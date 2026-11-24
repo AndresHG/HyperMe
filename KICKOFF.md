@@ -8,8 +8,8 @@ results are in.
 
 - Start Claude Code from a terminal that has `OPENAI_API_KEY` in its environment, plus one
   variable for each extra provider to compare. Do not paste keys into the chat.
-- Keep the repository private until the licence is chosen and the first release gate
-  passes.
+- Keep the repository private until the licence is chosen and the owner decides on a
+  first release.
 
 ## Phase 0: speed test
 

@@ -1,4 +1,4 @@
-> Status: interview closed on 24 November 2026. Its decisions are recorded in `CLAUDE.md` and
+> Status: the source of the decisions of 24 November 2026 recorded in `CLAUDE.md` and
 > `docs/RESEARCH.md` section 2, which win where they differ. Copied unchanged from local
 > agent state (`.omc/specs/`), which is lost with its worktree.
 

@@ -88,11 +88,13 @@ passes, update this section and record the evidence in `docs/results/`.
 - Keep dependencies few. Say why each new crate is needed in the commit message.
 - When borrowing code, record the source repository, commit and licence in `NOTICE.md`.
 - `cargo fmt`, `cargo clippy -- -D warnings` and tests pass before every commit.
-- Changed files end in a pull request into `master` with its `## Lessons` filled in. Never
-  commit on `master`: review found six errors the author's own check had passed (PR 1).
+- Changed files end in a pull request into `master` with its `## Lessons` filled in: never
+  a commit on `master`, never left uncommitted. An uncommitted plan was missing for the
+  session that needed it, and a clean-context check found six errors (PR 1).
 - Rename an auto-created `claude/*` branch before the first push. GitHub cannot re-point
   a pull request's head.
 - A claim about the field or a competitor in `docs/` names its source or says it is
-  unverified. The first analysis did neither and its headline was wrong (PR 1).
+  unverified. The first analysis took its own field list as checked and its headline was
+  wrong (PR 1).
 - Small commits with clear messages. Open a GitHub issue for anything deferred.
 - Work data (bank mail, bank meetings) is out of scope until the owner says otherwise.
