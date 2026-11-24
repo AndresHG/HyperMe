@@ -4,6 +4,9 @@ Source: analysis of 24 November 2026.
 Full write-up: https://claude.ai/artifact/HP3aScXAUcUVD5h7ExLwTL
 Mind map of the field: https://claude.ai/artifact/KG73DFinZohHHeVQn9VEAZ
 
+Reviewed the same day against [RESEARCH.md](RESEARCH.md). Section 5 carries the change;
+sections 1 and 2 still describe the original six-part plan.
+
 ## 1. What it must do
 
 | Capability | Detail | When |
@@ -47,7 +50,7 @@ overlay. Models and connectors are remote.
 | --- | --- | --- |
 | Shell and overlay | Tauri 2; NSPanel on macOS via `tauri-nspanel` | Small footprint, floats over fullscreen apps, same code reaches Linux and Windows |
 | Hotkeys and text insertion | Global shortcuts; clipboard paste | What Handy ships on three operating systems |
-| Audio in | `cpal` for the microphone; Core Audio taps (`cidre`) for system audio on macOS | Taps need no Screen Recording permission |
+| Audio in | `cpal` for the microphone; Core Audio taps (`cidre`, or `cpal` 0.17 and later) for system audio on macOS | Taps need their own audio-capture permission, not Screen Recording |
 | Speech | Trait with providers: streaming cloud first, file upload fallback, local Parakeet later | Swap provider after the speed test without touching the rest |
 | Cleanup | Small model, reasoning off, streamed; prompt carries the personal dictionary and the active app name | This is where dictation quality is won |
 | Command mode | Second hotkey; transcript goes to a tool-calling model | Voice in, action out |
@@ -94,9 +97,16 @@ These are targets and estimates. Phase 0 replaces the latency rows with measurem
 
 ## 5. Roadmap and gates
 
+**Under review since 24 November 2026.** Only Phase 0 is committed. The owner's gate is to
+show Wispr Flow performance first, so dictation moves ahead of the command layer and the
+other parts follow as capabilities, in an order decided after Phase 0. Research found
+crons and nudges to be the most crowded part, and meeting capture a commodity best read
+from an existing notetaker: see [RESEARCH.md](RESEARCH.md). The table below is the earlier
+plan, kept until it is rewritten.
+
 | Phase | Scope | Estimate | Gate to pass before the next phase |
 | --- | --- | --- | --- |
-| 0. Speed test | CLI that measures upload against streaming on real dictations | 1 day | Median key release to cleaned text at or under 800 ms |
+| 0. Speed test | CLI that measures upload against streaming on 50 of the owner's dictations | 1 to 2 days | Median key release to cleaned text at or under 800 ms, 90th percentile at or under 1.2 s, formatting accepted beside Wispr Flow |
 | 1. Command layer | Overlay pill, command hotkey, Linear and calendar over MCP, crons | 2 to 3 weeks | Owner uses it every day for two weeks |
 | 2. Dictation | Streaming speech, cleanup prompt, personal dictionary, tone per app | 3 to 4 weeks | A full week without opening Wispr Flow |
 | 3. Meetings and coding agents | Capture, notes, action points to Linear; Claude Code and Devin tasks | 4 to 6 weeks | First public open-source release |
