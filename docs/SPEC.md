@@ -50,7 +50,7 @@ overlay. Models and connectors are remote.
 | --- | --- | --- |
 | Shell and overlay | Tauri 2; NSPanel on macOS via `tauri-nspanel` | Small footprint, floats over fullscreen apps, same code reaches Linux and Windows |
 | Hotkeys and text insertion | Global shortcuts; clipboard paste | What Handy ships on three operating systems |
-| Audio in | `cpal` for the microphone; Core Audio taps (`cidre`, or `cpal` 0.17 and later) for system audio on macOS | Taps need their own audio-capture permission, not Screen Recording |
+| Audio in | `cpal` for the microphone; Core Audio taps (`cidre`, or `cpal` 0.18 and later) for system audio on macOS | Taps need their own audio-capture permission, not Screen Recording |
 | Speech | Trait with providers: streaming cloud first, file upload fallback, local Parakeet later | Swap provider after the speed test without touching the rest |
 | Cleanup | Small model, reasoning off, streamed; prompt carries the personal dictionary and the active app name | This is where dictation quality is won |
 | Command mode | Second hotkey; transcript goes to a tool-calling model | Voice in, action out |

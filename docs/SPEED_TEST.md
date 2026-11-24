@@ -105,8 +105,8 @@ available; each needs its own account.
 | --- | --- | --- |
 | Speech | OpenAI `gpt-live-transcribe` | Specified above. The most expensive option, about $0.017 a minute |
 | Speech | ElevenLabs Scribe v2 Realtime | Claims a median of about 150 ms to a committed transcript; $0.22 an hour |
-| Speech | Soniox `stt-rt-v6` | Cheapest at $0.12 an hour; language hints and a manual finalize message |
-| Speech | AssemblyAI realtime | $0.30 an hour, billed while the socket is open |
+| Speech | Soniox `stt-rt-v6` | Cheapest streaming option at $0.12 an hour; language hints and a manual finalize message |
+| Speech | AssemblyAI STT-3.7 Realtime | $0.30 an hour, billed while the socket is open |
 | Speech | Deepgram Nova-3 multilingual | $0.0058 a minute |
 | Cleanup | `gpt-6-luna`, reasoning off | Specified above |
 | Cleanup | Groq `gpt-oss-20b`, Cerebras `gpt-oss-120b` | About 1,000 and 3,000 tokens a second; OpenAI-compatible endpoints, so only base URL, key and model change |

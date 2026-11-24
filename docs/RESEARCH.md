@@ -30,10 +30,10 @@ is a vendor claim until Phase 0 replaces it.
 
 | First analysis said | Research found |
 | --- | --- |
-| No open-source project combines the parts | OpenWhispr (MIT, 12,161 stars, five active committers) has dictation, a voice-command hotkey, meetings with calendar, notes, an API, an MCP server and bring-your-own-key. It lacks scheduled jobs and coding-agent dispatch. Omi desktop (MIT, Swift) has the floating bar with agent pills. |
+| No open-source project combines the parts | OpenWhispr (MIT, 12,161 stars, five active committers) has dictation, a voice-command hotkey, meetings with calendar, notes, an API, an MCP server and bring-your-own-key. As far as its README shows, it lacks scheduled jobs and coding-agent dispatch. Omi desktop (MIT, Swift) has the floating bar with agent pills. |
 | Wispr Flow is a dictation app | It added a bot-less notetaker (August 2026), an MCP server, "Ask Wispr" drafts for Gmail, Slack and Notion, and its own speech models, on $361M raised to build a "voice OS". |
-| Start with commands and crons, because nobody offers them | Crons and proactive nudges are the most crowded part: Anthropic, OpenAI, Google, Meta and Microsoft all shipped them in 2026. Claude desktop alone has a quick-entry overlay with dictation, connectors, scheduled tasks and background Claude Code sessions. |
-| Formatting quality is the largest risk | On the one cross-vendor benchmark (US English) a small MIT client scores 78.0% zero-edit rate against Wispr Flow's 79.3%. English quality is close to a commodity. |
+| Start with commands and crons, because nobody offers them | Crons and proactive nudges are the most crowded part: Anthropic, OpenAI and Microsoft shipped them in 2026, and Google and Meta are reported to have. Claude desktop alone has a quick-entry overlay with dictation, connectors, scheduled tasks and background Claude Code sessions. |
+| Formatting quality is the largest risk | On the one cross-vendor benchmark (US English) a small MIT client scores 78.0% zero-edit rate against Wispr Flow's 79.3% and Aqua's 80.5%. English quality is close to a commodity. |
 | Handy transcribes after key release | Handy streams since v0.9.0 (July 2026), with local models only. It still has no cloud speech, and cleanup is an optional extra step. |
 
 ### 1.2 What nobody ships
@@ -128,7 +128,7 @@ knows you better every day, on your own keys and your own disk.
 | --- | --- | --- | --- |
 | Dictation | Wispr Flow, Aqua, Superwhisper, Willow, Typeless, Monologue; free from Granola, Apple, Google, ChatGPT | Handy, OpenWhispr, FluidVoice, VoiceInk, FreeFlow, Hex, SpeakoFlow, OpenTypeless, Blurt | Commodity in English. Table stakes, not a differentiator |
 | Meeting notes | Granola, Wispr Flow Notetaker, Notion, ChatGPT Record, Krisp, Circleback, Zoom | Meetily, Anarlog, Minutes, Omi, Quill | Commodity. The open step is transcript to proposed tickets |
-| Crons and nudges | Claude (scheduled tasks, Duet), ChatGPT (tasks, dots), Gemini Spark, Copilot Autopilot, Poke, Lindy, Littlebird | OpenClaw, Hermes Agent, goose | Saturated. Call into what exists |
+| Crons and nudges | Claude (scheduled tasks, Duet), ChatGPT (tasks, dots), Gemini Spark (reported), Copilot Autopilot, Poke, Lindy, Littlebird | OpenClaw, Hermes Agent, goose | Saturated. Call into what exists |
 | Commands through connectors | Claude connectors, ChatGPT plugins, Raycast AI extensions | OpenWhispr, Omi | Crowded, but no sub-second preview card |
 | Coding-agent dispatch | Claude Code agent view, Codex app, Conductor | Happy, Nimbalyst, Paradev | Single vendor is solved. Several vendors by voice is open |
 | Overlay | Claude Quick Entry, Raycast, Cluely | Omi desktop, Thuki (frozen), OpenClicky | Omi has the shape. OpenAI is likely to ship one |
@@ -150,7 +150,7 @@ knows you better every day, on your own keys and your own disk.
 | IronClaw | Apache-2.0 | Credential injection at the host boundary, as a design |
 
 **Do not copy code from:** VoiceInk and FluidVoice (GPL-3.0); Epicenter/Whispering,
-OpenLess, Tambourine, Claude Squad and opcode (AGPL-3.0); screenpipe (commercial,
+OpenLess, Tambourine, VoiceTypr, Claude Squad and opcode (AGPL-3.0); screenpipe (commercial,
 source-available).
 
 **Consume instead of building:** meeting capture (read an existing notetaker over MCP or
@@ -170,7 +170,7 @@ watch Minutes' files), scheduling (a Claude scheduled task or an OS timer).
   app. Neither is only a chat gateway now.
 - Devin is not an Agent Client Protocol agent. Use its MCP server or v3 API.
 - Core Audio taps need their own permission (`NSAudioCaptureUsageDescription`). `cpal`
-  0.17 and later also does macOS loopback.
+  also does macOS loopback: added in 0.17, silent captures fixed in 0.18.
 - Wispr Flow's speech model is its own Canto-1 and Canto-2. Llama on Baseten is the older
   description.
 - `gpt-live-transcribe` is the most expensive streaming option at about $0.017 a minute.

@@ -9,10 +9,10 @@ record what you take in `NOTICE.md`.
 
 | Layer | Project | Stack, licence | State | What to take from it |
 | --- | --- | --- | --- | --- |
-| Dictation | [Handy](https://github.com/cjpais/Handy) | Rust + Tauri 2, MIT | 40,050 stars, 193 contributors, a release every 1 to 3 weeks. Streams with local models since v0.9.0. No cloud speech | The base for the dictation core: `handy-keys`, `handy-recorder`, clipboard and paste code, the NSPanel recording pill. Replace its local transcription manager. Name and logo are not reusable. |
+| Dictation | [Handy](https://github.com/cjpais/Handy) | Rust + Tauri 2, MIT | 40,050 stars, 193 contributors, a release every 1 to 3 weeks. Streams with local models since v0.9.0. No cloud speech | The base for the dictation core: `handy-keys`, `handy-recorder`, clipboard and paste code, the NSPanel recording pill. Replace its local transcription manager. The first pass noted that its name and logo are not reusable; not re-checked. |
 | Dictation | [SpeakoFlow](https://github.com/AbhishekBarali/SpeakoFlow) | Tauri 2 + Rust, MIT | 407 stars, 6 contributors, built on Handy's core | Worked example of WebSocket streaming to cloud speech, with keys in the keychain |
 | Dictation | [OpenTypeless](https://github.com/tover0314-w/opentypeless) | Rust + Tauri, MIT | 703 stars | App detection with tone per app; connection warm-up |
-| Dictation | [Blurt](https://github.com/AssemblyAI/blurt) | Swift, MIT | 78.0% zero-edit rate on the one cross-vendor benchmark, against Wispr Flow's 79.3% | Design only: pre-warm on key-down, upload while recording, narrow context policy |
+| Dictation | [Blurt](https://github.com/AssemblyAI/blurt) | Swift, MIT | 78.0% zero-edit rate on the one cross-vendor benchmark, against Wispr Flow's 79.3% and Aqua's 80.5% | Design only: pre-warm on key-down, upload while recording, narrow context policy |
 | Dictation | [FreeFlow](https://github.com/zachlatta/freeflow) | Swift, MIT | 3,155 stars | Its published cleanup prompt |
 | Dictation | VoiceInk, FluidVoice | Swift, GPL-3.0 | | Ideas only. No code. |
 | All-in-one | [OpenWhispr](https://github.com/OpenWhispr/openwhispr) | Electron, MIT | 12,161 stars, five active committers, weekly releases. Dictation, voice-command hotkey, meetings with calendar, notes, API, MCP server, own API keys | The closest existing product to the whole plan, and the baseline to beat on speed and memory. The owner found an earlier version slow and dislikes the UI. |
@@ -32,7 +32,7 @@ Dropped since the first pass: Clicky (open repository frozen, product now closed
 Teachy (4 stars).
 
 **Do not copy code from:** VoiceInk and FluidVoice (GPL-3.0); Epicenter/Whispering,
-OpenLess, Tambourine, Claude Squad and opcode (AGPL-3.0); screenpipe (commercial,
+OpenLess, Tambourine, VoiceTypr, Claude Squad and opcode (AGPL-3.0); screenpipe (commercial,
 source-available).
 
 ## Closed products to measure against
@@ -55,10 +55,12 @@ formatting; its pill is the UX baseline for dictation.
 
 - Overlay: Tauri 2, [`tauri-nspanel`](https://github.com/ahkohd/tauri-nspanel)
   (Apache-2.0; a git dependency, so pin a commit)
-- Audio: `cpal` for the microphone, and for macOS loopback from 0.17; `cidre` for Core
+- Audio: `cpal` for the microphone, and for macOS loopback from 0.18 (added in 0.17,
+  silent captures fixed in 0.18); `cidre` for Core
   Audio taps. Taps need the `NSAudioCaptureUsageDescription` permission
 - Speech, cloud: the candidates and prices are in [SPEED_TEST.md](SPEED_TEST.md)
-- Speech, local (later): `transcribe-rs` with Parakeet v3 (25 European languages)
+- Speech, local (later): `transcribe-rs` with Parakeet v3 (25 European languages). From
+  the first pass; not re-checked
 - Connectors: `rmcp` 3.x, pinned (three major versions in five months). Linear works
   with dynamic registration or an API key; GitHub with a personal access token. Google
   Workspace is a preview that needs your own Cloud project; Slack bars unlisted apps;
