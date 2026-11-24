@@ -18,3 +18,6 @@ spikes/flowbench/samples/
 
 # macOS
 .DS_Store
+
+# Local agent state (sessions, logs, memory). Specs live in specs/.
+.omc/
