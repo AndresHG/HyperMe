@@ -19,12 +19,16 @@ or Devin and reports back.
 
 - `docs/SPEC.md`: requirements, architecture, budgets, safety rules, roadmap and gates
 - `docs/SPEED_TEST.md`: Phase 0, the first thing to build
-- `docs/FIELD.md`: existing open-source projects and what to borrow from each
+- `docs/FIELD.md`: existing projects and what to borrow from each
+- `docs/RESEARCH.md`: verdict, product focus, pitch and field map from the research of
+  24 November 2026
 - `KICKOFF.md`: the first two sessions, step by step
 
 ## Current phase
 
-**Phase 0: speed test.** Next is Phase 1 (command layer).
+**Phase 0: speed test.** It is the only committed work: the owner's gate is to show Wispr
+Flow performance first. What follows is decided once its results are in. Working
+assumption: dictation next, then the other parts as capabilities.
 Do not start a phase before the gate of the previous one has passed. When a gate
 passes, update this section and record the evidence in `docs/results/`.
 
@@ -41,6 +45,19 @@ passes, update this section and record the evidence in `docs/results/`.
   FluidVoice): read it for ideas only.
 - Anything that creates, sends or posts outside the app shows a preview and waits for
   confirmation. Email is draft-only.
+- Success means an open-source project other people install and use. What sets it apart
+  is speed and lightness, with the full feature set (owner, 24 November 2026).
+- The first gate is Wispr Flow performance, shown by a command-line tool on the owner's
+  own utterances. No overlay is needed for it.
+- Dictation is in Spanish and English, one language per dictation, detected
+  automatically. Mixed-language sentences are not a requirement.
+- Privacy boundary: audio, transcript, dictionary, app name and the text before the
+  cursor may leave the machine, under the user's own keys. Window text or a screenshot
+  only behind a visible switch that is off by default. Never password fields. No
+  telemetry. No audio kept on disk.
+- Memory and learning ("knows you better every day") is part of the vision, not of a
+  first version.
+- This project's own tickets live in GitHub Projects.
 
 ## Budgets (targets to design against)
 
@@ -54,10 +71,12 @@ passes, update this section and record the evidence in `docs/results/`.
 ## Open decisions: ask the owner, do not assume
 
 - Licence: MIT or Apache-2.0. Do not add a LICENSE file until this is decided.
-- Tracker for Phase 1: Linear is assumed. Jira or GitHub Projects from day one?
+- First tracker connector in the product: Linear was assumed. GitHub instead, since this
+  project's own tickets live there?
 - Mail and calendar provider: Google or Microsoft 365?
 - Ticket creation: wait for Enter (default) or fire at once?
-- Dictation languages: Spanish and English are assumed, possibly mixed in one dictation.
+- Order of the parts after dictation, and who the first outside user is.
+- Whether to adopt the two extra checks in `docs/RESEARCH.md` section 1.3 as gates.
 
 ## Working rules
 
