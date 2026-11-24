@@ -1,6 +1,7 @@
 > Status: the source of the decisions of 24 November 2026 recorded in `CLAUDE.md` and
-> `docs/RESEARCH.md` section 2, which win where they differ. Copied unchanged from local
-> agent state (`.omc/specs/`), which is lost with its worktree.
+> `docs/RESEARCH.md` section 2, which win where they differ. Copied from local agent state
+> (`.omc/specs/`), which is lost with its worktree. Unchanged apart from this block and one
+> project name removed from round 7 of the transcript.
 
 # Deep Interview Spec: HyperMe research, focus and first gate
 
@@ -178,7 +179,7 @@ shortlist and prices in report 01; Handy (MIT) as the later base for the dictati
 
 ### Round 7
 **Q:** How much time over the next three months?
-**A:** There will be time constraints, not much per week, but we will make it work. First validate Wispr Flow performance, then see how to evolve the product. VFS is mostly done.
+**A:** There will be time constraints, not much per week, but we will make it work. First validate Wispr Flow performance, then see how to evolve the product. Another side project is mostly done.
 **Ambiguity:** 26%
 
 ### Round 8
