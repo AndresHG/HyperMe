@@ -1,0 +1,20 @@
+# Rust
+target/
+**/*.rs.bk
+
+# Node / Tauri front end
+node_modules/
+dist/
+
+# Secrets and local config
+.env
+.env.*
+*.pem
+
+# Audio samples and recordings stay local
+spikes/flowbench/samples/
+*.wav
+*.m4a
+
+# macOS
+.DS_Store
