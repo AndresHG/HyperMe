@@ -50,6 +50,13 @@ pub struct Measured {
     pub stt_ms: u64,
     /// First cleaned token received. `None` on a fallback.
     pub first_ms: Option<u64>,
+    /// First cleanup token of any kind, reasoning included. Earlier than `first_ms` when the
+    /// model thinks before it writes.
+    pub first_any_ms: Option<u64>,
+    /// Characters of streamed reasoning; zero when the host streams none.
+    pub thinking_chars: usize,
+    /// Reasoning tokens, when the host reports usage.
+    pub reasoning_tokens: Option<u64>,
     /// Full text ready: the cleaned text, or the raw transcript on a fallback.
     pub total_ms: u64,
     pub raw: String,
@@ -83,6 +90,9 @@ pub async fn run_all<S: SpeechProvider, C: CleanupProvider>(
     for run in 1..=runs {
         for clip in clips {
             for pipeline in [Pipeline::A, Pipeline::B] {
+                if pipeline == Pipeline::A && !stt.supports_upload() {
+                    continue;
+                }
                 let outcome = match pipeline {
                     Pipeline::A => upload_after_release(stt, llm, clip, deadline).await,
                     Pipeline::B => streaming(stt, llm, clip, deadline).await,
@@ -194,6 +204,9 @@ async fn clean_and_measure<C: CleanupProvider>(
         last_audio_ms: marks.last_audio.map(signed),
         stt_ms: since(stt_at),
         first_ms: cleaned.first.map(since),
+        first_any_ms: cleaned.first_any.map(since),
+        thinking_chars: cleaned.thinking_chars,
+        reasoning_tokens: cleaned.reasoning_tokens,
         total_ms: since(cleaned.done),
         lang_ok: expected
             .map(|lang| detect(&raw) == Some(lang) && detect(&cleaned.text) == Some(lang)),
@@ -364,7 +377,11 @@ mod tests {
             async fn warm(&self) -> Result<()> {
                 Ok(())
             }
-            async fn clean(&self, _raw: &str, _on_text: &mut dyn FnMut(&str)) -> Result<()> {
+            async fn clean(
+                &self,
+                _raw: &str,
+                _on_piece: &mut dyn FnMut(crate::cleanup::Piece<'_>),
+            ) -> Result<()> {
                 anyhow::bail!("HTTP 404: the model does not exist")
             }
         }

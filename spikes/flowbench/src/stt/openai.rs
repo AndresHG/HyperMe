@@ -5,38 +5,25 @@
 //! <https://developers.openai.com/api/docs/guides/speech-to-text>. Check them again before
 //! changing anything here: they changed more than once in 2026.
 
-use std::time::Duration;
-
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
-use futures_util::stream::{SplitSink, SplitStream};
-use futures_util::{SinkExt, StreamExt};
+use futures_util::SinkExt;
 use reqwest::multipart::{Form, Part};
 use serde_json::{Value, json};
-use tokio::net::TcpStream;
-use tokio::task::JoinHandle;
-use tokio::time::timeout;
 use tokio_tungstenite::tungstenite::Message;
-use tokio_tungstenite::tungstenite::client::IntoClientRequest;
-use tokio_tungstenite::tungstenite::http::HeaderValue;
-use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async};
 
+use super::ws::{self, LiveSocket};
 use super::{LiveSession, SpeechProvider, Transcript};
 use crate::audio::{SAMPLE_RATE, pcm_bytes};
 use crate::http::ensure_ok;
 
 pub const KEY_ENV: &str = "OPENAI_API_KEY";
 pub const FILE_URL: &str = "https://api.openai.com/v1/audio/transcriptions";
-const CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
-/// How long to wait for the final transcript after the commit before giving up.
-const FINAL_TIMEOUT: Duration = Duration::from_secs(30);
 
 const DELTA: &str = "conversation.item.input_audio_transcription.delta";
 const COMPLETED: &str = "conversation.item.input_audio_transcription.completed";
 const FAILED: &str = "conversation.item.input_audio_transcription.failed";
-
-type Socket = WebSocketStream<MaybeTlsStream<TcpStream>>;
 
 pub struct OpenAiSpeech {
     pub http: reqwest::Client,
@@ -83,99 +70,40 @@ impl SpeechProvider for OpenAiSpeech {
     }
 
     async fn open_live(&self, _label: &str) -> Result<OpenAiLive> {
-        let mut request = self
-            .realtime_url
-            .as_str()
-            .into_client_request()
-            .context("realtime URL")?;
-        let mut auth = HeaderValue::from_str(&format!("Bearer {}", self.key))
-            .context("the API key has characters a header cannot carry")?;
-        auth.set_sensitive(true);
-        request.headers_mut().insert("Authorization", auth);
-        let (socket, _) = timeout(CONNECT_TIMEOUT, connect_async(request))
-            .await
-            .context("opening the realtime socket timed out")?
-            .context("opening the realtime socket")?;
-        let (mut sink, stream) = socket.split();
+        let (mut sink, stream) =
+            ws::connect(&self.realtime_url, &format!("Bearer {}", self.key)).await?;
         let update = session_update(&self.live_model, &self.languages, self.delay.as_deref());
         sink.send(Message::text(update.to_string()))
             .await
             .context("sending session.update")?;
-        Ok(OpenAiLive {
-            sink,
-            reader: Some(tokio::spawn(read_until_final(stream, self.trace))),
-        })
-    }
-}
-
-pub struct OpenAiLive {
-    sink: SplitSink<Socket, Message>,
-    /// Reads server events from the moment the socket opens; ends with the final transcript.
-    /// `None` once its result has been taken: a task can be awaited only once.
-    reader: Option<JoinHandle<Result<Transcript>>>,
-}
-
-impl OpenAiLive {
-    fn reader_finished(&self) -> bool {
-        self.reader.as_ref().is_some_and(JoinHandle::is_finished)
-    }
-
-    async fn reader_result(&mut self) -> Result<Transcript> {
-        let Some(mut reader) = self.reader.take() else {
-            bail!("the session has already ended");
-        };
-        match timeout(FINAL_TIMEOUT, &mut reader).await {
-            Ok(joined) => joined.context("transcript reader stopped")?,
-            Err(_) => {
-                reader.abort();
-                bail!(
-                    "no final transcript within {} s of the commit",
-                    FINAL_TIMEOUT.as_secs()
-                )
+        let mut partial = String::new();
+        let reader = ws::read_until_final(stream, self.trace, move |event| {
+            match on_event(event, &mut partial) {
+                Step::Continue => ws::Step::Continue,
+                Step::Done { text, languages } => ws::Step::Done(Transcript { text, languages }),
+                Step::Failed(body) => ws::Step::Failed(body),
             }
-        }
+        });
+        Ok(OpenAiLive(LiveSocket::new(sink, tokio::spawn(reader))))
     }
 }
 
-impl Drop for OpenAiLive {
-    fn drop(&mut self) {
-        // An abandoned session must not keep its socket open in the background.
-        if let Some(reader) = &self.reader {
-            reader.abort();
-        }
-    }
-}
+pub struct OpenAiLive(LiveSocket);
 
 impl LiveSession for OpenAiLive {
     async fn send_audio(&mut self, pcm: &[i16]) -> Result<()> {
-        if self.reader.is_none() || self.reader_finished() {
-            // Before the commit the reader only ends on a failure. Report it now instead of
-            // streaming the rest of the audio into a dead session.
-            return match self.reader_result().await {
-                Ok(_) => bail!("a final transcript arrived before the commit"),
-                Err(err) => Err(err),
-            };
-        }
         let event = json!({
             "type": "input_audio_buffer.append",
             "audio": STANDARD.encode(pcm_bytes(pcm)),
         });
-        self.sink
-            .send(Message::text(event.to_string()))
-            .await
-            .context("sending audio")
+        self.0.send(Message::text(event.to_string())).await
     }
 
-    async fn finish(mut self) -> Result<Transcript> {
+    async fn finish(self) -> Result<Transcript> {
         let commit = json!({"type": "input_audio_buffer.commit"});
-        let sent = self.sink.send(Message::text(commit.to_string())).await;
-        if let Err(err) = sent {
-            // If the provider said why it hung up, that message is the useful one.
-            if !self.reader_finished() {
-                return Err(err).context("sending the commit");
-            }
-        }
-        self.reader_result().await
+        self.0
+            .finish(vec![Message::text(commit.to_string())], "the commit")
+            .await
     }
 }
 
@@ -235,36 +163,6 @@ fn on_event(event: &str, partial: &mut String) -> Step {
     }
 }
 
-async fn read_until_final(mut stream: SplitStream<Socket>, trace: bool) -> Result<Transcript> {
-    let mut partial = String::new();
-    while let Some(message) = stream.next().await {
-        match message.context("realtime socket")? {
-            Message::Text(event) => {
-                if trace {
-                    eprintln!("    [realtime] {}", event_type(event.as_str()));
-                }
-                match on_event(event.as_str(), &mut partial) {
-                    Step::Continue => {}
-                    Step::Done { text, languages } => return Ok(Transcript { text, languages }),
-                    Step::Failed(body) => bail!("the provider reported a failure: {body}"),
-                }
-            }
-            Message::Close(frame) => {
-                bail!("the socket closed before the final transcript: {frame:?}")
-            }
-            _ => {}
-        }
-    }
-    bail!("the socket ended before the final transcript")
-}
-
-fn event_type(event: &str) -> String {
-    serde_json::from_str::<Value>(event)
-        .ok()
-        .and_then(|v| v["type"].as_str().map(str::to_owned))
-        .unwrap_or_else(|| "(not JSON)".to_owned())
-}
-
 /// The body of a successful `/v1/audio/transcriptions` call in the default `json` format.
 fn parse_file_response(body: &str) -> Result<Transcript> {
     let value: Value = serde_json::from_str(body)
@@ -290,6 +188,12 @@ fn language_codes(languages: &Value) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
+    use futures_util::StreamExt;
+    use tokio::task::JoinHandle;
+    use tokio::time::timeout;
+
     use super::*;
 
     #[test]
@@ -542,7 +446,7 @@ mod tests {
         }
         let failure = failure.expect("the stream should stop once the session is rejected");
         // The reader's result is taken; committing afterwards reports that and does not panic.
-        let after = live.finish().await.err().expect("a failure").to_string();
+        let after = live.finish().await.expect_err("a failure").to_string();
         assert_eq!(after, "the session has already ended");
         assert!(
             failure.contains("Model live-model is not available."),
@@ -566,7 +470,7 @@ mod tests {
 
         let mut live = stt.open_live("es-01").await.unwrap();
         live.send_audio(&[0; 240]).await.unwrap();
-        let failure = format!("{:#}", live.finish().await.err().expect("a failure"));
+        let failure = format!("{:#}", live.finish().await.expect_err("a failure"));
         assert!(failure.contains("could not transcribe"), "{failure}");
     }
 
