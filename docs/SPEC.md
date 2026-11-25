@@ -97,7 +97,7 @@ These are targets and estimates. Phase 0 replaces the latency rows with measurem
 
 ## 5. Roadmap and gates
 
-**Under review since 24 November 2026.** Only Phase 0 is committed. The owner's gate is to
+**Under review since 24 November 2026.** A replacement is proposed in [ROADMAP.md](ROADMAP.md). Only Phase 0 is committed. The owner's gate is to
 show Wispr Flow performance first, so dictation moves ahead of the command layer and the
 other parts follow as capabilities, in an order decided after Phase 0. Research found
 crons and nudges to be the most crowded part, and meeting capture a commodity best read
