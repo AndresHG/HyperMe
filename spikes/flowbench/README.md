@@ -60,12 +60,20 @@ afconvert -f WAVE -d LEI16@24000 -c 1 recording.m4a samples/es-01.wav
 ## 2. Set the key
 
 The tool reads `OPENAI_API_KEY` from the environment and never prints it. To keep the key out
-of files and shell history, store it in the macOS keychain once. This asks for the key and
-hides what you type:
+of files and shell history, store it in the macOS keychain once. Copy the whole key to the
+clipboard, then run:
 
 ```bash
-security add-generic-password -a "$USER" -s OPENAI_API_KEY -w
+security add-generic-password -U -a "$USER" -s OPENAI_API_KEY -w "$(pbpaste)"
 ```
+
+Copy something else afterwards to clear the clipboard. Shell history keeps only `$(pbpaste)`.
+`-U` replaces an entry that is already there. Do not use the interactive prompt (`-w` with no
+value): it cuts the input at 128 characters, and OpenAI project keys are longer, so the stored
+key is truncated and every call returns 401.
+
+For a cleanup key on another host, such as Groq, store it the same way under its own name
+(`-s GROQ_API_KEY`) and pass `--llm-key-env GROQ_API_KEY`.
 
 ## 3. Run
 
