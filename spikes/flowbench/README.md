@@ -176,7 +176,7 @@ run with them. Each gives free credit on sign-up; a 38-sample run is about 5 min
 | Provider | Key variable | Default host | Default model | End of speech |
 | --- | --- | --- | --- | --- |
 | Speechmatics | `SPEECHMATICS_API_KEY` | `wss://eu.rt.speechmatics.com/v2` | `melia-1` (`language: multi`, finds the language itself) | `ForceEndOfUtterance` |
-| Deepgram | `DEEPGRAM_API_KEY` | `wss://api.eu.deepgram.com/v1/listen` | `nova-3` (`language=multi`) | `Finalize`, then `CloseStream` |
+| Deepgram | `DEEPGRAM_API_KEY` | `wss://api.eu.deepgram.com/v1/listen` | `nova-3` (`language=multi`) | `Finalize`, then `CloseStream`; ends once all audio is processed |
 
 Store each key in the keychain as in section 2 (`-s SPEECHMATICS_API_KEY`,
 `-s DEEPGRAM_API_KEY`). Two samples first, with the Groq cleanup of run 3:
@@ -221,6 +221,7 @@ Then drop `es-01 en-01` for all samples, and repeat with `--stt-provider deepgra
 | `--llm-deadline-ms` | `1500` | After this, the raw transcript is used and counted as a fallback |
 | `--reasoning-effort` | `none` | `off` leaves the field out of the request |
 | `--prompt` | `v1` | Cleanup prompt: `v1`, `v2` or a file |
+| `--deepgram-finalize-only` | | Deepgram: end on the Finalize reply, not after CloseStream. Faster, but lost final words |
 | `--net` | | Print TCP round trips to the provider hosts, then stop |
 | `--net-host HOST` | built-in list | Hosts for `--net`; repeatable |
 | `--replay` | | Saved transcripts through the cleanup only |

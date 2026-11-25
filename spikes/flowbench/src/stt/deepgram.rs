@@ -5,9 +5,10 @@
 //! <https://developers.deepgram.com/docs/finalize>, <https://developers.deepgram.com/docs/close-stream>
 //! and <https://developers.deepgram.com/reference/speech-to-text/listen-streaming>.
 //!
-//! Deepgram says the `from_finalize` reply is sent "in most cases" but not always, so the
-//! session also sends CloseStream: its closing Metadata message ends the dictation if the
-//! Finalize reply never comes.
+//! At key release the session sends Finalize, then CloseStream. By default the dictation ends on
+//! the Metadata message Deepgram sends once CloseStream has processed all remaining audio. In the
+//! first real run (25 November 2026) ending at the `from_finalize` reply instead lost the last
+//! words of several samples, so that faster ending is kept only behind `wait_for_close: false`.
 
 use anyhow::{Result, bail};
 use serde_json::{Value, json};
@@ -28,6 +29,8 @@ pub struct DeepgramSpeech {
     pub model: String,
     /// One language is sent as is; none or several become `multi`.
     pub languages: Vec<String>,
+    /// End on the Metadata after CloseStream (all audio processed), not on the Finalize reply.
+    pub wait_for_close: bool,
     pub trace: bool,
 }
 
@@ -44,11 +47,13 @@ fn listen_url(base: &str, model: &str, languages: &[String]) -> String {
     )
 }
 
-/// Collects final results until the reply to Finalize, or the Metadata sent on close.
+/// Collects final results until the Metadata sent on close, or, with `stop_at_finalize`, the
+/// reply to Finalize.
 #[derive(Default)]
 struct Collector {
     parts: Vec<String>,
     languages: Vec<String>,
+    stop_at_finalize: bool,
 }
 
 impl Collector {
@@ -75,7 +80,7 @@ impl Collector {
                         }
                     }
                 }
-                if from_finalize {
+                if from_finalize && self.stop_at_finalize {
                     self.done()
                 } else {
                     Step::Continue
@@ -109,7 +114,10 @@ impl SpeechProvider for DeepgramSpeech {
     async fn open_live(&self, _label: &str) -> Result<DeepgramLive> {
         let url = listen_url(&self.url, &self.model, &self.languages);
         let (sink, stream) = ws::connect(&url, &format!("Token {}", self.key)).await?;
-        let mut collector = Collector::default();
+        let mut collector = Collector {
+            stop_at_finalize: !self.wait_for_close,
+            ..Collector::default()
+        };
         let reader = ws::read_until_final(stream, self.trace, move |e| collector.on_event(e));
         Ok(DeepgramLive(LiveSocket::new(sink, tokio::spawn(reader))))
     }
@@ -159,7 +167,10 @@ mod tests {
 
     #[test]
     fn final_results_are_joined_until_the_finalize_reply() {
-        let mut collector = Collector::default();
+        let mut collector = Collector {
+            stop_at_finalize: true,
+            ..Collector::default()
+        };
         assert_eq!(
             collector.on_event(&results("hola", false, false)),
             Step::Continue
@@ -178,8 +189,26 @@ mod tests {
     }
 
     #[test]
-    fn metadata_on_close_ends_the_dictation_when_no_finalize_reply_came() {
+    fn by_default_results_after_the_finalize_reply_still_count() {
         let mut collector = Collector::default();
+        collector.on_event(&results("Hola.", true, false));
+        assert_eq!(
+            collector.on_event(&results("Equipo", true, true)),
+            Step::Continue
+        );
+        collector.on_event(&results("de pagos.", true, false));
+        let metadata = json!({"type": "Metadata", "request_id": "r"}).to_string();
+        assert!(
+            matches!(collector.on_event(&metadata), Step::Done(t) if t.text == "Hola. Equipo de pagos.")
+        );
+    }
+
+    #[test]
+    fn metadata_on_close_ends_the_dictation_when_no_finalize_reply_came() {
+        let mut collector = Collector {
+            stop_at_finalize: true,
+            ..Collector::default()
+        };
         collector.on_event(&results("Hola.", true, false));
         let metadata = json!({"type": "Metadata", "request_id": "r"}).to_string();
         assert!(matches!(collector.on_event(&metadata), Step::Done(t) if t.text == "Hola."));
@@ -191,6 +220,7 @@ mod tests {
             url,
             model: "nova-3".to_owned(),
             languages: vec!["es".to_owned(), "en".to_owned()],
+            wait_for_close: true,
             trace: false,
         }
     }
@@ -202,7 +232,9 @@ mod tests {
             Got::Json(event) if event["type"] == "Finalize" => {
                 vec![serde_json::from_str(&results("Hola, hola.", true, true)).unwrap()]
             }
-            Got::Json(event) if event["type"] == "CloseStream" => vec![],
+            Got::Json(event) if event["type"] == "CloseStream" => {
+                vec![json!({"type": "Metadata", "request_id": "r"})]
+            }
             other => panic!("unexpected client message: {other:?}"),
         })
         .await;

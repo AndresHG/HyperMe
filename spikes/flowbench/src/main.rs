@@ -136,6 +136,11 @@ struct Args {
     #[arg(long)]
     stt_delay: Option<String>,
 
+    /// Deepgram: end the dictation on the Finalize reply instead of waiting for CloseStream to
+    /// process all audio. Faster, but lost final words in the first real run
+    #[arg(long)]
+    deepgram_finalize_only: bool,
+
     /// Print the TCP round trip to each speech and cleanup host, then stop. No key needed
     #[arg(long)]
     net: bool,
@@ -266,6 +271,7 @@ async fn main() -> Result<()> {
                 url,
                 model: live_model,
                 languages,
+                wait_for_close: !args.deepgram_finalize_only,
                 trace,
             };
             run(&args, clips, &stt, &llm).await
