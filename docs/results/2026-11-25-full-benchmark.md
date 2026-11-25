@@ -5,9 +5,10 @@ on the full set of 25 Spanish and 25 English samples. Median 429 ms and 90th per
 key release to cleaned text, against 800 and 1200 ms. Language was right on 50 of 50. OpenAI
 speech, with the same cleanup on the same samples and network, failed on both pipelines.
 
-The **quality** part of the gate is not measured. There is no `samples/gold.json`, so there is
-no zero-edit rate, and the owner has not compared the texts with Wispr Flow. The Phase 0 gate is
-therefore not passed yet, and `CLAUDE.md` still says Phase 0.
+The **quality** part of the gate is far from met. Against the owner's gold texts, 3 of 50 live
+outputs (6%) are exactly right, at 12.3 character edits per 100 characters (see "Quality" below).
+That figure is stricter than Voice Arena's, so it does not compare directly with Wispr Flow's
+79.3%. The Phase 0 gate is not passed, and `CLAUDE.md` still says Phase 0.
 
 ## Setup
 
@@ -76,15 +77,45 @@ sometimes cuts real words, so `v1` stays.
 | --- | --- | --- | --- |
 | End of speech to text | 429 ms median, 595 ms p90, 50 samples | Under 700 ms, a vendor budget and p99 target, not a measurement | [wisprflow.ai/canto-1-results](https://wisprflow.ai/canto-1-results), [Baseten case study](https://www.baseten.co/resources/customers/wispr-flow/) |
 | Same, measured by a third party | n/a | 1399 ms, reportedly measured by Aqua on an M3 Max | Unverified: search snippet, page returned 404 (research of 24 November) |
-| Zero-edit rate | **Not measured**: no `gold.json` yet | 79.3%, Voice Arena Dictation Bench, US English only | [voicearena.com/dictation-bench](https://voicearena.com/dictation-bench) |
+| Zero-edit rate | 6% exact match (3/50), 12.3 edits per 100 chars; a stricter measure, see below | 79.3%, Voice Arena Dictation Bench, US English only | [voicearena.com/dictation-bench](https://voicearena.com/dictation-bench) |
 
 Our numbers and Wispr's are not like for like. Ours start at key release and end at cleaned
 text on one machine and one network, without pasting. Wispr's is a stated target. On speed, the
-measured median and 90th percentile are under Wispr's own budget. On quality, there is no number.
+measured median and 90th percentile are under Wispr's own budget. On quality, the two numbers use
+different rules: ours is an exact character match with the owner's text, while Voice Arena's
+scoring uses LLM judges ([research notes](../research/2026-11-24/01-dictation.md)). Only Wispr Flow
+on the same 50 clips, scored against the same gold, would be like for like.
+
+## Quality
+
+Gold texts: Claude drafted all 50 from the raw Speechmatics and OpenAI transcripts (not from the
+outputs being scored). It flagged 15, and the owner reviewed those on 25 November. `en-14` has very
+bad audio and the owner was unsure of it; leaving it out changes nothing below. The gold texts stay
+on the owner's Mac. The score is exact match after normalising spacing, using `src/quality.rs`.
+
+| Output scored | es zero-edit | en zero-edit | All zero-edit | Edits per 100 chars, all |
+| --- | --- | --- | --- | --- |
+| Run 12 live outputs (Speechmatics + Groq v1) | 1/25 | 2/25 | 3/50 (6%) | 12.3 |
+| Groq v1 replayed on run 12 raw transcripts | 2/25 | 2/25 | 4/50 (8%) | 12.0 |
+
+Main difference per sample, read by Claude (live outputs and replay together):
+
+- **Misheard by speech**, about 20 samples: names and terms ("long chain", "unchain", "BFS"),
+  similar words ("your words" for keywords), and the lost English opening of `es-20`.
+- **Internal names a dictionary would fix**, 7 samples: Zentrix, Quorbit, HyperMe. Fixing
+  them alone makes 1 more sample exact.
+- **Cleanup rewording**, about 10: "like" removed, "gonna" to "going to", a profanity softened,
+  a statement turned into questions, one English phrase translated into Spanish.
+- **Words dropped**, about 6. **Filler left**, 2. **Punctuation or capitals only**, 2 to 3.
+
+Best case with perfect dictionary names and a punctuation-tolerant score: 6 to 9 of 50. The live
+run and the replay score about the same. The gap is in speech accuracy and in the cleanup
+rewording, not in the choice of prompt.
 
 ## Next
 
-1. The owner corrects the draft gold texts into `samples/gold.json`. `--replay --gold` then gives
-   a zero-edit rate and edits per 100 characters for each prompt.
-2. The owner dictates a handful of the same sentences in Wispr Flow and compares the texts.
-3. Only then can the Phase 0 gate be called passed and `CLAUDE.md` updated.
+1. Run the same 50 clips through Wispr Flow and score its texts against the same gold. Only that
+   says how far behind we really are.
+2. Add a custom dictionary (Speechmatics `additional_vocab`) and stricter cleanup rules: keep
+   "like" and "gonna", never translate or soften, and change nothing that is not a filler or a fix.
+3. The Phase 0 gate can be called passed only after that, and `CLAUDE.md` updated then.
