@@ -19,6 +19,7 @@ or Devin and reports back.
 
 - `docs/SPEC.md`: requirements, architecture, budgets, safety rules, roadmap and gates
 - `docs/SPEED_TEST.md`: Phase 0, the first thing to build
+- `docs/ROADMAP.md`: proposed phases after Phase 0 and the gap to Wispr Flow (not yet adopted)
 - `docs/FIELD.md`: existing projects and what to borrow from each
 - `docs/RESEARCH.md`: verdict, product focus, pitch and field map from the research of
   24 November 2026
