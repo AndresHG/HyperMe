@@ -48,7 +48,8 @@ formatting quality and the app itself.
 
 ## Open decisions for the owner
 
-1. The order of phases 3 to 5, and whether email comes before meetings.
+1. ~~What comes after dictation~~: decided 25 November 2026, smart routing and actions (phase 3).
+   Still open: whether email comes before meetings.
 2. The first tracker connector in phase 3: GitHub (this project's own tickets) or Linear.
 3. Mail and calendar provider for phase 4: Google or Microsoft 365.
 4. Licence, needed before the first release in phase 2 ([#7](https://github.com/AndresHG/hyperme/issues/7)).
