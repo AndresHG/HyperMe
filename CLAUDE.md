@@ -59,6 +59,8 @@ passes, update this section and record the evidence in `docs/results/`.
 - Memory and learning ("knows you better every day") is part of the vision, not of a
   first version.
 - This project's own tickets live in GitHub Projects.
+- After dictation comes smart routing and actions; the first tracker connector is GitHub,
+  not Linear (owner, 25 November 2026). See `docs/ROADMAP.md`.
 
 ## Budgets (targets to design against)
 
@@ -72,8 +74,6 @@ passes, update this section and record the evidence in `docs/results/`.
 ## Open decisions: ask the owner, do not assume
 
 - Licence: MIT or Apache-2.0. Do not add a LICENSE file until this is decided.
-- First tracker connector in the product: Linear was assumed. GitHub instead, since this
-  project's own tickets live there?
 - Mail and calendar provider: Google or Microsoft 365?
 - Ticket creation: wait for Enter (default) or fire at once?
 - Order of the parts after dictation, and who the first outside user is.
