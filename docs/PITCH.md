@@ -1,7 +1,7 @@
 # HyperMe pitch and positioning
 
-**Status: draft of 25 November 2026.** The wording below is proposed; the headline choice and
-the name are open decisions for the owner (see "Open choices" at the end). It builds on
+**Status: 25 November 2026.** The owner chose to lead with the full copilot, and to keep the
+name HyperMe for the public launch. It builds on
 [RESEARCH.md](RESEARCH.md) section 3, which it replaces as the place to edit the pitch.
 
 Every claim here must be earned before it appears in the README or a launch post. The ledger at
@@ -9,13 +9,20 @@ the end says which ones are earned today.
 
 ## One line
 
-> **HyperMe is open-source voice dictation for your Mac: as fast as Wispr Flow, light enough to
-> forget it is running, on your own keys.**
+> **HyperMe: the open-source voice copilot for your workday.**
 
-Before the claims are earned, the README uses the honest form:
+The headline leads with the full copilot (owner, 25 November 2026). Because only dictation will
+exist at first, the README says in its first paragraphs that it starts with dictation and that
+the rest arrives phase by phase. Repository description:
 
-> HyperMe is an open-source voice copilot for your Mac, starting with dictation that aims to be
-> as fast as Wispr Flow and light enough to forget it is running.
+> The open-source voice copilot for your workday. Starts with dictation as fast as Wispr Flow;
+> light, on your own keys.
+
+A dictation-only line stays available for a single-purpose launch post, where research found
+such launches score far higher ([RESEARCH.md](RESEARCH.md) section 1.4):
+
+> HyperMe is open-source voice dictation for your Mac: as fast as Wispr Flow, light enough to
+> forget it is running, on your own keys.
 
 ## Elevator pitch (about 30 seconds)
 
@@ -104,11 +111,5 @@ a launch post.
   (the Hyper terminal, the `hyper` Rust crate).
 - Checked on 25 November 2026: the name `hyperme` is unclaimed on crates.io and npm. No
   repository on GitHub uses it as its name (code search by name). No trademark search was done.
-- The tagline "You, amplified." is kept in the README for now; it says little about what the app
-  does, so the one-line pitch carries the meaning.
-
-## Open choices for the owner
-
-1. Headline: dictation first (the line above, recommended), the full copilot first, or the
-   explicit "open-source Wispr Flow alternative".
-2. Keep the name HyperMe for the public launch, or rename before the repository goes public.
+- The owner chose to keep HyperMe for the public launch (25 November 2026).
+- The old tagline "You, amplified." is dropped; the one-line pitch carries the meaning.

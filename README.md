@@ -1,13 +1,15 @@
 # HyperMe
 
-**Open-source voice copilot for your Mac, starting with dictation that aims to be as fast as
-Wispr Flow and light enough to forget it is running.**
+**The open-source voice copilot for your workday.**
 
-Hold a key, speak in English or Spanish, and clean text lands at your cursor in any app. HyperMe
-streams to the speech and language models you choose, with your own keys, keeps no audio on
-disk and sends no telemetry. Later, the same key will do things: "Hyper, open a ticket for
-this", short answers, your day and your mail, meetings turned into tasks, coding agents taking
-orders. Rust core, Tauri 2 shell, Mac first.
+One small pill for everything you say at work. Hold a key and your words land as clean text in
+any app; say "Hyper, open a ticket for this" and it previews the action; your day and your mail,
+your meetings turned into tasks, your coding agents taking orders. All on your own keys, light
+enough to forget it is running. Rust core, Tauri 2 shell, Mac first.
+
+It starts with dictation that aims to be as fast as Wispr Flow: hold a key, speak in English or
+Spanish, and clean text lands at your cursor. HyperMe streams to the speech and language models
+you choose, keeps no audio on disk and sends no telemetry. The rest arrives phase by phase.
 
 > **Status: pre-alpha. There is nothing to install yet.** Phase 0, a command-line speed test, is
 > under way. Speed passes; formatting quality does not yet. See [where we stand](#where-we-stand).

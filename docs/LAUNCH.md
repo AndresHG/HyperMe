@@ -8,7 +8,7 @@ checklist so a later session can tick it off. State on 25 November 2026.
 | Item | State |
 | --- | --- |
 | Licence, MIT OR Apache-2.0 | Done (PR 22) |
-| README with pitch, status and positioning | Done; headline wording waits on the owner ([PITCH.md](PITCH.md)) |
+| README with pitch, status and positioning | Done; copilot-first headline chosen by the owner ([PITCH.md](PITCH.md)) |
 | Pitch, elevator pitch, claims ledger | Done: [PITCH.md](PITCH.md) |
 | Contributing, spec-first and test-first rules | Done (PR 22), labels added |
 | Code of conduct | Done: Contributor Covenant 2.1 |
@@ -28,7 +28,7 @@ These are settings, not files, and only matter once the repository is public:
 
 - [ ] Enable private vulnerability reporting (Settings, Security). `SECURITY.md` and the code of
       conduct both point to it; GitHub offers it only on public repositories.
-- [ ] Description and topics, from the chosen headline: for example `dictation`, `voice`,
+- [ ] Description (the one in [PITCH.md](PITCH.md)) and topics, for example `dictation`, `voice`,
       `speech-to-text`, `tauri`, `rust`, `macos`, `wispr-flow-alternative`.
 - [ ] Social preview image.
 - [ ] Branch protection on `master`: pull request required, CI green required.

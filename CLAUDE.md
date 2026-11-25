@@ -65,6 +65,9 @@ passes, update this section and record the evidence in `docs/results/`.
 - After dictation comes smart routing and actions; the first tracker connector is GitHub,
   not Linear (owner, 25 November 2026). See `docs/ROADMAP.md`.
 - Licence: MIT OR Apache-2.0, dual, at the user's option (owner, 25 November 2026).
+- Public positioning leads with the full copilot ("the open-source voice copilot for your
+  workday"), and says plainly that it starts with dictation. The name HyperMe stays for the
+  public launch (owner, 25 November 2026). See `docs/PITCH.md`.
 
 ## Budgets (targets to design against)
 
