@@ -149,8 +149,11 @@ GROQ_API_KEY=$(security find-generic-password -a "$USER" -s GROQ_API_KEY -w) car
   with strict limits: remove only hesitations and false starts, keep informal words and
   swearing, never translate or rephrase. `--prompt FILE` reads any other prompt.
 - `--vocab FILE` is your dictionary, one term per line, optionally with how it sounds:
-  `Zentrix: zen trix`. Speechmatics gets it as `additional_vocab`, and the cleanup prompt gets
-  the written forms. Keep the file in `samples/`, which git ignores, if it holds internal
+  `Zentrix: zen trix`. The cleanup prompt gets the written forms. Speechmatics gets it as
+  `additional_vocab` only with a single-language model such as `enhanced`: on 25 November 2026
+  `melia-1` with `language: multi` refused the session with "additional properties
+  'additional_vocab' not allowed", so with `melia-1` or `oak-1` flowbench prints a warning and
+  sends the dictionary to the cleanup only. Keep the file in `samples/`, which git ignores, if it holds internal
   names. Speechmatics warns that a dictionary can delay the session start by up to 15 s; the
   start is before key release, so `total_ms` does not include it.
 - Times are from the moment the cleanup request is sent. Add the speech provider's `stt_ms` for
@@ -210,7 +213,8 @@ Then drop `es-01 en-01` for all samples, and repeat with `--stt-provider deepgra
   [Deepgram Finalize](https://developers.deepgram.com/docs/finalize),
   [Deepgram CloseStream](https://developers.deepgram.com/docs/close-stream),
   [Speechmatics custom dictionary](https://docs.speechmatics.com/speech-to-text/features/custom-dictionary).
-  Not stated there: whether `additional_vocab` works with `language: multi` and `melia-1`.
+  Not stated there: whether `additional_vocab` works with `language: multi` and `melia-1`. It
+  did not on 25 November 2026: the session was refused (see `--vocab` above).
   Not verified there: the exact form of Speechmatics `language_hints`.
 
 ## Flags
@@ -229,7 +233,7 @@ Then drop `es-01 en-01` for all samples, and repeat with `--stt-provider deepgra
 | `--llm-deadline-ms` | `1500` | After this, the raw transcript is used and counted as a fallback |
 | `--reasoning-effort` | `none` | `off` leaves the field out of the request |
 | `--prompt` | `v1` | Cleanup prompt: `v1`, `v2`, `v3` or a file |
-| `--vocab FILE` | none | Dictionary for Speechmatics and the cleanup |
+| `--vocab FILE` | none | Dictionary for the cleanup, and for Speechmatics single-language models |
 | `--deepgram-finalize-only` | | Deepgram: end on the Finalize reply, not after CloseStream. Faster, but lost final words |
 | `--net` | | Print TCP round trips to the provider hosts, then stop |
 | `--net-host HOST` | built-in list | Hosts for `--net`; repeatable |

@@ -131,7 +131,9 @@ impl LiveSocket {
     /// session.
     pub async fn send(&mut self, message: Message) -> Result<()> {
         if self.reader.is_none() || self.reader_finished() {
-            return match self.reader_result().await {
+            let result = self.reader_result().await;
+            self.close().await;
+            return match result {
                 Ok(_) => bail!("a final transcript arrived before the end of speech"),
                 Err(err) => Err(err),
             };
@@ -141,6 +143,10 @@ impl LiveSocket {
 
     /// Key release: sends the end-of-speech messages and waits for the final transcript.
     pub async fn finish(mut self, messages: Vec<Message>, what: &str) -> Result<Transcript> {
+        // A failure already taken by `send` closed the socket; there is nothing to send into.
+        if self.reader.is_none() {
+            bail!("the session has already ended");
+        }
         for message in messages {
             if let Err(err) = self.sink.send(message).await {
                 // If the provider said why it hung up, that message is the useful one.
@@ -150,7 +156,17 @@ impl LiveSocket {
                 break;
             }
         }
-        self.reader_result().await
+        let result = self.reader_result().await;
+        if result.is_err() {
+            self.close().await;
+        }
+        result
+    }
+
+    /// Sends a Close frame, so a failed session does not stay open and count against the
+    /// provider's concurrent quota. The socket may already be gone, so a failure is ignored.
+    async fn close(&mut self) {
+        let _ = self.sink.send(Message::Close(None)).await;
     }
 }
 
@@ -177,6 +193,8 @@ pub mod testserver {
     pub enum Got {
         Json(Value),
         Binary(Vec<u8>),
+        /// The client closed the socket with a Close frame.
+        Close,
     }
 
     /// What the server saw: the request path and query, the authorization header, and every
@@ -221,6 +239,10 @@ pub mod testserver {
                 let message = match message {
                     Message::Text(text) => Got::Json(serde_json::from_str(text.as_str()).unwrap()),
                     Message::Binary(bytes) => Got::Binary(bytes.to_vec()),
+                    Message::Close(_) => {
+                        got.push(Got::Close);
+                        break;
+                    }
                     _ => continue,
                 };
                 for answer in reply(&message) {

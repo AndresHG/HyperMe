@@ -259,13 +259,20 @@ async fn main() -> Result<()> {
                 .map(|d| d.parse::<f64>())
                 .transpose()
                 .context("--stt-delay for Speechmatics is max_delay in seconds, such as 0.7")?;
+            let vocab = vocab_terms(&args)?;
+            if !vocab.is_empty() && !speechmatics::takes_vocab(&live_model) {
+                eprintln!(
+                    "Speechmatics {live_model} refuses additional_vocab; the dictionary goes only \
+                     to the cleanup prompt"
+                );
+            }
             let stt = SpeechmaticsSpeech {
                 key: http::key_from_env(speechmatics::KEY_ENV)?,
                 url,
                 model: live_model,
                 languages,
                 max_delay,
-                vocab: vocab_terms(&args)?,
+                vocab,
                 trace,
             };
             run(&args, clips, &stt, &llm).await

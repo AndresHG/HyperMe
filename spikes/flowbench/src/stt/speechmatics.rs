@@ -46,6 +46,12 @@ fn is_multi(model: &str) -> bool {
     matches!(model, "melia-1" | "oak-1")
 }
 
+/// Whether the model takes `additional_vocab`. On 25 November 2026 `melia-1` with
+/// `language: multi` refused it: "additional properties 'additional_vocab' not allowed".
+pub fn takes_vocab(model: &str) -> bool {
+    !is_multi(model)
+}
+
 /// The `StartRecognition` message: raw 16-bit PCM at our rate, no partials.
 fn start_recognition(
     model: &str,
@@ -71,7 +77,7 @@ fn start_recognition(
     if let Some(delay) = max_delay {
         config["max_delay"] = json!(delay);
     }
-    if !vocab.is_empty() {
+    if !vocab.is_empty() && takes_vocab(model) {
         config["additional_vocab"] = vocab::speechmatics(vocab);
     }
     Ok(json!({
@@ -192,9 +198,15 @@ impl SpeechProvider for SpeechmaticsSpeech {
             }
             bail!("the socket closed before the session started")
         };
-        timeout(STARTED_TIMEOUT, started)
-            .await
-            .context("no RecognitionStarted from Speechmatics")??;
+        let outcome = match timeout(STARTED_TIMEOUT, started).await {
+            Ok(outcome) => outcome,
+            Err(_) => Err(anyhow::anyhow!("no RecognitionStarted from Speechmatics")),
+        };
+        if let Err(err) = outcome {
+            // A refused session still counts against the concurrent quota until it is closed.
+            let _ = sink.send(Message::Close(None)).await;
+            return Err(err);
+        }
         let mut collector = Collector::default();
         let reader = ws::read_until_final(stream, self.trace, move |e| collector.on_event(e));
         Ok(SpeechmaticsLive {
@@ -268,13 +280,41 @@ mod tests {
                 .get("additional_vocab")
                 .is_none()
         );
-        // Issue 31, AC-2: the dictionary goes in only when there is one.
+        // Issue 31, AC-2: melia-1 and oak-1 refuse additional_vocab ("additional properties
+        // 'additional_vocab' not allowed", 25 November 2026), so it is left out for them.
         let terms = vocab::parse("Zentrix: zen trix");
-        let with_vocab = start_recognition("melia-1", &[], None, &terms).unwrap();
+        let multi_with_vocab = start_recognition("melia-1", &[], None, &terms).unwrap();
+        assert!(
+            multi_with_vocab["transcription_config"]
+                .get("additional_vocab")
+                .is_none()
+        );
+        let oak_with_vocab = start_recognition("oak-1", &[], None, &terms).unwrap();
+        assert!(
+            oak_with_vocab["transcription_config"]
+                .get("additional_vocab")
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn single_language_models_take_the_dictionary() {
+        // Issue 31, AC-2: the dictionary goes in only when there is one and the model takes it.
+        let terms = vocab::parse("Zentrix: zen trix");
+        let es = ["es".to_owned()];
+        let with_vocab = start_recognition("enhanced", &es, None, &terms).unwrap();
         assert_eq!(
             with_vocab["transcription_config"]["additional_vocab"],
             json!([{"content": "Zentrix", "sounds_like": ["zen trix"]}])
         );
+        let without = start_recognition("enhanced", &es, None, &[]).unwrap();
+        assert!(
+            without["transcription_config"]
+                .get("additional_vocab")
+                .is_none()
+        );
+        assert!(takes_vocab("enhanced"));
+        assert!(!takes_vocab("melia-1"));
     }
 
     #[test]
@@ -412,6 +452,40 @@ mod tests {
         .await;
         let error = format!("{:#}", speech(base).open_live("es-01").await.err().unwrap());
         assert!(error.contains("bad key"), "{error}");
+    }
+
+    #[tokio::test]
+    async fn a_refused_session_closes_its_socket() {
+        // Issue 31: a refused session must not stay open and count against the concurrent quota.
+        let (base, server) = testserver::serve(vec![], |_| {
+            vec![json!({"message": "Error", "type": "protocol_error", "reason": "not allowed"})]
+        })
+        .await;
+        let error = format!("{:#}", speech(base).open_live("es-01").await.err().unwrap());
+        assert!(error.contains("not allowed"), "{error}");
+        let seen = server.await.unwrap();
+        assert_eq!(seen.got.last(), Some(&Got::Close));
+    }
+
+    #[tokio::test]
+    async fn a_session_that_fails_midway_closes_its_socket() {
+        // Issue 31: when the reader ends with a failure, the socket is closed, not left open.
+        let (base, server) = testserver::serve(vec![], |got| match got {
+            Got::Json(event) if event["message"] == "StartRecognition" => {
+                vec![json!({"message": "RecognitionStarted", "id": "abc"})]
+            }
+            Got::Binary(_) => {
+                vec![json!({"message": "Error", "type": "quota_exceeded", "reason": "quota"})]
+            }
+            _ => vec![],
+        })
+        .await;
+        let mut live = speech(base).open_live("es-01").await.unwrap();
+        live.send_audio(&[0; 240]).await.unwrap();
+        let error = format!("{:#}", live.finish().await.err().unwrap());
+        assert!(error.contains("quota"), "{error}");
+        let seen = server.await.unwrap();
+        assert_eq!(seen.got.last(), Some(&Got::Close));
     }
 
     #[tokio::test]
