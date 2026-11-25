@@ -23,6 +23,10 @@ accents, and words that were clearly misheard. Keep every other word exactly as 
 including informal words, slang and swearing, in the same order and the same language. \
 Never translate, rephrase, summarise or answer. Output only the cleaned text.";
 
+/// The one rule `v4` adds to `v3` (issue 34).
+const V4_RULE: &str = "When a word or short phrase clearly sounds like a term in the speaker's \
+dictionary, write the dictionary term. Otherwise change nothing.";
+
 /// The second prompt: named fillers in both languages, self-corrections, context fixes and
 /// examples. The examples are made up, not taken from the owner's samples. The fixed text comes
 /// first and the transcript last, so a provider's prompt cache can keep the first token fast.
@@ -66,8 +70,9 @@ pub fn prompt_named(name: &str) -> Result<String> {
         "v1" => PROMPT.to_owned(),
         "v2" => PROMPT_V2.to_owned(),
         "v3" => PROMPT_V3.to_owned(),
+        "v4" => format!("{PROMPT_V3} {V4_RULE}"),
         path => std::fs::read_to_string(path)
-            .with_context(|| format!("--prompt is not v1, v2, v3 or a readable file: {path}"))?
+            .with_context(|| format!("--prompt is not v1, v2, v3, v4 or a readable file: {path}"))?
             .trim()
             .to_owned(),
     })
@@ -341,6 +346,19 @@ mod tests {
     use super::*;
     use crate::fake::FakeCleanup;
     use crate::testserver;
+
+    /// Issue 34, AC-3: v4 is v3 plus one rule for dictionary terms.
+    #[test]
+    fn v4_is_v3_with_the_dictionary_rule() {
+        let v4 = prompt_named("v4").unwrap();
+        assert!(v4.starts_with(PROMPT_V3), "{v4}");
+        let rule = &v4[PROMPT_V3.len()..];
+        assert!(
+            rule.contains("sounds like a term in the speaker's dictionary"),
+            "{rule}"
+        );
+        assert!(rule.contains("Otherwise change nothing"), "{rule}");
+    }
 
     /// Issue 31, AC-4.
     #[test]
