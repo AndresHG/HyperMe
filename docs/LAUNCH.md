@@ -20,7 +20,7 @@ checklist so a later session can tick it off. State on 25 November 2026.
 | CI: fmt, clippy, tests, secret scan, licence policy | Done (PR 22). GitHub Actions blocked by billing on 25 November 2026; checks run locally until it is fixed |
 | Roadmap and phase issues | Done ([ROADMAP.md](ROADMAP.md), #24 to #29); adopted by the owner on 25 November 2026 |
 | Phase 1 spec | Draft: [specs/25-dictation-core](../specs/25-dictation-core/spec.md) |
-| No personal, employer or transcript data in the full history | Checked by the gitleaks job for secrets. A read of the history for personal and employer details is still to do before going public |
+| No personal, employer or transcript data in the full history | Read on 25 November 2026: no secrets, keys, audio, transcripts or client figures; the employer is never named. Master is clean; older commits still describe the owner's employer in general terms, which the owner accepts. Decision: this same repository goes public, with its history as it is, no rewrite (owner, 26 November 2026) |
 
 ## Repository settings (owner, on GitHub)
 

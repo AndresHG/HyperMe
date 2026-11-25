@@ -232,7 +232,7 @@ At 40 meeting hours a month, transcription after the meeting costs about $4 (Son
 - **Works councils.** EU member states may require works-council involvement for processing employee data (Mayer Brown) [V as a law-firm note].
 - **EU AI Act.** Emotion inference in the workplace is prohibited [U, memory]. Do not add sentiment or "coaching" analysis of colleagues.
 
-**A user in a regulated workplace, such as a bank**
+**A user in a regulated workplace**
 
 - The user is not the controller of work meetings; the employer is. Recording internal meetings with a personal tool creates a second, unapproved copy of the employer's data on personal infrastructure or a personal cloud account. Inference from the AEPD and Mayer Brown points.
 - Mayer Brown's recommended company policy: only approved notetakers, an escalation path for shadow IT, and default non-use for legal advice, HR matters, regulated clients, trade secrets and board discussions [V as a law-firm note].
@@ -328,7 +328,7 @@ Also consider borrowing nothing: `cpal` ≥ 0.18 (Apache-2.0) does microphone an
 
 1. **Silent capture failure.** A refused or broken tap returns zeros with no error; there is no API to ask; macOS upgrades can reset it. A notetaker that silently recorded nothing is the top user complaint in the category.
 2. **Echo and Bluetooth.** Loudspeakers double every remote sentence; Apple's built-in fix lowers the call volume; Bluetooth headsets degrade when used for input and output. This is weeks of audio work that produces no visible feature.
-3. **Invisible recording in a regulated workplace.** Bot-less means nobody else sees it. The AEPD asks for prior information, a visible indicator and per-session consent; a bank's policy is likely stricter. Keep work meetings excluded in software, and send a consent message by default for the rest.
+3. **Invisible recording in a regulated workplace.** Bot-less means nobody else sees it. The AEPD asks for prior information, a visible indicator and per-session consent; a regulated employer's policy is likely stricter. Keep work meetings excluded in software, and send a consent message by default for the rest.
 
 A fourth, smaller trap: rebuilding the notes interface. That is the commoditised part.
 

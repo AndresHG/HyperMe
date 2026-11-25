@@ -38,7 +38,7 @@ Date: 24 November 2026. Scope: stress-test the earlier conclusion "build it, sta
 2. No sub-second "speak, see a preview card, press Enter" path to a ticket or calendar entry. The Claude path opens a chat and takes an agent round trip of several seconds.
 3. No single glance at agents across vendors (Claude Code and Devin together).
 4. No open source, no bring-your-own-key, no data ownership.
-5. Nothing for the regulated employer's mail and meetings. A self-built tool does not fix this either.
+5. Nothing for work mail and meetings, which stay out of scope. A self-built tool does not fix this either.
 
 ### A2. Thin glue instead of a new app
 
@@ -223,7 +223,7 @@ Assumptions (mine): 30 hours of dictation audio a month, 43 hours of meetings a 
 3. **The treadmill is the cost, not version 1.** Handy: 69 releases and still 0.x after 21 months, 200 paste issues, a new macOS permission bug filed yesterday. A part-time developer with other side projects inherits that queue alone.
 4. **The economics are negative.** At most $15 a month saved; 2 to 3 months of part-time work spent; API bills between $9 and $100 a month.
 5. **Combination products do not pull.** All-in-one and voice-to-coding-agent launches scored 1 to 15 points where single-purpose clones scored 200 to 300.
-6. **The regulated day job removes half the use.** Work mail and meetings stay out whatever is built. Meeting notes and mail drafts lose most of their value.
+6. **Keeping work data out removes half the use.** Work mail and meetings stay out whatever is built. Meeting notes and mail drafts lose most of their value.
 7. **Security is a real liability.** Mail and ticket content is attacker-controlled input to an agent holding tokens.
 8. **Abandonment is the base rate** for solo and small-team assistants and overlays (B3).
 

@@ -65,6 +65,8 @@ passes, update this section and record the evidence in `docs/results/`.
 - After dictation comes smart routing and actions; the first tracker connector is GitHub,
   not Linear (owner, 25 November 2026). See `docs/ROADMAP.md`.
 - Licence: MIT OR Apache-2.0, dual, at the user's option (owner, 25 November 2026).
+- This repository goes public as it is, history included: no rewrite and no fresh repository
+  (owner, 26 November 2026). See `docs/LAUNCH.md`.
 - `docs/ROADMAP.md` is the adopted plan; it replaces the old phase table in `docs/SPEC.md`
   (owner, 25 November 2026).
 - Code-of-conduct reports go through GitHub private reporting, like security reports; no
