@@ -33,7 +33,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0  # gitleaks reads history, not just the tree
           persist-credentials: false  # a downloaded binary runs in this checkout
@@ -59,7 +59,7 @@ jobs:
       matrix:
         crate: [spikes/flowbench]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: EmbarkStudios/cargo-deny-action@v2
         with:
           manifest-path: ${{ matrix.crate }}/Cargo.toml

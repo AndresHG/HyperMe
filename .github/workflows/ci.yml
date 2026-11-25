@@ -27,7 +27,7 @@ jobs:
     name: Lint workflow YAML
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: raven-actions/actionlint@v2
 
   # Chooses the operating systems. macOS is the first platform, so it runs on
@@ -65,7 +65,7 @@ jobs:
       run:
         working-directory: ${{ matrix.crate }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install ALSA headers (cpal on Linux)
         if: runner.os == 'Linux'
