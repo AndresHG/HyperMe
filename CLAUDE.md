@@ -24,6 +24,7 @@ or Devin and reports back.
 - `docs/RESEARCH.md`: verdict, product focus, pitch and field map from the research of
   24 November 2026
 - `KICKOFF.md`: the first two sessions, step by step
+- `CONTRIBUTING.md` and `specs/README.md`: how a change is sized, specified and tested
 
 ## Current phase
 
@@ -61,6 +62,7 @@ passes, update this section and record the evidence in `docs/results/`.
 - This project's own tickets live in GitHub Projects.
 - After dictation comes smart routing and actions; the first tracker connector is GitHub,
   not Linear (owner, 25 November 2026). See `docs/ROADMAP.md`.
+- Licence: MIT OR Apache-2.0, dual, at the user's option (owner, 25 November 2026).
 
 ## Budgets (targets to design against)
 
@@ -73,11 +75,23 @@ passes, update this section and record the evidence in `docs/results/`.
 
 ## Open decisions: ask the owner, do not assume
 
-- Licence: MIT or Apache-2.0. Do not add a LICENSE file until this is decided.
 - Mail and calendar provider: Google or Microsoft 365?
 - Ticket creation: wait for Enter (default) or fire at once?
 - Order of the parts after dictation, and who the first outside user is.
 - Whether to adopt the two extra checks in `docs/RESEARCH.md` section 1.3 as gates.
+
+## Spec first, test first
+
+- Size every change S, M or L before coding (`CONTRIBUTING.md`). L gets
+  `specs/<issue>-<slug>/spec.md` with `AC-n` criteria, approved before production code; M keeps
+  its `AC-n` in the issue; S starts from a failing test.
+- Write the failing test before the code. Each test cites the `AC-n` it proves; a bug fix starts
+  with a test that reproduces it.
+- Tests never call a paid API or need a key: use local fakes and test servers.
+- CI (`.github/workflows/`) runs fmt, clippy, tests, a full-history secret scan and the licence
+  and advisory policy in `deny.toml`. A red check is fixed, never skipped or allowlisted to pass.
+- Keep platform code behind a trait or a `cfg(target_os)` module, so Linux and Windows can follow
+  macOS without touching the core.
 
 ## Working rules
 
@@ -88,7 +102,7 @@ passes, update this section and record the evidence in `docs/results/`.
   network.
 - Keep dependencies few. Say why each new crate is needed in the commit message.
 - When borrowing code, record the source repository, commit and licence in `NOTICE.md`.
-- `cargo fmt`, `cargo clippy -- -D warnings` and tests pass before every commit.
+- `cargo fmt`, `cargo clippy --all-targets -- -D warnings` and tests pass before every commit.
 - Changed files end in a pull request into `master` with its `## Lessons` filled in: never
   a commit on `master`, never left uncommitted. An uncommitted plan was missing for the
   session that needed it, and a clean-context check found six errors (PR 1).
@@ -98,4 +112,7 @@ passes, update this section and record the evidence in `docs/results/`.
   unverified. The first analysis took its own field list as checked and its headline was
   wrong (PR 1).
 - Small commits with clear messages. Open a GitHub issue for anything deferred.
-- Work data (bank mail, bank meetings) is out of scope until the owner says otherwise.
+- Work data from the owner's employer is out of scope until the owner says otherwise.
+- The repository is meant to be public. Never commit audio, transcripts, meeting notes, personal
+  or family details, or anything naming the owner's employer, clients or other projects.
+  `docs/results/` holds numbers only.

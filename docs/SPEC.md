@@ -57,7 +57,7 @@ overlay. Models and connectors are remote.
 | Tools | One MCP client (`rmcp`) to remote MCP servers | No per-service code |
 | Coding agents | Claude Code through `claude -p` or the Agent SDK; Devin through its MCP server | Start, poll, surface the result in the overlay |
 | Scheduler | Cron jobs in SQLite; each job is a self-contained prompt plus a tool allowlist | Jobs run with no memory of earlier chats |
-| Storage | SQLite with full-text search | Retrieval layer can be swapped later (VFS) |
+| Storage | SQLite with full-text search | Retrieval layer can be swapped later |
 | Secrets | OS keychain | Keys never sit in config files |
 
 ### Why Wispr Flow is fast (and what to copy)

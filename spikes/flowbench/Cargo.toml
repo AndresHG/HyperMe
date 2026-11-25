@@ -3,6 +3,7 @@ name = "flowbench"
 version = "0.1.0"
 edition = "2024"
 description = "Phase 0 speed test for HyperMe: key release to cleaned text"
+license = "MIT OR Apache-2.0"
 publish = false
 
 [dependencies]

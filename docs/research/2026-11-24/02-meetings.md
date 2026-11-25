@@ -232,13 +232,13 @@ At 40 meeting hours a month, transcription after the meeting costs about $4 (Son
 - **Works councils.** EU member states may require works-council involvement for processing employee data (Mayer Brown) [V as a law-firm note].
 - **EU AI Act.** Emotion inference in the workplace is prohibited [U, memory]. Do not add sentiment or "coaching" analysis of colleagues.
 
-**An employee at a bank**
+**A user in a regulated workplace, such as a bank**
 
-- The employee is not the controller of work meetings; the bank is. Recording internal meetings with a personal tool creates a second, unapproved copy of bank data on personal infrastructure or a personal cloud account. Inference from the AEPD and Mayer Brown points.
+- The user is not the controller of work meetings; the employer is. Recording internal meetings with a personal tool creates a second, unapproved copy of the employer's data on personal infrastructure or a personal cloud account. Inference from the AEPD and Mayer Brown points.
 - Mayer Brown's recommended company policy: only approved notetakers, an escalation path for shadow IT, and default non-use for legal advice, HR matters, regulated clients, trade secrets and board discussions [V as a law-firm note].
 - A vendor poll reported that 68% of financial-services compliance attendees restrict AI meeting tools and 20% ban them [U, vendor blog].
 - DORA's ICT third-party rules mean a bank must register and assess providers that process its data [U, memory]. A personal API key to a speech provider is such a provider.
-- The project brief already states that bank meetings are out of scope. This research supports keeping it that way, and suggests enforcing it in software (calendar-domain or account allowlist) rather than by habit.
+- The project brief already keeps employer meetings out of scope. This research supports keeping it that way, and suggests enforcing it in software (calendar-domain or account allowlist) rather than by habit.
 
 **Litigation signal (US).** A federal judge let wiretap and biometric claims against Otter proceed on 13 Aug 2026; two BIPA suits against Fireflies are pending [U, legal-news snippets].
 

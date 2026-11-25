@@ -1,0 +1,10 @@
+# gitleaks config for .github/workflows/security.yml.
+
+# Keep every built-in rule: a config without this replaces them all, and the
+# scan then passes on everything.
+[extend]
+useDefault = true
+
+# Add an allowlist entry only for a value made up for a test, matched on the
+# value itself, with the file that uses it. Never allowlist a real credential:
+# revoke it, then remove it from history.

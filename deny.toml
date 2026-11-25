@@ -1,0 +1,37 @@
+# cargo-deny policy for every crate in this repository. Run it locally with:
+#   cargo deny --manifest-path spikes/flowbench/Cargo.toml --config deny.toml check
+
+[graph]
+all-features = true
+
+[licenses]
+# CLAUDE.md: dependencies must be MIT, Apache-2.0 or BSD.
+allow = [
+  "MIT",
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  # Not on the CLAUDE.md list: permissive, asks for attribution, and comes in
+  # through `url`, which every Rust HTTP client and Tauri use. Whether to allow
+  # it is issue #16; remove this line if the owner says no.
+  "Unicode-3.0",
+]
+confidence-threshold = 0.9
+
+[licenses.private]
+# Our own crates are `publish = false`; their licence is MIT OR Apache-2.0.
+ignore = true
+
+[advisories]
+# Fail on any RustSec advisory, unmaintained crates included. Add an `ignore`
+# entry only with its advisory id, a reason and an issue number.
+ignore = []
+
+[bans]
+multiple-versions = "allow"
+wildcards = "deny"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"

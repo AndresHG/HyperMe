@@ -1,0 +1,12 @@
+# Weekly update pull requests for the Rust crates and the workflow actions.
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: /spikes/flowbench
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

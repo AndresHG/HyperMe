@@ -1,0 +1,92 @@
+name: CI
+
+# Build, lint and test every Rust crate on every pull request and on master.
+# Today the only crate is spikes/flowbench; add new crates to the matrix's
+# `crate` list. CLAUDE.md: fmt, clippy -D warnings and tests pass before every commit.
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A new push to a pull request cancels the run for its previous head.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -D warnings
+
+jobs:
+  lint-workflows:
+    name: Lint workflow YAML
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: raven-actions/actionlint@v2
+
+  # Chooses the operating systems. macOS is the first platform, so it runs on
+  # every pull request once the repository is public (standard runners are free
+  # for public repositories). While it is private, macOS minutes cost ten times
+  # Linux minutes, so macOS runs only on pushes to master and manual runs.
+  # Windows joins when there is a crate for it.
+  plan:
+    name: Plan platforms
+    runs-on: ubuntu-latest
+    outputs:
+      os: ${{ steps.os.outputs.os }}
+    steps:
+      - id: os
+        env:
+          PRIVATE: ${{ github.event.repository.private }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          if [ "$PRIVATE" = "true" ] && [ "$EVENT" = "pull_request" ]; then
+            echo 'os=["ubuntu-latest"]' >> "$GITHUB_OUTPUT"
+          else
+            echo 'os=["ubuntu-latest","macos-latest"]' >> "$GITHUB_OUTPUT"
+          fi
+
+  rust:
+    name: Rust (${{ matrix.crate }}, ${{ matrix.os }})
+    needs: plan
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        crate: [spikes/flowbench]
+        os: ${{ fromJSON(needs.plan.outputs.os) }}
+    defaults:
+      run:
+        working-directory: ${{ matrix.crate }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install ALSA headers (cpal on Linux)
+        if: runner.os == 'Linux'
+        working-directory: .
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libasound2-dev
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ${{ matrix.crate }}
+
+      - name: Format
+        run: cargo fmt --check
+
+      - name: Clippy
+        run: cargo clippy --all-targets --locked -- -D warnings
+
+      - name: Test
+        # Tests never call a paid API: they use the local fakes in src/fake.rs
+        # and src/testserver.rs, so CI needs no keys.
+        run: cargo test --locked
