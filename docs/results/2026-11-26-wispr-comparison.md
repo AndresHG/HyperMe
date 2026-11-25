@@ -22,7 +22,7 @@ rare for both. Most of our remaining distance comes from the speech engine, not 
 | Cleanup | Groq `openai/gpt-oss-20b`, reasoning effort low, deadline 1500 ms |
 | Tool | `spikes/flowbench` at `21b8d53` (branch `feat/vocab-and-strict-cleanup`) for the replays and the live `v3` run |
 | Wispr Flow | Version 1.6.1619. Each clip was played into the BlackHole 2ch virtual device with sox. Dictation was started and stopped with Wispr's `wispr-flow://start-hands-free` and `stop-hands-free` links, and the results were read afterwards from Wispr's local history. Wispr used the owner's own dictionary and settings |
-| Gold | One text per sample: what the owner would send if he typed it. Drafted from the raw Speechmatics and OpenAI transcripts (not from any cleaned output), then reviewed by the owner. Fifteen doubtful samples were flagged and checked by ear; `en-14` is kept, but its audio is poor |
+| Gold | One text per sample: what the owner would send if typing it. Drafted from the raw Speechmatics and OpenAI transcripts (not from any cleaned output), then reviewed by the owner. Fifteen doubtful samples were flagged and checked by ear; `en-14` is kept, but its audio is poor |
 
 **Scoring.** Both texts have their spacing collapsed. The score is the character edit distance to
 the gold text: zero-edit means the output needs no change at all, punctuation and capitals
