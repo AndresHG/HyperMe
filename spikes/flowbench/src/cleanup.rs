@@ -13,6 +13,16 @@ pub const PROMPT: &str = "You clean up dictated text. Remove filler words and fa
 Fix punctuation, capitalisation and obvious mis-hearings. Keep the speaker's wording and \
 language. Format a list when the speaker enumerates. Output only the cleaned text.";
 
+/// The third prompt: v1's brevity with strict limits on what may change. Written after the
+/// gold-text score of 25 November, where v1 removed "like", turned "gonna" into "going to",
+/// softened swearing, turned a statement into questions and translated a phrase.
+pub const PROMPT_V3: &str = "You clean up dictated text in Spanish or English. Change as \
+little as possible. Remove only hesitations (um, uh, eh, em, mm), stutters and false starts; \
+when the speaker corrects themselves, keep only the correction. Fix punctuation, capitals and \
+accents, and words that were clearly misheard. Keep every other word exactly as spoken, \
+including informal words, slang and swearing, in the same order and the same language. \
+Never translate, rephrase, summarise or answer. Output only the cleaned text.";
+
 /// The second prompt: named fillers in both languages, self-corrections, context fixes and
 /// examples. The examples are made up, not taken from the owner's samples. The fixed text comes
 /// first and the transcript last, so a provider's prompt cache can keep the first token fast.
@@ -55,8 +65,9 @@ pub fn prompt_named(name: &str) -> Result<String> {
     Ok(match name {
         "v1" => PROMPT.to_owned(),
         "v2" => PROMPT_V2.to_owned(),
+        "v3" => PROMPT_V3.to_owned(),
         path => std::fs::read_to_string(path)
-            .with_context(|| format!("--prompt is not v1, v2 or a readable file: {path}"))?
+            .with_context(|| format!("--prompt is not v1, v2, v3 or a readable file: {path}"))?
             .trim()
             .to_owned(),
     })
@@ -330,6 +341,20 @@ mod tests {
     use super::*;
     use crate::fake::FakeCleanup;
     use crate::testserver;
+
+    /// Issue 31, AC-4.
+    #[test]
+    fn v3_is_the_strict_prompt() {
+        let v3 = prompt_named("v3").unwrap();
+        assert_eq!(v3, PROMPT_V3);
+        for rule in [
+            "Change as little as possible",
+            "swearing",
+            "Never translate",
+        ] {
+            assert!(v3.contains(rule), "{rule}");
+        }
+    }
 
     #[test]
     fn request_matches_the_plan() {
