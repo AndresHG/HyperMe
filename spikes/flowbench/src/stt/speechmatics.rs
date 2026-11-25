@@ -146,26 +146,39 @@ impl SpeechProvider for SpeechmaticsSpeech {
             .context("no RecognitionStarted from Speechmatics")??;
         let mut collector = Collector::default();
         let reader = ws::read_until_final(stream, self.trace, move |e| collector.on_event(e));
-        Ok(SpeechmaticsLive(LiveSocket::new(
-            sink,
-            tokio::spawn(reader),
-        )))
+        Ok(SpeechmaticsLive {
+            socket: LiveSocket::new(sink, tokio::spawn(reader)),
+            sent: 0,
+        })
     }
 }
 
-pub struct SpeechmaticsLive(LiveSocket);
+pub struct SpeechmaticsLive {
+    socket: LiveSocket,
+    /// Audio frames sent, for `EndOfStream`'s `last_seq_no`.
+    sent: u64,
+}
 
 impl LiveSession for SpeechmaticsLive {
     async fn send_audio(&mut self, pcm: &[i16]) -> Result<()> {
-        self.0.send(Message::binary(pcm_bytes(pcm))).await
+        self.socket.send(Message::binary(pcm_bytes(pcm))).await?;
+        self.sent += 1;
+        Ok(())
     }
 
+    /// Sends ForceEndOfUtterance, then EndOfStream. In the first real run (25 November 2026,
+    /// `melia-1`) no EndOfUtterance came back after the force, so the dictation also ends on
+    /// the EndOfTranscript that follows EndOfStream, whichever comes first.
     async fn finish(self) -> Result<Transcript> {
         let force = json!({"message": "ForceEndOfUtterance"});
-        self.0
+        let end = json!({"message": "EndOfStream", "last_seq_no": self.sent});
+        self.socket
             .finish(
-                vec![Message::text(force.to_string())],
-                "ForceEndOfUtterance",
+                vec![
+                    Message::text(force.to_string()),
+                    Message::text(end.to_string()),
+                ],
+                "the end of stream",
             )
             .await
     }
@@ -259,6 +272,7 @@ mod tests {
                     "metadata": {"transcript": "Hola, hola."}, "results": []}),
                 json!({"message": "EndOfUtterance", "forced": true}),
             ],
+            Got::Json(event) if event["message"] == "EndOfStream" => vec![],
             other => panic!("unexpected client message: {other:?}"),
         })
         .await;
@@ -272,13 +286,36 @@ mod tests {
         let seen = server.await.unwrap();
         assert_eq!(seen.path_and_query, "/v2");
         assert_eq!(seen.auth, "Bearer test-key");
-        assert_eq!(seen.got.len(), 3);
+        assert_eq!(seen.got.len(), 4);
         assert!(matches!(&seen.got[0], Got::Json(e) if e["message"] == "StartRecognition"));
         assert_eq!(seen.got[1], Got::Binary(vec![1, 0, 0xFE, 0xFF]));
         assert_eq!(
             seen.got[2],
             Got::Json(json!({"message": "ForceEndOfUtterance"}))
         );
+        assert_eq!(
+            seen.got[3],
+            Got::Json(json!({"message": "EndOfStream", "last_seq_no": 1}))
+        );
+    }
+
+    #[tokio::test]
+    async fn end_of_transcript_ends_the_dictation_when_the_force_gets_no_answer() {
+        let (base, _server) = testserver::serve(vec![], |got| match got {
+            Got::Json(event) if event["message"] == "StartRecognition" => {
+                vec![json!({"message": "RecognitionStarted", "id": "abc"})]
+            }
+            Got::Json(event) if event["message"] == "EndOfStream" => vec![
+                json!({"message": "AddTranscript", "metadata": {"transcript": "Hola."}, "results": []}),
+                json!({"message": "EndOfTranscript"}),
+            ],
+            _ => vec![],
+        })
+        .await;
+        let mut live = speech(base).open_live("es-01").await.unwrap();
+        live.send_audio(&[0; 240]).await.unwrap();
+        live.send_audio(&[0; 240]).await.unwrap();
+        assert_eq!(live.finish().await.unwrap().text, "Hola.");
     }
 
     #[tokio::test]
