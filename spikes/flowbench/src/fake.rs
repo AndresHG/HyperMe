@@ -9,7 +9,7 @@ use anyhow::Result;
 use tokio::time::sleep;
 
 use crate::audio::{Clip, SAMPLE_RATE};
-use crate::cleanup::CleanupProvider;
+use crate::cleanup::{CleanupProvider, Piece};
 use crate::stt::{LiveSession, SpeechProvider, Transcript};
 
 const ES_LINES: &[&str] = &[
@@ -142,7 +142,7 @@ impl CleanupProvider for FakeCleanup {
         Ok(())
     }
 
-    async fn clean(&self, raw: &str, on_text: &mut dyn FnMut(&str)) -> Result<()> {
+    async fn clean(&self, raw: &str, on_piece: &mut dyn FnMut(Piece<'_>)) -> Result<()> {
         if raw.contains(STALL_WORD) {
             sleep(Duration::from_secs(10)).await;
         }
@@ -150,9 +150,9 @@ impl CleanupProvider for FakeCleanup {
         for (i, word) in Self::cleaned(raw).split(' ').enumerate() {
             if i > 0 {
                 sleep(Self::PER_WORD).await;
-                on_text(" ");
+                on_piece(Piece::Text(" "));
             }
-            on_text(word);
+            on_piece(Piece::Text(word));
         }
         Ok(())
     }

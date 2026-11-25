@@ -50,6 +50,9 @@ pub fn stage_line(result: &SampleResult) -> String {
                 opt(m.first_ms),
                 m.total_ms
             );
+            if let Some(reasoning) = reasoning_note(m) {
+                let _ = write!(line, " | {reasoning}");
+            }
             match m.lang_ok {
                 Some(true) => line.push_str(" | lang ok"),
                 Some(false) => line.push_str(" | LANG WRONG"),
@@ -363,8 +366,27 @@ pub fn markdown(info: &RunInfo, rows: &[Row], results: &[SampleResult]) -> Strin
     md
 }
 
+/// The model's reasoning before the text, when there was any to see.
+pub fn reasoning_note(m: &Measured) -> Option<String> {
+    if m.thinking_chars == 0 && m.reasoning_tokens.is_none_or(|t| t == 0) {
+        return None;
+    }
+    let mut note = String::from("reasoning:");
+    if let Some(at) = m.first_any_ms {
+        let _ = write!(note, " first token of any kind at {at} ms,");
+    }
+    let _ = write!(note, " {} chars streamed", m.thinking_chars);
+    if let Some(tokens) = m.reasoning_tokens {
+        let _ = write!(note, ", {tokens} tokens");
+    }
+    Some(note)
+}
+
 fn note(m: &Measured) -> String {
     let mut parts = Vec::new();
+    if let Some(reasoning) = reasoning_note(m) {
+        parts.push(reasoning);
+    }
     if let Some(fallback) = &m.fallback_note {
         parts.push(format!("FALLBACK: {fallback}"));
     }

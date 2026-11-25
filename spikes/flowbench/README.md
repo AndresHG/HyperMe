@@ -111,21 +111,122 @@ line. Dictate the same samples into Wispr Flow (playing one back with
 `afplay samples/es-01.wav` while holding the Wispr Flow key works), paste each result there
 and mark which reads better. The tool does not fill this in.
 
+## 6. Find where the time goes (network)
+
+```bash
+cargo run --release -- --net
+```
+
+Prints the TCP round trip from this Mac to every speech and cleanup host worth comparing:
+OpenAI, Groq, Cerebras, Anthropic, Speechmatics (EU and global), Deepgram (EU and default),
+AssemblyAI (EU and default) and ElevenLabs. No key is used and nothing is sent beyond the TCP
+handshake, so the numbers are the network alone. The "warm round trip" in a results file is a
+`GET /models` request and includes the server's own time. Run it once on Wi-Fi and once wired.
+`--net-host HOST` (repeatable) checks other hosts instead.
+
+Every run now also writes the TCP round trip to its speech and cleanup hosts into the results
+file, and the stage log notes the cleanup model's reasoning: when its first token of any kind
+arrived, how many reasoning characters it streamed, and its reasoning tokens when the host
+reports them. A gap between the first token of any kind and the first text token is time the
+model spends thinking before it writes.
+
+## 7. Compare cleanup setups without speaking (replay)
+
+Every run with real providers saves the raw transcripts to `samples/transcripts.json`
+(git-ignored). `--replay` sends them to a cleanup setup, with no speech provider and no
+speaking, and reports time and quality. A results file that still has its "Texts" section works
+too: `--transcripts path/to/speed-test-2026-11-25-3.md`.
+
+```bash
+GROQ_API_KEY=$(security find-generic-password -a "$USER" -s GROQ_API_KEY -w) cargo run --release -- \
+  --replay --prompt v2 --llm-base-url https://api.groq.com/openai/v1 \
+  --llm-key-env GROQ_API_KEY --llm-model openai/gpt-oss-20b --reasoning-effort low
+```
+
+- `--prompt v1` is the prompt of the 25 November runs. `--prompt v2` names the fillers in both
+  languages, keeps only the final version after a self-correction, allows a word fix from
+  context, forbids translating or answering, and has six made-up examples. `--prompt FILE` reads
+  any other prompt.
+- Times are from the moment the cleanup request is sent. Add the speech provider's `stt_ms` for
+  the time from key release.
+- The table also counts texts left unchanged and fillers left (um, uh, eh, o sea, you know and
+  similar).
+- Numbers go to `docs/results/replay-YYYY-MM-DD.md`; the texts to
+  `samples/replay-YYYY-MM-DD-<model>.md`, which stays out of the repository.
+- The first replay writes `samples/gold-draft.json` with its cleaned texts. Correct each text to
+  exactly what you would send and save the file as `samples/gold.json`. From then on every replay
+  also reports the zero-edit rate (outputs that need no edit, the measure Voice Arena uses) and
+  edits per 100 characters.
+
+Other hosts to try, each with its own key stored the same way. Check each host's current model
+names and documentation first.
+
+| Host | `--llm-base-url` | `--llm-model` (examples) | `--reasoning-effort` |
+| --- | --- | --- | --- |
+| Groq | `https://api.groq.com/openai/v1` | `openai/gpt-oss-20b`, `openai/gpt-oss-120b` | `low` |
+| Cerebras | `https://api.cerebras.ai/v1` | `gpt-oss-120b` | `low` |
+| OpenAI | `https://api.openai.com/v1` | `gpt-6-luna` | `none` |
+
+## 8. Try an EU streaming speech provider
+
+Speechmatics and Deepgram stream to EU hosts and take an explicit end-of-speech message, so
+the final transcript does not wait for silence detection. Both only stream: pipeline A is not
+run with them. Each gives free credit on sign-up; a 38-sample run is about 5 minutes of audio.
+
+| Provider | Key variable | Default host | Default model | End of speech |
+| --- | --- | --- | --- | --- |
+| Speechmatics | `SPEECHMATICS_API_KEY` | `wss://eu.rt.speechmatics.com/v2` | `melia-1` (`language: multi`, finds the language itself) | `ForceEndOfUtterance` |
+| Deepgram | `DEEPGRAM_API_KEY` | `wss://api.eu.deepgram.com/v1/listen` | `nova-3` (`language=multi`) | `Finalize`, then `CloseStream`; ends once all audio is processed |
+
+Store each key in the keychain as in section 2 (`-s SPEECHMATICS_API_KEY`,
+`-s DEEPGRAM_API_KEY`). Two samples first, with the Groq cleanup of run 3:
+
+```bash
+SPEECHMATICS_API_KEY=$(security find-generic-password -a "$USER" -s SPEECHMATICS_API_KEY -w) \
+GROQ_API_KEY=$(security find-generic-password -a "$USER" -s GROQ_API_KEY -w) \
+cargo run --release -- --stt-provider speechmatics \
+  --llm-base-url https://api.groq.com/openai/v1 --llm-key-env GROQ_API_KEY \
+  --llm-model openai/gpt-oss-20b --reasoning-effort low es-01 en-01
+```
+
+Then drop `es-01 en-01` for all samples, and repeat with `--stt-provider deepgram` and
+`DEEPGRAM_API_KEY`. Notes:
+
+- Speechmatics `--stt-delay 0.7` sets `max_delay` to its lowest value. If the service rejects
+  the language hints, `--languages off` leaves them out. `enhanced` and `standard` need exactly
+  one language in `--languages`.
+- `--realtime-url wss://global.rt.speechmatics.com/v2` or `wss://api.deepgram.com/v1/listen`
+  compares against the non-EU hosts.
+- Sources, read on 25 November 2026:
+  [Speechmatics real-time API](https://docs.speechmatics.com/api-ref/realtime-transcription-websocket),
+  [Speechmatics turn detection](https://docs.speechmatics.com/speech-to-text/realtime/turn-detection),
+  [Deepgram regional endpoints](https://developers.deepgram.com/reference/regional-endpoints),
+  [Deepgram Finalize](https://developers.deepgram.com/docs/finalize),
+  [Deepgram CloseStream](https://developers.deepgram.com/docs/close-stream).
+  Not verified there: the exact form of Speechmatics `language_hints`.
+
 ## Flags
 
 | Flag | Default | Meaning |
 | --- | --- | --- |
-| `--stt-provider` | `openai` | `openai` or `fake` |
-| `--stt-live-model` | `gpt-live-transcribe` | Speech model for streaming (B) |
+| `--stt-provider` | `openai` | `openai`, `speechmatics`, `deepgram` or `fake` |
+| `--stt-live-model` | per provider | Speech model for streaming (B): `gpt-live-transcribe`, `melia-1`, `nova-3` |
 | `--stt-file-model` | `gpt-transcribe` | Speech model for upload (A) |
-| `--realtime-url` | `wss://api.openai.com/v1/realtime?intent=transcription` | WebSocket URL |
+| `--realtime-url` | per provider | WebSocket URL; EU hosts for Speechmatics and Deepgram |
 | `--languages` | `es,en` | Language hints, the same for every dictation. `off` sends none |
-| `--stt-delay` | not sent | The live model's delay: `minimal`, `low`, `medium`, `high`, `xhigh` |
+| `--stt-delay` | not sent | OpenAI: `minimal` to `xhigh`. Speechmatics: `max_delay` in seconds, 0.7 to 4 |
 | `--llm-model` | `gpt-6-luna` | Cleanup model |
 | `--llm-base-url` | `https://api.openai.com/v1` | Any OpenAI-compatible chat API |
 | `--llm-key-env` | `OPENAI_API_KEY` | Variable that holds the cleanup key |
 | `--llm-deadline-ms` | `1500` | After this, the raw transcript is used and counted as a fallback |
 | `--reasoning-effort` | `none` | `off` leaves the field out of the request |
+| `--prompt` | `v1` | Cleanup prompt: `v1`, `v2` or a file |
+| `--deepgram-finalize-only` | | Deepgram: end on the Finalize reply, not after CloseStream. Faster, but lost final words |
+| `--net` | | Print TCP round trips to the provider hosts, then stop |
+| `--net-host HOST` | built-in list | Hosts for `--net`; repeatable |
+| `--replay` | | Saved transcripts through the cleanup only |
+| `--transcripts PATH` | `samples/transcripts.json` | Transcripts for `--replay`: JSON or a results file |
+| `--gold PATH` | `samples/gold.json` | Corrected texts for zero-edit scoring |
 | `--runs` | `1` | Times to run the whole sample set |
 | `--mic` | | Live microphone instead of samples |
 | `--record NAME` | | Record one sample to `samples/NAME.wav` |
@@ -170,6 +271,12 @@ language. It catches a wrong language or a translation, not a single wrong word.
 | --- | --- |
 | `src/stt/mod.rs` | The speech-provider trait: file upload and live session |
 | `src/stt/openai.rs` | OpenAI upload and realtime WebSocket |
+| `src/stt/speechmatics.rs` | Speechmatics real-time WebSocket |
+| `src/stt/deepgram.rs` | Deepgram streaming WebSocket |
+| `src/stt/ws.rs` | What the streaming providers share: socket, reader, end of speech |
+| `src/net.rs` | TCP round trips, `--net` |
+| `src/replay.rs` | `--replay`: transcripts in, timings and quality signals out |
+| `src/quality.rs` | Fillers, unchanged texts, zero-edit and edit distance |
 | `src/cleanup.rs` | The cleanup trait, the OpenAI-compatible chat client, the deadline |
 | `src/pipeline.rs` | Pipelines A and B and the stage timestamps |
 | `src/stats.rs` | Median, 90th percentile, the gate |
@@ -184,5 +291,5 @@ language. It catches a wrong language or a translation, not a single wrong word.
 cargo test
 ```
 
-The tests need no key and no network. The OpenAI socket and HTTP code is tested against a
-server on localhost.
+The tests need no key and no network. Every provider's socket and HTTP code is tested against
+a server on localhost.

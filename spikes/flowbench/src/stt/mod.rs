@@ -1,9 +1,13 @@
 //! Speech-to-text behind one trait, so providers can be compared and swapped.
 
+pub mod deepgram;
 pub mod openai;
+pub mod speechmatics;
+pub mod ws;
 
 use anyhow::Result;
 
+#[derive(Debug, PartialEq)]
 pub struct Transcript {
     pub text: String,
     /// Language codes the provider says it detected. Empty when it reports none.
@@ -20,6 +24,11 @@ pub trait SpeechProvider {
 
     /// Pipeline B: open and configure a streaming session before the audio starts.
     async fn open_live(&self, label: &str) -> Result<Self::Live>;
+
+    /// Whether pipeline A can run: providers added only for streaming say no.
+    fn supports_upload(&self) -> bool {
+        true
+    }
 }
 
 /// One dictation being streamed.
