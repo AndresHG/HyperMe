@@ -1,0 +1,53 @@
+name: Feature or change
+description: Propose something new, or a change to how HyperMe behaves.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        HyperMe grows in phases, each behind a gate ([roadmap](https://github.com/AndresHG/hyperme/blob/master/docs/ROADMAP.md)).
+        Ideas for later phases are welcome and are kept for when that phase starts.
+        How a change is sized and specified: [CONTRIBUTING.md](https://github.com/AndresHG/hyperme/blob/master/CONTRIBUTING.md).
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What you are trying to do, and what gets in the way today.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: What HyperMe should do. One behaviour per line helps.
+    validations:
+      required: true
+  - type: textarea
+    id: criteria
+    attributes:
+      label: Acceptance criteria
+      description: How we will know it works. Observable, with numbers where a budget applies. Leave empty if unsure.
+      placeholder: |
+        AC-1: When the user releases the hotkey, the cleaned text is pasted within 800 ms at the median.
+        AC-2: ...
+  - type: dropdown
+    id: size
+    attributes:
+      label: Size, if you know it
+      description: S a fix or small change, M one feature in one part, L a new part, provider or connector, or anything that changes what leaves the machine.
+      options:
+        - "Not sure"
+        - "S"
+        - "M"
+        - "L (needs a spec in specs/ before code)"
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy
+      options:
+        - label: This changes what leaves the machine (audio, text, screenshots, app names). If ticked, it is L-sized and needs a spec.
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives and prior art
+      description: Other apps or projects that do this, and how. Name your source.
