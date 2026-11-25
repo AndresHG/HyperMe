@@ -17,13 +17,15 @@ use tokio_tungstenite::tungstenite::Message;
 use super::ws::{self, LiveSocket, Step};
 use super::{LiveSession, SpeechProvider, Transcript};
 use crate::audio::{SAMPLE_RATE, pcm_bytes};
+use crate::vocab::{self, Term};
 
 pub const KEY_ENV: &str = "SPEECHMATICS_API_KEY";
 /// The EU region. `wss://global.rt.speechmatics.com/v2` is the global one.
 pub const DEFAULT_URL: &str = "wss://eu.rt.speechmatics.com/v2";
 /// Melia 1 takes `language: multi` and finds the language itself.
 pub const DEFAULT_MODEL: &str = "melia-1";
-const STARTED_TIMEOUT: Duration = Duration::from_secs(10);
+/// Speechmatics warns that a custom dictionary can delay the start by up to 15 s.
+const STARTED_TIMEOUT: Duration = Duration::from_secs(20);
 
 pub struct SpeechmaticsSpeech {
     pub key: String,
@@ -34,6 +36,8 @@ pub struct SpeechmaticsSpeech {
     pub languages: Vec<String>,
     /// `max_delay` in seconds (0.7 to 4). `None` leaves the service default.
     pub max_delay: Option<f64>,
+    /// The user's dictionary, sent as `additional_vocab`.
+    pub vocab: Vec<Term>,
     pub trace: bool,
 }
 
@@ -43,7 +47,12 @@ fn is_multi(model: &str) -> bool {
 }
 
 /// The `StartRecognition` message: raw 16-bit PCM at our rate, no partials.
-fn start_recognition(model: &str, languages: &[String], max_delay: Option<f64>) -> Result<Value> {
+fn start_recognition(
+    model: &str,
+    languages: &[String],
+    max_delay: Option<f64>,
+    vocab: &[Term],
+) -> Result<Value> {
     let mut config = json!({"model": model});
     if is_multi(model) {
         config["language"] = json!("multi");
@@ -61,6 +70,9 @@ fn start_recognition(model: &str, languages: &[String], max_delay: Option<f64>) 
     }
     if let Some(delay) = max_delay {
         config["max_delay"] = json!(delay);
+    }
+    if !vocab.is_empty() {
+        config["additional_vocab"] = vocab::speechmatics(vocab);
     }
     Ok(json!({
         "message": "StartRecognition",
@@ -160,7 +172,7 @@ impl SpeechProvider for SpeechmaticsSpeech {
     }
 
     async fn open_live(&self, _label: &str) -> Result<SpeechmaticsLive> {
-        let start = start_recognition(&self.model, &self.languages, self.max_delay)?;
+        let start = start_recognition(&self.model, &self.languages, self.max_delay, &self.vocab)?;
         let (mut sink, mut stream) =
             ws::connect(&self.url, &format!("Bearer {}", self.key)).await?;
         sink.send(Message::text(start.to_string()))
@@ -231,7 +243,7 @@ mod tests {
     #[test]
     fn multi_language_models_send_multi_and_hints() {
         let languages = ["es".to_owned(), "en".to_owned()];
-        let start = start_recognition("melia-1", &languages, Some(0.7)).unwrap();
+        let start = start_recognition("melia-1", &languages, Some(0.7), &[]).unwrap();
         assert_eq!(start["message"], "StartRecognition");
         assert_eq!(
             start["audio_format"],
@@ -244,21 +256,33 @@ mod tests {
         assert_eq!(config["max_delay"], 0.7);
         assert!(config.get("enable_partials").is_none());
 
-        let no_hints = start_recognition("melia-1", &[], None).unwrap();
+        let no_hints = start_recognition("melia-1", &[], None, &[]).unwrap();
         assert!(
             no_hints["transcription_config"]
                 .get("language_hints")
                 .is_none()
         );
         assert!(no_hints["transcription_config"].get("max_delay").is_none());
+        assert!(
+            no_hints["transcription_config"]
+                .get("additional_vocab")
+                .is_none()
+        );
+        // Issue 31, AC-2: the dictionary goes in only when there is one.
+        let terms = vocab::parse("Zentrix: zen trix");
+        let with_vocab = start_recognition("melia-1", &[], None, &terms).unwrap();
+        assert_eq!(
+            with_vocab["transcription_config"]["additional_vocab"],
+            json!([{"content": "Zentrix", "sounds_like": ["zen trix"]}])
+        );
     }
 
     #[test]
     fn single_language_models_need_exactly_one_language() {
-        let start = start_recognition("enhanced", &["es".to_owned()], None).unwrap();
+        let start = start_recognition("enhanced", &["es".to_owned()], None, &[]).unwrap();
         assert_eq!(start["transcription_config"]["language"], "es");
         let two = ["es".to_owned(), "en".to_owned()];
-        let error = start_recognition("enhanced", &two, None).unwrap_err();
+        let error = start_recognition("enhanced", &two, None, &[]).unwrap_err();
         assert!(error.to_string().contains("exactly one language"));
     }
 
@@ -317,6 +341,7 @@ mod tests {
             model: "melia-1".to_owned(),
             languages: vec!["es".to_owned(), "en".to_owned()],
             max_delay: None,
+            vocab: vec![],
             trace: false,
         }
     }

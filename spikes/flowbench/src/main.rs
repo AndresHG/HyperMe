@@ -18,6 +18,7 @@ mod stats;
 mod stt;
 #[cfg(test)]
 mod testserver;
+mod vocab;
 
 use std::future::Future;
 use std::path::PathBuf;
@@ -110,9 +111,15 @@ struct Args {
     #[arg(long, default_value = "none")]
     reasoning_effort: String,
 
-    /// Cleanup prompt: v1 (the runs of 25 November), v2 (fillers named, examples), or a file
+    /// Cleanup prompt: v1 (the runs of 25 November), v2 (fillers named, examples), v3 (strict:
+    /// change as little as possible), or a file
     #[arg(long, default_value = "v1")]
     prompt: String,
+
+    /// The user's dictionary: one term per line, optionally `Term: sounds, like`. Sent to
+    /// Speechmatics as additional_vocab and added to the cleanup prompt
+    #[arg(long)]
+    vocab: Option<PathBuf>,
 
     /// WebSocket URL for streaming transcription. Default: the provider's (EU for Speechmatics
     /// and Deepgram)
@@ -258,6 +265,7 @@ async fn main() -> Result<()> {
                 model: live_model,
                 languages,
                 max_delay,
+                vocab: vocab_terms(&args)?,
                 trace,
             };
             run(&args, clips, &stt, &llm).await
@@ -307,8 +315,16 @@ fn chat_cleanup(args: &Args, http: reqwest::Client) -> Result<ChatCleanup> {
         key_env: args.llm_key_env.clone(),
         model: args.llm_model.clone(),
         reasoning_effort: (args.reasoning_effort != "off").then(|| args.reasoning_effort.clone()),
-        prompt: cleanup::prompt_named(&args.prompt)?,
+        prompt: cleanup::prompt_named(&args.prompt)? + &vocab::prompt_line(&vocab_terms(args)?),
     })
+}
+
+fn vocab_terms(args: &Args) -> Result<Vec<vocab::Term>> {
+    args.vocab
+        .as_deref()
+        .map(vocab::load)
+        .transpose()
+        .map(Option::unwrap_or_default)
 }
 
 /// Keeps the named samples, in the order given; all when no name is given.
@@ -519,6 +535,13 @@ async fn run<S: SpeechProvider, C: CleanupProvider>(
                 args.stt_delay.clone().unwrap_or("not sent".to_owned()),
             ),
             ("Prompt", format!("`{}`", args.prompt)),
+            (
+                "Dictionary",
+                match vocab_terms(args) {
+                    Ok(terms) if !terms.is_empty() => format!("{} terms", terms.len()),
+                    _ => "none".to_owned(),
+                },
+            ),
             (
                 "Cleanup",
                 format!("`{}` at `{}`", args.llm_model, args.llm_base_url),

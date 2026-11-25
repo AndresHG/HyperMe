@@ -145,8 +145,14 @@ GROQ_API_KEY=$(security find-generic-password -a "$USER" -s GROQ_API_KEY -w) car
 
 - `--prompt v1` is the prompt of the 25 November runs. `--prompt v2` names the fillers in both
   languages, keeps only the final version after a self-correction, allows a word fix from
-  context, forbids translating or answering, and has six made-up examples. `--prompt FILE` reads
-  any other prompt.
+  context, forbids translating or answering, and has six made-up examples. `--prompt v3` is v1
+  with strict limits: remove only hesitations and false starts, keep informal words and
+  swearing, never translate or rephrase. `--prompt FILE` reads any other prompt.
+- `--vocab FILE` is your dictionary, one term per line, optionally with how it sounds:
+  `Zentrix: zen trix`. Speechmatics gets it as `additional_vocab`, and the cleanup prompt gets
+  the written forms. Keep the file in `samples/`, which git ignores, if it holds internal
+  names. Speechmatics warns that a dictionary can delay the session start by up to 15 s; the
+  start is before key release, so `total_ms` does not include it.
 - Times are from the moment the cleanup request is sent. Add the speech provider's `stt_ms` for
   the time from key release.
 - The table also counts texts left unchanged and fillers left (um, uh, eh, o sea, you know and
@@ -202,7 +208,9 @@ Then drop `es-01 en-01` for all samples, and repeat with `--stt-provider deepgra
   [Speechmatics turn detection](https://docs.speechmatics.com/speech-to-text/realtime/turn-detection),
   [Deepgram regional endpoints](https://developers.deepgram.com/reference/regional-endpoints),
   [Deepgram Finalize](https://developers.deepgram.com/docs/finalize),
-  [Deepgram CloseStream](https://developers.deepgram.com/docs/close-stream).
+  [Deepgram CloseStream](https://developers.deepgram.com/docs/close-stream),
+  [Speechmatics custom dictionary](https://docs.speechmatics.com/speech-to-text/features/custom-dictionary).
+  Not stated there: whether `additional_vocab` works with `language: multi` and `melia-1`.
   Not verified there: the exact form of Speechmatics `language_hints`.
 
 ## Flags
@@ -220,7 +228,8 @@ Then drop `es-01 en-01` for all samples, and repeat with `--stt-provider deepgra
 | `--llm-key-env` | `OPENAI_API_KEY` | Variable that holds the cleanup key |
 | `--llm-deadline-ms` | `1500` | After this, the raw transcript is used and counted as a fallback |
 | `--reasoning-effort` | `none` | `off` leaves the field out of the request |
-| `--prompt` | `v1` | Cleanup prompt: `v1`, `v2` or a file |
+| `--prompt` | `v1` | Cleanup prompt: `v1`, `v2`, `v3` or a file |
+| `--vocab FILE` | none | Dictionary for Speechmatics and the cleanup |
 | `--deepgram-finalize-only` | | Deepgram: end on the Finalize reply, not after CloseStream. Faster, but lost final words |
 | `--net` | | Print TCP round trips to the provider hosts, then stop |
 | `--net-host HOST` | built-in list | Hosts for `--net`; repeatable |
@@ -276,6 +285,7 @@ language. It catches a wrong language or a translation, not a single wrong word.
 | `src/stt/ws.rs` | What the streaming providers share: socket, reader, end of speech |
 | `src/net.rs` | TCP round trips, `--net` |
 | `src/replay.rs` | `--replay`: transcripts in, timings and quality signals out |
+| `src/vocab.rs` | The user's dictionary, `--vocab` |
 | `src/quality.rs` | Fillers, unchanged texts, zero-edit and edit distance |
 | `src/cleanup.rs` | The cleanup trait, the OpenAI-compatible chat client, the deadline |
 | `src/pipeline.rs` | Pipelines A and B and the stage timestamps |
