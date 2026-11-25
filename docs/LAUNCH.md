@@ -11,14 +11,14 @@ checklist so a later session can tick it off. State on 25 November 2026.
 | README with pitch, status and positioning | Done; copilot-first headline chosen by the owner ([PITCH.md](PITCH.md)) |
 | Pitch, elevator pitch, claims ledger | Done: [PITCH.md](PITCH.md) |
 | Contributing, spec-first and test-first rules | Done (PR 22), labels added |
-| Code of conduct | Done: Contributor Covenant 2.1 |
+| Code of conduct | Done: Contributor Covenant 2.1; reports through GitHub private reporting (owner's choice) |
 | Security policy | Done (PR 22) |
 | Issue templates and pull-request template | Done |
 | CODEOWNERS | Done |
 | Changelog | Done |
 | Notice file for borrowed code | Done, empty |
 | CI: fmt, clippy, tests, secret scan, licence policy | Done (PR 22). GitHub Actions blocked by billing on 25 November 2026; checks run locally until it is fixed |
-| Roadmap and phase issues | Done ([ROADMAP.md](ROADMAP.md), #24 to #29); not yet adopted by the owner |
+| Roadmap and phase issues | Done ([ROADMAP.md](ROADMAP.md), #24 to #29); adopted by the owner on 25 November 2026 |
 | Phase 1 spec | Draft: [specs/25-dictation-core](../specs/25-dictation-core/spec.md) |
 | No personal, employer or transcript data in the full history | Checked by the gitleaks job for secrets. A read of the history for personal and employer details is still to do before going public |
 
@@ -28,7 +28,7 @@ These are settings, not files, and only matter once the repository is public:
 
 - [ ] Enable private vulnerability reporting (Settings, Security). `SECURITY.md` and the code of
       conduct both point to it; GitHub offers it only on public repositories.
-- [ ] Description (the one in [PITCH.md](PITCH.md)) and topics, for example `dictation`, `voice`,
+- [ ] Description (the one in [PITCH.md](PITCH.md); this session could not change repository settings) and topics, for example `dictation`, `voice`,
       `speech-to-text`, `tauri`, `rust`, `macos`, `wispr-flow-alternative`.
 - [ ] Social preview image.
 - [ ] Branch protection on `master`: pull request required, CI green required.

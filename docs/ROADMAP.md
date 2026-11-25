@@ -1,8 +1,7 @@
 # HyperMe roadmap
 
-**Status: proposal of 25 November 2026, not yet adopted by the owner.** It replaces the table in
-[SPEC.md](SPEC.md) section 5, which has been under review since 24 November. Phase 0 is still the
-only committed work. Each later phase starts only after the gate of the one before it passes
+**Status: adopted by the owner on 25 November 2026.** It replaces the earlier phase table in
+[SPEC.md](SPEC.md) section 5. Phase 0 is still the only work under way. Each later phase starts only after the gate of the one before it passes
 (`CLAUDE.md`).
 
 ## Where we stand against Wispr Flow
