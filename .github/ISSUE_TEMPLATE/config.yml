@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security problem or a code-of-conduct concern
+    url: https://github.com/AndresHG/hyperme/security/advisories/new
+    about: Private report to the maintainers. Please do not open a public issue for these.
+  - name: Read the roadmap first
+    url: https://github.com/AndresHG/hyperme/blob/master/docs/ROADMAP.md
+    about: Work for a later phase waits until the gate of the phase before it has passed.

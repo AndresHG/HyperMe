@@ -1,0 +1,68 @@
+name: Bug report
+description: Something HyperMe does wrong, slowly, or not at all.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Please never paste API keys, audio, or what you dictated if it is
+        private: describe it instead ("a 10-second Spanish sentence with two product names").
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Hold the hotkey in ...
+        2. Say ...
+        3. Release; the text ...
+    validations:
+      required: true
+  - type: dropdown
+    id: part
+    attributes:
+      label: Part
+      options:
+        - Hotkey or recording
+        - Speech (transcript wrong or slow)
+        - Cleanup (formatting, words changed or dropped)
+        - Paste at the cursor
+        - Pill or settings
+        - Keys or providers
+        - flowbench (speed-test tool)
+        - Docs
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: HyperMe version or commit
+      placeholder: "v0.1.0, or the commit you built"
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: Operating system and machine
+      placeholder: "macOS 26.6, MacBook Pro M1 Pro"
+    validations:
+      required: true
+  - type: input
+    id: providers
+    attributes:
+      label: Speech and cleanup providers
+      description: Provider and model names from your config. Never the keys.
+      placeholder: "Speechmatics melia-1 (EU), Groq openai/gpt-oss-20b"
+  - type: textarea
+    id: timing
+    attributes:
+      label: Timing or logs
+      description: Stage timings or log lines, if you have them. Check that they hold no keys or private text.
+      render: text

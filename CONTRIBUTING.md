@@ -4,6 +4,8 @@ Thank you for helping. HyperMe is small on purpose: fast, light, and easy to rea
 keep it that way. `CLAUDE.md` holds the full set for coding agents; this page is the part every
 contributor needs.
 
+Everyone taking part follows the [code of conduct](CODE_OF_CONDUCT.md).
+
 ## Before you start
 
 - Look for an issue, or open one. Say what you want to change and why, before writing code.
@@ -46,6 +48,20 @@ Tests must not call a paid API or need a key. Use the local fakes and test serve
 - Fill in the template, including `## Lessons` ("None" is a valid answer).
 - Small commits with clear messages. A commit that adds a crate says why it is needed.
 - Anything you defer gets its own issue, linked from `## Not done`.
+
+## Labels
+
+| Label | Means |
+| --- | --- |
+| `phase-0` to `phase-5` | The roadmap phase the issue belongs to ([docs/ROADMAP.md](docs/ROADMAP.md)) |
+| `size: S`, `size: M`, `size: L` | The size from "How a change is built". `size: L` needs a spec |
+| `area: core`, `area: speech`, `area: cleanup`, `area: audio`, `area: input`, `area: ui`, `area: app`, `area: flowbench`, `area: docs`, `area: ci` | The part of the code |
+| `good first issue` | Small, well bounded, with its acceptance criteria written; a good start |
+| `help wanted` | The maintainer would welcome a pull request |
+| `needs decision` | Waiting on a choice by the maintainer; do not start yet |
+| `privacy` | Changes what leaves the machine; always `size: L` |
+| `bug`, `enhancement`, `documentation`, `question`, `dependencies` | The kind of issue |
+| `roadmap`, `validation`, `harness` | Phase trackers, gate checks, and tooling for coding agents |
 
 ## What never goes in the repository
 

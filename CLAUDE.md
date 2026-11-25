@@ -17,9 +17,11 @@ or Devin and reports back.
 
 ## Read first
 
-- `docs/SPEC.md`: requirements, architecture, budgets, safety rules, roadmap and gates
+- `docs/SPEC.md`: requirements, architecture, budgets and safety rules
 - `docs/SPEED_TEST.md`: Phase 0, the first thing to build
-- `docs/ROADMAP.md`: proposed phases after Phase 0 and the gap to Wispr Flow (not yet adopted)
+- `docs/ROADMAP.md`: the phases and their gates, and the gap to Wispr Flow (adopted 25 November 2026)
+- `docs/PITCH.md`: pitch, positioning against Wispr Flow, and the ledger of claims still to earn
+- `specs/25-dictation-core/`: draft Phase 1 spec, design and slices (not yet approved)
 - `docs/FIELD.md`: existing projects and what to borrow from each
 - `docs/RESEARCH.md`: verdict, product focus, pitch and field map from the research of
   24 November 2026
@@ -29,8 +31,8 @@ or Devin and reports back.
 ## Current phase
 
 **Phase 0: speed test.** It is the only committed work: the owner's gate is to show Wispr
-Flow performance first. What follows is decided once its results are in. Working
-assumption: dictation next, then the other parts as capabilities.
+Flow performance first. After it come the phases in `docs/ROADMAP.md`, starting with
+the dictation core (Phase 1).
 Do not start a phase before the gate of the previous one has passed. When a gate
 passes, update this section and record the evidence in `docs/results/`.
 
@@ -63,6 +65,13 @@ passes, update this section and record the evidence in `docs/results/`.
 - After dictation comes smart routing and actions; the first tracker connector is GitHub,
   not Linear (owner, 25 November 2026). See `docs/ROADMAP.md`.
 - Licence: MIT OR Apache-2.0, dual, at the user's option (owner, 25 November 2026).
+- `docs/ROADMAP.md` is the adopted plan; it replaces the old phase table in `docs/SPEC.md`
+  (owner, 25 November 2026).
+- Code-of-conduct reports go through GitHub private reporting, like security reports; no
+  personal email in the repository (owner, 25 November 2026).
+- Public positioning leads with the full copilot ("the open-source voice copilot for your
+  workday"), and says plainly that it starts with dictation. The name HyperMe stays for the
+  public launch (owner, 25 November 2026). See `docs/PITCH.md`.
 
 ## Budgets (targets to design against)
 
@@ -77,7 +86,7 @@ passes, update this section and record the evidence in `docs/results/`.
 
 - Mail and calendar provider: Google or Microsoft 365?
 - Ticket creation: wait for Enter (default) or fire at once?
-- Order of the parts after dictation, and who the first outside user is.
+- Whether email (phase 4) comes before meetings (phase 5), and who the first outside user is.
 - Whether to adopt the two extra checks in `docs/RESEARCH.md` section 1.3 as gates.
 
 ## Spec first, test first

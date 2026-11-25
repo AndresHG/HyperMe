@@ -27,8 +27,8 @@ Paste this as the first message of a fresh session:
 
 Do not start another phase from this file. Read the latest file in `docs/results/` and
 the table "What the result decides" in [docs/SPEED_TEST.md](docs/SPEED_TEST.md). The
-working assumption is dictation next. The roadmap in [docs/SPEC.md](docs/SPEC.md) is the
-earlier plan and is under review.
+next phase is the dictation core, as set out in [docs/ROADMAP.md](docs/ROADMAP.md) and
+[specs/25-dictation-core](specs/25-dictation-core/spec.md).
 
 ## Habits that keep sessions useful
 
