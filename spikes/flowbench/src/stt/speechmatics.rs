@@ -74,6 +74,8 @@ fn start_recognition(model: &str, languages: &[String], max_delay: Option<f64>) 
 struct Collector {
     text: String,
     languages: Vec<String>,
+    /// The last piece opens the next word, so no space follows it.
+    glue_next: bool,
 }
 
 impl Collector {
@@ -83,8 +85,19 @@ impl Collector {
         };
         match value["message"].as_str().unwrap_or_default() {
             "AddTranscript" => {
-                self.text
-                    .push_str(value["metadata"]["transcript"].as_str().unwrap_or_default());
+                let results = value["results"].as_array().filter(|r| !r.is_empty());
+                match results {
+                    Some(results) => {
+                        for result in results {
+                            self.push_result(result);
+                        }
+                    }
+                    // No word list: take the formatted text as it is.
+                    None => self.push_text(
+                        value["metadata"]["transcript"].as_str().unwrap_or_default(),
+                        false,
+                    ),
+                }
                 let words = value["results"].as_array().into_iter().flatten();
                 for language in words.filter_map(|w| w["alternatives"][0]["language"].as_str()) {
                     if !self.languages.iter().any(|l| l == language) {
@@ -99,6 +112,32 @@ impl Collector {
             "Error" => Step::Failed(event.to_owned()),
             _ => Step::Continue,
         }
+    }
+
+    /// Adds one word or punctuation mark. In the first real run, joining `metadata.transcript`
+    /// pieces glued words together across messages, so the text is built from the words.
+    fn push_result(&mut self, result: &Value) {
+        let content = result["alternatives"][0]["content"]
+            .as_str()
+            .unwrap_or_default();
+        let attaches = result["attaches_to"].as_str().unwrap_or_default();
+        let punctuation = result["type"] == "punctuation";
+        // Punctuation sticks to the word before it unless it opens the next one (¿, ¡).
+        let glue_before = punctuation && attaches != "next";
+        self.push_text(content, glue_before);
+        self.glue_next = punctuation && attaches == "next";
+    }
+
+    fn push_text(&mut self, piece: &str, glue_before: bool) {
+        let piece = piece.trim();
+        if piece.is_empty() {
+            return;
+        }
+        if !self.text.is_empty() && !glue_before && !self.glue_next {
+            self.text.push(' ');
+        }
+        self.text.push_str(piece);
+        self.glue_next = false;
     }
 
     fn done(&mut self) -> Step {
@@ -227,7 +266,11 @@ mod tests {
     fn transcripts_are_joined_until_the_forced_end_of_utterance() {
         let mut collector = Collector::default();
         let first = json!({"message": "AddTranscript", "metadata": {"transcript": "Hola equipo. "},
-            "results": [{"type": "word", "alternatives": [{"content": "Hola", "language": "es"}]}]});
+        "results": [
+            {"type": "word", "alternatives": [{"content": "Hola", "language": "es"}]},
+            {"type": "word", "alternatives": [{"content": "equipo", "language": "es"}]},
+            {"type": "punctuation", "attaches_to": "previous", "alternatives": [{"content": "."}]},
+        ]});
         let natural = json!({"message": "EndOfUtterance", "metadata": {}});
         let second = json!({"message": "AddTranscript", "forced": true,
             "metadata": {"transcript": "Mañana a las once."}, "results": []});
@@ -247,6 +290,24 @@ mod tests {
             Collector::default().on_event(&error.to_string()),
             Step::Failed(body) if body.contains("no such model")
         ));
+    }
+
+    #[test]
+    fn words_are_spaced_and_punctuation_attached_across_messages() {
+        let word =
+            |w: &str| json!({"type": "word", "alternatives": [{"content": w, "language": "es"}]});
+        let mark = |m: &str, to: &str| json!({"type": "punctuation", "attaches_to": to, "alternatives": [{"content": m}]});
+        let mut collector = Collector::default();
+        let first = json!({"message": "AddTranscript", "metadata": {"transcript": "Ok creo que está"},
+            "results": [word("Ok"), mark(",", "previous"), word("creo"), word("que"), word("está")]});
+        let second = json!({"message": "AddTranscript", "metadata": {"transcript": "grabando. ¿Sí?"},
+            "results": [word("grabando"), mark(".", "previous"), mark("¿", "next"), word("Sí"), mark("?", "previous")]});
+        collector.on_event(&first.to_string());
+        collector.on_event(&second.to_string());
+        let Step::Done(transcript) = collector.done() else {
+            panic!("done gives the transcript")
+        };
+        assert_eq!(transcript.text, "Ok, creo que está grabando. ¿Sí?");
     }
 
     fn speech(url: String) -> SpeechmaticsSpeech {
