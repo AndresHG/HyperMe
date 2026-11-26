@@ -80,7 +80,7 @@ It is hidden while idle.
 | State | Look | Copy | How long |
 | --- | --- | --- | --- |
 | Recording | Red dot, live level bars | none | While held |
-| Working | Three soft dots | none | Until text or deadline |
+| Working | The bars settle into a thin line and a violet light runs along it (U-15) | none | Until text or deadline |
 | Done | Green check | "Pasted" | 600 ms, then fades |
 | Raw text | Amber dot | "Raw text" | 2 s; click shows why (cleanup slow or failed, R-20) |
 | Nothing heard | Grey | "Nothing heard" | 1.5 s (R-14) |
