@@ -43,8 +43,9 @@ What that means for decisions:
   because that is what people compare. It does not copy Wispr Flow's product shape, its Hub
   window or its feature list. Where Wispr stops at text (its Command Mode takes no action in other
   apps, [FIELD.md](FIELD.md)), HyperMe keeps going.
-- **The pill is where you talk; the panel is where Hyper talks back** ([UX.md](UX.md)). One
-  surface that grows, never a new window per feature.
+- **Quick things happen at the pill, lasting things in Home** ([UX.md](UX.md), decision U-8).
+  One shape at the bottom centre (dot, pill, card) and one Home sheet that rises from the same
+  spot, never a new window per feature.
 - **"Hyper" is someone you address.** Commands start with the name, the way you would address a
   colleague. The name is also the future wake word (`CLAUDE.md`).
 
@@ -109,14 +110,14 @@ These settle trade-offs when a spec does not.
 
 1. **Speed is the feature.** Dictation has a hard budget (section 10). Anything that adds
    latency to the dictation path needs a number that shows it fits.
-2. **Dictation is never worse because of the rest.** Commands, panels and connectors must not
+2. **Dictation is never worse because of the rest.** Commands, cards, Home and connectors must not
    slow, complicate or break dictation. One key, but the dictation path stays the fast default.
 3. **Preview before anything leaves the app.** Anything that creates, sends or posts outside the
    app shows a preview and waits for confirmation. Email is draft-only (`CLAUDE.md`).
 4. **Your keys, your Mac.** Bring your own keys, data on disk only on your Mac, no telemetry, no
    account with us (section 9).
 5. **Light to run.** Under 100 MB idle, near 0% CPU; features that are not open cost nothing.
-6. **Never take focus.** The pill and the panel never steal the cursor from the app you are in
+6. **Never take focus.** The pill and its cards never steal the cursor from the app you are in; only Home takes focus, and only when you open it
    ([UX.md](UX.md)).
 7. **Use what exists.** Connectors through MCP, scheduling through a small built-in scheduler,
    coding through the agents' own interfaces. No integration code per service, no agent
@@ -154,11 +155,11 @@ to the next release; **P2** is nice to have. The phase is from [ROADMAP.md](ROAD
 | Feature | Phase | Priority | Notes |
 | --- | --- | --- | --- |
 | "Hyper, …" routes the same key to a question or an action | 3 | P0 | *Proposed* (question 3) |
-| Short answers in the pill, longer ones in the panel | 3 | P0 | Model-only answers first; web search as an MCP tool (question 11) |
+| Answers in a card that grows from the pill | 3 | P0 | Model-only answers first; web search as an MCP tool (question 11) |
 | Preview card for actions, Enter to confirm, Esc to drop | 3 | P0 | Under one second from release to card |
 | One MCP client; GitHub as the first connector | 3 | P0 | Owner, 25 November 2026 |
 | Context of the frontmost app and selected text | 3 | P1 | Within the privacy boundary (section 9) |
-| Orb and panel with tabs | 3 | P0 | Owner, U-1 |
+| Dot at the bottom centre, cards for answers and previews | 3 | P0 | Owner, U-8 |
 | Linear and Jira connectors | 3+ | P2 | Any MCP server the user adds works without code |
 
 ### 7.3 Daily tasks and email (J-4, J-5)
@@ -169,7 +170,7 @@ to the next release; **P2** is nice to have. The phase is from [ROADMAP.md](ROAD
 | Scheduled jobs: a prompt plus a tool allowlist each | 4 | P0 | Built in, small; no agent runtime |
 | Daily plan: what's next, what's pending for tomorrow | 4 | P0 | |
 | Email triage and reply drafts, draft-only | 4 | P0 | Never sends |
-| "Needs you" list in the panel | 4 | P1 | [UX.md](UX.md) |
+| One "Waiting for you" queue in Home → Today | 4 | P1 | [UX.md](UX.md) |
 
 ### 7.4 Meetings and coding agents (J-6, J-7)
 
