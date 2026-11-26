@@ -2,96 +2,321 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Welcome to HyperMe</title>
 <style>
-  :root { color-scheme: light dark; --violet: #7c5cff; --ok: #22c55e; --bad: #ff4d4f; --line: color-mix(in srgb, CanvasText 12%, transparent); --muted: color-mix(in srgb, CanvasText 55%, transparent); }
+  /* docs/UX.md, "Visual language": system fonts, one signature colour (Hyper violet), state
+     colours for state only, light and dark from the system. */
+  :root {
+    color-scheme: light dark;
+    --violet: #7c5cff;
+    --violet-strong: #6a48f5;
+    --violet-soft: rgba(124, 92, 255, 0.10);
+    --violet-line: rgba(124, 92, 255, 0.35);
+    --ok: #1f9d55;
+    --bad: #e5484d;
+    --bg: #fbfaf8;
+    --surface: #ffffff;
+    --raised: #f2f0ec;
+    --text: #1c1b1f;
+    --muted: #6b6a70;
+    --faint: #94939a;
+    --line: rgba(28, 27, 31, 0.09);
+    --line-strong: rgba(28, 27, 31, 0.16);
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 4px 16px rgba(0, 0, 0, 0.04);
+    --seg-on: #ffffff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ok: #3dd68c;
+      --bad: #ff6b6f;
+      --violet-soft: rgba(124, 92, 255, 0.16);
+      --violet-line: rgba(150, 125, 255, 0.45);
+      --bg: #18171b;
+      --surface: #222125;
+      --raised: #2b2a2f;
+      --text: #f2f1f4;
+      --muted: #a3a2aa;
+      --faint: #76757d;
+      --line: rgba(255, 255, 255, 0.08);
+      --line-strong: rgba(255, 255, 255, 0.14);
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 16px rgba(0, 0, 0, 0.25);
+      --seg-on: #3d3c43;
+    }
+  }
   * { box-sizing: border-box; }
-  body { margin: 0; font: 13px -apple-system, system-ui, sans-serif; background: Canvas; color: CanvasText; height: 100vh; display: flex; flex-direction: column; }
-  main { flex: 1; padding: 28px 32px 0; }
-  h1 { font: 600 18px ui-rounded, -apple-system, sans-serif; margin: 0 0 8px; }
-  p { margin: 0 0 14px; line-height: 1.45; }
-  .muted { color: var(--muted); }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 13px/1.45 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    display: flex;
+    flex-direction: column;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  input, textarea, .error { user-select: text; -webkit-user-select: text; }
+  main { flex: 1; overflow: auto; padding: 34px 40px 8px; }
+  h1 {
+    font: 600 22px/1.2 ui-rounded, -apple-system, "SF Pro Rounded", system-ui, sans-serif;
+    letter-spacing: -0.01em;
+    margin: 0 0 6px;
+  }
+  .lead { color: var(--muted); font-size: 13.5px; margin: 0 0 22px; max-width: 58ch; }
+  .lead b { color: var(--text); font-weight: 600; }
+  .faint { color: var(--faint); font-size: 12px; }
+  .hidden { display: none !important; }
+
+  /* Screens slide in from the right; with "Reduce motion" they only fade. */
   .screen { display: none; }
-  .screen.on { display: block; }
-  .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); }
-  .ok { color: var(--ok); } .bad { color: var(--bad); }
-  button { padding: 6px 14px; border-radius: 7px; border: 1px solid var(--line); background: Canvas; color: inherit; font: inherit; cursor: pointer; }
-  button.main { background: var(--violet); color: white; border-color: var(--violet); }
-  button:disabled { opacity: 0.4; cursor: default; }
-  input[type=password] { padding: 5px 8px; border-radius: 6px; border: 1px solid var(--line); background: Canvas; color: inherit; font: inherit; width: 220px; }
-  textarea { width: 100%; height: 110px; padding: 8px; border-radius: 8px; border: 1px solid var(--line); background: Canvas; color: inherit; font: inherit; resize: none; }
-  .meter { height: 10px; border-radius: 5px; background: var(--line); overflow: hidden; margin: 12px 0; }
-  .meter div { height: 100%; width: 0; background: var(--ok); transition: width 50ms linear; }
-  footer { display: flex; align-items: center; justify-content: space-between; padding: 14px 32px; border-top: 1px solid var(--line); }
-  .dots span { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--line); margin-right: 5px; }
-  .dots span.on { background: var(--violet); }
-  .hidden { display: none; }
-  main { overflow: auto; }
-  .card { padding: 10px 12px; border-radius: 10px; background: color-mix(in srgb, var(--violet) 10%, Canvas); margin-bottom: 6px; line-height: 1.4; }
-  .steps { margin: 2px 0 6px; font-size: 12px; }
-  .cost-q { margin: 14px 0 6px; font-weight: 600; }
-  .choices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-  .choices button { text-align: left; padding: 8px 10px; }
-  .choices button.on { border-color: var(--violet); box-shadow: inset 0 0 0 1px var(--violet); }
-  .choices small { display: block; color: var(--muted); font-size: 11px; }
-  .choices b { display: block; margin-top: 4px; }
-  a.quiet { color: var(--muted); font-size: 12px; }
+  .screen.on { display: block; animation: enter 220ms cubic-bezier(.2, .8, .2, 1); }
+  @keyframes enter { from { opacity: 0; transform: translateX(10px); } to { opacity: 1; transform: none; } }
+  @media (prefers-reduced-motion: reduce) {
+    .screen.on { animation: fade 120ms linear; }
+    @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+  }
+
+  /* Controls. One primary (violet) action per screen: the footer button. */
+  button {
+    font: inherit;
+    font-weight: 500;
+    color: var(--text);
+    background: var(--surface);
+    border: 1px solid var(--line-strong);
+    border-radius: 8px;
+    padding: 6px 12px;
+    cursor: pointer;
+    transition: background 120ms, border-color 120ms, opacity 120ms;
+  }
+  button:hover { background: var(--raised); }
+  button:focus-visible, input:focus-visible, textarea:focus-visible {
+    outline: 2px solid var(--violet);
+    outline-offset: 2px;
+  }
+  button.primary {
+    background: var(--violet);
+    border-color: var(--violet);
+    color: #fff;
+    padding: 8px 18px;
+    min-width: 116px;
+  }
+  button.primary:hover { background: var(--violet-strong); }
+  button.primary:disabled { opacity: 0.38; cursor: default; background: var(--violet); }
+  button.link { background: none; border: none; padding: 2px 0; color: var(--violet); font-size: 12px; }
+  button.link:hover { background: none; text-decoration: underline; }
+  button.quiet { background: none; border: none; color: var(--muted); padding: 4px 2px; }
+  button.quiet:hover { color: var(--text); background: none; }
+
+  /* Status: a dot and a few words, never colour alone. */
+  .status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; white-space: nowrap; color: var(--muted); }
+  .status::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--faint); flex: none; }
+  .status.ok { color: var(--ok); } .status.ok::before { background: var(--ok); }
+  .status.bad { color: var(--bad); } .status.bad::before { background: var(--bad); }
+  .status.busy::before { background: var(--violet); animation: pulse 900ms ease-in-out infinite; }
+  .status:empty { display: none; }
+  @keyframes pulse { 50% { opacity: 0.25; } }
+
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); }
+
+  /* Welcome */
+  .hero { padding-top: 22px; }
+  .mark {
+    width: 56px; height: 56px; border-radius: 15px;
+    background: linear-gradient(160deg, #9178ff, var(--violet-strong));
+    display: grid; place-items: center; margin-bottom: 22px;
+    box-shadow: 0 6px 20px rgba(124, 92, 255, 0.32);
+  }
+  .mark span { display: flex; gap: 3px; align-items: center; }
+  .mark i { display: block; width: 4px; border-radius: 2px; background: #fff; }
+  .hero h1 { font-size: 26px; }
+  .steps-list { margin: 4px 0 0; padding: 0; list-style: none; display: grid; gap: 12px; }
+  .steps-list li { display: flex; gap: 12px; align-items: center; color: var(--muted); }
+  .steps-list b { color: var(--text); font-weight: 500; }
+  .num {
+    width: 22px; height: 22px; border-radius: 50%; flex: none; display: grid; place-items: center;
+    font-size: 11px; font-weight: 600; color: var(--violet); background: var(--violet-soft);
+  }
+
+  /* Microphone */
+  .meter-card { padding: 26px 22px 20px; display: flex; flex-direction: column; gap: 16px; align-items: center; }
+  .bars { display: flex; align-items: center; gap: 4px; height: 60px; }
+  .bars i { display: block; width: 5px; height: 6px; border-radius: 3px; background: var(--line-strong); transition: height 60ms linear, background 160ms; }
+  .bars.live i { background: var(--violet); }
+
+  /* Permissions */
+  .perm { display: flex; align-items: center; gap: 14px; padding: 14px 16px; }
+  .perm + .perm { border-top: 1px solid var(--line); }
+  .glyph {
+    width: 34px; height: 34px; border-radius: 9px; flex: none; display: grid; place-items: center;
+    background: var(--violet-soft); color: var(--violet); font: 600 14px -apple-system, system-ui, sans-serif;
+  }
+  .perm .what { flex: 1; min-width: 0; }
+  .perm .what b { display: block; font-weight: 600; }
+  .perm .what small { color: var(--muted); font-size: 12px; }
+  .callout {
+    margin-top: 14px; padding: 12px 14px; border-radius: 10px; background: var(--raised);
+    color: var(--muted); font-size: 12.5px; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  }
+  .callout b { color: var(--text); font-weight: 600; }
+  .callout button { white-space: nowrap; }
+
+  /* Keys */
+  .recommended { padding: 12px 14px; border-radius: 12px; margin: -6px 0 20px; background: var(--violet-soft); border: 1px solid var(--violet-line); }
+  .tag { display: inline-block; font-size: 11px; font-weight: 600; color: #fff; background: var(--violet); border-radius: 6px; padding: 1px 7px; margin-right: 8px; vertical-align: 1px; }
+  .recommended b { font-weight: 600; }
+  .recommended .faint { display: block; margin-top: 3px; }
+  .key { margin-bottom: 14px; }
+  .key-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 6px; }
+  .key-head label { font-weight: 600; }
+  .field {
+    display: flex; align-items: center; gap: 10px; background: var(--surface);
+    border: 1px solid var(--line-strong); border-radius: 9px; padding: 3px 3px 3px 12px;
+    transition: border-color 120ms, box-shadow 120ms;
+  }
+  .field:focus-within { border-color: var(--violet); box-shadow: 0 0 0 3px var(--violet-soft); }
+  .field.ok { border-color: color-mix(in srgb, var(--ok) 55%, transparent); }
+  .field.bad { border-color: color-mix(in srgb, var(--bad) 60%, transparent); }
+  .field input {
+    flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--text);
+    font: 13px ui-monospace, "SF Mono", Menlo, monospace; padding: 6px 0;
+  }
+  .field input::placeholder { color: var(--faint); font-family: -apple-system, system-ui, sans-serif; }
+  .field button { padding: 5px 12px; border-radius: 7px; }
+  .key .error { color: var(--bad); font-size: 12px; margin-top: 5px; }
+  .key .hint { margin-top: 5px; }
+  .section-title { font-weight: 600; margin: 20px 0 8px; }
+  .seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; padding: 2px; border-radius: 9px; background: var(--raised); border: 1px solid var(--line); }
+  .seg button { border: 0; background: transparent; border-radius: 7px; padding: 6px 8px; display: flex; flex-direction: column; align-items: center; gap: 0; }
+  .seg button small { color: var(--muted); font-size: 11px; font-weight: 400; }
+  .seg button.on { background: var(--seg-on); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18); }
+  .seg button:hover:not(.on) { background: transparent; }
+  .cost { display: flex; align-items: baseline; gap: 10px; margin-top: 12px; }
+  .cost strong { font: 600 19px/1.1 ui-rounded, -apple-system, system-ui, sans-serif; }
+  #free-credit { margin: 6px 0 0; }
+
+  /* Try it */
+  textarea {
+    width: 100%; height: 160px; padding: 14px; border-radius: 12px; resize: none;
+    background: var(--surface); color: var(--text); border: 1px solid var(--line-strong);
+    font: 15px/1.5 -apple-system, system-ui, sans-serif; transition: border-color 120ms, box-shadow 120ms;
+  }
+  textarea:focus { outline: 0; border-color: var(--violet); box-shadow: 0 0 0 3px var(--violet-soft); }
+  kbd { font: 600 11px -apple-system, system-ui, sans-serif; padding: 1px 6px; border-radius: 5px; background: var(--surface); border: 1px solid var(--line-strong); border-bottom-width: 2px; color: var(--text); }
+  .result { margin-top: 14px; min-height: 20px; }
+  .result .status { font-size: 13px; }
+
+  footer { display: flex; align-items: center; gap: 16px; padding: 14px 40px 20px; }
+  .dots { display: flex; gap: 6px; flex: 1; }
+  .dots span { width: 6px; height: 6px; border-radius: 3px; background: var(--line-strong); transition: width 200ms, background 200ms; }
+  .dots span.done { background: var(--violet-line); }
+  .dots span.on { width: 18px; background: var(--violet); }
 </style>
 </head>
 <body>
 <main>
   <section class="screen on" data-step="welcome">
-    <h1>Welcome to HyperMe</h1>
-    <p>Hold a key, speak, and your words appear where you type.</p>
-    <p class="muted">Four quick checks and you are ready. Each one is tested before you go on.</p>
+    <div class="hero">
+      <div class="mark" aria-hidden="true"><span><i style="height:9px"></i><i style="height:16px"></i><i style="height:24px"></i><i style="height:16px"></i><i style="height:9px"></i></span></div>
+      <h1>Welcome to HyperMe</h1>
+      <p class="lead">Hold a key, speak, and your words appear where you type. Four quick checks and you are ready.</p>
+      <ul class="steps-list">
+        <li><span class="num">1</span><span><b>Microphone</b>, so HyperMe can hear you</span></li>
+        <li><span class="num">2</span><span><b>Accessibility and Input Monitoring</b>, to paste and to see the key</span></li>
+        <li><span class="num">3</span><span><b>Two keys</b>, for the speech and text services</span></li>
+        <li><span class="num">4</span><span><b>A first dictation</b>, to see how fast it is</span></li>
+      </ul>
+    </div>
   </section>
 
   <section class="screen" data-step="microphone">
-    <h1>Microphone</h1>
-    <p>Say something. macOS may ask whether HyperMe can use the microphone: allow it.</p>
-    <div class="meter"><div id="meter"></div></div>
-    <p id="mic-state" class="muted">Listening…</p>
+    <h1>Check your microphone</h1>
+    <p class="lead">Say a few words. If macOS asks whether HyperMe can use the microphone, allow it.</p>
+    <div class="card meter-card">
+      <div class="bars" id="bars" aria-hidden="true"></div>
+      <span id="mic-state" class="status busy">Listening…</span>
+    </div>
   </section>
 
   <section class="screen" data-step="permissions">
-    <h1>Accessibility and Input Monitoring</h1>
-    <p>HyperMe needs Accessibility to paste your words, and Input Monitoring to see the dictation key. Each turns green by itself once allowed.</p>
-    <p class="muted" id="host-note">Click each button, then switch <b class="host-name">HyperMe</b> on in the list.</p>
-    <div class="row"><span>Accessibility</span><span><span id="ax-state"></span> <button data-request="accessibility">Allow</button></span></div>
-    <div class="row"><span>Input Monitoring</span><span><span id="im-state"></span> <button data-request="input-monitoring">Allow</button></span></div>
-    <p class="muted hidden" id="relaunch-row">Switched them on already? macOS sometimes passes a permission to an app only after it restarts. <button id="relaunch">Relaunch HyperMe</button></p>
+    <h1>Let HyperMe paste and hear the key</h1>
+    <p class="lead" id="host-note">Click Allow on each row, then switch <b>HyperMe</b> on in the list that opens. Each row turns green by itself.</p>
+    <div class="card">
+      <div class="perm">
+        <div class="glyph" aria-hidden="true">⌘</div>
+        <div class="what"><b>Accessibility</b><small>To paste your words where you type</small></div>
+        <span id="ax-state" class="status"></span>
+        <button data-request="accessibility">Allow</button>
+      </div>
+      <div class="perm">
+        <div class="glyph" aria-hidden="true">fn</div>
+        <div class="what"><b>Input Monitoring</b><small>To notice when you hold the dictation key</small></div>
+        <span id="im-state" class="status"></span>
+        <button data-request="input-monitoring">Allow</button>
+      </div>
+    </div>
+    <div class="callout hidden" id="relaunch-row">
+      <span><b>Switched them on already?</b> macOS sometimes passes a permission on only after a restart.</span>
+      <button id="relaunch">Relaunch HyperMe</button>
+    </div>
   </section>
 
   <section class="screen" data-step="keys">
-    <h1>Keys for the recommended setup</h1>
-    <div class="card"><span id="pair-line">Speechmatics hears you, Groq cleans up the text.</span> The fastest pair we measured: 0.43 s from key release to text.</div>
-    <div class="row"><span id="speech-name">Speechmatics</span><span><button data-get="speech">Get a key</button> <input type="password" id="speech-key" placeholder="Paste the key" autocomplete="off"> <button data-test="speech">Test</button></span></div>
-    <p class="muted steps">Sign up, create a key, paste it here. <span id="speech-state"></span></p>
-    <div class="row"><span id="cleanup-name">Groq</span><span><button data-get="cleanup">Get a key</button> <input type="password" id="cleanup-key" placeholder="Paste the key" autocomplete="off"> <button data-test="cleanup">Test</button></span></div>
-    <p class="muted steps">Sign up, create a key, paste it here. <span id="cleanup-state"></span></p>
-    <p class="cost-q">How much do you talk a day?</p>
-    <div class="choices" id="choices"></div>
-    <p class="muted" id="free-credit"></p>
-    <p><a href="#" id="other-providers" class="quiet">Use other providers</a></p>
+    <h1>Connect your speech and text services</h1>
+    <p class="lead">HyperMe uses your own keys. Nothing goes through our servers.</p>
+    <div class="recommended">
+      <span class="tag">Recommended</span><b id="pair-line">Speechmatics hears you, Groq cleans up the text.</b>
+      <span class="faint">The fastest pair we measured: 0.43 s from key release to text.</span>
+    </div>
+
+    <div class="key">
+      <div class="key-head"><label for="speech-key"><span id="speech-name">Speechmatics</span> key</label><button class="link" data-get="speech">Get a key ↗</button></div>
+      <div class="field" id="speech-field">
+        <input type="password" id="speech-key" placeholder="Paste your key" autocomplete="off" spellcheck="false">
+        <span id="speech-state" class="status"></span>
+        <button data-test="speech">Test</button>
+      </div>
+      <div class="error hidden" id="speech-error"></div>
+    </div>
+
+    <div class="key">
+      <div class="key-head"><label for="cleanup-key"><span id="cleanup-name">Groq</span> key</label><button class="link" data-get="cleanup">Get a key ↗</button></div>
+      <div class="field" id="cleanup-field">
+        <input type="password" id="cleanup-key" placeholder="Paste your key" autocomplete="off" spellcheck="false">
+        <span id="cleanup-state" class="status"></span>
+        <button data-test="cleanup">Test</button>
+      </div>
+      <div class="error hidden" id="cleanup-error"></div>
+      <div class="hint faint">No key yet? Get a key, sign up, create an API key and paste it here.</div>
+    </div>
+
+    <div class="section-title">How much do you talk a day?</div>
+    <div class="seg" id="choices" role="radiogroup" aria-label="How much do you talk a day?"></div>
+    <div class="cost"><strong id="cost-total"></strong><span class="faint" id="cost-detail"></span></div>
+    <p class="faint" id="free-credit"></p>
   </section>
 
   <section class="screen" data-step="try">
     <h1>Try it</h1>
-    <p>Click in the box, hold <b>Fn</b> and say anything.</p>
+    <p class="lead">Click in the box, hold <kbd>fn</kbd> and say anything. Let go when you are done.</p>
     <textarea id="try-box" placeholder="Your words appear here"></textarea>
-    <p id="try-state" class="muted"></p>
+    <div class="result"><span id="try-state" class="status"></span></div>
   </section>
 </main>
 <footer>
   <div class="dots" id="dots"></div>
-  <button class="main" id="next" disabled>Next</button>
+  <button class="quiet hidden" id="other-providers">Use other providers</button>
+  <button class="primary" id="next" disabled>Continue</button>
 </footer>
 <script>
   const tauri = window.__TAURI__;
   const invoke = tauri.core.invoke;
   const $ = (id) => document.getElementById(id);
   const steps = ['welcome', 'microphone', 'permissions', 'keys', 'try'];
-  // Set only from tests run in Rust; Rust decides whether Next lights up (onboarding.rs).
+  const labels = { welcome: 'Get started', try: 'Done' };
+  // Set only from tests run in Rust; Rust decides whether the main button lights up
+  // (onboarding.rs).
   const checks = { microphone: false, accessibility: false, input_monitoring: false, speech_key: false, cleanup_key: false, tried: false };
   // After "Relaunch HyperMe" the window opens on the screen it was on.
   let index = Math.max(0, steps.indexOf(location.hash.slice(1)));
@@ -102,27 +327,37 @@
   let poll = null;
 
   $('dots').innerHTML = steps.map(() => '<span></span>').join('');
+  $('bars').innerHTML = Array.from({ length: 24 }, () => '<i></i>').join('');
 
   async function update() {
     const ok = await invoke('onboarding_can_continue', { step: steps[index], checks });
     $('next').disabled = !ok;
-    $('next').textContent = index === steps.length - 1 ? 'Done' : 'Next';
+    $('next').textContent = labels[steps[index]] || 'Continue';
   }
 
-  function mark(el, ok, yes, no) { el.textContent = ok ? yes : no; el.className = ok ? 'ok' : 'bad'; }
+  // A status: a dot and a few words. `kind` is ok, bad, busy or empty.
+  function status(el, kind, text) {
+    el.className = 'status' + (kind ? ' ' + kind : '');
+    el.textContent = text;
+  }
+  function mark(el, ok, yes, no) { status(el, ok ? 'ok' : 'bad', ok ? yes : no); }
 
   async function checkPermissions() {
     const p = await invoke('onboarding_checks');
     checks.accessibility = p.accessibility;
     checks.input_monitoring = p.input_monitoring;
-    mark($('ax-state'), p.accessibility, '✓ Allowed', 'Not yet');
+    mark($('ax-state'), p.accessibility, 'Allowed', 'Not yet');
+    mark($('im-state'), p.input_monitoring, 'Allowed', 'Not yet');
+    document.querySelectorAll('[data-request]').forEach((b) => {
+      const allowed = b.dataset.request === 'accessibility' ? p.accessibility : p.input_monitoring;
+      b.classList.toggle('hidden', allowed);
+    });
     window.bundled = p.bundled;
     $('relaunch-row').classList.toggle('hidden', !(visitedSettings && !(p.accessibility && p.input_monitoring)));
-    mark($('im-state'), p.input_monitoring, '✓ Allowed', 'Not yet');
     // Run from a terminal (cargo run), macOS gives the permissions to that terminal, which must
     // be quit and reopened before they take effect.
     if (p.host_app) {
-      $('host-note').innerHTML = 'HyperMe is running from <b></b>, so macOS lists <b></b>, not HyperMe. Click each button, switch <b></b> on in the list, then quit <b></b> (⌘Q), open it again and start HyperMe again.';
+      $('host-note').innerHTML = 'HyperMe is running from <b></b>, so macOS lists <b></b>, not HyperMe. Click Allow, switch <b></b> on, then quit <b></b> (⌘Q), open it again and start HyperMe again.';
       $('host-note').querySelectorAll('b').forEach((b) => { b.textContent = p.host_app; });
     }
     if (p.speech_provider) $('speech-name').textContent = p.speech_provider;
@@ -132,38 +367,51 @@
 
   async function enter(step) {
     clearInterval(poll);
+    $('other-providers').classList.toggle('hidden', step !== 'keys');
     if (step !== 'microphone') invoke('onboarding_mic', { on: false });
     if (step === 'microphone') {
-      try { await invoke('onboarding_mic', { on: true }); } catch (e) { mark($('mic-state'), false, '', String(e)); }
+      try { await invoke('onboarding_mic', { on: true }); } catch (e) { status($('mic-state'), 'bad', String(e)); }
     }
     if (step === 'permissions') { checkPermissions(); poll = setInterval(checkPermissions, 1000); }
     if (step === 'keys') { checkPermissions(); keysScreen(); }
     if (step === 'try') {
       try { await invoke('onboarding_try'); $('try-box').focus(); }
-      catch (e) { mark($('try-state'), false, '', String(e)); }
+      catch (e) { status($('try-state'), 'bad', String(e)); }
     }
   }
 
   function show() {
     document.querySelectorAll('.screen').forEach((s) => s.classList.toggle('on', s.dataset.step === steps[index]));
-    document.querySelectorAll('#dots span').forEach((d, i) => d.classList.toggle('on', i <= index));
+    document.querySelectorAll('#dots span').forEach((d, i) => {
+      d.classList.toggle('on', i === index);
+      d.classList.toggle('done', i < index);
+    });
     enter(steps[index]);
     update();
   }
 
+  // The meter: 24 bars shaped like a hill, driven by the live level.
+  const shape = Array.from({ length: 24 }, (_, i) => 0.35 + 0.65 * Math.sin(Math.PI * (i + 0.5) / 24));
+  function meter(level) {
+    $('bars').classList.toggle('live', level > 0.05);
+    $('bars').querySelectorAll('i').forEach((bar, i) => {
+      const jitter = 0.75 + 0.25 * Math.random();
+      bar.style.height = Math.max(6, Math.round(60 * level * shape[i] * jitter)) + 'px';
+    });
+  }
   tauri.event.listen('onboarding-level', (event) => {
     const [level, heard] = event.payload;
-    $('meter').style.width = Math.round(level * 100) + '%';
+    meter(level);
     if (heard && !checks.microphone) {
       checks.microphone = true;
-      mark($('mic-state'), true, '✓ Working', '');
+      status($('mic-state'), 'ok', 'Working');
       update();
     }
   });
 
   tauri.event.listen('dictation-pasted', (event) => {
     checks.tried = true;
-    mark($('try-state'), true, 'Pasted in ' + (event.payload / 1000).toFixed(2) + ' s', '');
+    status($('try-state'), 'ok', 'Pasted in ' + (event.payload / 1000).toFixed(2) + ' s');
     update();
   });
 
@@ -186,9 +434,20 @@
   });
 
   // The recommended pair and what it costs, worked out in Rust from the config (U-11).
+  let costs = null;
+  function pickChoice(i) {
+    document.querySelectorAll('#choices button').forEach((b, j) => {
+      b.classList.toggle('on', j === i);
+      b.setAttribute('aria-checked', String(j === i));
+    });
+    const c = costs.choices[i];
+    $('cost-total').textContent = c.shown_as;
+    $('cost-detail').textContent = costs.speech + ' about $' + c.speech_usd.toFixed(2) + ' · ' + costs.cleanup + ' about $' + c.cleanup_usd.toFixed(2);
+  }
   async function keysScreen() {
     try {
       const k = await invoke('onboarding_keys_screen');
+      costs = k;
       $('pair-line').textContent = k.speech + ' hears you, ' + k.cleanup + ' cleans up the text.';
       $('speech-name').textContent = k.speech;
       $('cleanup-name').textContent = k.cleanup;
@@ -196,35 +455,42 @@
       $('choices').innerHTML = '';
       k.choices.forEach((c, i) => {
         const b = document.createElement('button');
-        b.innerHTML = '<span></span><small></small><b></b>';
+        b.setAttribute('role', 'radio');
+        b.innerHTML = '<span></span><small></small>';
         b.children[0].textContent = c.label;
-        b.children[1].textContent = c.detail;
-        b.children[2].textContent = c.shown_as;
-        b.title = k.speech + ' about $' + c.speech_usd.toFixed(2) + ', ' + k.cleanup + ' about $' + c.cleanup_usd.toFixed(2);
-        b.addEventListener('click', () => document.querySelectorAll('#choices button').forEach((x) => x.classList.toggle('on', x === b)));
-        if (i === 1) b.classList.add('on');
+        b.children[1].textContent = c.detail.split(',')[0];
+        b.addEventListener('click', () => pickChoice(i));
         $('choices').appendChild(b);
       });
+      pickChoice(Math.min(1, k.choices.length - 1));
     } catch (e) { $('free-credit').textContent = String(e); }
   }
 
+  // The key field shows its own state: testing, works with the time, or the provider's error
+  // under it.
+  function keyState(role, kind, text, error) {
+    status($(role + '-state'), kind, text);
+    $(role + '-field').className = 'field' + (kind === 'ok' || kind === 'bad' ? ' ' + kind : '');
+    $(role + '-error').textContent = error || '';
+    $(role + '-error').classList.toggle('hidden', !error);
+  }
   async function testKey(role) {
-    const state = $(role + '-state');
     const flag = role === 'speech' ? 'speech_key' : 'cleanup_key';
-    state.textContent = 'Testing…'; state.className = 'muted';
+    keyState(role, 'busy', 'Testing…');
     try {
       const ms = await invoke('key_test', { role });
       checks[flag] = true;
-      mark(state, true, '✓ Works, ' + ms + ' ms', '');
+      keyState(role, 'ok', 'Works · ' + ms + ' ms');
+      $(role + '-key').placeholder = 'Saved in your keychain';
     } catch (e) {
       checks[flag] = false;
-      mark(state, false, '', String(e));
+      keyState(role, 'bad', 'Not working', String(e));
     }
     update();
   }
 
   document.querySelectorAll('[data-get]').forEach((b) => b.addEventListener('click', () => invoke('onboarding_get_key', { role: b.dataset.get })));
-  $('other-providers').addEventListener('click', (e) => { e.preventDefault(); invoke('onboarding_other_providers'); });
+  $('other-providers').addEventListener('click', () => invoke('onboarding_other_providers'));
   // U-12: while the wizard waits, a provider or key saved in Settings is tested again here.
   tauri.event.listen('providers-changed', () => { keysScreen(); testKey('speech'); testKey('cleanup'); });
 
@@ -236,7 +502,11 @@
       // Saving a key tells this window to test the providers again (providers-changed).
       await invoke('key_set', { role, key: field.value });
       field.value = '';
-    } catch (e) { mark($(role + '-state'), false, '', String(e)); }
+    } catch (e) { keyState(role, 'bad', 'Not saved', String(e)); }
+  }));
+  // Enter in a key field saves and tests it.
+  ['speech', 'cleanup'].forEach((role) => $(role + '-key').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') document.querySelector('[data-test="' + role + '"]').click();
   }));
 
   $('next').addEventListener('click', () => {

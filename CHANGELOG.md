@@ -49,6 +49,8 @@ All notable changes to HyperMe are recorded here. The format follows
 - Permissions in the walkthrough: macOS's dialog is shown once per button, Input Monitoring is
   detected by creating the hotkey tap, and "Relaunch HyperMe" restarts the app on the same
   screen when a grant needs it. Opening HyperMe while it runs shows the walkthrough or Settings.
+- A redesigned walkthrough: system typography, one main button per screen, key fields with their
+  status inline, a segmented cost choice with one clear number, light and dark.
 - The timing log: one line of stage timings per dictation in `~/Library/Logs/HyperMe/timing.tsv`
   when timing is on, numbers only, in flowbench's columns; `examples/timing_summary.rs` gives
   AC-10's median and 90th percentile, and `scripts/measure-idle.sh` measures AC-19.
