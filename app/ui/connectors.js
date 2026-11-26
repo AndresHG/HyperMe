@@ -25,7 +25,7 @@
   }
 
   function showView(which) {
-    for (const id of ['connectors-list', 'connectors-sheet', 'connectors-page']) {
+    for (const id of ['connectors-list', 'connectors-sheet', 'connectors-page', 'connectors-oauth']) {
       $(id).classList.toggle('hidden', id !== which);
     }
   }
@@ -41,8 +41,45 @@
     $('connectors-choices').replaceChildren(...data.choices.map((c) =>
       el('div', { class: 'row', 'data-words': 'add connector ' + c.name },
         el('div', { class: 'what' }, c.name, el('small', {}, c.note)),
-        c.ready ? el('button', { onclick: () => $('connectors-custom').classList.remove('hidden') }, 'Set up')
+        c.ready ? el('button', { onclick: () => (c.id === 'custom' ? $('connectors-custom').classList.remove('hidden') : openSheet(c.id)) }, 'Set up')
                 : el('button', { disabled: '' }, 'Set up'))));
+    drawPrivacy();
+  }
+
+  function drawPrivacy() {
+    const p = data.privacy;
+    $('privacy-connectors').classList.toggle('hidden', !p || !p.accounts.length);
+    if (!p) return;
+    $('privacy-accounts').replaceChildren(...p.accounts.map((a) =>
+      el('div', { class: 'row', 'data-words': 'connected account ' + a.title },
+        el('div', { class: 'what' }, a.title, el('small', {}, a.reads.join(' · '))))));
+    $('privacy-where').textContent = p.where_it_goes;
+    $('privacy-kept').textContent = p.kept;
+  }
+
+  // The setup sheet of an OAuth preset: client, then sign-in with a label and switches.
+  let sheet = null;
+  function openSheet(connector, label = '', features = null) {
+    sheet = data.sheets.find((s) => s.connector === connector);
+    if (!sheet) { fail('No setup sheet for ' + connector); return; }
+    $('oauth-title').textContent = 'Add ' + sheet.name;
+    $('oauth-client-id').value = sheet.client_id || '';
+    $('oauth-client-secret').value = '';
+    const state = $('oauth-client-state');
+    state.textContent = sheet.client_saved ? 'Client saved' : 'No client yet';
+    state.className = 'state ' + (sheet.client_saved ? 'ok' : 'warn');
+    $('oauth-label').value = label;
+    $('oauth-label').disabled = !!label;
+    $('oauth-features').replaceChildren(...sheet.features.map((f) => {
+      const box = el('input', { type: 'checkbox', 'data-feature': f.id });
+      box.checked = features ? features.includes(f.id) : f.on_by_default;
+      return el('div', { class: 'row', 'data-words': 'scope ' + f.label }, el('div', { class: 'what' }, f.label), box);
+    }));
+    $('oauth-signin').classList.toggle('hidden', !sheet.client_saved);
+    for (const id of ['oauth-testing', 'oauth-done', 'oauth-cancel']) $(id).classList.add('hidden');
+    $('oauth-wait').textContent = '';
+    $('oauth-go').disabled = false;
+    showView('connectors-oauth');
   }
 
   function drawPage(page) {
@@ -55,6 +92,7 @@
     $('page-enabled').checked = page.enabled;
     $('page-token-row').classList.toggle('hidden', page.account || page.state !== 'Not signed in');
     $('page-unverified').classList.toggle('hidden', page.tools_verified);
+    $('page-oauth-row').classList.toggle('hidden', !(page.account && page.oauth));
     const connector = page.id.split(':')[0];
     $('page-tools').replaceChildren(...page.tools.map((t) => {
       const select = el('select', { 'aria-label': t.name },
@@ -110,6 +148,59 @@
       field.value = '';
       await refresh();
     } catch (e) { fail(e); }
+  });
+
+  $('oauth-open-client').addEventListener('click', () => invoke('connectors_open_url', { connector: sheet.connector, which: 'client' }).catch(fail));
+  $('oauth-open-production').addEventListener('click', () => invoke('connectors_open_url', { connector: sheet.connector, which: 'production' }).catch(fail));
+  $('oauth-gcloud').addEventListener('click', async () => {
+    await navigator.clipboard.writeText(sheet.commands.join('\n'));
+    $('oauth-client-state').textContent = 'gcloud commands copied; the OAuth client itself is made on the setup page';
+  });
+  $('oauth-client-save').addEventListener('click', async () => {
+    const state = $('oauth-client-state');
+    state.textContent = 'Testing…';
+    state.className = 'state warn';
+    try {
+      const ms = await invoke('connectors_save_client', { connector: sheet.connector, clientId: $('oauth-client-id').value, clientSecret: $('oauth-client-secret').value });
+      $('oauth-client-secret').value = '';
+      state.textContent = 'Works, ' + ms + ' ms';
+      state.className = 'state ok';
+      await refresh();
+      sheet = data.sheets.find((s) => s.connector === sheet.connector);
+      $('oauth-signin').classList.remove('hidden');
+    } catch (e) { state.textContent = String(e); state.className = 'state bad'; }
+  });
+  $('oauth-go').addEventListener('click', async () => {
+    const features = [...document.querySelectorAll('[data-feature]')].filter((b) => b.checked).map((b) => b.dataset.feature);
+    $('oauth-wait').textContent = 'Finish in your browser…';
+    $('oauth-wait').className = 'state warn';
+    $('oauth-go').disabled = true;
+    $('oauth-cancel').classList.remove('hidden');
+    try {
+      const result = await invoke('connectors_sign_in', { connector: sheet.connector, label: $('oauth-label').value, features });
+      await refresh();
+      $('oauth-wait').textContent = '';
+      $('oauth-done').replaceChildren(el('p', { class: 'ok' }, 'Signed in as ' + result.account + '.'), ...result.checks.map((c) => el('p', { class: 'lead' }, c)));
+      $('oauth-done').classList.remove('hidden');
+    } catch (e) {
+      $('oauth-wait').textContent = e.message || String(e);
+      $('oauth-wait').className = 'state bad';
+      $('oauth-testing').classList.toggle('hidden', !e.testing);
+    } finally {
+      $('oauth-go').disabled = false;
+      $('oauth-cancel').classList.add('hidden');
+    }
+  });
+  $('oauth-cancel').addEventListener('click', () => invoke('connectors_cancel_sign_in'));
+  $('oauth-close').addEventListener('click', () => { location.hash = 'connectors'; showView('connectors-list'); });
+  $('page-sign-in').addEventListener('click', () => openSheet(current.id.split(':')[0], current.label, current.features));
+  $('page-disconnect').addEventListener('click', async () => {
+    if (!confirm('Disconnect ' + current.title + '? This removes access and deletes what HyperMe cached from this account.')) return;
+    try {
+      await invoke('connectors_disconnect', { account: current.id });
+      location.hash = 'connectors';
+      await refresh();
+    } catch (e) { fail(e); await refresh(); }
   });
 
   refresh().catch(fail);

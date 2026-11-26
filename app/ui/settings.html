@@ -114,12 +114,35 @@
       </div>
       <p><button id="sheet-close">Cancel</button></p>
     </div>
+    <div id="connectors-oauth" class="hidden">
+      <h1 id="oauth-title"></h1>
+      <div id="oauth-client">
+        <p class="lead">1 · Your client. HyperMe uses your own OAuth client, so nothing passes through us.</p>
+        <div class="row" data-words="google client cloud setup"><div class="what">Create your client<small>Opens the provider's setup guide.</small></div><span><button id="oauth-open-client">Open setup</button> <button id="oauth-gcloud">Use gcloud instead</button></span></div>
+        <div class="row" data-words="client id"><div class="what">Client ID<small class="state" id="oauth-client-state"></small></div><input type="text" id="oauth-client-id" autocomplete="off"></div>
+        <div class="row" data-words="client secret"><div class="what">Client secret<small>Kept in the macOS keychain, never shown again.</small></div><span style="white-space:nowrap"><input type="password" id="oauth-client-secret" autocomplete="off"> <button id="oauth-client-save">Save and test</button></span></div>
+      </div>
+      <div id="oauth-signin">
+        <p class="lead" style="margin-top:14px">2 · Sign in, and choose what Hyper can see.</p>
+        <div class="row" data-words="account label personal work"><div class="what">Label<small>One word you can say: "in my work calendar".</small></div><input type="text" id="oauth-label" placeholder="personal"></div>
+        <div id="oauth-features"></div>
+        <div class="row" style="border:0"><span class="state" id="oauth-wait"></span><span><button id="oauth-cancel" class="hidden">Cancel</button> <button class="main" id="oauth-go">Sign in</button></span></div>
+      </div>
+      <div id="oauth-testing" class="hidden">
+        <p class="bad">Your project is in Testing, so you would be signed out every 7 days.</p>
+        <p class="lead">Set its publishing status to In production (no review is needed for your own account), then sign in again.</p>
+        <p><button id="oauth-open-production">Open the setting</button></p>
+      </div>
+      <div id="oauth-done" class="hidden"></div>
+      <p><button id="oauth-close">Close</button></p>
+    </div>
     <div id="connectors-page" class="hidden">
       <p><a href="#connectors" id="page-back">‹ Connectors</a></p>
       <h1 id="page-title"></h1>
       <p class="lead"><span class="state" id="page-state"></span></p>
       <div class="row" id="page-enabled-row" data-words="connector account on off"><div class="what">Use this account<small>Off keeps the sign-in but stops using it.</small></div><input type="checkbox" id="page-enabled"></div>
       <div class="row hidden" id="page-token-row" data-words="connector bearer token"><div class="what">Bearer token<small>Kept in the macOS keychain, never shown again.</small></div><span><input type="password" id="page-token" placeholder="Paste a token" autocomplete="off"> <button id="page-token-save">Save</button></span></div>
+      <div class="row hidden" id="page-oauth-row" data-words="sign in again disconnect account"><div class="what">Account<small id="page-disconnect-note">Disconnect removes access and deletes what HyperMe cached from this account.</small></div><span style="white-space:nowrap"><button id="page-sign-in">Sign in again</button> <button id="page-disconnect">Disconnect</button></span></div>
       <p class="lead" style="margin-top:14px">Tools<span id="page-unverified" class="warn hidden"> · names not checked against the live server yet</span></p>
       <div id="page-tools"></div>
     </div>
@@ -127,11 +150,17 @@
 
   <section id="privacy">
     <h1>Privacy</h1>
-    <p class="lead">Audio and text go only to the speech and cleanup providers above, under your keys. Nothing else leaves this Mac, and there is no telemetry. A dictation's audio stays on this Mac so a dropped connection never loses it.</p>
+    <p class="lead">Audio and text go only to the speech and cleanup providers above, under your keys. Connected accounts follow the rules at the bottom of this page. There is no telemetry. A dictation's audio stays on this Mac so a dropped connection never loses it.</p>
     <div class="row" data-words="history dictation audio keep"><div class="what">Dictation history<small>Keeps each dictation's audio and text on this Mac.</small></div><input type="checkbox" data-section="history" data-key="enabled"></div>
     <div class="row" data-words="history retention days unlimited"><div class="what">Keep for<small>Older dictations are deleted.</small></div><select id="retention"><option value="30">30 days</option><option value="unlimited">Unlimited</option></select></div>
     <div class="row" data-words="history size limit"><div class="what">Size limit (MB)<small>The oldest dictations go first.</small></div><input type="number" min="10" data-section="history" data-key="size_limit_mb"></div>
     <div class="row" data-words="timing log measure"><div class="what">Timing log<small>One line of stage timings per dictation, numbers only.</small></div><input type="checkbox" data-section="timing" data-key="log"></div>
+    <div id="privacy-connectors" class="hidden" data-words="connected accounts google calendar mail privacy">
+      <p class="lead" style="margin:16px 0 4px">Connected accounts</p>
+      <div id="privacy-accounts"></div>
+      <p class="lead" id="privacy-where" style="margin:8px 0 0"></p>
+      <p class="lead" id="privacy-kept" style="margin:4px 0 0"></p>
+    </div>
   </section>
 
   <section id="advanced">

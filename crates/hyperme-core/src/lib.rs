@@ -5,6 +5,7 @@ pub mod audio;
 pub mod brief;
 pub mod config;
 pub mod connector_settings;
+pub mod connector_setup;
 pub mod connectors;
 pub mod cost;
 pub mod dictation;

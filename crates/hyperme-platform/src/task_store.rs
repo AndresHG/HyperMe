@@ -11,7 +11,7 @@ use std::fmt;
 use std::path::Path;
 use std::sync::{Mutex, MutexGuard};
 
-use hyperme_core::connectors::{RequestLog, Usage};
+use hyperme_core::connectors::{AccountData, RequestLog, Usage};
 use hyperme_core::schedule::Schedule;
 use hyperme_core::scheduler::{Job, JobKind, JobStatus, JobStore};
 use hyperme_core::tasks::{
@@ -913,6 +913,20 @@ impl RequestLog for SqliteTaskStore {
             )
             .optional()
             .map(Option::unwrap_or_default)
+            .map_err(|error| format!("connector requests: {error}"))
+    }
+}
+
+/// Disconnect deletes every row kept from the account (R-12, AC-6). The events and mail
+/// tables join this when the pulls add them (slices 7 and 8).
+impl AccountData for SqliteTaskStore {
+    fn delete_account(&self, account: &str) -> Result<(), String> {
+        self.db()
+            .execute(
+                "DELETE FROM connector_requests WHERE account = ?1",
+                params![account],
+            )
+            .map(drop)
             .map_err(|error| format!("connector requests: {error}"))
     }
 }
