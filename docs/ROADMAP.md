@@ -30,7 +30,7 @@ formatting quality and the app itself.
 | **3. Smart routing and actions** | One key for everything you say | The same key routes to dictation, a question or an action; command mode sends the transcript to a tool-calling model; one MCP client (`rmcp`); the first tracker connector; "speak, preview card, Enter" in under a second; short spoken questions answered in the pill | Owner uses commands every day for two weeks. Covers items 1 and 2 of "what nobody ships" ([RESEARCH.md](RESEARCH.md) section 1.2) |
 | **4. Daily tasks and email** | The copilot for the workday | Calendar connector; crons and "meeting now" nudges, each job with a tool allowlist; email triage and replies, draft-only | Owner relies on it for a week of daily planning and mail drafts |
 | **5. Meetings and coding agents** | Meetings become tasks; agents take orders | Note-taker with live gray transcript and batch cleanup to white ([#20](https://github.com/AndresHG/hyperme/issues/20)), local-first: see [meetings on device](#meetings-on-device) below; proposed tickets with owner and quote; start and follow Claude Code and Devin tasks by voice | Tickets from a real meeting accepted with few edits; one agent task started and reported back from the pill |
-| **Later** | | Memory and learning ("knows you better every day"); local speech models for dictation; Linux and Windows | |
+| **Later** | | Memory and learning ("knows you better every day"); local speech models for dictation; Linux and Windows, including a local meeting option there in place of Apple's recognizer (for example Whisper through whisper.cpp or sherpa-onnx, both behind the speech trait) | |
 
 ## Meetings on device
 
@@ -52,6 +52,9 @@ kept only as an optional re-transcription after the meeting. For the settings sc
 meeting view, look first at how Wispr Flow and OpenWhispr present them; check the licence before
 borrowing any code and record it in `NOTICE.md`. Still to measure before phase 5:
 battery drain, Apple's live mode on far-field meeting audio, and diarization.
+
+Apple's recognizer exists only on macOS. Windows and Linux get their own local option later
+(owner, 26 November 2026); see the Later row.
 
 This does not change the dictation core, which stays on cloud speech for speed.
 
