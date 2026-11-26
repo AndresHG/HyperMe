@@ -100,7 +100,7 @@ async fn the_store_uses_wal_and_a_schema_version_and_survives_reopening() {
     let version: i64 = db
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 1);
+    assert_eq!(version, 2);
 
     let store = SqliteTaskStore::open(&path).unwrap();
     let snapshot = store.snapshot(day(WED), 0).await.unwrap();

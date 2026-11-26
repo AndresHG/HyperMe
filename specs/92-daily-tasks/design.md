@@ -78,12 +78,13 @@ CREATE TABLE day_log (
 CREATE TABLE job (
   name        TEXT PRIMARY KEY,
   kind        TEXT NOT NULL,          -- rollover, morning, evening, nudge, sync:<connector>, prompt
-  schedule    TEXT NOT NULL,          -- JSON, one of the three shapes below
+  schedule    TEXT NOT NULL,          -- `at HH:MM 1111100`, `every 30` or `presence HH:MM HH:MM 1111100`
   enabled     INTEGER NOT NULL DEFAULT 1,
   catch_up_min INTEGER NOT NULL,      -- the catch-up window in minutes; 0 skips missed runs
-  allowlist   TEXT,                   -- JSON array of tool names, prompt jobs only
+  allowlist   TEXT,                   -- tool names, comma-separated
   prompt      TEXT,                   -- prompt jobs only
-  last_run    INTEGER, last_status TEXT, fails_today INTEGER NOT NULL DEFAULT 0
+  last_run    INTEGER, last_status TEXT, fails_today INTEGER NOT NULL DEFAULT 0,
+  fails_day   TEXT                    -- the local day fails_today counts
 ) WITHOUT ROWID;
 ```
 

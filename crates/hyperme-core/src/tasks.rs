@@ -98,6 +98,7 @@ pub struct WeekdaySet(u8);
 
 impl WeekdaySet {
     pub const EMPTY: WeekdaySet = WeekdaySet(0);
+    pub const ALL: WeekdaySet = WeekdaySet(0b111_1111);
 
     pub const fn from_array<const N: usize>(days: [Weekday; N]) -> WeekdaySet {
         let mut bits = 0;
@@ -115,6 +116,10 @@ impl WeekdaySet {
 
     pub const fn is_empty(self) -> bool {
         self.0 == 0
+    }
+
+    pub fn insert(&mut self, day: Weekday) {
+        self.0 |= 1 << day.number_days_from_monday();
     }
 }
 
