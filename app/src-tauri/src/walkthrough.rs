@@ -75,7 +75,7 @@ pub fn open(app: &AppHandle, step: onboarding::Step) {
     let url = format!("onboarding.html#{}", step.name());
     let built = WebviewWindowBuilder::new(app, WALKTHROUGH, WebviewUrl::App(url.into()))
         .title("Welcome to HyperMe")
-        .inner_size(520.0, 440.0)
+        .inner_size(640.0, 620.0)
         .resizable(false)
         .build();
     if let Ok(window) = built {
