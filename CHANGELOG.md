@@ -8,6 +8,11 @@ All notable changes to HyperMe are recorded here. The format follows
 
 ### Added
 
+- `crates/hyperme-quality`, the quality harness (issue 99): replays a set of saved dictations
+  through the app's own state machine and providers and scores the pasted text against the
+  owner's corrected texts (zero-edit, edits per 100 characters, internal names), with flowbench's
+  definitions. `import` copies done dictations from the history into a set. Audio and texts stay
+  in the set folder; the results file holds numbers only.
 - Releases made on the owner's Mac (`scripts/release-macos.sh`, `docs/RELEASING.md`): Developer ID
   signing with the hardened runtime, notarisation, a DMG, and a signed update with its
   `latest.json`; `--unsigned` for a trial run without an Apple account. **Check for updates…** in
