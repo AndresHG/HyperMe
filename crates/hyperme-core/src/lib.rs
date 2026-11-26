@@ -5,5 +5,6 @@ pub mod audio;
 pub mod config;
 pub mod cost;
 pub mod dictation;
+pub mod dictionary;
 pub mod secrets;
 pub mod traits;
