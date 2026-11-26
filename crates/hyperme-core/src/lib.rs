@@ -6,4 +6,5 @@ pub mod config;
 pub mod cost;
 pub mod dictation;
 pub mod secrets;
+pub mod tasks;
 pub mod traits;

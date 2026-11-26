@@ -32,6 +32,10 @@ serde_json = "1.0.154"
 tokio-tungstenite = { version = "0.30.0", default-features = false, features = ["connect", "handshake", "native-tls"] }
 serde = { version = "1.0.229", features = ["derive"] }
 toml = "1.2.3"
+# Local dates, weekdays and day arithmetic for the task list. Already in the tree through
+# Tauri. Not chrono: RUSTSEC-2026-0543 marks it unmaintained, and deny.toml fails on that.
+# No default features: the core never reads the clock or the local offset.
+time = { version = "0.3.55", default-features = false, features = ["std"] }
 tokio = { version = "1.54.1", default-features = false }
 
 [workspace.lints.rust]
