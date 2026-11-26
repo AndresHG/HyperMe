@@ -10,12 +10,12 @@ use std::time::Duration;
 
 use std::collections::BTreeMap;
 
-use hyperme_core::dictation::{Engine, Event, Parts, Settings, Status};
+use hyperme_core::dictation::{Engine, Event, Parts, Providers, Settings, Status};
 use hyperme_core::traits::{
     CleanupProvider, DictationId, Error, ErrorKind, FocusInfo, History, Inserter, LiveSession,
     Microphone, Sound, Sounds, SpeechProvider, TimingLine, TimingLog, Transcript,
 };
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, watch};
 use tokio::time::{Instant, sleep};
 
 /// What happened, in order, with when.
@@ -371,6 +371,8 @@ pub struct Harness {
     pub events: mpsc::Sender<Event>,
     pub status: mpsc::UnboundedReceiver<Status>,
     pub log: Log,
+    /// Replaces the providers, as Settings does (specs/96-provider-settings, R-8).
+    pub switch: watch::Sender<Arc<Providers<FakeSpeech, FakeCleanup>>>,
 }
 
 impl Harness {
@@ -437,10 +439,10 @@ impl Harness {
     ) -> Self {
         let (events, events_rx) = mpsc::channel(256);
         let (status_tx, status) = mpsc::unbounded_channel();
+        let (switch, providers) = watch::channel(Arc::new(Providers { speech, cleanup }));
         let parts = Parts {
             mic: FakeMic { log: log.clone() },
-            speech,
-            cleanup,
+            providers,
             inserter: FakeInserter { log: log.clone() },
             focus,
             history,
@@ -454,6 +456,7 @@ impl Harness {
             events,
             status,
             log: log.clone(),
+            switch,
         }
     }
 

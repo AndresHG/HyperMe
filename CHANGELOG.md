@@ -15,6 +15,13 @@ All notable changes to HyperMe are recorded here. The format follows
 
 ### Added
 
+- Switching providers without a restart (issue 124, slice 2 of `specs/96-provider-settings`):
+  `hyperme-providers::any` has one client enum per role (`AnySpeech`, `AnyCleanup`) and one
+  `resolve` path that builds the providers a config names, used at launch, after a change in
+  Settings and by Test. The engine reads its providers from a `watch` channel once on key-down,
+  so a change reaches the next dictation and never one in progress. A provider that cannot be
+  built yet (no key) leaves the one in use running. The timing log's provider names follow a
+  switch.
 - A provider catalogue (issue 123, slice 1 of `specs/96-provider-settings`): what each provider
   is (protocol, endpoint, key page, roles, models with dated prices and measured latency) lives
   in `default-providers.toml`, built into the app, and `[speech]` and `[cleanup]` name only a
