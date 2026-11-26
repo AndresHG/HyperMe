@@ -91,4 +91,7 @@ pub trait Inserter {
 pub trait FocusInfo {
     /// The frontmost app's name, for the cleanup prompt (R-11).
     fn frontmost_app(&self) -> Option<String>;
+
+    /// Whether secure input is on, as it is while a password field has focus (R-17).
+    fn secure_input(&self) -> bool;
 }

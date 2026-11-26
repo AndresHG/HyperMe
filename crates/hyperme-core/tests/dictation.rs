@@ -319,6 +319,29 @@ async fn key_down_while_working_is_ignored() {
     assert_eq!(log.pasted().len(), 2);
 }
 
+/// R-17 (the core half of AC-14): with secure input on (a password field has focus), holding
+/// the hotkey records nothing, opens no connection and says so in the pill.
+#[tokio::test(start_paused = true)]
+async fn secure_input_records_nothing() {
+    let log = Log::new();
+    let speech = FakeSpeech::new(&log, "my password is hunter2");
+    let cleanup = FakeCleanup::new(&log, "never used");
+    let mut h = Harness::start_with(
+        &log,
+        speech,
+        cleanup,
+        settings(),
+        FakeFocus { secure: true },
+    );
+
+    h.send(Event::KeyDown).await;
+    let seen = h.until(&Status::Idle).await;
+    assert_eq!(seen, [Status::SecureInput, Status::Idle]);
+    h.send(Event::KeyUp).await;
+    h.settle().await;
+    assert!(log.entries().is_empty(), "{:?}", log.entries());
+}
+
 /// AC-11: with zero-latency fakes, the pipeline's own overhead from release to paste sent is
 /// under 20 ms at the 90th percentile. Real clock, 100 dictations.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

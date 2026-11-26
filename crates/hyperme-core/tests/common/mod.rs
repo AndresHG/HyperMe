@@ -233,11 +233,18 @@ impl Inserter for FakeInserter {
     }
 }
 
-pub struct FakeFocus;
+pub struct FakeFocus {
+    /// Whether a password field has focus (secure input on).
+    pub secure: bool,
+}
 
 impl FocusInfo for FakeFocus {
     fn frontmost_app(&self) -> Option<String> {
         Some("TextEdit".to_owned())
+    }
+
+    fn secure_input(&self) -> bool {
+        self.secure
     }
 }
 
@@ -254,6 +261,16 @@ pub struct Harness {
 
 impl Harness {
     pub fn start(log: &Log, speech: FakeSpeech, cleanup: FakeCleanup, settings: Settings) -> Self {
+        Self::start_with(log, speech, cleanup, settings, FakeFocus { secure: false })
+    }
+
+    pub fn start_with(
+        log: &Log,
+        speech: FakeSpeech,
+        cleanup: FakeCleanup,
+        settings: Settings,
+        focus: FakeFocus,
+    ) -> Self {
         let (events, events_rx) = mpsc::channel(256);
         let (status_tx, status) = mpsc::unbounded_channel();
         let engine = Engine::new(
@@ -261,7 +278,7 @@ impl Harness {
             speech,
             cleanup,
             FakeInserter { log: log.clone() },
-            FakeFocus,
+            focus,
             settings,
             status_tx,
         );

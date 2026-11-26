@@ -292,6 +292,9 @@ impl FocusInfo for Notes {
     fn frontmost_app(&self) -> Option<String> {
         Some("Notes".to_owned())
     }
+    fn secure_input(&self) -> bool {
+        false
+    }
 }
 
 const RAW: &str = "so the deploy failed because of the cash invalidation";
