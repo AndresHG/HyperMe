@@ -209,9 +209,20 @@ where
         // The error never carries audio, so it is safe to print. The next start rebuilds.
         move |err| {
             eprintln!("microphone: {err}");
-            shared.broken.store(true, Ordering::SeqCst);
+            if needs_rebuild(err.kind()) {
+                shared.broken.store(true, Ordering::SeqCst);
+            }
         },
         None,
+    )
+}
+
+/// Whether a stream error means the stream must be rebuilt. A glitch (an overrun, which macOS
+/// reports when a stream starts) or a followed route change does not.
+fn needs_rebuild(kind: cpal::ErrorKind) -> bool {
+    !matches!(
+        kind,
+        cpal::ErrorKind::Xrun | cpal::ErrorKind::DeviceChanged | cpal::ErrorKind::RealtimeDenied
     )
 }
 
@@ -264,6 +275,16 @@ mod tests {
             "old audio leaked into the frame"
         );
         assert!(rx.try_recv().is_err());
+    }
+
+    /// A glitch must not force a rebuild on the next start, which would cost the latency that
+    /// play and pause save; a lost device must.
+    #[test]
+    fn only_lasting_stream_errors_force_a_rebuild() {
+        assert!(!needs_rebuild(cpal::ErrorKind::Xrun));
+        assert!(!needs_rebuild(cpal::ErrorKind::DeviceChanged));
+        assert!(needs_rebuild(cpal::ErrorKind::DeviceNotAvailable));
+        assert!(needs_rebuild(cpal::ErrorKind::StreamInvalidated));
     }
 
     #[test]

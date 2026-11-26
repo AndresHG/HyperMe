@@ -16,6 +16,11 @@ apart. Numbers only; no audio was kept.
 
 The max is the first start of each run, which builds the stream.
 
+After a fix so that a buffer overrun (which macOS reports when a stream starts) no longer forces a
+rebuild, five more runs of the shipped mode gave medians of 46.7, 69.3, 67.3, 64.5 and 69.7 ms
+and 90th percentiles of 52.4 to 74.4 ms. The first run is an outlier; the usual median is
+about 65 to 70 ms.
+
 The target in AC-2 is under 50 ms at the median and under 80 ms at the 90th percentile, from
 key-down. Neither mode meets the median; the measurement also excludes the hotkey's own delay.
 Each figure includes up to 20 ms to fill the first frame and one device buffer.
