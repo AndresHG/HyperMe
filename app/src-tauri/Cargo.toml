@@ -25,12 +25,17 @@ hyperme-providers = { path = "../../crates/hyperme-providers" }
 serde.workspace = true
 serde_json.workspace = true
 tauri-nspanel = "2.1.1"
+# Signed updates (docs/RELEASING.md): checks, verifies with minisign and swaps HyperMe.app.
+# native-tls like the rest of the app, so no second TLS stack (rustls, ring) comes in.
+tauri-plugin-updater = { version = "2.14.1", default-features = false, features = ["native-tls"] }
 tokio = { workspace = true, features = ["sync", "time"] }
 
 [dev-dependencies]
 # The pure modules (pill, onboarding, geometry) are tested on every platform.
 hyperme-core.workspace = true
 serde.workspace = true
+# Reads tauri.conf.json in the updater's config test. Already a dependency on macOS.
+serde_json.workspace = true
 # tauri's own mock runtime, to test that commands send their events. Not a new crate.
 tauri = { version = "2.12.7", features = ["macos-private-api", "tray-icon", "test"] }
 
