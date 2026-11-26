@@ -89,7 +89,7 @@ pub fn width_for(view: &View) -> f64 {
     if chars == 0.0 {
         120.0
     } else {
-        (44.0 + chars * 7.2).clamp(120.0, 420.0).round()
+        (52.0 + chars * 7.2).clamp(120.0, 420.0).round()
     }
 }
 
@@ -170,6 +170,10 @@ mod tests {
         assert_eq!(width_for(&view(Status::Done { raw: false })), 120.0);
         let notice = width_for(&view(Status::SecureInput));
         assert!(notice > 250.0 && notice <= 420.0, "{notice}");
+        // The state's line, the gap and "Nothing heard" fit without an ellipsis: 14 px padding
+        // each side, 14 px line, 8 px gap and about 7.2 px a character.
+        let quiet = width_for(&view(Status::NothingHeard));
+        assert!(quiet >= 14.0 * 2.0 + 14.0 + 8.0 + 13.0 * 7.2, "{quiet}");
     }
 }
 
