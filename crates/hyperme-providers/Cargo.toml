@@ -20,9 +20,22 @@ tokio-tungstenite.workspace = true
 base64 = "0.22.1"
 getrandom = "0.3.4"
 sha2 = "0.10.9"
+# The one MCP client (CLAUDE.md, design.md): streamable HTTP over the reqwest already here, on
+# native TLS like the rest of the app. No default features: they pull in chrono (unmaintained,
+# refused by deny.toml) and the server side. Apache-2.0.
+rmcp = { version = "3.12.0", default-features = false, features = ["client", "reqwest-native-tls", "transport-streamable-http-client-reqwest"] }
+# The request counter's day (connectors::RequestLog).
+time.workspace = true
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["io-util", "macros", "rt-multi-thread", "test-util"] }
+# The fake MCP server in tests/fake_mcp: rmcp's own streamable HTTP server behind a small hyper
+# server that checks the bearer token. hyper, hyper-util and http-body-util are already in the
+# tree through reqwest; all MIT.
+rmcp = { version = "3.12.0", default-features = false, features = ["server", "transport-streamable-http-server"] }
+hyper = { version = "1.13.0", features = ["http1", "server"] }
+hyper-util = { version = "0.1.21", features = ["tokio"] }
+http-body-util = "0.1.5"
 
 [lints]
 workspace = true

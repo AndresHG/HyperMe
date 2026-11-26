@@ -11,6 +11,7 @@ use std::fmt;
 use std::path::Path;
 use std::sync::{Mutex, MutexGuard};
 
+use hyperme_core::connectors::{RequestLog, Usage};
 use hyperme_core::schedule::Schedule;
 use hyperme_core::scheduler::{Job, JobKind, JobStatus, JobStore};
 use hyperme_core::tasks::{
@@ -70,6 +71,15 @@ const MIGRATIONS: &[&str] = &[
         last_status  TEXT,
         fails_today  INTEGER NOT NULL DEFAULT 0,
         fails_day    TEXT
+    ) WITHOUT ROWID;",
+    // 3: the connector request counter (specs/97-google-connectors, design.md, "Storage").
+    "CREATE TABLE connector_requests (
+        account TEXT    NOT NULL,
+        day     TEXT    NOT NULL,
+        server  TEXT    NOT NULL,
+        calls   INTEGER NOT NULL DEFAULT 0,
+        units   INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (account, day, server)
     ) WITHOUT ROWID;",
 ];
 
@@ -870,5 +880,39 @@ impl JobStore for SqliteTaskStore {
 
     async fn save_job(&self, job: &Job) -> Result<(), TaskError> {
         self.save_job_now(job)
+    }
+}
+
+/// The request counter of connectors (R-20), in the same file as the task list.
+impl RequestLog for SqliteTaskStore {
+    fn record(&self, account: &str, day: Date, server: &str, units: u32) -> Result<(), String> {
+        self.db()
+            .execute(
+                "INSERT INTO connector_requests (account, day, server, calls, units)
+                 VALUES (?1, ?2, ?3, 1, ?4)
+                 ON CONFLICT (account, day, server)
+                 DO UPDATE SET calls = calls + 1, units = units + excluded.units",
+                params![account, date_text(day), server, units],
+            )
+            .map(drop)
+            .map_err(|error| format!("connector requests: {error}"))
+    }
+
+    fn usage(&self, account: &str, day: Date, server: &str) -> Result<Usage, String> {
+        self.db()
+            .query_row(
+                "SELECT calls, units FROM connector_requests
+                 WHERE account = ?1 AND day = ?2 AND server = ?3",
+                params![account, date_text(day), server],
+                |row| {
+                    Ok(Usage {
+                        calls: row.get(0)?,
+                        units: row.get(1)?,
+                    })
+                },
+            )
+            .optional()
+            .map(Option::unwrap_or_default)
+            .map_err(|error| format!("connector requests: {error}"))
     }
 }
