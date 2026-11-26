@@ -253,7 +253,12 @@ async fn read_request(stream: &mut TcpStream) -> (String, String) {
             }
         }
         match stream.read(&mut chunk).await {
-            Ok(0) | Err(_) => return (String::from_utf8_lossy(&received).to_string(), String::new()),
+            Ok(0) | Err(_) => {
+                return (
+                    String::from_utf8_lossy(&received).to_string(),
+                    String::new(),
+                );
+            }
             Ok(n) => received.extend_from_slice(&chunk[..n]),
         }
     }

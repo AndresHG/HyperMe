@@ -19,7 +19,11 @@ const ACCOUNT: &str = "google:personal";
 const SCOPES: &[&str] = &["calendar.read", "mail.read"];
 
 fn client(fake: &FakeOAuth) -> OAuthClient {
-    OAuthClient::new(OAuthConfig {
+    OAuthClient::new(config(fake))
+}
+
+fn config(fake: &FakeOAuth) -> OAuthConfig {
+    OAuthConfig {
         auth_url: fake.auth_url(),
         token_url: fake.token_url(),
         revoke_url: Some(fake.revoke_url()),
@@ -29,7 +33,7 @@ fn client(fake: &FakeOAuth) -> OAuthClient {
             ("access_type".to_owned(), "offline".to_owned()),
             ("prompt".to_owned(), "consent".to_owned()),
         ],
-    })
+    }
 }
 
 /// What the browser was asked to open, shared with the test.
@@ -53,18 +57,39 @@ impl Browser for AllowingBrowser {
     }
 }
 
-/// Sends the listener a code with a state the app never made, as a forged redirect would.
+/// First sends the listener a code with a state the app never made, as another local process
+/// could, then lets the user click "Allow".
 #[derive(Debug, Default)]
 struct ForgingBrowser {
     opened: Opened,
+    forged_status: Arc<Mutex<Option<u16>>>,
 }
 
 impl Browser for ForgingBrowser {
     fn open(&self, url: &str) -> Result<(), String> {
         self.opened.lock().unwrap().push(url.to_owned());
         let redirect = query(url, "redirect_uri");
+        let (url, forged_status) = (url.to_owned(), self.forged_status.clone());
         tokio::spawn(async move {
-            let _ = reqwest::get(format!("{redirect}?code=fake-code-1&state=forged")).await;
+            let forged = reqwest::get(format!("{redirect}?code=fake-code-forged&state=forged"))
+                .await
+                .unwrap();
+            *forged_status.lock().unwrap() = Some(forged.status().as_u16());
+            let _ = reqwest::get(url).await;
+        });
+        Ok(())
+    }
+}
+
+/// The user clicks "Cancel": the provider redirects with `error=access_denied` and the state.
+#[derive(Debug, Default)]
+struct DenyingBrowser;
+
+impl Browser for DenyingBrowser {
+    fn open(&self, url: &str) -> Result<(), String> {
+        let (redirect, state) = (query(url, "redirect_uri"), query(url, "state"));
+        tokio::spawn(async move {
+            let _ = reqwest::get(format!("{redirect}?error=access_denied&state={state}")).await;
         });
         Ok(())
     }
@@ -172,25 +197,49 @@ async fn the_listener_binds_only_loopback_on_a_free_port() {
     );
 }
 
-/// AC-2: a redirect with a state the app did not make is refused; no code is exchanged and
-/// nothing reaches the keychain.
+/// AC-2: a redirect with a state the app did not make is refused (400) and its code is never
+/// exchanged; it does not end the sign-in, so the real redirect still completes it.
 #[tokio::test]
 async fn a_wrong_state_is_rejected() {
     let fake = FakeOAuth::start().await;
     let store = MemorySecretStore::default();
     let browser = ForgingBrowser::default();
-    let result = client(&fake)
+    client(&fake)
         .sign_in(&browser, &store, ACCOUNT, SCOPES, DEFAULT_LISTEN_TIMEOUT)
-        .await;
+        .await
+        .unwrap();
 
+    assert_eq!(*browser.forged_status.lock().unwrap(), Some(400));
+    let exchanges = fake.token_requests();
+    assert_eq!(exchanges.len(), 1);
+    assert_ne!(exchanges[0]["code"], "fake-code-forged");
+    assert_eq!(
+        store.get(ACCOUNT).unwrap().as_deref(),
+        Some(fake.issued_refresh_tokens()[0].as_str())
+    );
+}
+
+/// AC-2: when the user cancels at the consent page, sign-in ends with the provider's error
+/// code, exchanges nothing and closes the listener.
+#[tokio::test]
+async fn a_cancelled_consent_ends_the_sign_in() {
+    let fake = FakeOAuth::start().await;
+    let store = MemorySecretStore::default();
+    let result = client(&fake)
+        .sign_in(
+            &DenyingBrowser,
+            &store,
+            ACCOUNT,
+            SCOPES,
+            DEFAULT_LISTEN_TIMEOUT,
+        )
+        .await;
     assert!(
-        matches!(result, Err(OAuthError::StateMismatch)),
+        matches!(&result, Err(OAuthError::Denied(code)) if code == "access_denied"),
         "{result:?}"
     );
     assert!(fake.token_requests().is_empty());
     assert_eq!(store.get(ACCOUNT).unwrap(), None);
-    let redirect = query(&browser.opened.lock().unwrap()[0], "redirect_uri");
-    assert!(!is_listening(port_of(&redirect)).await);
 }
 
 /// AC-2: when the browser never comes back, sign-in gives up after the default 5 minutes and
@@ -253,7 +302,10 @@ async fn the_refresh_token_is_only_in_the_keychain() {
 
     let refresh = fake.issued_refresh_tokens()[0].clone();
     let access = fake.issued_access_tokens()[0].clone();
-    assert_eq!(store.get(ACCOUNT).unwrap().as_deref(), Some(refresh.as_str()));
+    assert_eq!(
+        store.get(ACCOUNT).unwrap().as_deref(),
+        Some(refresh.as_str())
+    );
 
     let mut shown = format!("{token:?} {client:?} {store:?}");
     fake.revoke_all_refresh_tokens();
@@ -272,10 +324,7 @@ async fn an_expired_access_token_is_refreshed() {
     let store = MemorySecretStore::default();
     fake.set_access_ttl(0);
     let client = signed_in(&fake, &store).await;
-    let expired = client
-        .fresh_token(&store, ACCOUNT, None)
-        .await
-        .unwrap();
+    let expired = client.fresh_token(&store, ACCOUNT, None).await.unwrap();
     assert_eq!(fake.refresh_calls(), 1);
 
     fake.set_access_ttl(3600);
@@ -336,4 +385,25 @@ async fn revoke_calls_the_endpoint_and_removes_the_keychain_item() {
         client.refresh(&store, ACCOUNT).await,
         Err(OAuthError::NotSignedIn)
     ));
+}
+
+/// AC-6 (revoke): when the provider cannot be reached, disconnect still removes the keychain
+/// item and returns the error, so the caller can say access may still be listed there.
+#[tokio::test]
+async fn revoke_removes_the_item_even_when_the_provider_is_unreachable() {
+    let fake = FakeOAuth::start().await;
+    let store = MemorySecretStore::default();
+    signed_in(&fake, &store).await;
+    let closed = std::net::TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
+    let unreachable = format!("http://{}/revoke", closed.local_addr().unwrap());
+    drop(closed);
+    let client = OAuthClient::new(OAuthConfig {
+        revoke_url: Some(unreachable),
+        ..config(&fake)
+    });
+
+    let error = client.revoke(&store, ACCOUNT).await.unwrap_err();
+    assert!(matches!(error, OAuthError::Network(_)), "{error:?}");
+    assert_eq!(store.get(ACCOUNT).unwrap(), None);
+    assert!(fake.revoked().is_empty());
 }
