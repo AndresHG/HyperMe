@@ -96,6 +96,13 @@ fn key_for(config: &Config, provider: &str, keys: &dyn SecretStore) -> Result<St
     }
 }
 
+/// Whether `provider` can be used now: it has a key, or its catalogue entry says it needs none
+/// (R-12, R-14). Settings switches a role only when this holds, so dictation never loses a
+/// working provider to one without a key.
+pub fn key_ready(config: &Config, provider: &str, keys: &dyn SecretStore) -> bool {
+    key_for(config, provider, keys).is_ok()
+}
+
 /// The speech provider the config names, with its key.
 pub fn speech(config: &Config, keys: &dyn SecretStore) -> Result<AnySpeech, Error> {
     let s = &config.speech;

@@ -9,7 +9,7 @@ use chat_server::*;
 use hyperme_core::config::{Config, DEFAULT_CONFIG};
 use hyperme_core::secrets::{MemorySecretStore, SecretStore};
 use hyperme_core::traits::{CleanupProvider, ErrorKind};
-use hyperme_providers::any::{AnyCleanup, AnySpeech, resolve};
+use hyperme_providers::any::{AnyCleanup, AnySpeech, key_ready, resolve};
 
 const KEY: &str = "not-a-real-key-for-tests";
 
@@ -69,4 +69,15 @@ fn a_keyless_provider_needs_no_key() {
     let config = with_server("http://127.0.0.1:9/v1", false);
     let providers = resolve(&config, &keys(&["speechmatics"])).unwrap();
     assert!(matches!(providers.cleanup, AnyCleanup::Chat(_)));
+}
+
+/// AC-5: a provider is ready only with a key, unless it needs none, so Settings keeps the old
+/// provider until the new one has a key that passed Test.
+#[test]
+fn ac5_a_provider_without_a_key_is_not_ready() {
+    let config = with_server("http://127.0.0.1:9/v1", true);
+    assert!(!key_ready(&config, "myserver", &keys(&["speechmatics"])));
+    assert!(key_ready(&config, "myserver", &keys(&["myserver"])));
+    let keyless = with_server("http://127.0.0.1:9/v1", false);
+    assert!(key_ready(&keyless, "myserver", &keys(&[])));
 }
