@@ -27,6 +27,10 @@ pub struct Config {
     pub timing: Timing,
 }
 
+fn show_while_idle() -> bool {
+    true
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Dictation {
@@ -40,6 +44,10 @@ pub struct Dictation {
     pub short_dictation_words: u32,
     /// R-32.
     pub sounds: bool,
+    /// The bead at the bottom centre while idle (U-13, brought forward by the owner). Optional,
+    /// so a config written before it existed still loads, with the bead on.
+    #[serde(default = "show_while_idle")]
+    pub show_while_idle: bool,
     /// The user's terms, one per line.
     pub dictionary: Option<PathBuf>,
 }

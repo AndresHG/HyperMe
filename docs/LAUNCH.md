@@ -38,7 +38,9 @@ These are settings, not files, and only matter once the repository is public:
 
 ## Before the first release (Phase 2)
 
-- [ ] Signed and notarised build, and a download on the Releases page.
+- [ ] Signed and notarised build, and a download on the Releases page. The release script, DMG
+      and updater are ready ([RELEASING.md](RELEASING.md)); signing and notarisation wait for an
+      Apple Developer account.
 - [ ] Every README claim earned in the ledger in [PITCH.md](PITCH.md), with its evidence linked.
 - [ ] Install and first-run instructions tested on a fresh macOS account.
 - [ ] Launch post draft, single-purpose ("open-source dictation for your Mac"), with the method
