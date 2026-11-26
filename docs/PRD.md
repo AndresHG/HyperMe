@@ -119,7 +119,7 @@ These settle trade-offs when a spec does not.
 4. **Your keys, your Mac.** Bring your own keys, data on disk only on your Mac, no telemetry, no
    account with us (section 9).
 5. **Light to run.** Under 100 MB idle, near 0% CPU; features that are not open cost nothing.
-6. **Never take focus.** The pill, its cards and the quick sheet never steal the cursor from the app you are in; only the Home window takes focus, and only when you open it
+6. **Never take focus.** The pill and its cards never steal the cursor from the app you are in; the quick sheet and the Home window take focus only when you open them
    ([UX.md](UX.md)).
 7. **Use what exists.** Connectors through MCP, scheduling through a small built-in scheduler,
    coding through the agents' own interfaces. No integration code per service, no agent
