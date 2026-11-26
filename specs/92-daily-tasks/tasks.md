@@ -16,8 +16,8 @@ they wait for the phase 3 gate.
 | 3 | `hyperme-core::schedule`: the three schedule shapes, next run in a given zone, daylight saving, catch-up decision. **Good first issue** once 1 merges: pure functions, no Mac needed | AC-15, AC-14 (catch-up half) | `area: core` | S | 1 |
 | 4 | `hyperme-core::scheduler`: the loop with `Clock` and `Presence` traits, failures and backoff, pause, seeded built-in jobs from config | AC-14, AC-16 | `area: core` | M | 3 |
 | 5 | `hyperme-platform::presence` on macOS: wake, sleep, lock, unlock, clock and zone changes, seconds since input; a `presence_probe` example to check the notifications on the owner's Mac | R-15, R-34 (platform half) | `area: app` | M | 4 |
-| 6 | `hyperme-core::brief`: Today, morning and evening card models from a snapshot; timing test at 10 000 synthetic tasks | AC-9 (data), AC-11, AC-12, AC-13, AC-18 (build time) | `area: core` | M | 1, 2 |
-| 7 | App: morning and evening cards from the dot, with their keys; the "Updating…" parts | AC-8, AC-9, AC-11, AC-12 | `area: ui` | M | 4, 5, 6, phase 3 dot and cards |
+| 6 | `hyperme-core::brief`: Today and morning card models from a snapshot; timing test at 10 000 synthetic tasks | AC-9 (data), AC-18 (build time) | `area: core` | M | 1, 2 |
+| 7 | App: the morning card from the dot, with its keys; the "Updating…" parts; the keep, day or drop question on stale tasks | AC-7 (UI), AC-8, AC-9 | `area: ui` | M | 4, 5, 6, phase 3 dot and cards |
 | 8 | App: Today block on the Home page and a Today row in the quick sheet, with "new", "unblocked" and "Waiting on" | AC-5, AC-10 (UI) | `area: ui` | M | 6, phase 3 Home |
 | 9 | Command tools `tasks_add`, `tasks_update`, `tasks_finish`, `tasks_today` in the phase 3 loop; done card with ⌘Z; chains; blocker matching; English and Spanish prompt examples | AC-1, AC-2, AC-3 | `area: core` | M | 2, phase 3 command loop |
 | 10 | Nudges: a due time and a meeting a few minutes ahead, as alert cards | AC-10 | `area: ui` | S | 4, 7 |
@@ -39,6 +39,9 @@ After slice 1, slices 2 and 3 can run at the same time, then 4 and 6, then 5. Wi
 two threads, the core group is about four pull requests deep.
 
 ## After the first version
+
+Deferred by the owner on 26 November 2026: the evening summary (R-24 to R-28, AC-11 to AC-13), one
+slice of about M in the core builders plus one in the app, when the owner asks for it.
 
 Candidates, each its own issue, only if the owner asks after a week of use: recurring tasks
 ("every Monday"), the day as a Markdown note in the memory folder (R-29, second half), a week

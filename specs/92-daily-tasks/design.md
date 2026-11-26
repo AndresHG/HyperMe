@@ -1,6 +1,7 @@
 # Phase 4 daily tasks: design
 
-**Status:** draft, 26 November 2026, with [spec.md](spec.md). How the task list, the two daily
+**Status:** draft, 26 November 2026, with [spec.md](spec.md). The evening summary is deferred
+(owner, 26 November 2026); the parts below that serve it stay as the design for later. How the task list, the two daily
 cards and the scheduler fit the code that exists, what they cost to run, and how they are tested.
 
 ## Where the code goes

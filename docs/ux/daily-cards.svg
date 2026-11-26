@@ -31,7 +31,7 @@
   <rect x="266" y="444" width="58" height="26" rx="7" fill="#26262B"/><text x="278" y="461" fill="#A1A1AA" font-size="11">⌘K More</text>
 
   <!-- EVENING -->
-  <text x="420" y="66" fill="#FFFFFF" font-size="13" font-weight="700">Evening card</text>
+  <text x="420" y="66" fill="#FFFFFF" font-size="13" font-weight="700">Evening card (deferred)</text>
   <rect x="420" y="76" width="360" height="410" rx="18" fill="#111113" stroke="#3A3A40"/>
   <text x="438" y="106" fill="#FFFFFF" font-size="15" font-weight="700">Day done · 6 of 9</text>
   <text x="438" y="124" fill="#A1A1AA" font-size="11">Dentist, numbers to Ana, onboarding copy and 3 more</text>
