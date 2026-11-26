@@ -99,6 +99,7 @@ pub struct Permissions {
 /// The permission checks, polled by the Permissions screen so it turns green by itself.
 #[tauri::command]
 pub fn onboarding_checks(app: AppHandle) -> Permissions {
+    log_permissions();
     let config = Config::load_or_create(&crate::runtime::data_dir(&app).join("config.toml")).ok();
     Permissions {
         accessibility: permissions::accessibility(),
@@ -149,6 +150,36 @@ pub fn onboarding_mic(app: AppHandle, on: bool) -> Result<(), String> {
         }
     });
     Ok(())
+}
+
+/// Appends the raw permission facts to `~/Library/Logs/HyperMe/permissions.log` whenever they
+/// change, so a grant that does not show up can be diagnosed. Facts only, no user data.
+fn log_permissions() {
+    use std::io::Write;
+    static LAST: std::sync::Mutex<String> = std::sync::Mutex::new(String::new());
+    let line = permissions::diagnostics();
+    let mut last = LAST
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if *last == line {
+        return;
+    }
+    last.clone_from(&line);
+    let path = std::path::PathBuf::from(std::env::var_os("HOME").unwrap_or_default())
+        .join("Library/Logs/HyperMe/permissions.log");
+    if let Some(dir) = path.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    if let Ok(mut file) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)
+    {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_secs());
+        let _ = writeln!(file, "{now} {line}");
+    }
 }
 
 /// Input Monitoring as the walkthrough sees it: the preflight check, or a tap that can be
