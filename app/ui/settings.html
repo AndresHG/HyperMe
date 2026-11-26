@@ -107,7 +107,7 @@
     </div>
     <div id="providers-advanced" class="hidden" data-words="provider model openai openrouter gemini anthropic local custom endpoint reasoning">
       <table class="roles">
-        <thead><tr><th style="width:18%">Role</th><th style="width:22%">Provider</th><th style="width:28%">Model</th><th>Key / Test</th></tr></thead>
+        <thead><tr><th style="width:15%">Role</th><th style="width:25%">Provider</th><th style="width:27%">Model</th><th>Key / Test</th></tr></thead>
         <tbody id="roles-body"></tbody>
       </table>
       <div class="toolbar"><small class="lead" style="margin:0">Changes save at once and reach the next dictation.</small><button id="reset-providers">Reset to recommended</button></div>
@@ -272,7 +272,7 @@
         test.addEventListener('click', () => testRole(r.role, chosen.id, modelField.value.trim()));
         row.append(test);
       }
-      if (chosen.has_key_page) {
+      if (needsKey && chosen.has_key_page) {
         const page = el('a', { className: 'link', textContent: 'Get a key' });
         page.addEventListener('click', () => invoke('provider_key_page', { provider: chosen.id }));
         row.append(page);
