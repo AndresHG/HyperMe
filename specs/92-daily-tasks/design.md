@@ -259,7 +259,7 @@ spec wins where it differs.
 
 | Part | What this spec needs from it |
 | --- | --- |
-| Home window | Blocks above Recent, so Today and Waiting for you are two more entries; a `hyperme://home/today` link for the morning card's ↵; an event when Today has been seen, to clear "new"; re-render on a push from the core; `home_attention(bool)` for the violet dot |
+| Home window ([spec 98](../98-home-window/spec.md), PR #103) | Blocks above Recent, so Today and Waiting for you are two more entries; `home::open(app, "today")` for the morning card's ↵ (a `hyperme://` link later, with the URL scheme); an event when Today has been seen, to clear "new"; re-render on a push from the core; `home_attention(bool)` for the violet dot |
 | Google calendar and mail ([spec 97](../97-google-connectors/spec.md), PR #101) | Sync as `sync:google-calendar` and `sync:google-mail` jobs in this scheduler, with read tools only, skipped on low power and run once on wake; today's meetings as title, start, end, account and link; items to act on upserted as mirrored tasks keyed by source, account and id; a count of mail to answer |
 | Phase 3 command loop | Built-in tools beside MCP tools, and a done card with ⌘Z |
 | Phase 3 dot and cards | Alert cards from the dot for the morning and evening cards and nudges |
