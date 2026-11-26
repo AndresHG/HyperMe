@@ -23,7 +23,7 @@ or Devin and reports back.
 - `docs/PITCH.md`: pitch, positioning against Wispr Flow, and the ledger of claims still to earn
 - `specs/25-dictation-core/`: draft Phase 1 spec, design and slices (not yet approved)
 - `docs/FIELD.md`: existing projects and what to borrow from each
-- `docs/UX.md`: UX and UI by phase (pill, menu bar, onboarding, settings, then the orb and panel), with mockups in `docs/ux/` (draft)
+- `docs/UX.md`: UX and UI by phase (the pill, its cards, Home, settings and menus), with mockups in `docs/ux/` (draft)
 - `docs/RESEARCH.md`: verdict, product focus, pitch and field map from the research of
   24 November 2026
 - `KICKOFF.md`: the first two sessions, step by step

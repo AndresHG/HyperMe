@@ -5,47 +5,52 @@ looks like and feels like. Mockups are in [ux/](ux/).
 
 ## The idea in one paragraph
 
-HyperMe has one surface that grows. In Phase 1 it is only a **pill** that appears while you
-dictate, plus a menu-bar icon and a settings window. From Phase 3 the pill gains a home: a small
-**orb** in the corner that opens a compact dark **panel** with tabs. Each later phase adds one tab
-to that panel, never a new window. The rule that holds it together: **the panel is where Hyper
-talks back; the pill is where you talk to it.** Dictation never needs the panel.
+HyperMe is voice first, so **the pill is the product**. In Phase 1 it shows only while you
+dictate, with a menu-bar icon and a settings window around it. In Phase 3 the pill also answers:
+it grows upward into a card with the answer or a preview that waits for ↵. Work that outlives a
+card lives in **Home**, one plain window with a few views taken from the roadmap: History, Today
+and Meetings. The rule that holds it together: **quick things happen at the pill, lasting things
+in Home.** Dictation never needs Home. Each surface comes from a job in the roadmap, and the
+patterns are borrowed from the best Mac apps, not from any single app.
 
 ## Principles
 
 1. **Speed is the UI.** The pill shows recording within one frame of key-down (budget: under 50 ms
    to recording). No animation delays text; animations run beside the work, never before it.
-2. **Never take focus.** The pill and the panel are non-activating panels (spec R-23). Typing
-   goes on in the app you were in. Only an explicit click into the panel's composer takes focus.
-3. **Quiet until needed.** Nothing on screen while idle in Phase 1. Later, the orb is small and
-   still; only a count badge moves it.
+2. **Never take focus.** The pill and its cards are non-activating panels (spec R-23). Typing
+   goes on in the app you were in. Only Home, a normal window, takes focus, and only when you
+   open it.
+3. **Quiet until needed.** Nothing on screen while idle in Phase 1. Later, the idle pill is a
+   thin line, with a dot only when something waits.
 4. **Say what happened, in a few words.** Every state has one short label ("Raw text",
    "Nothing heard"). Errors name the provider and point to the fix (R-21), never show a key.
 5. **Preview before anything leaves the app.** Any action that creates, sends or posts shows a
    card and waits for Enter (`CLAUDE.md`). Email is draft-only.
-6. **Light to run.** No front-end framework, no build step (design.md). The panel's web view is
+6. **Light to run.** No front-end framework, no build step (design.md). Home's web view is
    created when opened and dropped when closed, so idle memory stays under 100 MB.
-7. **Dense but calm.** Near-black surfaces, white bold type for what matters, grey for the rest,
-   one accent for state. Rounded cards, little chrome.
+7. **Dense but calm.** The pill and cards are dark capsules, as in Wispr Flow, which the owner
+   likes. Home follows the system's light or dark mode like any Mac app. White or black bold
+   type for what matters, grey for the rest, one accent for state.
+8. **Keyboard everywhere.** ↵ does the main thing, Esc backs out, ⌘K shows everything else.
 
 ## Visual language
 
 | Token | Value | Use |
 | --- | --- | --- |
-| Surface | `#111113` panel, `#1B1B1F` card, `#26262B` hover | Panel and pill backgrounds |
+| Surface | `#111113` pill and card, `#1B1B1F` raised, `#26262B` hover | Pill and cards (Home uses the system's colours) |
 | Text | `#FFFFFF` primary, `#A1A1AA` secondary, `#6B6B73` live or muted | White is final, grey is provisional (this matters in meetings) |
 | Accent | `#FF4D4F` recording, `#22C55E` ready or done, `#F59E0B` raw text or warning | State only, never decoration |
-| Radius | 999 px pill, 14 px panel, 10 px card | |
+| Radius | 999 px pill, 14 px card | |
 | Type | System font (SF Pro on macOS), 13 px body, 15 px bold titles, 11 px meta | Native feel, no font download |
 | Motion | 120 ms ease-out for show and hide; level meter at 30 fps | Respect "Reduce motion": no slide, only fade |
 
 Colour is never the only signal: each state also has an icon and a word. Contrast of text on the
-surfaces meets WCAG AA. Everything in the panel is reachable by keyboard: Tab between controls,
+surfaces meets WCAG AA. Everything in the cards and Home is reachable by keyboard: Tab between controls,
 Enter to confirm a preview, Esc to close.
 
 ## Phase 1: dictation only
 
-What the owner needs to drop Wispr Flow for a week. No orb and no panel yet.
+What the owner needs to drop Wispr Flow for a week. No cards and no Home yet.
 
 ### The flow
 
@@ -119,7 +124,7 @@ later phases add their own short "what's new" card.
 Phase 1 shows the first seven sections of the settings plan below: General, Shortcuts, Providers,
 Privacy, Advanced, About, and a Setup check at the top. Mockup: [ux/settings.svg](ux/settings.svg).
 
-## Settings, tabs and menus
+## Settings, Home and menus
 
 HyperMe needs more setup than a dictation app: two or more providers with keys, then
 connectors, scheduled jobs and meetings. The owner's bar is a UI as slim as Wispr Flow's, which
@@ -143,9 +148,9 @@ Every setting has exactly one home, chosen by how often it is used:
 
 | Place | What goes there | Examples |
 | --- | --- | --- |
-| Pill and orb | Nothing to configure. Right-click opens the same menu as the menu-bar icon | |
+| Pill and its cards | Nothing to configure. Right-click opens the same menu as the menu-bar icon | |
 | Menu-bar menu | Things you do several times a day, at most 8 items | Paste last dictation, start a meeting, pause notifications |
-| Panel tabs (Phase 3+) | Work, and the personalisation that comes from using it | Add a word to the dictionary from a dictation, mark a card "Not important" |
+| Home (Phase 2+) | Work, and the personalisation that comes from using it | Fix a word into the dictionary from History, dismiss a proposal in Today |
 | Settings window | Setup you do once, and preferences you rarely change | Keys, providers, shortcuts, connectors |
 | `config.toml` | Everything, for people who prefer a file. Settings writes to it, and Advanced has "Open config file" | Endpoints, thresholds, model names (R-26) |
 
@@ -158,8 +163,8 @@ once its feature exists: no "coming soon" pages.
 | --- | --- | --- | --- |
 | | **Setup check** | One line per requirement with a green tick or a fix button: microphone, accessibility, each provider key, each connector. The first page until everything is green, and the place every error links to | 1 |
 | Everyday | **General** | Launch at login; pill position and whether it shows while idle; sounds (start and stop: soft, off); pause media while dictating; theme follows the system | 1 |
-| | **Shortcuts** | Dictation (hold), hands-free, cancel (Esc), paste last dictation, open panel; later command and meeting. One list, with conflicts flagged | 1 |
-| | **Dictionary** | Words and sound-alike replacements, with import and export. Also reachable from the panel | 2 |
+| | **Shortcuts** | Dictation (hold), hands-free, cancel (Esc), paste last dictation, open Home; later command and meeting. One list, with conflicts flagged | 1 |
+| | **Dictionary** | Words and sound-alike replacements, with import and export. Also reachable from Home → History | 2 |
 | | **Style** | Cleanup level (none, light, medium) and a style per kind of app: personal chat, work chat, email, other. Same groups as Wispr Flow | 2 |
 | Setup | **Providers** | One page for every model service. Each row shows provider, model, key status and a Test button, and says which features use it ("Used by: dictation, meetings"). Choosing what each feature uses is a short table on the same page, never a tab per feature | 1 |
 | | **Connectors** | MCP servers (GitHub first). Each has its tools, a switch per tool, and "ask before" on for anything that writes (`CLAUDE.md`) | 3 |
@@ -184,97 +189,142 @@ once its feature exists: no "coming soon" pages.
 6. **Search finds every setting**, including Advanced ones, by its name and by common words
    ("hotkey" finds Shortcuts).
 7. **One name per thing.** Settings, menus and pill copy use the same words: "dictation", "pill",
-   "panel", "Hyper".
+   "card", "Home", "Hyper".
 
 ### Menus
 
-The **menu-bar menu** grows by phase but stays at 8 items or fewer:
+What other good Mac apps teach about menus, and what HyperMe takes:
 
-| Item | From |
+| App | Pattern | In HyperMe |
+| --- | --- | --- |
+| Raycast | ↵ runs the main action, ⌘↵ the second, ⌘K lists every action for the selected item ([manual](https://manual.raycast.com/action-panel)) | The same keys on every pill card and Home item |
+| Superhuman | Cmd+K finds and runs anything, and shows each action's shortcut beside it, so you learn the key and stop opening the palette ([help](https://help.superhuman.com/article/478-superhuman-command)) | Home's command bar shows shortcuts beside commands |
+| Linear | The command menu runs any action or opens any page by name; ? lists every shortcut; two-key jumps such as G then I ([guide](https://linear.app/enablement/guides/navigating-linear)) | ⌘K in Home, ? for shortcuts, G then H, T or M for History, Today, Meetings |
+| CleanShot X | A small overlay after each capture with one-key actions (copy, save, close, upload) ([iMore](https://www.imore.com/cleanshot-x-gains-new-keyboard-shortcuts-quick-access-overlay-more)) | The done card after an action: ⌘C copies the link, ⌘O opens it |
+| Things 3 | A global shortcut opens Quick Entry; with Autofill it takes the link of what you are looking at ([support](https://culturedcode.com/things/support/articles/2249437/)) | "For this" in commands means the thing in front of you, shown on the card |
+| Notion Calendar | Upcoming events in the menu bar and a system-wide shortcut to join a meeting ([help](https://www.notion.com/help/notion-calendar-settings)) | Next meeting in the menu header; ↵ on a nudge joins it and starts notes |
+| Superwhisper | Settings open from the menu bar, a right-click on the recording window, ⌘, or a deep link ([docs](https://superwhisper.com/docs/get-started/settings.md)) | The same ways in, with `hyperme://` links |
+
+The **menu-bar menu** grows by phase but stays at 8 rows or fewer:
+
+| Row | From |
 | --- | --- |
-| Status: "Ready", or the open problem with a link to Setup check | 1 |
-| Paste last dictation ⌃⌥V · Copy last dictation · Retry last failed (only when one is waiting) | 1 |
-| Open HyperMe (the panel) | 3 |
+| Status: "Ready", or the open problem with a link to Setup check. From Phase 4 it also shows the next meeting: "Next: Weekly planning, 10:30" | 1 |
+| **Recent**: the last three dictations, one line each. Click copies; a failed one shows **Retry** | 1 |
+| Paste last dictation ⌃⌥V | 1 |
+| Open Home ⌥Space | 2 |
 | Start meeting notes / Stop | 5 |
-| Pause Hyper for 1 hour (no nudges, no automations; dictation still works) | 4 |
+| Pause Hyper for 1 hour (no nudges, no jobs; dictation still works) | 4 |
 | Settings… ⌘, | 1 |
 | Quit HyperMe ⌘Q | 1 |
 
-Right-clicking the pill or the orb shows the same menu. Timing log moves to Privacy, so the menu
-holds actions only.
+Right-clicking the pill shows the same menu. The timing log is in Privacy, so the menu holds only
+actions.
 
-### Panel tabs
+### Home views
 
-- A tab appears only once its feature is set up. A fresh install that has connected GitHub but
-  not mail sees Chat and Needs you, not To do.
-- Never more than six tabs. If a seventh ever comes up, two of them merge.
-- Badges only where they carry meaning: red on Needs you, grey on To do, nothing anywhere else.
-- The panel's sliders icon opens the Settings window at the section for the current tab (from
-  Meetings, it opens Meetings). There are no settings inside the panel, so the panel stays slim.
+- A view appears only once its feature exists: History in Phase 2, Today in Phase 4, Meetings in
+  Phase 5. No empty views waiting for a later phase.
+- Three views, and a fourth only if the roadmap adds a job that none of them fits.
+- One mark of attention: a dot on Today when something waits for a yes. No counts.
+- Home has no settings. ⌘, opens Settings at the section for the current view.
 
 ## Phase 2: quality and first release
 
 
-Still no panel required. What changes on screen:
+What changes on screen:
 
 - **Dictionary** and **Style** sections in Settings ([the settings plan](#the-settings-plan)).
 - **Cleanup level** and **style per app**, shown as the app's name on the pill while working, so
   the user sees which style ran.
 - **Hands-free** (owner, U-3): double-tap the hotkey to lock recording, tap again
   to stop, with a stop button on the pill (Wispr Flow's pattern).
-- **History**, if adopted: a list of recent dictations to copy or re-paste. It is the first
-  reason for a panel, so it becomes the panel's **Dictation** tab (see decisions).
+- **Home → History:** dictation history is on from Phase 1 (U-4), so Phase 2 gives it a place to
+  search, copy, re-paste, retry and fix words. Phase 1 has only Recent in the menu.
 
-## Phase 3 onward: the orb and the panel
+## Phase 3 onward: the pill grows, and Home
 
-![The panel above the orb, Needs you tab](ux/panel.svg)
+Every surface here comes from a job in [ROADMAP.md](ROADMAP.md), not from another app's layout:
 
-### The orb
-
-A 40 pt circle, bottom right, with a slow, faint animation only while Hyper is working on
-something. A red badge shows how many items need the user. Click opens the panel; drag moves it;
-right-click offers the menu-bar menu. Dictation still uses the pill, not the orb.
-
-### The panel
-
-A dark panel about 420 by 560 pt, anchored above the orb with a small tail pointing at it.
-
-**Header:** "HyperMe" on the left. On the right: a status pill ("Ready", green; "Listening", red;
-"Offline", grey), then icons for new chat, voice, settings, pop out to a window, and close.
-
-**Tabs,** added one per phase:
-
-| Tab | Phase | Shows |
+| Roadmap job | Phase | Where it happens |
 | --- | --- | --- |
-| Chat | 3 | Answers to spoken questions and action previews. Each message has Hyper's name, time, a bold one-line headline ("Ticked off 2 reviews"), bullets, and a dismiss X. A smaller line under it says what Hyper learned, and done items say where to get them back ("Under Done this week") |
-| Needs you | 4 | Items waiting for a decision, with a red count |
-| To do | 4 | Daily tasks and scheduled jobs, with a grey count |
-| Meetings | 5 | Week calendar and the live note-taker |
-| Dictation | 2 or 3 | History, if adopted: copy, re-paste, fix a word |
-| Agents | 5 | Coding-agent tasks started by voice (Claude Code, Devin), with state and result |
+| Dictate anywhere, and never lose a dictation | 1 | The pill; Recent and Retry in the menu (spec R-18, R-31) |
+| Find and fix what I said | 2 | **Home → History** |
+| "Speak, preview card, Enter" in under a second | 3 | A **card that grows out of the pill** |
+| Short questions answered in the pill | 3 | The same card, with an answer instead of a preview |
+| Plan the day: calendar, crons, "meeting now" nudges, mail drafts | 4 | **Home → Today**, plus a nudge card from the pill |
+| Meetings become tasks | 5 | **Home → Meetings**, and a live transcript window while recording |
+| Start and follow coding agents, reported back from the pill | 5 | A status card from the pill; the run lives in **Today** |
 
-**Composer,** at the bottom of every tab: attach, "Message Hyper…", a language chip (Auto, ES,
-EN), a mic button and Send. The mic button and the hotkey do the same thing.
+![Pill cards: an answer, a preview waiting for Enter, and the action menu](ux/pill-cards.svg)
 
-### Smart routing (Phase 3)
+### The pill grows into cards
 
-One key for everything you say (ROADMAP Phase 3). The pill shows where the words went before
-anything happens: "Dictation" (pasted), "Question" (answer appears in the panel's Chat tab and as
-a short line on the pill), or "Action" (a preview card opens in the panel and waits for Enter).
-Saying "Hyper, …" at the start routes to a command, as OpenWhispr's agent name does; OpenWhispr
-notes this is the feature that surprises people most, because it is on by default
-([docs](https://docs.openwhispr.com/help/agent/voice-modes.md)). Proposed: the pill always shows
-the route, and a dictation that became a command can be undone with one key back to plain text.
+The pill is where you talk to Hyper, and in Phase 3 it is also where Hyper answers. When a
+dictation turns out to be a question or an action, the pill opens upward into a card. No window
+opens and focus stays where it was.
 
-### Cards (Needs you, Phase 4)
+- **Route first.** Before anything happens the pill names the route: "Dictation", "Question" or
+  "Action". A dictation that became a command goes back to plain text with one key (⌘Z).
+- **Answer card.** Up to four lines of answer and the source, if there is one. Esc closes it.
+  ↵ copies the answer, ⌘↵ pastes it at the cursor.
+- **Preview card.** What will be created or sent, laid out the way the destination shows it (a
+  GitHub issue looks like an issue). **↵ does it, Esc cancels, ⌘K opens more actions** (edit,
+  change the project, open in the browser). This rule comes from Raycast's action panel, where ↵
+  runs the main action, ⌘↵ a second one, and ⌘K lists the rest
+  ([manual](https://manual.raycast.com/action-panel)).
+- **Done card.** After an action, a small card with the result and its link stays for 5 seconds,
+  with ⌘C (copy link) and ⌘O (open). CleanShot X's quick-access overlay after a capture uses the
+  same idea, with its own one-key shortcuts ([iMore](https://www.imore.com/cleanshot-x-gains-new-keyboard-shortcuts-quick-access-overlay-more)).
+- **Context, like Things.** "Create a ticket for this" means the page, mail or file in front of
+  you, the way Things' Quick Entry with Autofill picks up the current link
+  ([support](https://culturedcode.com/things/support/articles/2249437/)). The card shows what
+  "this" was taken to be, so you can fix it before ↵. Window text only behind the visible
+  switch that is off by default (`CLAUDE.md`).
 
-Each card: a source chip (GitHub, Mail, Calendar), a bold title, a one-line summary ending in
-"Next: …", optional sub-rows with times and "N new" or "2 h ago" badges, then buttons: a filled
-**Ask Hyper**, outlined **Open** and **Mark done**, and a quiet "Not important" link on the right.
-The tab header shows the count, "Checked just now", a refresh icon and "Clear all".
+### The idle pill
 
-"Not important" is a signal for later learning (memory is part of the vision, not of a first
-version); in Phase 4 it only hides the item.
+Wispr Flow keeps a small bar on screen while idle, and its docs say you can move or hide it
+([docs](https://docs.wisprflow.ai/articles/5096240724-navigating-the-wispr-flow-app-desktop-ios-and-android)).
+HyperMe does the same from Phase 3: a thin line at the bottom centre that grows into the pill on
+hover. Hovering shows "Hold Fn · Click for Home". A small dot appears on it when something is
+waiting for you; there is no number badge to nag. It can be hidden in General. This replaces the
+corner orb (decision U-6).
+
+### Home
+
+![Home: Today with what waits for you, the day, and what runs](ux/home-today.svg)
+
+One normal Mac window, opened from the idle pill, the menu, or a shortcut (⌥Space, proposed). It
+is light or dark with the system, like a native app, so it does not feel like an overlay. Its
+sidebar holds only what the roadmap needs, added by phase:
+
+| View | Phase | Holds |
+| --- | --- | --- |
+| **History** | 2 | Everything you said: dictations, questions and actions, newest first, searchable. Each item can be copied, pasted again, retried if it failed, or used to fix a word into the dictionary |
+| **Today** | 4 | Three parts, top to bottom. **Waiting for you:** every proposal that needs a yes (mail drafts, proposed tickets, agent results to review), one queue, since everything that leaves the app needs a preview anyway. **The day:** a timeline of meetings, nudges and scheduled jobs. **Running:** agent tasks and jobs in progress, with their state |
+| **Meetings** | 5 | Past and upcoming meetings, each with notes, action points and proposed tickets |
+
+Settings stays its own window (⌘,). Home never holds settings.
+
+One queue instead of separate "needs you" and "to do" lists is our choice. It follows from the
+safety rule, where everything outbound waits for a yes, and it keeps Home to three views.
+
+### The command bar
+
+⌘K anywhere in Home opens one command bar: jump to a view, search history, run an action, or open
+a setting by name. Next to each command it shows that command's own shortcut, so the bar also
+teaches the shortcuts. Superhuman's Cmd+K works this way ([help](https://help.superhuman.com/article/478-superhuman-command)),
+and Linear's command menu runs any action or opens any page by name
+([guide](https://linear.app/enablement/guides/navigating-linear)). Press ? for the full list.
+
+### Nudges (Phase 4)
+
+A nudge is a card from the pill, never a system notification. Example: "Weekly planning in
+2 min · ↵ Join and take notes · Esc". Notion Calendar shows upcoming events in the menu bar
+and has a system-wide "join meeting" shortcut
+([help](https://www.notion.com/help/notion-calendar-settings)); HyperMe puts the next meeting in
+the menu header and makes ↵ on the nudge join it and start notes.
 
 ## Meetings (Phase 5)
 
@@ -283,15 +333,16 @@ version); in Phase 4 it only hides the item.
 Built on the on-device design adopted on
 26 November 2026 (ROADMAP, "Meetings on device").
 
-- **Week view:** a header with the count ("8 today"), Monday to Friday, today circled, events as dark blocks, a search icon and a
-  List or Week toggle. Each upcoming event offers **Record**.
-- **Live view:** the transcript scrolls as people speak. **Live words are grey** (Apple's
+- **Meetings view in Home:** a list by day, with the next meeting at the top and **Record**
+  beside it. A week grid is not needed for a note-taker; the calendar app has one.
+- **Live transcript window:** a small floating window that never takes focus, opened when
+  recording starts and closed when it stops. The transcript scrolls as people speak. **Live words are grey** (Apple's
   on-device recognizer); **cleaned sentences turn white** as each batch comes back from cleanup.
   Lines are labelled **Me** (microphone) and **Them** (system audio), named from the invite.
 - **Cleanup setting** as a chip in the header with three choices: **Cloud** (Groq, default),
   **Local** (any OpenAI-compatible server), **Off** (grey text stays grey; nothing leaves the
   Mac). The chip says what leaves the Mac in a tooltip.
-- **Always visible while recording** (safety rule): a red dot on the orb and the menu-bar icon,
+- **Always visible while recording** (safety rule): a red dot on the idle pill and the menu-bar icon,
   with a timer, for as long as capture runs.
 - **After the meeting:** notes, action points and **proposed tickets** with owner and the exact
   quote. Proposals stay pending until the user applies them (Anarlog's pattern, FIELD.md); each
@@ -311,7 +362,7 @@ an earlier OpenWhispr slow and dislikes its UI (FIELD.md).
 | --- | --- | --- | --- |
 | Default hotkey | Fn hold to talk; Fn + Space hands-free | Globe (Fn), via a bundled listener; tap by default, hold optional | Fn hold (owner, U-2); Right Option offered |
 | Hands-free | Separate shortcut or double-tap; second press within 0.5 s cancels | Tap mode is the default | Phase 2, double-tap (owner, U-3) |
-| On-screen bar | Flow Bar shown by default; click to start, stop button | Floating panel, bottom right by default, auto-hide off | Pill only while dictating in Phase 1; orb from Phase 3 |
+| On-screen bar | Flow Bar shown by default; click to start, stop button | Floating panel, bottom right by default, auto-hide off | Pill only while dictating in Phase 1; a thin idle pill from Phase 3 |
 | Paste failure | "Select a textbox first", Paste last transcript | Pasted without cleanup is announced | Raw text label, Paste last dictation |
 | Cleanup off or failed | Not documented here | "Pasted without AI cleanup" note; cleanup has its own model | Raw text label (R-20) |
 | Commands | Command Mode on its own shortcut, off by default | Four hotkeys, plus the agent's name in dictation | One key, routed, with the route shown (Phase 3) |
@@ -332,13 +383,20 @@ Answered by the owner on 26 November 2026.
 
 | # | Question | Decided |
 | --- | --- | --- |
-| U-1 | When does the always-visible orb appear? | Phase 3. Phase 1 shows the pill only while dictating |
+| U-1 | When does the always-visible orb appear? | Phase 3. Phase 1 shows the pill only while dictating. Revisited by U-6 after the owner asked for a design of our own |
 | U-2 | Default dictation hotkey | Hold Fn (Globe); Right Option and chords offered |
 | U-3 | Hands-free (double-tap to lock) | Phase 2 |
-| U-4 | Dictation history | On by default, kept 30 days or unlimited, under a total size limit the user sets (default 1 GB, our pick). Above all, a dropped connection must never lose a dictation: the audio is kept and the pill and menu offer **Retry**, even with history off (spec R-18, R-31). It becomes the panel's Dictation tab |
+| U-4 | Dictation history | On by default, kept 30 days or unlimited, under a total size limit the user sets (default 1 GB, our pick). Above all, a dropped connection must never lose a dictation: the audio is kept and the pill and menu offer **Retry**, even with history off (spec R-18, R-31). Searchable in Home → History from Phase 2 |
 | U-5 | Start and stop sounds | On, soft, with a switch |
+
+Open, after the owner asked on 26 November 2026 for a design of our own, with views from the roadmap:
+
+| # | Question | Proposed |
+| --- | --- | --- |
+| U-6 | A corner orb with a tabbed panel, or the pill growing into cards plus a Home window? | The pill grows into cards for quick answers and previews; lasting work in Home (History, Today, Meetings); a thin idle pill instead of the orb |
+| U-7 | One "Waiting for you" queue in Today, or separate lists for things that need you and things to do? | One queue, since everything outbound waits for a yes anyway |
 
 ## Not decided here
 
-Look and copy for email (Phase 4) and coding agents (Phase 5) beyond their tab; a light theme;
-Linux and Windows placement of the orb and pill.
+Look and copy for email (Phase 4) and coding agents (Phase 5) beyond Today;
+Linux and Windows placement of the pill.
