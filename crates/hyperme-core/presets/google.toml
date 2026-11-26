@@ -13,19 +13,36 @@ auth_url = "https://accounts.google.com/o/oauth2/v2/auth"
 token_url = "https://oauth2.googleapis.com/token"
 revoke_url = "https://oauth2.googleapis.com/revoke"
 extra_auth_params = { access_type = "offline", prompt = "consent" }
+# R-14: never asked for, whatever is switched on.
+forbidden_scopes = ["https://www.googleapis.com/auth/gmail.send",
+                    "https://www.googleapis.com/auth/gmail.modify",
+                    "https://mail.google.com/"]
+
+# G-1: the user's own Google Cloud client. The gcloud commands make the project and turn on the
+# APIs; the OAuth client itself is made on the console page. UNVERIFIED until slice 1.
+[setup]
+client_url = "https://developers.google.com/workspace/guides/configure-mcp-servers"
+production_url = "https://console.cloud.google.com/auth/audience"
+commands = [
+  "gcloud projects create hyperme-dev",
+  "gcloud services enable gmail.googleapis.com calendar-json.googleapis.com gmailmcp.googleapis.com calendarmcp.googleapis.com --project hyperme-dev",
+]
 
 [[servers]]
 id = "calendar"
+label = "Calendar: read your events"
 url = "https://calendarmcp.googleapis.com/mcp/v1"
 scopes = ["https://www.googleapis.com/auth/calendar.calendarlist.readonly",
           "https://www.googleapis.com/auth/calendar.events.readonly"]
 
 [[servers]]
 id = "gmail"
+label = "Mail: read your inbox"
 url = "https://gmailmcp.googleapis.com/mcp/v1"
 scopes = ["https://www.googleapis.com/auth/gmail.readonly"]
 # R-14: only when drafts are switched on. Never gmail.send, gmail.modify or mail.google.com.
 optional_scopes = { drafts = ["https://www.googleapis.com/auth/gmail.compose"] }
+optional_labels = { drafts = "Mail: write drafts for you to send" }
 
 # Defaults; the user changes them per tool in Settings. A tool no list names is "ask"; when a
 # tool matches more than one list, the strictest wins (off, then ask, then read). `*` matches

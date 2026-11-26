@@ -5,4 +5,5 @@
 pub mod cleanup;
 pub mod mcp;
 pub mod oauth;
+pub mod setup;
 pub mod speechmatics;

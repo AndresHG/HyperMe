@@ -3,7 +3,7 @@
 
 use std::path::{Path, PathBuf};
 
-use hyperme_core::connectors::{RequestLog, Usage};
+use hyperme_core::connectors::{AccountData, RequestLog, Usage};
 use hyperme_platform::task_store::SqliteTaskStore;
 use time::{Date, Month};
 
@@ -78,6 +78,31 @@ fn an_older_file_gains_the_table() {
 
     let store = SqliteTaskStore::open(&path).unwrap();
     store.record("google:personal", day(), "gmail", 1).unwrap();
+    assert_eq!(
+        store
+            .usage("google:personal", day(), "gmail")
+            .unwrap()
+            .calls,
+        1
+    );
+}
+
+/// R-12, AC-6: disconnecting an account deletes its rows and leaves the other accounts'.
+#[test]
+fn disconnect_deletes_only_that_accounts_rows() {
+    let store = SqliteTaskStore::open(&temp_db("delete")).unwrap();
+    store.record("google:work", day(), "gmail", 1).unwrap();
+    store.record("google:work", day(), "calendar", 1).unwrap();
+    store.record("google:personal", day(), "gmail", 1).unwrap();
+    store.delete_account("google:work").unwrap();
+    assert_eq!(
+        store.usage("google:work", day(), "gmail").unwrap(),
+        Usage::default()
+    );
+    assert_eq!(
+        store.usage("google:work", day(), "calendar").unwrap(),
+        Usage::default()
+    );
     assert_eq!(
         store
             .usage("google:personal", day(), "gmail")

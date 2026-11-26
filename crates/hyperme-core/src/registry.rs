@@ -129,6 +129,23 @@ pub struct Server {
     pub scopes: Vec<String>,
     /// Scopes asked for only when the named feature is switched on, such as `drafts`.
     pub optional_scopes: BTreeMap<String, Vec<String>>,
+    /// The switch that turns this server on in the setup sheet, in plain words.
+    pub label: Option<String>,
+    /// The switch for each optional scope, by feature.
+    pub optional_labels: BTreeMap<String, String>,
+}
+
+/// Help for setting up a connector's own OAuth client (G-1), from the preset.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Setup {
+    /// The page where the user creates their client.
+    pub client_url: String,
+    /// The page where the user sets the client's project to "In production" (R-10a).
+    pub production_url: Option<String>,
+    /// Shell commands for the "Use gcloud instead" path, copied as text, never run.
+    #[serde(default)]
+    pub commands: Vec<String>,
 }
 
 /// The OAuth endpoints and consent parameters of a connector (RFC 8252).
@@ -166,6 +183,9 @@ pub struct Connector {
     /// The user's switches from Settings (exact tool names), which win over `tools`.
     pub user_tools: ToolLists,
     pub pulls: Vec<Pull>,
+    /// Scopes this connector never asks for, whatever is switched on (R-14).
+    pub forbidden_scopes: Vec<String>,
+    pub setup: Option<Setup>,
 }
 
 impl Connector {
@@ -238,6 +258,9 @@ struct PresetFile {
     tools: ToolLists,
     #[serde(default)]
     pull: Vec<Pull>,
+    #[serde(default)]
+    forbidden_scopes: Vec<String>,
+    setup: Option<Setup>,
 }
 
 #[derive(Deserialize)]
@@ -258,6 +281,9 @@ struct ServerFile {
     scopes: Vec<String>,
     #[serde(default)]
     optional_scopes: BTreeMap<String, Vec<String>>,
+    label: Option<String>,
+    #[serde(default)]
+    optional_labels: BTreeMap<String, String>,
 }
 
 /// How a custom server signs in.
@@ -361,10 +387,14 @@ impl CustomServer {
                 transport,
                 scopes: self.scopes.clone(),
                 optional_scopes: BTreeMap::new(),
+                label: None,
+                optional_labels: BTreeMap::new(),
             }],
             tools: self.tools.clone(),
             user_tools: ToolLists::default(),
             pulls: Vec::new(),
+            forbidden_scopes: Vec::new(),
+            setup: None,
         }
     }
 }
@@ -481,11 +511,25 @@ fn parse_preset(text: &str, source: &str, builtin: bool) -> Result<Connector, Re
             return Err(fail(format!("server {:?} appears twice", server.id)));
         }
         check_url(&server.url).map_err(|e| fail(format!("server {}: url {e}", server.id)))?;
+        let asks = server
+            .scopes
+            .iter()
+            .chain(server.optional_scopes.values().flatten());
+        for scope in asks {
+            if file.forbidden_scopes.contains(scope) {
+                return Err(fail(format!(
+                    "server {} asks for {scope}, which forbidden_scopes rules out",
+                    server.id
+                )));
+            }
+        }
         servers.push(Server {
             id: server.id,
             transport: Transport::Http(server.url),
             scopes: server.scopes,
             optional_scopes: server.optional_scopes,
+            label: server.label,
+            optional_labels: server.optional_labels,
         });
     }
     for pull in &file.pull {
@@ -512,6 +556,8 @@ fn parse_preset(text: &str, source: &str, builtin: bool) -> Result<Connector, Re
         tools: file.tools,
         user_tools: ToolLists::default(),
         pulls: file.pull,
+        forbidden_scopes: file.forbidden_scopes,
+        setup: file.setup,
     })
 }
 
