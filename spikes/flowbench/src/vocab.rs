@@ -199,8 +199,7 @@ mod tests {
     /// Issue 34, AC-1: case-insensitive, whole words or phrases only.
     #[test]
     fn sound_alikes_become_the_term() {
-        let terms =
-            parse("Zentrix: zen trix, sun trix\nQuorbit: corbit\nflowbench: flow bench");
+        let terms = parse("Zentrix: zen trix, sun trix\nQuorbit: corbit\nflowbench: flow bench");
         let (text, made) = replace(
             "We tried Zen Trix, sun trixie and Corbit in flow bench.",
             &terms,
