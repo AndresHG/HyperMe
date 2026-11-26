@@ -159,7 +159,7 @@ to the next release; **P2** is nice to have. The phase is from [ROADMAP.md](ROAD
 | --- | --- | --- | --- |
 | "Hyper, …" routes the same key to a question or an action; optional command key in Settings | 3 | P0 | Owner, 26 November 2026 (Q-3) |
 | Answers in a card that grows from the pill | 3 | P0 | Model-only answers first; web search as an MCP tool (question 11) |
-| Preview card for actions, Enter to confirm, Esc to drop | 3 | P0 | Under one second from release to card |
+| Preview card for actions, Enter to confirm, Esc to drop | 3 | P0 | Under one second from release to card. Default for every tool; a tool can be switched to fire at once in Settings later; email stays draft-only (owner, Q-8) |
 | One MCP client; GitHub as the first connector | 3 | P0 | Owner, 25 November 2026 |
 | Context of the frontmost app and selected text | 3 | P1 | Within the privacy boundary (section 9) |
 | Dot at the bottom centre with a quick sheet (Ask, Now, top 3 waiting, last dictation); cards for answers and previews | 3 | P0 | Owner, U-8 and U-10 |
@@ -273,7 +273,7 @@ Asked in the interview of 26 November 2026. Recommendations first.
 | Q-5 | Keys model for outside users | Bring your own keys only in version 1 | Decided 26 November 2026: own keys with a recommended setup and cost estimate; other providers in Advanced; a local mode in a later version |
 | Q-6 | Email (phase 4) before meetings (phase 5) | Keep email first | Decided 26 November 2026: daily tasks and email first, meetings next or in parallel; coding agents move to later, as a hand-off only |
 | Q-7 | Mail and calendar provider | Google first | Decided 26 November 2026: Google first, Microsoft 365 later |
-| Q-8 | Ticket creation: wait for Enter or fire at once | Wait for Enter, per-tool relaxing later | Open |
+| Q-8 | Ticket creation: wait for Enter or fire at once | Wait for Enter, per-tool relaxing later | Decided 26 November 2026: wait for Enter |
 | Q-9 | Adoption measure | Downloads, stars, 10 outside weekly users in three months | Open |
 | Q-10 | Languages at public release | English and Spanish only | Open |
 | Q-11 | What answers questions | The cleanup provider's larger model, web search as an MCP tool | Open |
