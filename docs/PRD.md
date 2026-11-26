@@ -27,14 +27,13 @@ this file first.
 HyperMe is a small, open-source desktop copilot that you drive with your voice. You hold one
 key and speak. If you are writing, clean text lands at your cursor, faster than you could type
 it. If you start with "Hyper, …", it answers a short question, prepares an action in your tools
-and shows it before anything leaves the app, or hands work to a coding agent and tells you when
-it is done. It runs on your own keys, keeps your data on your Mac, and stays light enough to
+and shows it before anything leaves the app, or turns your meeting into notes and tickets. It runs on your own keys, keeps your data on your Mac, and stays light enough to
 forget it is running. Mac first; Linux and Windows later.
 
 ## 2. Identity: voice to done
 
 Decided by the owner on 26 November 2026 (Q-1). Dictation apps turn voice into text. HyperMe turns voice into
-an outcome: text, an answer, an action, a task or an agent run. Text is the first outcome and
+an outcome: text, an answer, an action or a task. Text is the first outcome and
 the one that has to be perfect, because it is used dozens of times a day.
 
 What that means for decisions:
@@ -54,11 +53,10 @@ What that means for decisions:
 What sets it apart, in order of how hard it is for others to copy
 ([RESEARCH.md](RESEARCH.md) section 1.2):
 
-1. One key for everything you say: dictation, a question, a previewed action, an agent.
+1. One key for everything you say: dictation, a question, a previewed action.
 2. Speak, preview card, Enter, in under a second.
 3. Meetings that end as proposed tickets with an owner and the exact quote.
-4. Coding agents from several vendors started and followed by voice.
-5. Light and native, with cloud speed, open source and on your own keys.
+4. Light and native, with cloud speed, open source and on your own keys.
 
 ## 3. Users
 
@@ -92,7 +90,6 @@ agents ([RESEARCH.md](RESEARCH.md) section 2).
 | Small tasks break focus | "Create a ticket for this", "what's next today", "draft a reply": each needs a switch of app and a few minutes | Attention, many times a day |
 | Voice assistants are slow to act | The Claude path opens a chat turn that takes seconds; dictation apps stop at text | You type it yourself instead |
 | Meetings end as notes, not work | Granola and Wispr Flow stop at notes and create no tickets ([RESEARCH.md](RESEARCH.md) section 1.2) | Action points get lost or retyped |
-| Coding agents live in separate apps | Each vendor dispatches only its own agent | Context switching to start and follow tasks |
 | Desktop helpers are heavy | Electron apps with hundreds of MB idle | Battery, memory, trust |
 
 ## 5. Jobs to be done
@@ -105,7 +102,7 @@ agents ([RESEARCH.md](RESEARCH.md) section 2).
 | J-4 | start or plan my day | hear or see what's next and what's pending | nothing slips | 4 |
 | J-5 | face my inbox | get it triaged and replies drafted | mail takes minutes, and nothing is sent without me | 4 |
 | J-6 | finish a meeting | get notes, action points and proposed tickets | the meeting becomes work, not a document | 5 |
-| J-7 | want code written or a bug looked at | hand it to a coding agent by voice and get told the result | I delegate without opening another app | 5 |
+| J-7 | want code written or a bug looked at | say it and have the task handed to Claude Code | I start the work without switching apps; the agent does the coding, not HyperMe | later |
 | J-8 | use it every day | have it learn my words, names and style | it gets better the more I use it | later (dictionary from Phase 2) |
 
 ## 6. Principles
@@ -178,28 +175,32 @@ to the next release; **P2** is nice to have. The phase is from [ROADMAP.md](ROAD
 | Email triage and reply drafts, draft-only | 4 | P0 | Never sends |
 | One "Waiting for you" queue on the Home page of the Home window, its top three in the quick sheet | 4 | P1 | [UX.md](UX.md) |
 
-### 7.4 Meetings and coding agents (J-6, J-7)
+### 7.4 Meetings (J-6)
+
+Daily tasks and email (7.3) and meetings are the two most important capabilities after
+commands (owner, Q-6). Meetings follow daily tasks and email, or run in parallel with them.
 
 | Feature | Phase | Priority | Notes |
 | --- | --- | --- | --- |
 | Live transcript on device (Apple's recognizer), grey to white cleanup | 5 | P0 | Owner, 26 November 2026 |
 | Two tracks: me (microphone) and them (system audio) | 5 | P0 | Visible indicator always on |
 | Notes, action points and proposed tickets with owner and quote | 5 | P0 | Tickets go through the preview |
-| Start and follow Claude Code tasks by voice | 5 | P0 | |
-| Devin and other agents | 5 | P1 | Devin through its MCP server or API |
 | Diarization after the meeting | 5+ | P2 | FluidAudio (Apache-2.0) |
 
 ### 7.5 Later
 
 Memory and learning beyond the dictionary ("knows you better every day", plain files the user
 owns); a free local mode with speech and cleanup models you download in the app, so no key is
-needed (owner, Q-5); Linux and Windows; a wake word. Jira is not on the roadmap; it may come later, and an MCP server the user
+needed (owner, Q-5); handing a task to Claude Code by voice ("Hyper, create this and send it to
+Claude Code"), a trigger and nothing more, through MCP or the agent's own interface (owner, Q-6); Linux and Windows; a wake word. Jira is not on the roadmap; it may come later, and an MCP server the user
 adds already works (owner, 26 November 2026).
 
 ## 8. Non-goals
 
 - A chat app. HyperMe answers briefly and acts; long conversations belong in a chat client.
 - Its own agent framework, or embedding one (OpenClaw, Hermes and similar).
+- Coding. HyperMe is for daily work: dictation, meetings, moving and acting fast. It never runs
+  or follows coding tasks itself; at most it hands one to a coding agent (owner, 26 November 2026).
 - Sending email, or posting anywhere, without a preview and a confirmation.
 - Integration code per service. If there is no MCP server, it waits or uses a generic one.
 - Telemetry, accounts or a cloud of our own in version 1.
@@ -232,7 +233,7 @@ adds already works (owner, 26 November 2026).
 | 2 | Fewer edits than Wispr Flow on the owner's samples; first public release |
 | 3 | Commands used every day for two weeks |
 | 4 | A week of daily planning and mail drafts relied on |
-| 5 | Tickets from a real meeting accepted with few edits; one agent task started and reported back from the pill |
+| 5 | Tickets from a real meeting accepted with few edits |
 
 ### Budgets
 
@@ -270,7 +271,7 @@ Asked in the interview of 26 November 2026. Recommendations first.
 | Q-3 | One key or two | One key; "Hyper, …" routes to commands; optional command key | Decided 26 November 2026: one key, "Hyper" prefix |
 | Q-4 | First outside user | Developers who dictate into coding agents and chat | Decided 26 November 2026: people in tech companies, developers first, product owners and data people too |
 | Q-5 | Keys model for outside users | Bring your own keys only in version 1 | Decided 26 November 2026: own keys with a recommended setup and cost estimate; other providers in Advanced; a local mode in a later version |
-| Q-6 | Email (phase 4) before meetings (phase 5) | Keep email first | Open |
+| Q-6 | Email (phase 4) before meetings (phase 5) | Keep email first | Decided 26 November 2026: daily tasks and email first, meetings next or in parallel; coding agents move to later, as a hand-off only |
 | Q-7 | Mail and calendar provider | Google first | Open |
 | Q-8 | Ticket creation: wait for Enter or fire at once | Wait for Enter, per-tool relaxing later | Open |
 | Q-9 | Adoption measure | Downloads, stars, 10 outside weekly users in three months | Open |
@@ -299,3 +300,4 @@ confirms, unless marked "fixed here".
 | C-11 | Budgets in `CLAUDE.md` vs ROADMAP phase 0 gate | "Under 800 ms" vs "median ≤ 800, p90 ≤ 1200" | Both kept: the gate is the median rule; under 800 ms at p90 is the design target (section 10) |
 | C-12 | [PITCH.md](PITCH.md) and README | Positioning is framed entirely against Wispr Flow | Q-1 |
 | C-13 | Open-decision lists in `CLAUDE.md`, ROADMAP and RESEARCH | Overlap and disagree on what is still open (licence and first connector are decided) | This section is the single list; the others link here |
+| C-14 | [ROADMAP.md](ROADMAP.md) phase 5, `CLAUDE.md` introduction, [SPEC.md](SPEC.md) | Phase 5 includes starting and following Claude Code and Devin tasks, and its gate needs an agent task reported back; the owner moved coding agents to later, as a hand-off only (Q-6) | Phase 5 becomes meetings only; agent hand-off moves to Later |
