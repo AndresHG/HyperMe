@@ -39,7 +39,9 @@ All notable changes to HyperMe are recorded here. The format follows
   search. Changes save at once to `config.toml`, keeping its comments.
 - The first-launch walkthrough: welcome, microphone with a live level, Accessibility and Input
   Monitoring that turn green by themselves, both keys tested, and a first dictation with its
-  timing; it opens at launch while anything it sets up is missing.
+  timing; it opens at launch while anything it sets up is missing. Its keys step guides to the
+  recommended pair with "Get a key" buttons, a monthly cost estimate worked out from prices in
+  `config.toml`, and a quiet way to other providers in Settings.
 - The timing log: one line of stage timings per dictation in `~/Library/Logs/HyperMe/timing.tsv`
   when timing is on, numbers only, in flowbench's columns; `examples/timing_summary.rs` gives
   AC-10's median and 90th percentile, and `scripts/measure-idle.sh` measures AC-19.

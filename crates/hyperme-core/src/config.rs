@@ -17,7 +17,7 @@ pub const DEFAULT_CONFIG: &str = include_str!("default-config.toml");
 /// The only speech providers with a client. Speech protocols differ, so each needs its own code.
 const SPEECH_PROVIDERS: &[&str] = &["speechmatics"];
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
     pub dictation: Dictation,
@@ -44,15 +44,23 @@ pub struct Dictation {
     pub dictionary: Option<PathBuf>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Speech {
     pub provider: String,
     pub model: String,
     pub endpoint: String,
+    /// Onboarding's "Get a key" page. Optional: an older file takes the default file's value.
+    #[serde(default)]
+    key_url: Option<String>,
+    /// For the cost estimate (docs/UX.md, "Models and keys in onboarding").
+    #[serde(default)]
+    price_per_hour_usd: Option<f64>,
+    #[serde(default)]
+    free_credit_usd: Option<f64>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Cleanup {
     /// Labels the keychain entry and error messages (R-21).
@@ -66,6 +74,70 @@ pub struct Cleanup {
     pub prompt: String,
     /// R-12: after this, the raw transcript is pasted.
     pub deadline_ms: u64,
+    /// Onboarding's "Get a key" page. Optional, like the cost fields below: an older file takes
+    /// the default file's values, so no price is ever written in code.
+    #[serde(default)]
+    key_url: Option<String>,
+    #[serde(default)]
+    price_input_per_million_usd: Option<f64>,
+    #[serde(default)]
+    price_output_per_million_usd: Option<f64>,
+    #[serde(default)]
+    estimate_dictations_per_hour: Option<f64>,
+    #[serde(default)]
+    estimate_input_tokens: Option<f64>,
+    #[serde(default)]
+    estimate_output_tokens: Option<f64>,
+}
+
+/// The default file's speech and cleanup sections, for keys an older file leaves out.
+fn defaults() -> &'static Config {
+    static DEFAULTS: std::sync::OnceLock<Config> = std::sync::OnceLock::new();
+    DEFAULTS.get_or_init(Config::default)
+}
+
+/// A field's value, or the default file's when the user's file leaves it out.
+macro_rules! or_default {
+    ($self:ident, $section:ident, $field:ident) => {
+        $self
+            .$field
+            .clone()
+            .or_else(|| defaults().$section.$field.clone())
+            .unwrap_or_default()
+    };
+}
+
+impl Speech {
+    pub fn key_url(&self) -> String {
+        or_default!(self, speech, key_url)
+    }
+    pub fn price_per_hour_usd(&self) -> f64 {
+        or_default!(self, speech, price_per_hour_usd)
+    }
+    pub fn free_credit_usd(&self) -> f64 {
+        or_default!(self, speech, free_credit_usd)
+    }
+}
+
+impl Cleanup {
+    pub fn key_url(&self) -> String {
+        or_default!(self, cleanup, key_url)
+    }
+    pub fn price_input_per_million_usd(&self) -> f64 {
+        or_default!(self, cleanup, price_input_per_million_usd)
+    }
+    pub fn price_output_per_million_usd(&self) -> f64 {
+        or_default!(self, cleanup, price_output_per_million_usd)
+    }
+    pub fn estimate_dictations_per_hour(&self) -> f64 {
+        or_default!(self, cleanup, estimate_dictations_per_hour)
+    }
+    pub fn estimate_input_tokens(&self) -> f64 {
+        or_default!(self, cleanup, estimate_input_tokens)
+    }
+    pub fn estimate_output_tokens(&self) -> f64 {
+        or_default!(self, cleanup, estimate_output_tokens)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -378,6 +450,35 @@ impl Config {
         named("cleanup.reasoning_effort", &c.reasoning_effort)?;
         named("cleanup.prompt", &c.prompt)?;
         range("cleanup.deadline_ms", c.deadline_ms, 100, 10_000)?;
+
+        if let Some(url) = &s.key_url {
+            scheme("speech.key_url", url, &["https"])?;
+        }
+        if let Some(url) = &c.key_url {
+            scheme("cleanup.key_url", url, &["https"])?;
+        }
+        let not_negative = |key, value: Option<f64>| match value {
+            Some(v) if !(v.is_finite() && v >= 0.0) => {
+                invalid(key, format!("is {v}: it must be 0 or more"))
+            }
+            _ => Ok(()),
+        };
+        not_negative("speech.price_per_hour_usd", s.price_per_hour_usd)?;
+        not_negative("speech.free_credit_usd", s.free_credit_usd)?;
+        not_negative(
+            "cleanup.price_input_per_million_usd",
+            c.price_input_per_million_usd,
+        )?;
+        not_negative(
+            "cleanup.price_output_per_million_usd",
+            c.price_output_per_million_usd,
+        )?;
+        not_negative(
+            "cleanup.estimate_dictations_per_hour",
+            c.estimate_dictations_per_hour,
+        )?;
+        not_negative("cleanup.estimate_input_tokens", c.estimate_input_tokens)?;
+        not_negative("cleanup.estimate_output_tokens", c.estimate_output_tokens)?;
 
         let h = &self.history;
         if let Retention::Days(days) = h.retention_days {

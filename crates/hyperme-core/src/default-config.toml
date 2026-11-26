@@ -25,6 +25,13 @@ provider = "speechmatics"
 model = "melia-1"
 # The EU region. wss://global.rt.speechmatics.com/v2 is the global one.
 endpoint = "wss://eu.rt.speechmatics.com/v2"
+# Where onboarding's "Get a key" goes.
+key_url = "https://portal.speechmatics.com/signup"
+# For onboarding's cost estimate, from speechmatics.com/pricing on 26 November 2026: real-time
+# Melia 1 at USD 0.40 an hour, and USD 100 of credit for new accounts (it lasts 12 months).
+# Check them against the provider's page before each release.
+price_per_hour_usd = 0.40
+free_credit_usd = 100
 
 [cleanup]
 # Any host with an OpenAI-compatible chat completions API. The provider name labels the
@@ -38,6 +45,17 @@ reasoning_effort = "low"
 prompt = "v4"
 # After this many ms without cleaned text, the raw transcript is pasted. 100 to 10000.
 deadline_ms = 1500
+# Where onboarding's "Get a key" goes.
+key_url = "https://console.groq.com/keys"
+# For onboarding's cost estimate, from Groq's openai/gpt-oss-20b page on 26 November 2026:
+# USD 0.075 per million input tokens and USD 0.30 per million output tokens.
+price_input_per_million_usd = 0.075
+price_output_per_million_usd = 0.30
+# What one hour of talking sends to cleanup, from the research of 24 November 2026 (section 3):
+# about 120 dictations, each about 600 prompt tokens and 100 output tokens.
+estimate_dictations_per_hour = 120
+estimate_input_tokens = 600
+estimate_output_tokens = 100
 
 [history]
 # Keep each dictation's audio and text on this Mac.

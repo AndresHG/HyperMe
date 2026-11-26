@@ -17,6 +17,7 @@ use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 use tokio::sync::mpsc;
 
 use crate::onboarding::{self, AtLaunch};
+use hyperme_core::cost;
 
 /// The walkthrough window's label.
 pub const WALKTHROUGH: &str = "walkthrough";
@@ -140,6 +141,79 @@ pub fn onboarding_request(app: AppHandle, what: String) -> Result<(), String> {
 #[tauri::command]
 pub fn onboarding_try(app: AppHandle) -> Result<(), String> {
     crate::runtime::ensure_running(&app)
+}
+
+/// One choice of the cost block (U-11).
+#[derive(Debug, Serialize)]
+pub struct CostChoice {
+    label: &'static str,
+    detail: &'static str,
+    shown_as: String,
+    speech_usd: f64,
+    cleanup_usd: f64,
+}
+
+/// What the keys screen shows about the recommended setup: the provider names, the cost for
+/// each choice and the free-credit line, all worked out from the config (docs/UX.md, "Models
+/// and keys in onboarding").
+#[derive(Debug, Serialize)]
+pub struct KeysScreen {
+    speech: String,
+    cleanup: String,
+    choices: Vec<CostChoice>,
+    free_credit: Option<String>,
+}
+
+#[tauri::command]
+pub fn onboarding_keys_screen(app: AppHandle) -> Result<KeysScreen, String> {
+    let config = Config::load_or_create(&crate::runtime::data_dir(&app).join("config.toml"))
+        .map_err(|e| e.to_string())?;
+    let choices = cost::CHOICES
+        .iter()
+        .map(|choice| {
+            let c = cost::monthly_cost(&config, choice.minutes_per_day);
+            CostChoice {
+                label: choice.label,
+                detail: choice.detail,
+                shown_as: cost::shown_as(c.total_usd()),
+                speech_usd: c.speech_usd,
+                cleanup_usd: c.cleanup_usd,
+            }
+        })
+        .collect();
+    Ok(KeysScreen {
+        speech: cost::display_name(&config.speech.provider),
+        cleanup: cost::display_name(&config.cleanup.provider),
+        choices,
+        free_credit: cost::free_credit_line(&config),
+    })
+}
+
+/// "Get a key": opens the provider's key page from the config in the browser.
+#[tauri::command]
+pub fn onboarding_get_key(app: AppHandle, role: String) -> Result<(), String> {
+    let config = Config::load_or_create(&crate::runtime::data_dir(&app).join("config.toml"))
+        .map_err(|e| e.to_string())?;
+    let url = match role.as_str() {
+        "speech" => config.speech.key_url(),
+        "cleanup" => config.cleanup.key_url(),
+        other => return Err(format!("{other} is not a provider role")),
+    };
+    if !url.starts_with("https") {
+        return Err("the key page in the config is not an https address".to_owned());
+    }
+    std::process::Command::new("open")
+        .arg(url)
+        .status()
+        .map(|_| ())
+        .map_err(|e| e.to_string())
+}
+
+/// U-12: "Use other providers" opens Settings → Providers with Advanced showing; the wizard
+/// waits and tests again whenever Settings saves a provider or a key.
+#[tauri::command]
+pub fn onboarding_other_providers(app: AppHandle) {
+    crate::settings::open(&app, "providers-advanced");
 }
 
 /// Whether Next may light up on `step`, given what the page's tests found (rules in

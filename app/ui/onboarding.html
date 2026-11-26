@@ -25,6 +25,16 @@
   footer { display: flex; align-items: center; justify-content: space-between; padding: 14px 32px; border-top: 1px solid var(--line); }
   .dots span { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--line); margin-right: 5px; }
   .dots span.on { background: var(--violet); }
+  main { overflow: auto; }
+  .card { padding: 10px 12px; border-radius: 10px; background: color-mix(in srgb, var(--violet) 10%, Canvas); margin-bottom: 6px; line-height: 1.4; }
+  .steps { margin: 2px 0 6px; font-size: 12px; }
+  .cost-q { margin: 14px 0 6px; font-weight: 600; }
+  .choices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .choices button { text-align: left; padding: 8px 10px; }
+  .choices button.on { border-color: var(--violet); box-shadow: inset 0 0 0 1px var(--violet); }
+  .choices small { display: block; color: var(--muted); font-size: 11px; }
+  .choices b { display: block; margin-top: 4px; }
+  a.quiet { color: var(--muted); font-size: 12px; }
 </style>
 </head>
 <body>
@@ -50,12 +60,16 @@
   </section>
 
   <section class="screen" data-step="keys">
-    <h1>Keys</h1>
-    <p>One key per provider. Each goes straight to the macOS keychain and is never shown again.</p>
-    <div class="row"><span id="speech-name">Speech</span><span><input type="password" id="speech-key" placeholder="Paste the key" autocomplete="off"> <button data-test="speech">Test</button></span></div>
-    <p id="speech-state" class="muted"></p>
-    <div class="row"><span id="cleanup-name">Cleanup</span><span><input type="password" id="cleanup-key" placeholder="Paste the key" autocomplete="off"> <button data-test="cleanup">Test</button></span></div>
-    <p id="cleanup-state" class="muted"></p>
+    <h1>Keys for the recommended setup</h1>
+    <div class="card"><span id="pair-line">Speechmatics hears you, Groq cleans up the text.</span> The fastest pair we measured: 0.43 s from key release to text.</div>
+    <div class="row"><span id="speech-name">Speechmatics</span><span><button data-get="speech">Get a key</button> <input type="password" id="speech-key" placeholder="Paste the key" autocomplete="off"> <button data-test="speech">Test</button></span></div>
+    <p class="muted steps">Sign up, create a key, paste it here. <span id="speech-state"></span></p>
+    <div class="row"><span id="cleanup-name">Groq</span><span><button data-get="cleanup">Get a key</button> <input type="password" id="cleanup-key" placeholder="Paste the key" autocomplete="off"> <button data-test="cleanup">Test</button></span></div>
+    <p class="muted steps">Sign up, create a key, paste it here. <span id="cleanup-state"></span></p>
+    <p class="cost-q">How much do you talk a day?</p>
+    <div class="choices" id="choices"></div>
+    <p class="muted" id="free-credit"></p>
+    <p><a href="#" id="other-providers" class="quiet">Use other providers</a></p>
   </section>
 
   <section class="screen" data-step="try">
@@ -106,7 +120,8 @@
     if (step === 'microphone') {
       try { await invoke('onboarding_mic', { on: true }); } catch (e) { mark($('mic-state'), false, '', String(e)); }
     }
-    if (step === 'permissions' || step === 'keys') { checkPermissions(); poll = setInterval(checkPermissions, 1000); }
+    if (step === 'permissions') { checkPermissions(); poll = setInterval(checkPermissions, 1000); }
+    if (step === 'keys') { checkPermissions(); keysScreen(); }
     if (step === 'try') {
       try { await invoke('onboarding_try'); $('try-box').focus(); }
       catch (e) { mark($('try-state'), false, '', String(e)); }
@@ -138,14 +153,34 @@
 
   document.querySelectorAll('[data-request]').forEach((b) => b.addEventListener('click', () => invoke('onboarding_request', { what: b.dataset.request })));
 
-  document.querySelectorAll('[data-test]').forEach((b) => b.addEventListener('click', async () => {
-    const role = b.dataset.test;
-    const field = $(role + '-key');
+  // The recommended pair and what it costs, worked out in Rust from the config (U-11).
+  async function keysScreen() {
+    try {
+      const k = await invoke('onboarding_keys_screen');
+      $('pair-line').textContent = k.speech + ' hears you, ' + k.cleanup + ' cleans up the text.';
+      $('speech-name').textContent = k.speech;
+      $('cleanup-name').textContent = k.cleanup;
+      $('free-credit').textContent = k.free_credit || '';
+      $('choices').innerHTML = '';
+      k.choices.forEach((c, i) => {
+        const b = document.createElement('button');
+        b.innerHTML = '<span></span><small></small><b></b>';
+        b.children[0].textContent = c.label;
+        b.children[1].textContent = c.detail;
+        b.children[2].textContent = c.shown_as;
+        b.title = k.speech + ' about $' + c.speech_usd.toFixed(2) + ', ' + k.cleanup + ' about $' + c.cleanup_usd.toFixed(2);
+        b.addEventListener('click', () => document.querySelectorAll('#choices button').forEach((x) => x.classList.toggle('on', x === b)));
+        if (i === 1) b.classList.add('on');
+        $('choices').appendChild(b);
+      });
+    } catch (e) { $('free-credit').textContent = String(e); }
+  }
+
+  async function testKey(role) {
     const state = $(role + '-state');
     const flag = role === 'speech' ? 'speech_key' : 'cleanup_key';
+    state.textContent = 'Testing…'; state.className = 'muted';
     try {
-      if (field.value.trim()) { await invoke('key_set', { role, key: field.value }); field.value = ''; }
-      state.textContent = 'Testing…'; state.className = 'muted';
       const ms = await invoke('key_test', { role });
       checks[flag] = true;
       mark(state, true, '✓ Works, ' + ms + ' ms', '');
@@ -154,6 +189,22 @@
       mark(state, false, '', String(e));
     }
     update();
+  }
+
+  document.querySelectorAll('[data-get]').forEach((b) => b.addEventListener('click', () => invoke('onboarding_get_key', { role: b.dataset.get })));
+  $('other-providers').addEventListener('click', (e) => { e.preventDefault(); invoke('onboarding_other_providers'); });
+  // U-12: while the wizard waits, a provider or key saved in Settings is tested again here.
+  tauri.event.listen('providers-changed', () => { keysScreen(); testKey('speech'); testKey('cleanup'); });
+
+  document.querySelectorAll('[data-test]').forEach((b) => b.addEventListener('click', async () => {
+    const role = b.dataset.test;
+    const field = $(role + '-key');
+    if (!field.value.trim()) { testKey(role); return; }
+    try {
+      // Saving a key tells this window to test the providers again (providers-changed).
+      await invoke('key_set', { role, key: field.value });
+      field.value = '';
+    } catch (e) { mark($(role + '-state'), false, '', String(e)); }
   }));
 
   $('next').addEventListener('click', () => {

@@ -266,14 +266,12 @@ mod tests {
     use super::*;
 
     fn cleanup(effort: &str, prompt: &str) -> Result<ChatCleanup, Error> {
-        let config = config::Cleanup {
-            provider: "groq".to_owned(),
-            model: "test-model".to_owned(),
-            endpoint: "http://127.0.0.1:1/v1/".to_owned(),
-            reasoning_effort: effort.to_owned(),
-            prompt: prompt.to_owned(),
-            deadline_ms: 1500,
-        };
+        let mut config = config::Config::default().cleanup;
+        config.provider = "groq".to_owned();
+        config.model = "test-model".to_owned();
+        config.endpoint = "http://127.0.0.1:1/v1/".to_owned();
+        config.reasoning_effort = effort.to_owned();
+        config.prompt = prompt.to_owned();
         ChatCleanup::new(&config, "not-a-real-key")
     }
 
