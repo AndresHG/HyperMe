@@ -11,7 +11,7 @@ use std::collections::{BTreeMap, HashSet};
 use std::fmt;
 use std::path::Path;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::config::looks_like_secret;
 
@@ -32,7 +32,8 @@ impl fmt::Display for RegistryError {
 impl std::error::Error for RegistryError {}
 
 /// What a tool may do without the user (R-5).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
+#[serde(rename_all = "lowercase")]
 pub enum ToolAccess {
     /// Runs on its own, and may be in a job's allowlist.
     Read,
@@ -43,18 +44,25 @@ pub enum ToolAccess {
 }
 
 /// Tool names or `*` patterns for each access level.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ToolLists {
     #[serde(default)]
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub read: Vec<String>,
     #[serde(default)]
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub ask: Vec<String>,
     #[serde(default)]
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub off: Vec<String>,
 }
 
 impl ToolLists {
+    pub fn is_empty(&self) -> bool {
+        self.read.is_empty() && self.ask.is_empty() && self.off.is_empty()
+    }
+
     /// The access for `tool`: the strictest list that matches it, or ask before.
     pub fn access(&self, tool: &str) -> ToolAccess {
         let matches = |list: &[String]| list.iter().any(|pattern| glob(pattern, tool));
@@ -155,6 +163,8 @@ pub struct Connector {
     pub auth: Auth,
     pub servers: Vec<Server>,
     pub tools: ToolLists,
+    /// The user's switches from Settings (exact tool names), which win over `tools`.
+    pub user_tools: ToolLists,
     pub pulls: Vec<Pull>,
 }
 
@@ -163,9 +173,30 @@ impl Connector {
         self.servers.iter().find(|server| server.id == id)
     }
 
-    /// The default access for `tool` (R-5). The user's switches in Settings come in slice 5.
+    /// The access for `tool`: the user's switch if there is one, else the default (R-5).
     pub fn access(&self, tool: &str) -> ToolAccess {
+        self.user_access(tool)
+            .unwrap_or_else(|| self.default_access(tool))
+    }
+
+    /// The preset's or custom server's default for `tool`.
+    pub fn default_access(&self, tool: &str) -> ToolAccess {
         self.tools.access(tool)
+    }
+
+    /// The user's switch for `tool`, if they set one. Exact names only; the strictest wins.
+    pub fn user_access(&self, tool: &str) -> Option<ToolAccess> {
+        let named = |list: &[String]| list.iter().any(|name| name == tool);
+        let user = &self.user_tools;
+        if named(&user.off) {
+            Some(ToolAccess::Off)
+        } else if named(&user.ask) {
+            Some(ToolAccess::Ask)
+        } else if named(&user.read) {
+            Some(ToolAccess::Read)
+        } else {
+            None
+        }
     }
 
     /// The allowlist for a job that asks for `tools`: every one must be a read tool (R-22,
@@ -230,7 +261,7 @@ struct ServerFile {
 }
 
 /// How a custom server signs in.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum CustomAuth {
     Oauth,
@@ -240,25 +271,35 @@ pub enum CustomAuth {
 
 /// A custom MCP server from the config's `[[connectors.custom]]` (R-4). A bearer token or
 /// client secret is entered in Settings and kept in the keychain; the file never holds one.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct CustomServer {
     pub id: String,
     pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub command: Option<String>,
     #[serde(default)]
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub args: Vec<String>,
     pub auth: CustomAuth,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub auth_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub token_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub revoke_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub client_id: Option<String>,
     #[serde(default)]
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub scopes: Vec<String>,
     #[serde(default)]
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub extra_auth_params: BTreeMap<String, String>,
     #[serde(default)]
+    #[serde(skip_serializing_if = "ToolLists::is_empty")]
     pub tools: ToolLists,
 }
 
@@ -322,6 +363,7 @@ impl CustomServer {
                 optional_scopes: BTreeMap::new(),
             }],
             tools: self.tools.clone(),
+            user_tools: ToolLists::default(),
             pulls: Vec::new(),
         }
     }
@@ -468,6 +510,7 @@ fn parse_preset(text: &str, source: &str, builtin: bool) -> Result<Connector, Re
         auth,
         servers,
         tools: file.tools,
+        user_tools: ToolLists::default(),
         pulls: file.pull,
     })
 }
@@ -527,6 +570,17 @@ impl Registry {
 
     pub fn connectors(&self) -> &[Connector] {
         &self.connectors
+    }
+
+    /// Applies the user's tool switches from the config, by connector id. Switches for a
+    /// connector that is not loaded are kept in the file but have no effect.
+    pub fn with_user_tools(mut self, switches: &BTreeMap<String, ToolLists>) -> Registry {
+        for connector in &mut self.connectors {
+            if let Some(lists) = switches.get(&connector.id) {
+                connector.user_tools = lists.clone();
+            }
+        }
+        self
     }
 
     pub fn get(&self, id: &str) -> Option<&Connector> {
