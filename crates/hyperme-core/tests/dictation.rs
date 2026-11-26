@@ -570,3 +570,113 @@ async fn sounds_follow_the_setting() {
         }
     }
 }
+
+/// AC-20 (R-30): with timing on, each pasted dictation writes one line of stage timings, as ms
+/// from key-down and from key release (flowbench's stt_ms, first_ms, total_ms), and no text.
+#[tokio::test(start_paused = true)]
+async fn timing_on_writes_one_line_of_numbers_per_dictation() {
+    let log = Log::new();
+    let mut speech = FakeSpeech::new(&log, "please send the quarterly numbers to the team");
+    speech.finish_delay = ms(300);
+    let mut cleanup = FakeCleanup::new(&log, "Please send the quarterly numbers to the team.");
+    cleanup.delay = ms(120);
+    let mut settings = settings();
+    settings.timing_log = true;
+    let timing = FakeTiming::default();
+    let mut h = Harness::start_timed(&log, speech, cleanup, settings, timing.clone());
+
+    h.send(Event::KeyDown).await;
+    tokio::time::sleep(ms(40)).await;
+    h.frames(0, 5).await;
+    tokio::time::sleep(ms(960)).await;
+    h.send(Event::KeyUp).await;
+    h.until(&Status::Done { raw: false }).await;
+
+    let lines = timing.lines.lock().unwrap().clone();
+    assert_eq!(lines.len(), 1);
+    let line = &lines[0];
+    assert_eq!(line.first_audio_ms, Some(40));
+    assert_eq!(line.release_ms, 1000);
+    assert_eq!(line.stt_ms, 300);
+    assert_eq!(line.first_ms, Some(420));
+    assert_eq!(line.total_ms, 420);
+    assert_eq!(line.paste_ms, 420);
+    assert_eq!(line.language.as_deref(), Some("en"));
+    assert_eq!(line.words, 8);
+    assert!(!line.fallback);
+    let shown = format!("{line:?}");
+    assert!(
+        !shown.contains("quarterly"),
+        "the timing line holds text: {shown}"
+    );
+}
+
+/// AC-20: a fallback is marked, and a short dictation has no first cleaned token.
+#[tokio::test(start_paused = true)]
+async fn timing_marks_fallbacks_and_short_dictations() {
+    let log = Log::new();
+    let mut settings = settings();
+    settings.timing_log = true;
+    let timing = FakeTiming::default();
+    let mut cleanup = FakeCleanup::new(&log, "never in time");
+    cleanup.delay = ms(5000);
+    let speech = FakeSpeech::new(&log, "this one is long enough to clean");
+    let mut h = Harness::start_timed(&log, speech, cleanup, settings.clone(), timing.clone());
+    h.send(Event::KeyDown).await;
+    tokio::time::sleep(ms(600)).await;
+    h.send(Event::KeyUp).await;
+    h.until(&Status::Done { raw: true }).await;
+    let line = timing.lines.lock().unwrap()[0].clone();
+    assert!(line.fallback);
+    assert_eq!(line.first_ms, None);
+    assert_eq!(line.total_ms, 1500);
+
+    let log = Log::new();
+    let timing = FakeTiming::default();
+    let mut h = Harness::start_timed(
+        &log,
+        FakeSpeech::new(&log, "sounds good"),
+        FakeCleanup::new(&log, "x"),
+        settings,
+        timing.clone(),
+    );
+    h.send(Event::KeyDown).await;
+    tokio::time::sleep(ms(600)).await;
+    h.send(Event::KeyUp).await;
+    h.until(&Status::Done { raw: false }).await;
+    let line = timing.lines.lock().unwrap()[0].clone();
+    assert_eq!(
+        (line.first_ms, line.words, line.first_audio_ms),
+        (None, 2, None)
+    );
+}
+
+/// AC-20: with timing off nothing is recorded, and a cancelled dictation records nothing either.
+#[tokio::test(start_paused = true)]
+async fn timing_off_records_nothing() {
+    let log = Log::new();
+    let timing = FakeTiming::default();
+    let speech = FakeSpeech::new(&log, "send the report today please team");
+    let cleanup = FakeCleanup::new(&log, "Send the report today, please, team.");
+    let mut h = Harness::start_timed(&log, speech, cleanup, settings(), timing.clone());
+    h.send(Event::KeyDown).await;
+    tokio::time::sleep(ms(600)).await;
+    h.send(Event::KeyUp).await;
+    h.until(&Status::Done { raw: false }).await;
+    assert!(timing.lines.lock().unwrap().is_empty());
+
+    let mut on = settings();
+    on.timing_log = true;
+    let log = Log::new();
+    let mut h = Harness::start_timed(
+        &log,
+        FakeSpeech::new(&log, "x"),
+        FakeCleanup::new(&log, "x"),
+        on,
+        timing.clone(),
+    );
+    h.send(Event::KeyDown).await;
+    h.send(Event::Esc).await;
+    h.until(&Status::Idle).await;
+    assert!(timing.lines.lock().unwrap().is_empty());
+}

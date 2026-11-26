@@ -17,6 +17,7 @@ use hyperme_platform::microphone::CpalMicrophone;
 use hyperme_platform::paste::macos::{CmdV, MacFocus, MacPasteboard};
 use hyperme_platform::paste::{ClipboardInserter, RESTORE_AFTER};
 use hyperme_platform::sounds::SystemSounds;
+use hyperme_platform::timing::{FileTimingLog, Names};
 use hyperme_providers::cleanup::ChatCleanup;
 use hyperme_providers::speechmatics::{SAMPLE_RATE, Speechmatics};
 use tauri::{AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, Position, Size};
@@ -56,6 +57,15 @@ pub fn data_dir(app: &AppHandle) -> PathBuf {
         .data_dir()
         .unwrap_or_else(|_| PathBuf::from("."))
         .join("HyperMe")
+}
+
+/// The timing log (R-30): `~/Library/Logs/HyperMe/timing.tsv`, the app's log folder. Written
+/// only while timing is on in Settings.
+pub fn timing_path() -> PathBuf {
+    std::env::var_os("HOME")
+        .map(PathBuf::from)
+        .unwrap_or_default()
+        .join("Library/Logs/HyperMe/timing.tsv")
 }
 
 /// Where the pill's top-left corner goes for a given width.
@@ -143,6 +153,15 @@ fn wire(app: &AppHandle, history: Arc<Mutex<HistoryInner>>) -> Result<(), String
         focus: MacFocus,
         history: SharedHistory(history),
         sounds: SystemSounds,
+        timing: FileTimingLog::new(
+            timing_path(),
+            Names {
+                speech_provider: config.speech.provider.clone(),
+                speech_model: config.speech.model.clone(),
+                cleanup_provider: config.cleanup.provider.clone(),
+                cleanup_model: config.cleanup.model.clone(),
+            },
+        ),
     };
     let (status_tx, status_rx) = mpsc::unbounded_channel();
     let engine = Engine::new(parts, Settings::from_config(&config), status_tx);

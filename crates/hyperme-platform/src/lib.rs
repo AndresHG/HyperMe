@@ -11,3 +11,4 @@ pub mod paste;
 pub mod permissions;
 #[cfg(target_os = "macos")]
 pub mod sounds;
+pub mod timing;

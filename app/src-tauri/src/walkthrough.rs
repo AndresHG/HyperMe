@@ -41,6 +41,10 @@ fn at_launch(app: &AppHandle) -> AtLaunch {
 /// Opens the walkthrough at launch when something it sets up is missing.
 pub fn open_if_needed(app: &AppHandle) {
     app.manage(MicTest::default());
+    // scripts/measure-idle.sh sets this so a baseline measures the idle app, not the walkthrough.
+    if std::env::var_os("HYPERME_NO_WALKTHROUGH").is_some() {
+        return;
+    }
     if onboarding::should_open(&at_launch(app)) {
         open(app);
     }
