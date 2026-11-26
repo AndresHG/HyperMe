@@ -40,7 +40,8 @@ EARS form. "The app" is HyperMe running on macOS.
   and paste nothing.
 - R-7. If a dictation reaches the maximum length (default 120 s), the app shall stop recording
   and process what it has, as if the hotkey had been released.
-- R-8. The hotkey shall be configurable. The default is an open question (see below).
+- R-8. The hotkey shall be configurable. The default is hold Fn (Globe) (owner, 26 November
+  2026); Right Option and chords are offered.
 
 ### Transcription and cleanup
 
@@ -68,13 +69,16 @@ EARS form. "The app" is HyperMe running on macOS.
   clipboard changed in the meantime.
 - R-17. While macOS secure input is on (a password field has focus), the app shall not record and
   shall show "Not available in password fields" in the pill.
-- R-18. The app shall keep the last dictation's text in memory only, and offer "Paste last
+- R-18. The app shall keep a dictation history on the Mac: the audio and the text of each
+  dictation. History is on by default, keeps 30 days (or unlimited, if the user chooses), and
+  deletes the oldest items first when the total passes the size limit the user sets (default
+  1 GB). The user can turn it off. The app shall offer "Paste last
   dictation" and "Copy last dictation" in the menu-bar menu. It shall not write it to disk.
 
 ### Failures
 
 - R-19. If the speech session cannot open or drops, the app shall show the error in the pill,
-  paste nothing, and keep any partial transcript available through R-18.
+  paste nothing, and keep the audio for a retry (R-31).
 - R-20. If the cleanup call fails, the app shall paste the raw transcript and mark the pill with
   "Raw text".
 - R-21. If a provider rejects the key, the app shall say which provider and point to Settings,
@@ -96,13 +100,25 @@ EARS form. "The app" is HyperMe running on macOS.
 
 ### Privacy and measurement
 
-- R-28. The app shall keep no audio on disk, not even temporarily.
+- R-28. The app shall keep audio only on the Mac and only as R-18 and R-31 allow. It shall send
+  audio only to the configured speech provider. Deleting a history item, or turning history off,
+  deletes its audio.
 - R-29. The app shall send no telemetry. Network traffic shall go only to the providers the user
   configured.
 - R-30. For each dictation, the app shall record stage timings (key-down, first audio, key
   release, final transcript, first cleaned token, text ready, paste sent) in memory, and write
   them to a local timing log only when the user turns timing on. The log holds numbers, never
   text.
+
+### Recovery and sounds
+
+- R-31. If the speech session cannot open or drops, or the cleanup fails, the app shall keep that
+  dictation's audio on disk, even with history off, and offer **Retry** in the pill and the
+  menu-bar menu. Retry sends the saved audio again and pastes the result, or copies it when the
+  original app is no longer frontmost. With history off, that audio is deleted after a successful
+  retry, when the user discards it, or after 24 hours.
+- R-32. The app shall play a soft sound when recording starts and when it stops, on by default,
+  with a switch in Settings (owner, 26 November 2026).
 
 ## Acceptance criteria
 
@@ -139,8 +155,10 @@ test servers; *(live)* ones are measured by hand on the owner's Mac and recorded
   overwrite it. (R-16)
 - AC-14 *(live)*: With a password field focused, holding the hotkey records nothing and the pill
   shows the notice. (R-17)
-- AC-15 *(fake)*: After a dictation, "Copy last dictation" returns its text; after a restart, it
-  is empty; no file under the app's data or cache directories contains it. (R-18, R-28)
+- AC-15 *(fake)*: With history on, a dictation's audio and text are in the history store and
+  "Copy last dictation" returns its text; items older than the retention period, and the oldest
+  items past the size limit, are deleted. With history off, no audio or text file remains after a
+  successful dictation. (R-18, R-28)
 - AC-16 *(fake)*: A dropped speech connection, a 401 from each provider and a cleanup error each
   produce the message in R-19 to R-21, and the key never appears in the message or the log.
 - AC-17 *(live)*: The pill never takes focus: typing continues in the frontmost app while it is
@@ -155,6 +173,12 @@ test servers; *(live)* ones are measured by hand on the owner's Mac and recorded
 - AC-21 *(live)*: A fresh macOS user account goes from first launch to a first pasted dictation
   through the walkthrough, without a terminal. (R-27)
 - AC-22 *(fake)*: Tests make no network calls outside localhost and need no key (`CLAUDE.md`).
+- AC-23 *(fake)*: When the fake speech server drops mid-dictation, the audio is saved, the pill
+  offers Retry, and a retry against a working fake pastes the transcript. With history off, the
+  audio is gone after the retry, and after 24 hours on the fake clock when not retried.
+  (R-19, R-31)
+- AC-24 *(fake)*: The start and stop sounds play when the setting is on and not when it is off.
+  (R-32)
 
 ## Non-goals
 
@@ -164,7 +188,7 @@ test servers; *(live)* ones are measured by hand on the owner's Mac and recorded
 - Signed and notarised builds, auto-update, and any public release: Phase 2.
 - Commands, questions, actions, MCP: Phase 3.
 - Hands-free (toggle) mode, a wake word, and typing the text out character by character.
-- History stored on disk, SQLite, search.
+- A history view and search: they come with the panel's Dictation tab (`docs/UX.md`).
 - Local speech models, Linux and Windows. Platform code stays behind traits so they can follow.
 - Languages other than English and Spanish, and mixed-language sentences.
 
@@ -193,11 +217,12 @@ test servers; *(live)* ones are measured by hand on the owner's Mac and recorded
 | Cleanup | Groq `openai/gpt-oss-20b`, effort low, prompt `v1` | OpenAI `gpt-6-luna` (slower first token), prompt `v2` (slower, cuts words) | Phase 0 data; owner to confirm |
 | Insertion | Clipboard plus paste shortcut | Typing characters (slow, breaks with input methods) | What Handy ships ([FIELD.md](../../docs/FIELD.md)) |
 | Base code | Port Speechmatics, cleanup and timing code from `spikes/flowbench` into the new crates; borrow Handy's recorder, hotkey, paste and pill code under MIT, recorded in `NOTICE.md` | Depending on flowbench (a spike, still being tuned) | Proposed |
-| Storage | None on disk except config and the optional timing log | SQLite now (no feature needs it in Phase 1) | Proposed |
+| Storage | Config, the optional timing log, and the dictation history: audio files written as they are captured, plus a SQLite index, under the app's data folder | No history on disk (lost the dictation when a connection dropped) | Owner, 26 November 2026 |
+| Default hotkey | Hold Fn (Globe) | Right Option (easier to capture, but not what Wispr Flow users know) | Owner, 26 November 2026 |
 
 ## Open questions for the owner
 
-1. Default hotkey: hold Fn (what Wispr Flow uses, harder to capture), hold Right Option, or a
-   chord. Proposed: Right Option, because it is free in most apps and easy to capture.
+1. ~~Default hotkey~~: decided 26 November 2026, hold Fn (Globe), with Right Option and chords
+   offered.
 2. Cleanup deadline: 1000 ms after the final transcript (proposed) or Phase 0's 1500 ms.
 3. Whether the Phase 1 gate also needs AC-10 on Wi-Fi, or wired only.

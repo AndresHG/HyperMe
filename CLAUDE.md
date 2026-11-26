@@ -59,7 +59,9 @@ passes, update this section and record the evidence in `docs/results/`.
 - Privacy boundary: audio, transcript, dictionary, app name and the text before the
   cursor may leave the machine, under the user's own keys. Window text or a screenshot
   only behind a visible switch that is off by default. Never password fields. No
-  telemetry. No audio kept on disk.
+  telemetry. Audio stays on the Mac: dictation history (audio and text) is on by default,
+  kept 30 days or unlimited, under a size limit the user sets, so a dropped connection never
+  loses a dictation (owner, 26 November 2026; this replaces "no audio kept on disk").
 - Memory and learning ("knows you better every day") is part of the vision, not of a
   first version.
 - This project's own tickets live in GitHub Projects.

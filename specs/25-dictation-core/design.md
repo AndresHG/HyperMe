@@ -69,7 +69,9 @@ over a channel; it never blocks a platform thread.
 - Capture at the device rate and resample to what the provider wants (flowbench sends 24 kHz
   mono PCM16; check Speechmatics' accepted rates in the slice).
 - Frames of 20 ms, sent in batches of up to 100 ms (R-3).
-- The buffer lives in memory and is dropped when the dictation ends (R-28).
+- Audio is written to the history folder as it is captured, compressed (format settled in the
+  slice), so a crash or a dropped connection never loses it (R-18, R-31). With history off it is
+  deleted once the text is pasted.
 
 ## Pill and settings
 
@@ -78,6 +80,15 @@ over a channel; it never blocks a platform thread.
 - Settings is an ordinary window opened from the menu-bar menu.
 - The web view gets events from Rust and sends commands back. It never sees a key; key entry
   goes straight to Rust, which writes the keychain.
+
+## History (R-18, R-31)
+
+`~/Library/Application Support/HyperMe/history/`: one audio file per dictation and a SQLite
+index (time, app, language, text, state: done, failed or retried). A cleaner runs at launch and
+after each dictation: it deletes items past the retention period, then the oldest items until the
+total is under the size limit. Failed items are deleted last. The hold-Fn default needs an event
+tap that watches the Fn flag; OpenWhispr ships a small bundled listener for the same reason
+([docs](https://docs.openwhispr.com/help/dictation/hotkeys.md)).
 
 ## Config
 
