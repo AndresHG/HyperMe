@@ -76,6 +76,40 @@ pub fn should_open(at_launch: &AtLaunch) -> bool {
         && at_launch.cleanup_key_saved)
 }
 
+impl Step {
+    /// The screen's name in the page and in the resume file.
+    pub fn name(self) -> &'static str {
+        match self {
+            Step::Welcome => "welcome",
+            Step::Microphone => "microphone",
+            Step::Permissions => "permissions",
+            Step::Keys => "keys",
+            Step::Try => "try",
+        }
+    }
+
+    pub fn from_name(name: &str) -> Option<Step> {
+        [
+            Step::Welcome,
+            Step::Microphone,
+            Step::Permissions,
+            Step::Keys,
+            Step::Try,
+        ]
+        .into_iter()
+        .find(|s| s.name() == name.trim())
+    }
+}
+
+/// The app bundle to reopen for "Relaunch HyperMe": `/Users/me/Applications/HyperMe.app` for
+/// `/Users/me/Applications/HyperMe.app/Contents/MacOS/hyperme`. `None` for a bare binary, which
+/// macOS ties to its terminal: then the terminal itself has to be quit and reopened.
+pub fn bundle_of(executable: &std::path::Path) -> Option<std::path::PathBuf> {
+    let text = executable.to_str()?;
+    let end = text.find(".app/Contents/MacOS/")?;
+    Some(std::path::PathBuf::from(&text[..end + ".app".len()]))
+}
+
 /// A level from the meter counts as the microphone working above this (0 to 1, on the meter's
 /// dB scale: about -38 dBFS, quiet speech).
 pub const HEARD_LEVEL: f32 = 0.25;
@@ -124,6 +158,31 @@ mod tests {
         let mut checks = all();
         checks.accessibility = false;
         assert!(!can_continue(Step::Permissions, &checks));
+    }
+
+    /// After "Relaunch HyperMe", the walkthrough comes back on the screen it was on.
+    #[test]
+    fn steps_round_trip_through_their_names() {
+        for step in STEPS {
+            assert_eq!(Step::from_name(step.name()), Some(step));
+        }
+        assert_eq!(Step::from_name(" permissions\n"), Some(Step::Permissions));
+        assert_eq!(Step::from_name("done"), None);
+    }
+
+    #[test]
+    fn relaunch_reopens_the_bundle_not_the_binary() {
+        use std::path::Path;
+        assert_eq!(
+            bundle_of(Path::new(
+                "/Users/me/Applications/HyperMe.app/Contents/MacOS/hyperme"
+            )),
+            Some(Path::new("/Users/me/Applications/HyperMe.app").to_path_buf())
+        );
+        assert_eq!(
+            bundle_of(Path::new("/Users/me/Github/hyperme/target/release/hyperme")),
+            None
+        );
     }
 
     #[test]

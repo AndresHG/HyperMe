@@ -21,6 +21,20 @@ use tokio::sync::mpsc;
 
 use super::{Kind, Matcher, RawKey};
 
+/// Whether a keyboard event tap can be created right now: the real test of Input Monitoring.
+/// `CGPreflightListenEventAccess` can stay false after the user grants access until the app
+/// restarts, while creating a tap already works; the walkthrough uses both.
+pub fn can_listen() -> bool {
+    CGEventTap::new(
+        CGEventTapLocation::Session,
+        CGEventTapPlacement::TailAppendEventTap,
+        CGEventTapOptions::ListenOnly,
+        vec![CGEventType::FlagsChanged],
+        |_proxy, _type, _event| CallbackResult::Keep,
+    )
+    .is_ok()
+}
+
 /// Owns the listener thread, which runs for the life of the app.
 #[derive(Debug)]
 pub struct HotkeyListener {

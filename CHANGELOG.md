@@ -46,6 +46,9 @@ All notable changes to HyperMe are recorded here. The format follows
   identity from `scripts/create-signing-identity.sh` so permissions survive rebuilds. The
   permission buttons now ask macOS to add the row, and a run from a terminal names that
   terminal as the app to switch on.
+- Permissions in the walkthrough: macOS's dialog is shown once per button, Input Monitoring is
+  detected by creating the hotkey tap, and "Relaunch HyperMe" restarts the app on the same
+  screen when a grant needs it. Opening HyperMe while it runs shows the walkthrough or Settings.
 - The timing log: one line of stage timings per dictation in `~/Library/Logs/HyperMe/timing.tsv`
   when timing is on, numbers only, in flowbench's columns; `examples/timing_summary.rs` gives
   AC-10's median and 90th percentile, and `scripts/measure-idle.sh` measures AC-19.

@@ -152,7 +152,7 @@ pub fn settings_view(app: AppHandle) -> View {
         config_path: path.display().to_string(),
         setup: SetupView {
             accessibility: permissions::accessibility(),
-            input_monitoring: permissions::input_monitoring(),
+            input_monitoring: crate::walkthrough::input_monitoring(),
             host_app: permissions::host_app(),
         },
         version: env!("CARGO_PKG_VERSION"),
@@ -265,17 +265,15 @@ pub async fn key_test(app: AppHandle, role: String) -> Result<u64, String> {
 pub fn settings_open(app: AppHandle, what: String) -> Result<(), String> {
     let target = match what.as_str() {
         "config" => config_path(&app).display().to_string(),
+        // macOS's own dialog, which adds the row and has its own "Open System Settings"
+        // button, so the page is not opened as well.
         "request-accessibility" => {
             permissions::request_accessibility();
-            permissions::settings_url("accessibility")
-                .unwrap_or_default()
-                .to_owned()
+            return Ok(());
         }
         "request-input-monitoring" => {
             permissions::request_input_monitoring();
-            permissions::settings_url("input-monitoring")
-                .unwrap_or_default()
-                .to_owned()
+            return Ok(());
         }
         permission => permissions::settings_url(permission)
             .ok_or_else(|| format!("{permission} is not something Settings opens"))?

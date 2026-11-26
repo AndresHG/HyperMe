@@ -25,6 +25,7 @@
   footer { display: flex; align-items: center; justify-content: space-between; padding: 14px 32px; border-top: 1px solid var(--line); }
   .dots span { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--line); margin-right: 5px; }
   .dots span.on { background: var(--violet); }
+  .hidden { display: none; }
   main { overflow: auto; }
   .card { padding: 10px 12px; border-radius: 10px; background: color-mix(in srgb, var(--violet) 10%, Canvas); margin-bottom: 6px; line-height: 1.4; }
   .steps { margin: 2px 0 6px; font-size: 12px; }
@@ -58,6 +59,7 @@
     <p class="muted" id="host-note">Click each button, then switch <b class="host-name">HyperMe</b> on in the list.</p>
     <div class="row"><span>Accessibility</span><span><span id="ax-state"></span> <button data-request="accessibility">Allow</button></span></div>
     <div class="row"><span>Input Monitoring</span><span><span id="im-state"></span> <button data-request="input-monitoring">Allow</button></span></div>
+    <p class="muted hidden" id="relaunch-row">Switched them on already? macOS sometimes passes a permission to an app only after it restarts. <button id="relaunch">Relaunch HyperMe</button></p>
   </section>
 
   <section class="screen" data-step="keys">
@@ -91,7 +93,12 @@
   const steps = ['welcome', 'microphone', 'permissions', 'keys', 'try'];
   // Set only from tests run in Rust; Rust decides whether Next lights up (onboarding.rs).
   const checks = { microphone: false, accessibility: false, input_monitoring: false, speech_key: false, cleanup_key: false, tried: false };
-  let index = 0;
+  // After "Relaunch HyperMe" the window opens on the screen it was on.
+  let index = Math.max(0, steps.indexOf(location.hash.slice(1)));
+  // Which Allow buttons have shown macOS's dialog already, and whether the user has been to
+  // System Settings since.
+  const prompted = new Set();
+  let visitedSettings = false;
   let poll = null;
 
   $('dots').innerHTML = steps.map(() => '<span></span>').join('');
@@ -109,6 +116,8 @@
     checks.accessibility = p.accessibility;
     checks.input_monitoring = p.input_monitoring;
     mark($('ax-state'), p.accessibility, '✓ Allowed', 'Not yet');
+    window.bundled = p.bundled;
+    $('relaunch-row').classList.toggle('hidden', !(visitedSettings && !(p.accessibility && p.input_monitoring)));
     mark($('im-state'), p.input_monitoring, '✓ Allowed', 'Not yet');
     // Run from a terminal (cargo run), macOS gives the permissions to that terminal, which must
     // be quit and reopened before they take effect.
@@ -158,7 +167,23 @@
     update();
   });
 
-  document.querySelectorAll('[data-request]').forEach((b) => b.addEventListener('click', () => invoke('onboarding_request', { what: b.dataset.request })));
+  // The first click shows macOS's own dialog, which adds HyperMe's row and has its own
+  // "Open System Settings" button; later clicks open System Settings directly. Polling uses only
+  // checks that never prompt, so the dialog never comes back by itself.
+  document.querySelectorAll('[data-request]').forEach((b) => b.addEventListener('click', async () => {
+    const what = b.dataset.request;
+    const prompt = !prompted.has(what);
+    prompted.add(what);
+    b.textContent = 'Open Settings';
+    visitedSettings = true;
+    try { await invoke('onboarding_request', { what, prompt }); } catch (e) { $('host-note').textContent = String(e); }
+  }));
+  // Back from System Settings: check at once.
+  window.addEventListener('focus', () => { if (steps[index] === 'permissions') setTimeout(checkPermissions, 300); });
+  $('relaunch').addEventListener('click', async () => {
+    try { await invoke('onboarding_relaunch', { step: steps[index] }); }
+    catch (e) { $('host-note').textContent = String(e); }
+  });
 
   // The recommended pair and what it costs, worked out in Rust from the config (U-11).
   async function keysScreen() {
