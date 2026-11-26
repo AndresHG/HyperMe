@@ -68,8 +68,13 @@ EARS form. "The app" is HyperMe running on macOS.
 
 ### Adding and editing words
 
-- R-10. The Home window shall have a Dictionary page that lists the entries with their heard
-  forms, where they came from and how often they were used, with search, add, edit and delete.
+- R-10. The Settings window shall have a **Dictionary** section, one click from the menu-bar
+  menu ("Dictionary…"), that lists the entries with their heard forms, where they came from and
+  how often they were used, with search, add, edit and delete (owner, 26 November 2026: "a
+  section in the settings to add more words, similar to Wispr Flow"). When the Home window
+  exists, the same page also appears in its sidebar; both show and edit the same dictionary.
+- R-10a. A change made on the Dictionary page shall take effect from the next dictation, with
+  no restart.
 - R-11. When the user adds an entry, the app shall ask for the written form and, optionally, the
   heard forms, and shall use it from the next dictation.
 - R-12. When the user selects words in a dictation in History and chooses **Fix**, the app shall
@@ -127,8 +132,8 @@ EARS form. "The app" is HyperMe running on macOS.
   of 7 right and edits per 100 characters are no worse than the 6.5 of the dictionary results;
   key release to text stays within the Phase 1 budget (median under 800 ms) with 0, 150 and
   1,000 entries. (R-1, R-4, R-5)
-- AC-8 *(fake)*: Changing the dictionary takes effect on the next dictation without reading the
-  disk during a dictation. (R-8, R-11)
+- AC-8 *(fake)*: Changing the dictionary takes effect on the next dictation, with no restart and
+  without reading the disk during a dictation. (R-8, R-10a, R-11)
 - AC-9 *(fake)*: The timing log line has a substitution count and no dictionary words. (R-9)
 - AC-10 *(fake)*: Import and export round-trip the text file and the CSV; over-long items,
   duplicates and item 1,001 are refused with a reason. (R-13, R-15)

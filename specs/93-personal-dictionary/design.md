@@ -202,7 +202,14 @@ Mockup: [dictionary.svg](../../docs/ux/dictionary.svg). Home is the light or dar
 from [UX.md](../../docs/UX.md); the pill and cards stay dark and show nothing about the
 dictionary (R-22).
 
-**Dictionary page** (⌘3 in Home):
+**Where it lives.** The owner asked for the dictionary in Settings, as Wispr Flow has it (its
+Dictionary sits in its main window's sidebar, beside Settings,
+[docs](https://docs.wisprflow.ai/articles/5096240724-navigating-the-wispr-flow-app-desktop-ios-and-android)).
+So the page ships first as a **Dictionary** section of the Settings window, which exists today,
+with "Dictionary…" in the menu-bar menu. When Home ships, the same page is also Home's ⌘3
+section; Settings keeps its entry. One page, two doors, so it is easy to find from either.
+
+**Dictionary page** (Settings → Dictionary, later also ⌘3 in Home):
 
 - Title "Dictionary", subtitle "Words HyperMe should always get right."
 - A search field, **Add word** (keycap N) and a `⋯` menu with Import and Export.

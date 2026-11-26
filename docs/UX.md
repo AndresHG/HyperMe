@@ -414,7 +414,9 @@ sections. Sections are added by phase:
 | Settings, Help | 1 | At the bottom of the sidebar. Settings opens the Settings window (⌘,) |
 
 Dictionary and Style move out of Settings into Home, as in Wispr Flow: you tune them while you use
-the app, so they are not setup. Settings keeps only setup and rarely changed preferences.
+the app, so they are not setup. The Dictionary also keeps a section in Settings, at the owner's
+request (26 November 2026), and ships there first, before Home exists
+([spec](../specs/93-personal-dictionary/spec.md)). Settings keeps only setup and rarely changed preferences.
 
 Rows in every section are single lines with a source glyph, the text, and the main key on the
 right ("↵ Review"). ⌘K on a row shows its other actions.
