@@ -8,7 +8,6 @@ use std::time::{Duration, Instant};
 
 use hyperme_core::config::Config;
 use hyperme_core::dictation::{Engine, Event, Parts, Providers, Settings, Status};
-use hyperme_core::secrets::SecretStore;
 use hyperme_core::traits::{
     DictationId, Error, ErrorKind, History, Inserter, TimingLine, TimingLog,
 };
