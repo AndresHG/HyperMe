@@ -75,10 +75,9 @@ passes, update this section and record the evidence in `docs/results/`.
 - After dictation comes smart routing and actions; the first tracker connector is GitHub,
   not Linear (owner, 25 November 2026). See `docs/ROADMAP.md`.
 - Licence: MIT OR Apache-2.0, dual, at the user's option (owner, 25 November 2026).
-- The public release is a fresh repository with a clean first commit, not this one: older
-  commits here contain internal names that must never be published. This repository's history
-  is not rewritten (owner, 26 November 2026; replaces the same-day "go public as it is"
-  decision). See `docs/LAUNCH.md`.
+- This repository is the one that goes public. It was recreated on 26 November 2026 with its
+  history rewritten so that internal project names never appear; the private original is the
+  archive (owner, 26 November 2026). See `docs/LAUNCH.md`.
 - `docs/ROADMAP.md` is the adopted plan; it replaces the old phase table in `docs/SPEC.md`
   (owner, 25 November 2026).
 - Code-of-conduct reports go through GitHub private reporting, like security reports; no
