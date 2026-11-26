@@ -3,7 +3,7 @@
 
 [workspace]
 resolver = "3"
-members = ["crates/hyperme-core", "crates/hyperme-providers"]
+members = ["crates/hyperme-core", "crates/hyperme-platform", "crates/hyperme-providers"]
 exclude = ["spikes"]
 
 [workspace.package]
@@ -15,6 +15,7 @@ rust-version = "1.85"
 
 [workspace.dependencies]
 hyperme-core = { path = "crates/hyperme-core" }
+cpal = "0.18.2"
 futures-util = { version = "0.3.34", default-features = false, features = ["sink", "std"] }
 reqwest = { version = "0.13.5", default-features = false, features = ["http2", "native-tls"] }
 serde_json = "1.0.154"
