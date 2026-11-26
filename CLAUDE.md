@@ -68,6 +68,8 @@ passes, update this section and record the evidence in `docs/results/`.
   telemetry. Audio stays on the Mac: dictation history (audio and text) is on by default,
   kept 30 days or unlimited, under a size limit the user sets, so a dropped connection never
   loses a dictation (owner, 26 November 2026; this replaces "no audio kept on disk").
+  Calendar and mail content from a connected account may go to the user's own language-model
+  provider, only when a briefing, summary, triage or question needs it (owner, 26 November 2026).
 - Memory starts with commands in phase 3: "Hyper, remember …", proposed facts approved by the
   user, kept in a folder of Markdown files on the user's Mac (owner, 26 November 2026; replaces
   "not in a first version"). See `docs/PRD.md` section 7.5.

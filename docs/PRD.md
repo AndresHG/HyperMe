@@ -325,6 +325,9 @@ Asked in the interview of 26 November 2026. Recommendations first.
 | D-1 to D-3 | Daily tasks: whose list, how the day arrives, when | | Decided 26 November 2026: see 7.3 |
 | Q-15 | Quick notes ("Hyper, note that …"): a note in the memory folder, an item on the task list, or both | Into the task list when it has an action, into the memory folder otherwise | Open; decide with the phase 3 spec |
 | Q-16 | How self-learning memory works | A design proposal comparing how other assistants build memory | Open; research before the memory spec |
+| G-1 | Whose Google sign-in client | Bring your own Google Cloud client now; a shared one later if non-developers ask | Decided 26 November 2026: as recommended ([spec](../specs/97-google-connectors/spec.md)) |
+| G-2 | Gmail access in the first version | Read plus drafts, never send | Decided 26 November 2026: as recommended |
+| G-3 | Mail and calendar content to the model | To the user's own model provider, only when a job or question needs it | Decided 26 November 2026: as recommended. Also: Google must never sign the user out in normal use |
 | Q-12 | Work and personal profiles ([SPEC.md](SPEC.md) section 4) | Drop from version 1; one profile | Decided 26 November 2026: one profile, several accounts |
 | Q-13 | Adopt the trial and baseline checks as gates ([RESEARCH.md](RESEARCH.md) section 1.3) | Drop as gates; the Wispr comparison covers the baseline | Decided 26 November 2026: drop both; read how Handy, Omi and OpenWhispr are built for ideas only |
 

@@ -93,11 +93,15 @@ Consequences:
 - Re-signing in replaces the token; the app never holds more than one per account, so the 100
   limit cannot bite.
 - The scheduler pulls every day, so 6 months unused cannot happen while HyperMe runs.
-- Unknown: whether a personal-mode client counts as "Testing". Slice 1 measures it over 8 days.
-  If it expires, the guided setup tells the user to set the project to "In production"; an
-  unverified app used by its own developer shows a warning screen once at consent, and its
-  tokens do not expire after 7 days. Whether that path hits a user cap for restricted scopes is
-  also checked in slice 1.
+- No sign-out in normal use is a requirement (R-10a, owner). The only cause in our control is a
+  project left in "Testing", whose tokens expire after 7 days. The setup sheet therefore has the
+  user set their project to "In production" and checks it before it finishes. For a project used
+  only by its owner this needs no verification; Google shows an "unverified app" screen once, at
+  consent, which the sheet explains beforehand.
+- Still to check in slice 1, over 14 days on the owner's account: that an "In production"
+  personal client keeps its token, and whether Google's personal mode is already "In production"
+  by itself. If a personal client cannot avoid expiry, the spec comes back to the owner before
+  slice 2.
 
 ## Why bring your own client (G-1)
 

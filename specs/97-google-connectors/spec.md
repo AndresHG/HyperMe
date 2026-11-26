@@ -1,6 +1,6 @@
 # Google account (Calendar and Gmail) and the Connectors settings
 
-**Status:** draft, 26 November 2026. Needs the owner's approval before any production code. The
+**Status:** draft, 26 November 2026; G-1 to G-3 answered by the owner the same day. Needs the owner's approval before any production code. The
 Connectors section belongs to phase 3 and the Google connector to phase 4 ([ROADMAP.md](../../docs/ROADMAP.md));
 neither starts before the gate of the phase before it. Only slice 1 in [tasks.md](tasks.md), a
 spike that writes no production code, may run earlier, with the owner's yes.
@@ -78,6 +78,11 @@ EARS form. "The app" is HyperMe running on macOS.
 - R-9. The app shall store each account's refresh token, and the OAuth client secret when there
   is one, in the macOS Keychain, one item per account. Access tokens shall stay in memory. No
   token shall appear in files, logs, the web view or crash reports.
+- R-10a. Google shall not sign the user out in normal use: a connected account shall keep
+  working, with no new sign-in, for as long as HyperMe keeps running and the user does not revoke
+  access or change the account password (owner, 26 November 2026). The guided setup shall not
+  finish on a client whose refresh tokens expire after 7 days (a project left in "Testing"); it
+  shall have the user set the project to "In production" and check it.
 - R-10. When an access token expires, the app shall refresh it without asking the user. When the
   refresh token is refused (`invalid_grant`), the app shall mark the account "Sign in again",
   show one alert card that opens the account's row, and not retry until the user signs in.
@@ -148,6 +153,9 @@ EARS form. "The app" is HyperMe running on macOS.
   minutes (R-7, R-8).
 - AC-3. After sign-in, the refresh token is in the Keychain (fake keychain in tests) and in no
   file under the app's data folder or log; a grep of logs for the token finds nothing (R-9).
+- AC-4a. On the owner's account, a connected account still syncs 14 days after sign-in with no
+  new consent, recorded in `docs/results/` (R-10a). Against the fake OAuth server, a client
+  reported as "Testing" stops the setup sheet with the step that fixes it.
 - AC-4. With an access token expired at the fake server, the next tool call refreshes and
   succeeds; with the refresh token revoked, the account shows "Sign in again" and exactly one
   alert is raised (R-10).
@@ -193,7 +201,7 @@ It is three months later and this failed. Why?
 
 | Why | Becomes |
 | --- | --- |
-| The owner is signed out every week: Google expires refresh tokens after 7 days for clients in "Testing" | Slice 1 measures token life on a personal-mode client; if it expires, the guided setup publishes the user's own project "In production" (unverified for a single user) instead. Design, "Token life" |
+| The owner is signed out every week: Google expires refresh tokens after 7 days for clients in "Testing" | R-10a and AC-4a: the setup sheet requires a project "In production"; slice 1 measures token life over 14 days before any other slice. Design, "Token life" |
 | Setting up a Google Cloud client is too hard for anyone but developers | The guided step does it in three screens with links straight to each console page, and a `gcloud` path; first users are developers (PRD Q-4). A shared client stays open as G-1's later option |
 | Polling drains the battery or eats the quota | R-16, R-17, R-20, AC-8 |
 | A mail tells Hyper to do something and it does | R-22, AC-10, AC-11; destructive tools off by default (R-5) |
@@ -205,14 +213,15 @@ It is three months later and this failed. Why?
 
 | ID | Decision | Chosen | Rejected and why | Who |
 | --- | --- | --- | --- | --- |
-| G-1 | Whose OAuth client | *Proposed:* bring your own client (each user's own Google Cloud project, personal mode) | A HyperMe client shared by all users: Gmail read scopes are restricted, so it needs Google verification and a yearly security assessment (CASA), its secret ships in a public binary, and one project's quota (reported as 5,000 requests a day per product, unverified) would be shared by every user | Owner, open |
-| G-2 | Gmail access in the first version | *Proposed:* read plus drafts (`gmail.readonly` and `gmail.compose`), drafts switched on in the wizard | Read only first: a second consent later when drafts arrive in the same phase | Owner, open |
-| G-3 | Privacy boundary | *Proposed:* event and mail content may go to the user's own language model provider when a job or question needs it; nothing else new leaves the Mac | Keep mail out of the model: the briefing and triage of PRD 7.3 cannot work without it | Owner, open |
+| G-1 | Whose OAuth client | Bring your own client now (each user's own Google Cloud project); a shared HyperMe client only in its own spec, if non-developers ask | A HyperMe client shared by all users: Gmail read scopes are restricted, so it needs Google verification and a yearly security assessment (CASA), its secret ships in a public binary, and one project's quota (reported as 5,000 requests a day per product, unverified) would be shared by every user | Owner, 26 November 2026 |
+| G-2 | Gmail access in the first version | Read plus drafts (`gmail.readonly` and `gmail.compose`), drafts switched on in the wizard; never send | Read only first: a second consent later when drafts arrive in the same phase | Owner, 26 November 2026 |
+| G-3 | Privacy boundary | Event and mail content may go to the user's own language model provider when a job or question needs it; nothing else new leaves the Mac | Metadata only: the briefing, triage and reply drafts of PRD 7.3 get much weaker | Owner, 26 November 2026 |
 | G-4 | Official Google MCP servers or a community one | Google's remote servers | Community servers (Python or Node, run locally) add a runtime to ship and keep current, and Google reportedly requires its own servers for agents from February 2027 | Proposed here |
 | G-5 | How pulled data reaches the task list | A declarative mapping in the preset (tool, arguments, fields to keep), run without a model | A model reads every pull: costs tokens every 15 minutes and adds latency for no gain on structured data | Proposed here |
 | G-6 | Calendar writes | Not in version 1 | | Proposed here |
 
 ## Open questions for the owner
 
-G-1 to G-3 above, asked on decision cards in the project chat. They are added to PRD section 12
-once answered.
+None left. G-1 to G-3 were answered on 26 November 2026 and are recorded in PRD section 12 and,
+for G-3, in the privacy rule of `CLAUDE.md`. The owner added R-10a: Google must not sign the user
+out.
