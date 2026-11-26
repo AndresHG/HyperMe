@@ -1,8 +1,8 @@
 # Phase 4: daily tasks and the morning briefing
 
-**Status:** draft, 26 November 2026. Needs the owner's approval before any production code. The
-work belongs to phase 4 ([ROADMAP.md](../../docs/ROADMAP.md)) and starts after the phase 3 gate,
-unless the owner pulls some slices forward (decision T-5).
+**Status:** draft, 26 November 2026. The owner approved building core slices 1 to 6 now, beside
+phases 1 and 2 (T-5, 26 November 2026); the app slices (7 to 12) belong to phase 4
+([ROADMAP.md](../../docs/ROADMAP.md)) and wait for the phase 3 gate.
 **Issue:** [#92](https://github.com/AndresHG/hyperme/issues/92). **Size:** L.
 **Design:** [design.md](design.md). **Slices:** [tasks.md](tasks.md). **Research:**
 [research.md](research.md).
@@ -282,7 +282,7 @@ It is three months later and this failed. Why?
 | T-2 | Evening time | 18:30 on workdays, a setting | Deferred with the evening summary |
 | T-3 | Voice-captured tasks: save at once or wait for Enter | Save at once with ⌘Z for 5 s, since nothing leaves the Mac | Decided by the owner, 26 November 2026: as recommended |
 | T-4 | Evening summary: local list or a recap by the model | Local list by default; model recap as a switch, off | Deferred with the evening summary (owner, 26 November 2026) |
-| T-5 | When to build | Keep phase 4 for the app, but build the pure core slices (store, dependencies, roll-over, scheduler; tests only, no UI) now, beside phases 1 and 2 | Open, for the owner |
+| T-5 | When to build | Keep phase 4 for the app, but build the pure core slices (store, dependencies, roll-over, scheduler; tests only, no UI) now, beside phases 1 and 2 | Decided by the owner, 26 November 2026: build core slices 1 to 6 now |
 | T-6 | Dependency model | "Blocked by" links between tasks, a graph without cycles, as Linear and GitHub do; no sub-tasks | Our pick |
 | T-7 | Day and due as two fields | Yes, as Things and Todoist do: day is when you plan to do it, due is the hard cut-off | Our pick |
 | T-8 | Scheduler crate | None: three schedule shapes in about 200 lines on `chrono` (already in the tree). `croner` (MIT) only if cron expressions are ever needed | Our pick |
