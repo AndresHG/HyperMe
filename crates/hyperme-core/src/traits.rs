@@ -132,3 +132,32 @@ pub trait FocusInfo {
     /// Whether secure input is on, as it is while a password field has focus (R-17).
     fn secure_input(&self) -> bool;
 }
+
+/// One dictation's stage timings (R-30). Numbers, the language code and flags only: never any
+/// text. `first_audio_ms` and `release_ms` count from key-down; the rest count from key release,
+/// like flowbench's columns (`stt_ms`, `first_ms`, `total_ms`), so results compare with Phase 0.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TimingLine {
+    /// The first captured frame. `None` if no audio arrived.
+    pub first_audio_ms: Option<u64>,
+    /// Key release, or the maximum length.
+    pub release_ms: u64,
+    /// The final transcript.
+    pub stt_ms: u64,
+    /// The first cleaned token. `None` for a short dictation (no cleanup) or a fallback.
+    pub first_ms: Option<u64>,
+    /// The text ready: cleaned, short-formatted, or raw after a fallback.
+    pub total_ms: u64,
+    /// The paste shortcut sent.
+    pub paste_ms: u64,
+    pub language: Option<String>,
+    pub words: usize,
+    /// The raw transcript was used (deadline or cleanup error).
+    pub fallback: bool,
+}
+
+/// Where timing lines go when the timing log is on (R-30). The state machine calls it once per
+/// pasted dictation, and never when the setting is off.
+pub trait TimingLog {
+    fn record(&mut self, line: &TimingLine);
+}

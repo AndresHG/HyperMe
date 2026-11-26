@@ -19,7 +19,7 @@ use tokio::time::{Instant, sleep_until, timeout};
 use crate::config::Config;
 use crate::traits::{
     CleanupProvider, DictationId, Error, FocusInfo, History, Inserter, LiveSession, Microphone,
-    Sound, Sounds, SpeechProvider,
+    Sound, Sounds, SpeechProvider, TimingLine, TimingLog,
 };
 
 /// The numbers the state machine needs from the config.
@@ -35,6 +35,8 @@ pub struct Settings {
     pub cleanup_deadline: Duration,
     /// R-32: the start and stop sounds.
     pub sounds: bool,
+    /// R-30: write one line of stage timings per dictation.
+    pub timing_log: bool,
 }
 
 impl Settings {
@@ -45,6 +47,7 @@ impl Settings {
             short_words: config.dictation.short_dictation_words as usize,
             cleanup_deadline: Duration::from_millis(config.cleanup.deadline_ms),
             sounds: config.dictation.sounds,
+            timing_log: config.timing.log,
         }
     }
 }
@@ -101,7 +104,7 @@ pub enum Status {
 
 /// Everything the state machine drives, one implementation per trait.
 #[derive(Debug)]
-pub struct Parts<M, S, C, I, F, H, N> {
+pub struct Parts<M, S, C, I, F, H, N, T> {
     pub mic: M,
     pub speech: S,
     pub cleanup: C,
@@ -109,17 +112,18 @@ pub struct Parts<M, S, C, I, F, H, N> {
     pub focus: F,
     pub history: H,
     pub sounds: N,
+    pub timing: T,
 }
 
-pub struct Engine<M, S, C, I, F, H, N> {
-    parts: Parts<M, S, C, I, F, H, N>,
+pub struct Engine<M, S, C, I, F, H, N, T> {
+    parts: Parts<M, S, C, I, F, H, N, T>,
     settings: Settings,
     status: mpsc::UnboundedSender<Status>,
     /// The last dictation that failed with its audio saved, for Retry (R-31).
     failed: Option<FailedDictation>,
 }
 
-impl<M, S, C, I, F, H, N> std::fmt::Debug for Engine<M, S, C, I, F, H, N> {
+impl<M, S, C, I, F, H, N, T> std::fmt::Debug for Engine<M, S, C, I, F, H, N, T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Engine")
             .field("settings", &self.settings)
@@ -157,15 +161,19 @@ enum NoText {
     Closed,
 }
 
-/// The text to insert.
+/// The text to insert, and when each stage finished (R-30).
 struct Text {
     text: String,
     /// The raw transcript, after a cleanup failure or the deadline.
     raw: bool,
     language: Option<String>,
+    words: usize,
+    transcript_at: Instant,
+    first_token_at: Option<Instant>,
+    ready_at: Instant,
 }
 
-impl<M, S, C, I, F, H, N> Engine<M, S, C, I, F, H, N>
+impl<M, S, C, I, F, H, N, T> Engine<M, S, C, I, F, H, N, T>
 where
     M: Microphone + Send,
     S: SpeechProvider + Sync,
@@ -174,9 +182,10 @@ where
     F: FocusInfo + Send,
     H: History + Send,
     N: Sounds + Send,
+    T: TimingLog + Send,
 {
     pub fn new(
-        parts: Parts<M, S, C, I, F, H, N>,
+        parts: Parts<M, S, C, I, F, H, N, T>,
         settings: Settings,
         status: mpsc::UnboundedSender<Status>,
     ) -> Self {
@@ -218,6 +227,7 @@ where
             focus,
             history,
             sounds,
+            timing,
         } = parts;
         let emit = |s: Status| {
             // The pill may be gone while the app quits; the dictation goes on regardless.
@@ -291,6 +301,7 @@ where
         // Audio captured before the session opens, sent when it does.
         let mut buffer: Vec<i16> = Vec::new();
         let mut max_length = pin!(sleep_until(start + settings.max_length));
+        let mut first_audio: Option<Instant> = None;
 
         loop {
             tokio::select! {
@@ -301,6 +312,7 @@ where
                         return Flow::Closed;
                     }
                     Some(Event::Audio(pcm)) => {
+                        first_audio.get_or_insert_with(Instant::now);
                         if let Some(id) = id {
                             let _ = history.append(id, &pcm);
                         }
@@ -360,6 +372,7 @@ where
             }
         }
 
+        let released = Instant::now();
         stop_mic(mic);
         emit(Status::Transcribing);
         let live = match session {
@@ -411,8 +424,25 @@ where
             });
             return Flow::Ended;
         }
+        let pasted = Instant::now();
         if let Some(id) = id {
             let _ = history.done(id, &text.text, text.language.as_deref());
+        }
+        // R-30: numbers only, and only when the timing log is on.
+        if settings.timing_log {
+            let ms =
+                |from: Instant, to: Instant| to.saturating_duration_since(from).as_millis() as u64;
+            timing.record(&TimingLine {
+                first_audio_ms: first_audio.map(|at| ms(start, at)),
+                release_ms: ms(start, released),
+                stt_ms: ms(released, text.transcript_at),
+                first_ms: text.first_token_at.map(|at| ms(released, at)),
+                total_ms: ms(released, text.ready_at),
+                paste_ms: ms(released, pasted),
+                language: text.language.clone(),
+                words: text.words,
+                fallback: text.raw,
+            });
         }
         emit(Status::Done { raw: text.raw });
         Flow::Ended
@@ -556,6 +586,7 @@ async fn transcribe_and_clean<L: LiveSession, C: CleanupProvider>(
         }
         Waited::Closed => return Err(NoText::Closed),
     };
+    let transcript_at = Instant::now();
     let language = transcript.language.clone();
     let raw = transcript.text.trim();
     let words = raw.split_whitespace().count();
@@ -570,12 +601,22 @@ async fn transcribe_and_clean<L: LiveSession, C: CleanupProvider>(
             text: format_short(raw),
             raw: false,
             language,
+            words,
+            transcript_at,
+            first_token_at: None,
+            ready_at: Instant::now(),
         });
     }
     emit(Status::Cleaning);
     let mut cleaned = String::new();
+    let mut first_token_at: Option<Instant> = None;
     let outcome = {
-        let mut on_text = |piece: &str| cleaned.push_str(piece);
+        let mut on_text = |piece: &str| {
+            if !piece.is_empty() {
+                first_token_at.get_or_insert_with(Instant::now);
+            }
+            cleaned.push_str(piece);
+        };
         let clean = pin!(timeout(
             settings.cleanup_deadline,
             cleanup.clean(raw, app, &mut on_text),
@@ -587,12 +628,20 @@ async fn transcribe_and_clean<L: LiveSession, C: CleanupProvider>(
             text: cleaned.trim().to_owned(),
             raw: false,
             language,
+            words,
+            transcript_at,
+            first_token_at,
+            ready_at: Instant::now(),
         }),
         // R-12 (deadline), R-20 (error) and an empty answer: the raw transcript.
         Waited::Done(_) => Ok(Text {
             text: raw.to_owned(),
             raw: true,
             language,
+            words,
+            transcript_at,
+            first_token_at: None,
+            ready_at: Instant::now(),
         }),
         Waited::Cancelled => {
             emit(Status::Cancelled);

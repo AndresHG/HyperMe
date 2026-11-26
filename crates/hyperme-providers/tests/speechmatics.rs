@@ -10,7 +10,7 @@ use hyperme_core::config;
 use hyperme_core::dictation::{Engine, Event, Parts, Settings, Status};
 use hyperme_core::traits::{
     CleanupProvider, DictationId, Error, ErrorKind, FocusInfo, History, Inserter, LiveSession,
-    Microphone, Sound, Sounds, SpeechProvider,
+    Microphone, Sound, Sounds, SpeechProvider, TimingLine, TimingLog,
 };
 use hyperme_providers::speechmatics::{MAX_CHUNK_SAMPLES, Speechmatics};
 use serde_json::{Value, json};
@@ -384,6 +384,7 @@ async fn engine_pastes_the_final_transcript_from_speechmatics() {
         focus: NoFocus,
         history: NoHistory,
         sounds: Silent,
+        timing: NoTiming,
     };
     let engine = Engine::new(parts, settings, status_tx);
     tokio::spawn(engine.run(events_rx));
@@ -439,6 +440,11 @@ impl History for NoHistory {
     fn audio(&self, _id: DictationId) -> Result<Vec<i16>, Error> {
         Ok(Vec::new())
     }
+}
+
+struct NoTiming;
+impl TimingLog for NoTiming {
+    fn record(&mut self, _line: &TimingLine) {}
 }
 
 struct Silent;

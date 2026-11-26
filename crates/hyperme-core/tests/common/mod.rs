@@ -11,7 +11,7 @@ use std::collections::BTreeMap;
 use hyperme_core::dictation::{Engine, Event, Parts, Settings, Status};
 use hyperme_core::traits::{
     CleanupProvider, DictationId, Error, ErrorKind, FocusInfo, History, Inserter, LiveSession,
-    Microphone, Sound, Sounds, SpeechProvider, Transcript,
+    Microphone, Sound, Sounds, SpeechProvider, TimingLine, TimingLog, Transcript,
 };
 use tokio::sync::mpsc;
 use tokio::time::{Instant, sleep};
@@ -312,6 +312,18 @@ impl History for FakeHistory {
     }
 }
 
+/// Collects timing lines.
+#[derive(Clone, Default)]
+pub struct FakeTiming {
+    pub lines: Arc<Mutex<Vec<TimingLine>>>,
+}
+
+impl TimingLog for FakeTiming {
+    fn record(&mut self, line: &TimingLine) {
+        self.lines.lock().unwrap().push(line.clone());
+    }
+}
+
 pub struct FakeSounds {
     pub log: Log,
 }
@@ -374,6 +386,24 @@ impl Harness {
         Self::start_full(log, speech, cleanup, settings, focus, FakeHistory::new(log))
     }
 
+    pub fn start_timed(
+        log: &Log,
+        speech: FakeSpeech,
+        cleanup: FakeCleanup,
+        settings: Settings,
+        timing: FakeTiming,
+    ) -> Self {
+        Self::start_parts(
+            log,
+            speech,
+            cleanup,
+            settings,
+            FakeFocus::textedit(),
+            FakeHistory::new(log),
+            timing,
+        )
+    }
+
     pub fn start_full(
         log: &Log,
         speech: FakeSpeech,
@@ -381,6 +411,27 @@ impl Harness {
         settings: Settings,
         focus: FakeFocus,
         history: FakeHistory,
+    ) -> Self {
+        Self::start_parts(
+            log,
+            speech,
+            cleanup,
+            settings,
+            focus,
+            history,
+            FakeTiming::default(),
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn start_parts(
+        log: &Log,
+        speech: FakeSpeech,
+        cleanup: FakeCleanup,
+        settings: Settings,
+        focus: FakeFocus,
+        history: FakeHistory,
+        timing: FakeTiming,
     ) -> Self {
         let (events, events_rx) = mpsc::channel(256);
         let (status_tx, status) = mpsc::unbounded_channel();
@@ -392,6 +443,7 @@ impl Harness {
             focus,
             history,
             sounds: FakeSounds { log: log.clone() },
+            timing,
         };
         let engine = Engine::new(parts, settings, status_tx);
         // Spawned on the runtime, which proves the engine's future is Send.

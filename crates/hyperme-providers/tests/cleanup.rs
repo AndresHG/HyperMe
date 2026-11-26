@@ -9,7 +9,7 @@ use hyperme_core::config;
 use hyperme_core::dictation::{Engine, Event, Parts, Settings, Status};
 use hyperme_core::traits::{
     CleanupProvider, DictationId, Error, ErrorKind, FocusInfo, History, Inserter, LiveSession,
-    Microphone, Sound, Sounds, SpeechProvider, Transcript,
+    Microphone, Sound, Sounds, SpeechProvider, TimingLine, TimingLog, Transcript,
 };
 use hyperme_providers::cleanup::ChatCleanup;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -324,6 +324,7 @@ async fn dictate(endpoint: &str, deadline: Duration) -> (Status, String, Duratio
         focus: Notes,
         history: NoHistory,
         sounds: Silent,
+        timing: NoTiming,
     };
     let engine = Engine::new(parts, settings, status_tx);
     tokio::spawn(engine.run(events_rx));
@@ -427,6 +428,11 @@ impl History for NoHistory {
     fn audio(&self, _id: DictationId) -> Result<Vec<i16>, Error> {
         Ok(Vec::new())
     }
+}
+
+struct NoTiming;
+impl TimingLog for NoTiming {
+    fn record(&mut self, _line: &TimingLine) {}
 }
 
 struct Silent;
