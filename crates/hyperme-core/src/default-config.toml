@@ -16,6 +16,8 @@ max_length_s = 120
 short_dictation_words = 4
 # A soft sound when recording starts and stops.
 sounds = true
+# A small still bead at the bottom centre while idle; it grows into the pill when you dictate.
+show_while_idle = true
 # Optional: a text file with your own terms, one per line.
 # dictionary = "/Users/you/hyperme-dictionary.txt"
 

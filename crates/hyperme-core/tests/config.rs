@@ -457,3 +457,15 @@ fn set_value_refuses_invalid_values_and_secrets() {
         .to_string();
     assert!(err.contains("nowhere"), "{err}");
 }
+
+/// The bead at rest (owner, 26 November 2026, U-13 brought forward): on by default, and a
+/// config file written before the setting existed still loads, with the bead on.
+#[test]
+fn the_bead_shows_while_idle_by_default() {
+    assert!(Config::default().dictation.show_while_idle);
+    let older = default_with("show_while_idle = true\n", "");
+    assert!(!older.contains("show_while_idle"));
+    assert!(parse(&older).unwrap().dictation.show_while_idle);
+    let off = default_with("show_while_idle = true", "show_while_idle = false");
+    assert!(!parse(&off).unwrap().dictation.show_while_idle);
+}

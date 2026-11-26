@@ -73,6 +73,20 @@ pub fn change_for(status: &Status) -> Change {
     }
 }
 
+/// What the panel shows once a state is over: the bead when "Show while idle" is on (U-13,
+/// brought forward by the owner on 26 November 2026), otherwise nothing.
+pub fn rest(show_while_idle: bool) -> Change {
+    if show_while_idle {
+        show("idle", "", None)
+    } else {
+        Change::Hide
+    }
+}
+
+/// Width of the panel at rest: the 14 pt bead with a little room around it, so only the bead
+/// itself takes clicks.
+pub const BEAD_WIDTH: f64 = 22.0;
+
 /// "Speech: speechmatics: the connection dropped: ..." becomes "Connection lost" for the pill;
 /// the full message stays in the menu's status line.
 fn short(message: &str) -> &'static str {
@@ -84,12 +98,19 @@ fn short(message: &str) -> &'static str {
 }
 
 /// Width of the pill for a label, in points: the 120 pt capsule, wider for longer words.
+/// The state's mark sits at the left edge and the label in the exact centre, so the label has
+/// 14 pt padding plus the mark's 16 pt (8 pt mark, 8 pt gap) on both sides.
 pub fn width_for(view: &View) -> f64 {
+    if view.kind == "idle" {
+        return BEAD_WIDTH;
+    }
     let chars = view.label.chars().count() as f64;
     if chars == 0.0 {
         120.0
     } else {
-        (52.0 + chars * 7.2).clamp(120.0, 420.0).round()
+        (2.0 * (14.0 + 16.0) + chars * 7.2)
+            .clamp(120.0, 420.0)
+            .round()
     }
 }
 
@@ -162,6 +183,30 @@ mod tests {
             ),
             ("retry", "Connection lost · Retry", None, true)
         );
+    }
+
+    /// The bead at rest (U-13, brought forward by the owner): with "Show while idle" on, the
+    /// pill rests as the small bead instead of hiding; off, it hides as before.
+    #[test]
+    fn at_rest_the_pill_becomes_the_bead_or_hides() {
+        let Change::Show(bead) = rest(true) else {
+            panic!("the bead shows while idle");
+        };
+        assert_eq!(
+            (bead.kind, bead.label.as_str(), bead.hide_after_ms),
+            ("idle", "", None)
+        );
+        assert_eq!(width_for(&bead), BEAD_WIDTH);
+        assert_eq!(rest(false), Change::Hide);
+    }
+
+    /// The label sits in the exact centre: the state's mark is drawn at the left edge, so the
+    /// pill keeps the same room on the right (owner, 26 November 2026: "Pasted" sat right of
+    /// centre).
+    #[test]
+    fn labels_have_room_for_the_mark_on_both_sides() {
+        let quiet = width_for(&view(Status::NothingHeard));
+        assert!(quiet >= 2.0 * (14.0 + 16.0) + 13.0 * 7.2, "{quiet}");
     }
 
     #[test]
