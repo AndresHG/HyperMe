@@ -80,6 +80,26 @@ fn item_from_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Item> {
     })
 }
 
+/// Lower case without accents, for search (#98 R-12): "Canción" and "CANCION" both fold to
+/// "cancion". A small map of the Latin letters Spanish and English text meets; other letters
+/// are only lower-cased.
+fn fold(text: &str) -> String {
+    text.chars()
+        .flat_map(char::to_lowercase)
+        .map(|c| match c {
+            'à' | 'á' | 'â' | 'ã' | 'ä' | 'å' | 'ā' => 'a',
+            'ç' => 'c',
+            'è' | 'é' | 'ê' | 'ë' | 'ē' => 'e',
+            'ì' | 'í' | 'î' | 'ï' | 'ī' => 'i',
+            'ñ' => 'n',
+            'ò' | 'ó' | 'ô' | 'õ' | 'ö' | 'ø' | 'ō' => 'o',
+            'ù' | 'ú' | 'û' | 'ü' | 'ū' => 'u',
+            'ý' | 'ÿ' => 'y',
+            c => c,
+        })
+        .collect()
+}
+
 /// The history store.
 pub struct SqliteHistory {
     dir: PathBuf,
@@ -158,6 +178,10 @@ impl SqliteHistory {
                 message TEXT,
                 audio_bytes INTEGER NOT NULL DEFAULT 0
             );",
+        )
+        .map_err(|e| error(format!("creating the index: {e}")))?;
+        db.execute_batch(
+            "CREATE INDEX IF NOT EXISTS dictations_started ON dictations (started_ms, id);",
         )
         .map_err(|e| error(format!("creating the index: {e}")))?;
         let mut store = SqliteHistory {
@@ -317,6 +341,63 @@ impl SqliteHistory {
         let rows = Self::sql(query.query_map(args, item_from_row))?;
         let items: Vec<Item> = Self::sql(rows.collect())?;
         Ok(items.into_iter().map(|i| self.with_audio(i)).collect())
+    }
+
+    /// Finished dictations older than `before` (start time, then id), newest first, that pass
+    /// `keep`, up to `limit`. Keyset paging: a dictation added between two pages is newer than
+    /// the cursor, so it never shifts a later page (#98 AC-7). Dictations still recording are
+    /// left out.
+    fn scan(
+        &self,
+        before: Option<(i64, DictationId)>,
+        limit: usize,
+        mut keep: impl FnMut(&Item) -> bool,
+    ) -> Result<Vec<Item>, Error> {
+        let (ms, id) = before.unwrap_or((i64::MAX, DictationId::MAX));
+        let mut query = Self::sql(self.db.prepare(&format!(
+            "SELECT {ITEM_COLUMNS} FROM dictations
+             WHERE state != 'recording' AND (started_ms < ?1 OR (started_ms = ?1 AND id < ?2))
+             ORDER BY started_ms DESC, id DESC"
+        )))?;
+        let mut rows = Self::sql(query.query(params![ms, id]))?;
+        let mut items = Vec::new();
+        while items.len() < limit {
+            let Some(row) = Self::sql(rows.next())? else {
+                break;
+            };
+            let item = Self::sql(item_from_row(row))?;
+            if keep(&item) {
+                items.push(self.with_audio(item));
+            }
+        }
+        Ok(items)
+    }
+
+    /// A page of History: up to `limit` finished dictations older than `before`, the start
+    /// time and id of the last item of the previous page (#98 R-10, AC-7).
+    pub fn page(
+        &self,
+        before: Option<(i64, DictationId)>,
+        limit: usize,
+    ) -> Result<Vec<Item>, Error> {
+        self.scan(before, limit, |_| true)
+    }
+
+    /// As [`page`](Self::page), only the dictations whose text holds every word of `query`,
+    /// ignoring case and accents (#98 R-12, AC-8). In Rust over the texts: a 30-day history is
+    /// a few thousand items, too few to need a full-text index.
+    pub fn search(
+        &self,
+        query: &str,
+        before: Option<(i64, DictationId)>,
+        limit: usize,
+    ) -> Result<Vec<Item>, Error> {
+        let folded = fold(query);
+        let words: Vec<&str> = folded.split_whitespace().collect();
+        self.scan(before, limit, |item| {
+            let text = fold(item.text.as_deref().unwrap_or_default());
+            words.iter().all(|w| text.contains(w))
+        })
     }
 
     fn with_audio(&self, mut item: Item) -> Item {

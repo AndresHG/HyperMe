@@ -332,3 +332,161 @@ fn failed_with_audio_lists_retryable_items() {
         .collect();
     assert_eq!(ids, [newer, older]);
 }
+
+/// Fills a store with `n` done items straight in the index, one second apart from `start_ms`,
+/// with the text `text(i)`. Faster than dictating them, for the paging and timing tests.
+fn fill(dir: &Path, n: usize, start_ms: i64, text: impl Fn(usize) -> String) {
+    let db = rusqlite::Connection::open(dir.join("history.sqlite3")).unwrap();
+    db.execute_batch("BEGIN").unwrap();
+    for i in 0..n {
+        db.execute(
+            "INSERT INTO dictations (started_ms, finished_ms, app, language, text, state)
+             VALUES (?1, ?1, 'Notes', 'es', ?2, 'done')",
+            rusqlite::params![start_ms + i as i64 * 1000, text(i)],
+        )
+        .unwrap();
+    }
+    db.execute_batch("COMMIT").unwrap();
+}
+
+/// #98 AC-7 (R-10): History pages in fifties, newest first, and a dictation that arrives
+/// between pages neither repeats nor skips an item.
+#[test]
+fn pages_do_not_repeat_or_skip_when_a_dictation_arrives() {
+    let dir = temp_dir("paging");
+    let (store, clock) = open_store(&dir, on(Retention::Days(30), 1024));
+    drop(store);
+    fill(&dir, 120, 99 * DAY_MS, |i| format!("Item {i}"));
+    let (mut store, _) = open_store(&dir, on(Retention::Days(30), 1024));
+    clock.store(100 * DAY_MS, Ordering::SeqCst);
+
+    let first = store.page(None, 50).unwrap();
+    assert_eq!(first.len(), 50);
+    assert_eq!(first[0].text.as_deref(), Some("Item 119"));
+    // Two items with the same start time are ordered by id.
+    let last = first.last().unwrap();
+    let new = dictate(&mut store, "Arrived between pages.", 100);
+
+    let mut seen: Vec<i64> = first.iter().map(|i| i.id).collect();
+    let mut cursor = Some((last.started_ms, last.id));
+    while let Some(before) = cursor {
+        let page = store.page(Some(before), 50).unwrap();
+        cursor = page.last().map(|i| (i.started_ms, i.id));
+        seen.extend(page.iter().map(|i| i.id));
+    }
+    assert_eq!(seen.len(), 120, "every old item once");
+    let mut unique = seen.clone();
+    unique.sort_unstable();
+    unique.dedup();
+    assert_eq!(unique.len(), 120);
+    assert!(
+        !seen.contains(&new),
+        "the new item is on top, not inside a later page"
+    );
+    assert_eq!(store.page(None, 1).unwrap()[0].id, new);
+}
+
+/// #98 AC-7: items that share a start time page by id, without loss.
+#[test]
+fn pages_break_ties_by_id() {
+    let dir = temp_dir("paging-ties");
+    let (store, _) = open_store(&dir, on(Retention::Days(30), 1024));
+    drop(store);
+    fill(&dir, 5, 99 * DAY_MS, |i| format!("Tie {i}"));
+    let db = rusqlite::Connection::open(dir.join("history.sqlite3")).unwrap();
+    db.execute("UPDATE dictations SET started_ms = ?1", [99 * DAY_MS])
+        .unwrap();
+    drop(db);
+    let (store, _) = open_store(&dir, on(Retention::Days(30), 1024));
+    let mut seen = Vec::new();
+    let mut cursor = None;
+    loop {
+        let page = store.page(cursor, 2).unwrap();
+        let Some(last) = page.last() else { break };
+        cursor = Some((last.started_ms, last.id));
+        seen.extend(page.iter().map(|i| i.id));
+    }
+    assert_eq!(seen, [5, 4, 3, 2, 1]);
+}
+
+/// #98 AC-8 (R-12): every word typed must appear, ignoring case and accents.
+#[test]
+fn search_matches_every_word_ignoring_case_and_accents() {
+    let dir = temp_dir("search");
+    let (mut store, clock) = open_store(&dir, on(Retention::Days(30), 1024));
+    let mut ids = Vec::new();
+    for text in [
+        "Canción para la Reunión de mañana.",
+        "La reunión empieza a las diez.",
+        "CANCION nueva para el coche.",
+        "Song for the meeting.",
+        "Después de la REUNION, la cancion.",
+        "Ünïcödé àccents: Ñandú, façade, Øresund.",
+    ] {
+        clock.fetch_add(1000, Ordering::SeqCst);
+        ids.push(dictate(&mut store, text, 100));
+    }
+    let found = |query: &str| -> Vec<i64> {
+        store
+            .search(query, None, 50)
+            .unwrap()
+            .iter()
+            .map(|i| i.id)
+            .collect()
+    };
+    assert_eq!(found("cancion reunion"), [ids[4], ids[0]]);
+    assert_eq!(found("  Canción   REUNIÓN "), [ids[4], ids[0]]);
+    assert_eq!(found("meeting"), [ids[3]]);
+    assert_eq!(found("unicode nandu facade oresund"), [ids[5]]);
+    assert!(found("cancion meeting").is_empty());
+    // No words: every item, as a page.
+    assert_eq!(found("   ").len(), 6);
+    // The search pages like History.
+    let first = store.search("la", None, 2).unwrap();
+    assert_eq!(
+        first.iter().map(|i| i.id).collect::<Vec<_>>(),
+        [ids[4], ids[1]]
+    );
+    let last = first.last().unwrap();
+    let rest: Vec<_> = store
+        .search("la", Some((last.started_ms, last.id)), 50)
+        .unwrap()
+        .iter()
+        .map(|i| i.id)
+        .collect();
+    assert_eq!(rest, [ids[0]]);
+}
+
+/// #98 AC-8: search over 10,000 items takes under 50 ms in a release build on the owner's
+/// Mac. A debug build is far slower, so it gets a generous bound here; the 50 ms check is
+/// `cargo test --release -p hyperme-platform --test history search_is_fast`.
+#[test]
+fn search_is_fast_on_ten_thousand_items() {
+    let dir = temp_dir("search-speed");
+    let (store, _) = open_store(&dir, on(Retention::Days(30), 1024));
+    drop(store);
+    let words = [
+        "la", "reunión", "de", "mañana", "the", "meeting", "notes", "para", "proyecto", "email",
+    ];
+    fill(&dir, 10_000, 90 * DAY_MS, |i| {
+        let mut text: Vec<&str> = (0..30)
+            .map(|k| words[(i * 7 + k * 3) % words.len()])
+            .collect();
+        if i % 1000 == 0 {
+            text.push("Canción");
+        }
+        text.join(" ")
+    });
+    let (store, _) = open_store(&dir, on(Retention::Days(30), 1024));
+
+    let start = std::time::Instant::now();
+    let found = store.search("cancion reunion", None, 50).unwrap();
+    let elapsed = start.elapsed();
+    println!("search over 10,000 items: {elapsed:?}");
+    assert_eq!(found.len(), 10);
+    let bound_ms = if cfg!(debug_assertions) { 500 } else { 50 };
+    assert!(
+        elapsed.as_millis() < bound_ms,
+        "search took {elapsed:?}, bound {bound_ms} ms"
+    );
+}
