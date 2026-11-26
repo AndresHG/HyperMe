@@ -15,6 +15,11 @@ All notable changes to HyperMe are recorded here. The format follows
 
 ### Added
 
+- Test checks the key and the model (issue 127, slice 5 of `specs/96-provider-settings`): the
+  cleanup Test has the chosen model clean one word through the same request a dictation sends,
+  so a wrong model fails Test. A rejected key, a model that does not exist (in OpenAI's, Groq's
+  and Google's shapes) and no network each get their own message, which never holds the key.
+  Dictation errors gain the same "model was not found" message.
 - Models from the key (issue 126, slice 4 of `specs/96-provider-settings`): opening a role's
   model menu lists the models the provider's key offers (`GET /models`), the catalogue's first,
   without embeddings, speech and image models (`hide_models` in the catalogue). The list is

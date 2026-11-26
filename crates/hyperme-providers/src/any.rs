@@ -78,6 +78,15 @@ impl CleanupProvider for AnyCleanup {
     }
 }
 
+impl AnyCleanup {
+    /// Settings' Test: the key and the chosen model together (R-13).
+    pub async fn check(&self) -> Result<(), Error> {
+        match self {
+            AnyCleanup::Chat(p) => p.check().await,
+        }
+    }
+}
+
 /// The key a provider needs, or `None` for one the catalogue marks as needing none (R-14).
 /// A missing key that is needed fails, naming the provider.
 fn key_for(config: &Config, provider: &str, keys: &dyn SecretStore) -> Result<String, Error> {
