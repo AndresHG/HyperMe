@@ -167,7 +167,7 @@ A dark panel about 420 by 560 pt, anchored above the orb with a small tail point
 
 | Tab | Phase | Shows |
 | --- | --- | --- |
-| Chat | 3 | Answers to spoken questions and action previews. Each message has Hyper's name, time, a bold one-line headline, bullets, and a dismiss X |
+| Chat | 3 | Answers to spoken questions and action previews. Each message has Hyper's name, time, a bold one-line headline ("Ticked off 2 reviews"), bullets, and a dismiss X. A smaller line under it says what Hyper learned, and done items say where to get them back ("Under Done this week") |
 | Needs you | 4 | Items waiting for a decision, with a red count |
 | To do | 4 | Daily tasks and scheduled jobs, with a grey count |
 | Meetings | 5 | Week calendar and the live note-taker |
@@ -204,7 +204,7 @@ version); in Phase 4 it only hides the item.
 Built on the on-device design adopted on
 26 November 2026 (ROADMAP, "Meetings on device").
 
-- **Week view:** Monday to Friday, today circled, events as dark blocks, a search icon and a
+- **Week view:** a header with the count ("8 today"), Monday to Friday, today circled, events as dark blocks, a search icon and a
   List or Week toggle. Each upcoming event offers **Record**.
 - **Live view:** the transcript scrolls as people speak. **Live words are grey** (Apple's
   on-device recognizer); **cleaned sentences turn white** as each batch comes back from cleanup.
