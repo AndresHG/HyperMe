@@ -16,6 +16,7 @@ rust-version = "1.85"
 [workspace.dependencies]
 serde = { version = "1.0.229", features = ["derive"] }
 toml = "1.2.3"
+tokio = { version = "1.54.1", default-features = false }
 
 [workspace.lints.rust]
 # Platform code that needs `unsafe` allows it in the one module that does, with a comment.

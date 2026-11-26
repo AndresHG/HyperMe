@@ -69,6 +69,8 @@ fn no_provider_or_model_names_in_code() {
         ("lib.rs", include_str!("../src/lib.rs")),
         ("config.rs", include_str!("../src/config.rs")),
         ("secrets.rs", include_str!("../src/secrets.rs")),
+        ("traits.rs", include_str!("../src/traits.rs")),
+        ("dictation.rs", include_str!("../src/dictation.rs")),
     ];
     for (file, source) in sources {
         for name in [

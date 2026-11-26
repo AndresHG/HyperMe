@@ -2,4 +2,6 @@
 //! network code out of it. Nothing here calls the OS or the network.
 
 pub mod config;
+pub mod dictation;
 pub mod secrets;
+pub mod traits;
