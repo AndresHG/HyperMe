@@ -159,7 +159,8 @@ to the next release; **P2** is nice to have. The phase is from [ROADMAP.md](ROAD
 | Feature | Phase | Priority | Notes |
 | --- | --- | --- | --- |
 | "Hyper, …" routes the same key to a question or an action; optional command key in Settings | 3 | P0 | Owner, 26 November 2026 (Q-3) |
-| Answers in a card that grows from the pill | 3 | P0 | Model-only answers first; web search as an MCP tool (question 11) |
+| Answers in a card that grows from the pill, a few lines, with sources when it searched | 3 | P0 | Its own "answers" model, chosen in Settings; the default is a very cheap, very fast hosted model (the class of `gpt-6-luna` or Claude Haiku; the name lives in config). Web search as an MCP tool, used only when the question needs fresh facts (owner, Q-11) |
+| Switch the model from the answer card and regenerate the last answer | 3 | P1 | Owner, Q-11 |
 | Preview card for actions, Enter to confirm, Esc to drop | 3 | P0 | Under one second from release to card. Default for every tool; a tool can be switched to fire at once in Settings later; email stays draft-only (owner, Q-8) |
 | One MCP client; GitHub as the first connector | 3 | P0 | Owner, 25 November 2026 |
 | Context of the frontmost app and selected text | 3 | P1 | Within the privacy boundary (section 9) |
@@ -277,7 +278,7 @@ Asked in the interview of 26 November 2026. Recommendations first.
 | Q-8 | Ticket creation: wait for Enter or fire at once | Wait for Enter, per-tool relaxing later | Decided 26 November 2026: wait for Enter |
 | Q-9 | Adoption measure | Downloads, stars, 10 outside weekly users in three months | Decided 26 November 2026: as recommended |
 | Q-10 | Languages at public release | English and Spanish only | Decided 26 November 2026: Spanish and English tested; others work, labelled untested |
-| Q-11 | What answers questions | The cleanup provider's larger model, web search as an MCP tool | Open |
+| Q-11 | What answers questions | A fast model, web search when needed | Decided 26 November 2026: its own model setting, cheap and fast by default, switchable from the card with regenerate |
 | Q-12 | Work and personal profiles ([SPEC.md](SPEC.md) section 4) | Drop from version 1; one profile | Open |
 | Q-13 | Adopt the trial and baseline checks as gates ([RESEARCH.md](RESEARCH.md) section 1.3) | Drop as gates; the Wispr comparison covers the baseline | Open |
 
