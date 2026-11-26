@@ -42,6 +42,10 @@ All notable changes to HyperMe are recorded here. The format follows
   timing; it opens at launch while anything it sets up is missing. Its keys step guides to the
   recommended pair with "Get a key" buttons, a monthly cost estimate worked out from prices in
   `config.toml`, and a quiet way to other providers in Settings.
+- A local HyperMe.app: `scripts/bundle-macos.sh` builds and installs it, signed with a local
+  identity from `scripts/create-signing-identity.sh` so permissions survive rebuilds. The
+  permission buttons now ask macOS to add the row, and a run from a terminal names that
+  terminal as the app to switch on.
 - The timing log: one line of stage timings per dictation in `~/Library/Logs/HyperMe/timing.tsv`
   when timing is on, numbers only, in flowbench's columns; `examples/timing_summary.rs` gives
   AC-10's median and 90th percentile, and `scripts/measure-idle.sh` measures AC-19.

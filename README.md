@@ -64,6 +64,18 @@ Each phase starts only after the gate of the one before it passes. Full plan:
 `spikes/flowbench` measures key release to cleaned text on your own recordings, with fakes for
 tests and real providers for numbers. See [its README](spikes/flowbench/README.md).
 
+## Try the app on your Mac (development build)
+
+```sh
+scripts/create-signing-identity.sh   # once: a local signing identity, so permissions survive rebuilds
+scripts/bundle-macos.sh              # builds HyperMe.app into ~/Applications
+open ~/Applications/HyperMe.app
+```
+
+The walkthrough asks for the microphone, Accessibility and Input Monitoring, and your two keys.
+This is a local, unnotarised build for trying HyperMe; a signed release comes later. Running the
+binary with `cargo run` works too, but then macOS gives the permissions to your terminal app.
+
 ## Contributing
 
 Contributions are welcome. Changes are sized S, M or L, and every change starts from a failing

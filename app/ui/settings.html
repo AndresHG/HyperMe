@@ -59,8 +59,9 @@
   <section id="setup">
     <h1>Setup check</h1>
     <p class="lead">What HyperMe needs before dictation works.</p>
-    <div class="row" data-words="accessibility paste permission"><div class="what">Accessibility<small>Needed to paste at the cursor.</small></div><span><span class="state" id="setup-accessibility"></span> <button data-open="accessibility">Open</button></span></div>
-    <div class="row" data-words="input monitoring hotkey keyboard permission"><div class="what">Input Monitoring<small>Needed to see the hotkey.</small></div><span><span class="state" id="setup-input"></span> <button data-open="input-monitoring">Open</button></span></div>
+    <p class="lead" id="host-note"></p>
+    <div class="row" data-words="accessibility paste permission"><div class="what">Accessibility<small>Needed to paste at the cursor.</small></div><span><span class="state" id="setup-accessibility"></span> <button data-open="request-accessibility">Allow</button></span></div>
+    <div class="row" data-words="input monitoring hotkey keyboard permission"><div class="what">Input Monitoring<small>Needed to see the hotkey.</small></div><span><span class="state" id="setup-input"></span> <button data-open="request-input-monitoring">Allow</button></span></div>
     <div class="row" data-words="microphone permission"><div class="what">Microphone<small>macOS asks the first time you dictate.</small></div><button data-open="microphone">Open</button></div>
     <div class="row" data-words="speech key speechmatics"><div class="what">Speech key<small id="setup-speech-name"></small></div><span class="state" id="setup-speech"></span></div>
     <div class="row" data-words="cleanup key groq"><div class="what">Cleanup key<small id="setup-cleanup-name"></small></div><span class="state" id="setup-cleanup"></span></div>
@@ -148,6 +149,9 @@
     $('version').textContent = view.version;
     $('config-path').textContent = view.config_path;
     mark($('setup-accessibility'), view.setup.accessibility, 'Allowed', 'Not allowed');
+    $('host-note').textContent = view.setup.host_app
+      ? 'HyperMe is running from ' + view.setup.host_app + ', so macOS lists ' + view.setup.host_app + ' instead of HyperMe: turn ' + view.setup.host_app + ' on, then quit it (⌘Q) and open it again.'
+      : '';
     mark($('setup-input'), view.setup.input_monitoring, 'Allowed', 'Not allowed');
     mark($('setup-speech'), view.keys.speech, 'Key saved', 'No key');
     mark($('setup-cleanup'), view.keys.cleanup, 'Key saved', 'No key');
