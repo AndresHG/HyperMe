@@ -26,6 +26,9 @@ All notable changes to HyperMe are recorded here. The format follows
 - Paste at the cursor through the clipboard, restored afterwards unless something else changed
   it; no recording while a password field has focus; the frontmost app's name for the cleanup.
 - Provider keys in the macOS keychain, behind the `SecretStore` trait.
+- The dictation history: each dictation's audio written to disk while it is captured, a SQLite
+  index, retention and a size limit; Retry of a failed dictation from its saved audio; start and
+  stop sounds behind a trait.
 - `spikes/flowbench`, a command-line speed test for dictation: upload against streaming,
   several speech and cleanup providers, stage timings, a quality score against gold texts.
 - Phase 0 results in `docs/results/`: Speechmatics (EU) with Groq cleanup reaches a median of

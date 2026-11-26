@@ -6,10 +6,10 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use hyperme_core::config;
-use hyperme_core::dictation::{Engine, Event, Settings, Status};
+use hyperme_core::dictation::{Engine, Event, Parts, Settings, Status};
 use hyperme_core::traits::{
-    CleanupProvider, Error, ErrorKind, FocusInfo, Inserter, LiveSession, Microphone,
-    SpeechProvider, Transcript,
+    CleanupProvider, DictationId, Error, ErrorKind, FocusInfo, History, Inserter, LiveSession,
+    Microphone, Sound, Sounds, SpeechProvider, Transcript,
 };
 use hyperme_providers::cleanup::ChatCleanup;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -285,6 +285,10 @@ impl Inserter for Paste {
         self.0.push(format!("paste: {text}"));
         Ok(())
     }
+    async fn copy(&mut self, text: &str) -> Result<(), Error> {
+        self.0.push(format!("copy: {text}"));
+        Ok(())
+    }
 }
 
 struct Notes;
@@ -312,22 +316,23 @@ async fn dictate(endpoint: &str, deadline: Duration) -> (Status, String, Duratio
         transcript: RAW,
         marks: marks.clone(),
     };
-    let engine = Engine::new(
-        NoMic,
+    let parts = Parts {
+        mic: NoMic,
         speech,
-        cleanup(endpoint),
-        Paste(marks.clone()),
-        Notes,
-        settings,
-        status_tx,
-    );
+        cleanup: cleanup(endpoint),
+        inserter: Paste(marks.clone()),
+        focus: Notes,
+        history: NoHistory,
+        sounds: Silent,
+    };
+    let engine = Engine::new(parts, settings, status_tx);
     tokio::spawn(engine.run(events_rx));
     events.send(Event::KeyDown).await.unwrap();
     // Let the warm-up finish, as it does while the user speaks.
     tokio::time::sleep(Duration::from_millis(50)).await;
     events.send(Event::KeyUp).await.unwrap();
     let last = loop {
-        if let done @ (Status::Done { .. } | Status::Failed(_)) = status.recv().await.unwrap() {
+        if let done @ (Status::Done { .. } | Status::Failed { .. }) = status.recv().await.unwrap() {
             break done;
         }
     };
@@ -391,4 +396,40 @@ async fn failed_cleanup_pastes_raw() {
         waited < Duration::from_millis(500),
         "a failure should not wait for the deadline: {waited:?}"
     );
+}
+
+/// No history: `begin` fails, so the state machine runs without one.
+struct NoHistory;
+impl History for NoHistory {
+    fn begin(&mut self, _app: Option<&str>) -> Result<DictationId, Error> {
+        Err(Error {
+            kind: ErrorKind::Device,
+            message: "no history in this test".to_owned(),
+        })
+    }
+    fn append(&mut self, _id: DictationId, _pcm: &[i16]) -> Result<(), Error> {
+        Ok(())
+    }
+    fn done(
+        &mut self,
+        _id: DictationId,
+        _text: &str,
+        _language: Option<&str>,
+    ) -> Result<(), Error> {
+        Ok(())
+    }
+    fn failed(&mut self, _id: DictationId, _message: &str) -> Result<(), Error> {
+        Ok(())
+    }
+    fn discard(&mut self, _id: DictationId) -> Result<(), Error> {
+        Ok(())
+    }
+    fn audio(&self, _id: DictationId) -> Result<Vec<i16>, Error> {
+        Ok(Vec::new())
+    }
+}
+
+struct Silent;
+impl Sounds for Silent {
+    fn play(&self, _sound: Sound) {}
 }

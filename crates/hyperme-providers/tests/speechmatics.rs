@@ -7,9 +7,10 @@ use std::sync::{Arc, Mutex};
 
 use common::{Got, Reply, serve, started_then};
 use hyperme_core::config;
-use hyperme_core::dictation::{Engine, Event, Settings, Status};
+use hyperme_core::dictation::{Engine, Event, Parts, Settings, Status};
 use hyperme_core::traits::{
-    CleanupProvider, Error, ErrorKind, FocusInfo, Inserter, LiveSession, Microphone, SpeechProvider,
+    CleanupProvider, DictationId, Error, ErrorKind, FocusInfo, History, Inserter, LiveSession,
+    Microphone, Sound, Sounds, SpeechProvider,
 };
 use hyperme_providers::speechmatics::{MAX_CHUNK_SAMPLES, Speechmatics};
 use serde_json::{Value, json};
@@ -329,6 +330,10 @@ impl Inserter for Paste {
         self.0.push(format!("paste: {text}"));
         Ok(())
     }
+    async fn copy(&mut self, text: &str) -> Result<(), Error> {
+        self.0.push(format!("copy: {text}"));
+        Ok(())
+    }
 }
 
 struct NoFocus;
@@ -371,15 +376,16 @@ async fn engine_pastes_the_final_transcript_from_speechmatics() {
     let (status_tx, mut status) = tokio::sync::mpsc::unbounded_channel();
     let mut settings = Settings::from_config(&config::Config::default());
     settings.min_hold = std::time::Duration::ZERO;
-    let engine = Engine::new(
-        NoMic,
-        speech(&base),
-        EchoCleanup,
-        Paste(Recorder(log.clone())),
-        NoFocus,
-        settings,
-        status_tx,
-    );
+    let parts = Parts {
+        mic: NoMic,
+        speech: speech(&base),
+        cleanup: EchoCleanup,
+        inserter: Paste(Recorder(log.clone())),
+        focus: NoFocus,
+        history: NoHistory,
+        sounds: Silent,
+    };
+    let engine = Engine::new(parts, settings, status_tx);
     tokio::spawn(engine.run(events_rx));
 
     events.send(Event::KeyDown).await.unwrap();
@@ -391,7 +397,7 @@ async fn engine_pastes_the_final_transcript_from_speechmatics() {
                 assert!(!raw);
                 break;
             }
-            Status::Failed(message) => panic!("{message}"),
+            Status::Failed { message, .. } => panic!("{message}"),
             _ => {}
         }
     }
@@ -402,4 +408,40 @@ async fn engine_pastes_the_final_transcript_from_speechmatics() {
             "paste: [clean] Please send the report."
         ]
     );
+}
+
+/// No history: `begin` fails, so the state machine runs without one.
+struct NoHistory;
+impl History for NoHistory {
+    fn begin(&mut self, _app: Option<&str>) -> Result<DictationId, Error> {
+        Err(Error {
+            kind: ErrorKind::Device,
+            message: "no history in this test".to_owned(),
+        })
+    }
+    fn append(&mut self, _id: DictationId, _pcm: &[i16]) -> Result<(), Error> {
+        Ok(())
+    }
+    fn done(
+        &mut self,
+        _id: DictationId,
+        _text: &str,
+        _language: Option<&str>,
+    ) -> Result<(), Error> {
+        Ok(())
+    }
+    fn failed(&mut self, _id: DictationId, _message: &str) -> Result<(), Error> {
+        Ok(())
+    }
+    fn discard(&mut self, _id: DictationId) -> Result<(), Error> {
+        Ok(())
+    }
+    fn audio(&self, _id: DictationId) -> Result<Vec<i16>, Error> {
+        Ok(Vec::new())
+    }
+}
+
+struct Silent;
+impl Sounds for Silent {
+    fn play(&self, _sound: Sound) {}
 }

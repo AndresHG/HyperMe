@@ -279,7 +279,7 @@ async fn speech_failure_pastes_nothing() {
     let seen = h.until(&Status::Idle).await;
     assert!(
         seen.iter()
-            .any(|s| matches!(s, Status::Failed(m) if m.contains("speech host unreachable"))),
+            .any(|s| matches!(s, Status::Failed { message, retry: true } if message.contains("speech host unreachable"))),
         "{seen:?}"
     );
     assert!(log.has("mic stop"));
@@ -331,7 +331,10 @@ async fn secure_input_records_nothing() {
         speech,
         cleanup,
         settings(),
-        FakeFocus { secure: true },
+        FakeFocus {
+            secure: true,
+            ..FakeFocus::textedit()
+        },
     );
 
     h.send(Event::KeyDown).await;
@@ -369,4 +372,201 @@ async fn pipeline_overhead_is_under_20_ms() {
     println!("AC-11 overhead: p50 {:?}, p90 {p90:?}", overheads[49]);
     assert!(p90 < ms(20), "p90 overhead {p90:?}");
     assert_eq!(log.pasted().len(), 100);
+}
+
+/// AC-15 (core half): the dictation's audio goes to the history as it is captured, with the
+/// app's name, and its text when it is pasted; a cancelled dictation and one where nothing was
+/// heard are discarded.
+#[tokio::test(start_paused = true)]
+async fn history_gets_the_audio_and_the_text() {
+    let log = Log::new();
+    let speech = FakeSpeech::new(&log, "remember to buy milk on the way home");
+    let cleanup = FakeCleanup::new(&log, "Remember to buy milk on the way home.");
+    let history = FakeHistory::new(&log);
+    let mut h = Harness::start_full(
+        &log,
+        speech,
+        cleanup,
+        settings(),
+        FakeFocus::textedit(),
+        history.clone(),
+    );
+
+    h.send(Event::KeyDown).await;
+    h.frames(0, 10).await;
+    tokio::time::sleep(ms(600)).await;
+    h.send(Event::KeyUp).await;
+    h.until(&Status::Done { raw: false }).await;
+    assert!(log.has("history begin 1 [TextEdit]"), "{:?}", log.entries());
+    assert_eq!(history.samples(1), 4800);
+    assert!(log.has("history done 1: Remember to buy milk on the way home. (en)"));
+
+    // A tap is discarded.
+    h.send(Event::KeyDown).await;
+    h.send(Event::KeyUp).await;
+    h.until(&Status::Cancelled).await;
+    h.until(&Status::Idle).await;
+    assert!(log.has("history discard 2"));
+}
+
+#[tokio::test(start_paused = true)]
+async fn nothing_heard_is_discarded() {
+    let log = Log::new();
+    let speech = FakeSpeech::new(&log, "");
+    let history = FakeHistory::new(&log);
+    let mut h = Harness::start_full(
+        &log,
+        speech,
+        FakeCleanup::new(&log, "x"),
+        settings(),
+        FakeFocus::textedit(),
+        history,
+    );
+    h.send(Event::KeyDown).await;
+    tokio::time::sleep(ms(600)).await;
+    h.send(Event::KeyUp).await;
+    h.until(&Status::NothingHeard).await;
+    h.until(&Status::Idle).await;
+    assert!(log.has("history discard 1"));
+}
+
+/// AC-23 (core half, R-31): when the speech connection drops, the audio is kept and Retry is
+/// offered; a retry against a working provider sends the saved audio again and pastes the
+/// transcript.
+#[tokio::test(start_paused = true)]
+async fn a_dropped_dictation_can_be_retried() {
+    let log = Log::new();
+    let speech = FakeSpeech::new(&log, "the connection dropped but the words were kept");
+    *speech.finish_error.lock().unwrap() = Some(err(ErrorKind::Network, "connection reset"));
+    let finish_error = speech.finish_error.clone();
+    let cleanup = FakeCleanup::new(&log, "The connection dropped, but the words were kept.");
+    let history = FakeHistory::new(&log);
+    let mut h = Harness::start_full(
+        &log,
+        speech,
+        cleanup,
+        settings(),
+        FakeFocus::textedit(),
+        history.clone(),
+    );
+
+    h.send(Event::KeyDown).await;
+    h.frames(0, 25).await;
+    tokio::time::sleep(ms(600)).await;
+    h.send(Event::KeyUp).await;
+    let seen = h.until(&Status::Idle).await;
+    assert!(
+        seen.iter().any(|s| matches!(s, Status::Failed { message, retry: true } if message.contains("connection reset"))),
+        "{seen:?}"
+    );
+    assert!(log.has("history failed 1"));
+    assert!(log.pasted().is_empty());
+    assert_eq!(history.samples(1), 25 * 480);
+
+    // The provider works again; Retry sends the saved audio and pastes.
+    *finish_error.lock().unwrap() = None;
+    let before = log.entries().len();
+    h.send(Event::Retry).await;
+    h.until(&Status::Done { raw: false }).await;
+    let retried: Vec<String> = log.entries()[before..]
+        .iter()
+        .filter(|e| e.starts_with("audio"))
+        .cloned()
+        .collect();
+    assert_eq!(retried, [format!("audio {} from 0", 25 * 480)]);
+    assert_eq!(
+        log.pasted(),
+        ["The connection dropped, but the words were kept."]
+    );
+    assert!(log.has("history done 1: The connection dropped, but the words were kept. (en)"));
+
+    // Nothing is left to retry.
+    h.send(Event::Retry).await;
+    h.until(&Status::Idle).await;
+    h.settle().await;
+    assert_eq!(log.pasted().len(), 1);
+}
+
+/// R-31: a retry after the user moved to another app copies the text instead of pasting it.
+#[tokio::test(start_paused = true)]
+async fn a_retry_in_another_app_copies() {
+    let log = Log::new();
+    let speech = FakeSpeech::new(&log, "this goes to the clipboard after the retry");
+    *speech.finish_error.lock().unwrap() = Some(err(ErrorKind::Network, "connection reset"));
+    let finish_error = speech.finish_error.clone();
+    let cleanup = FakeCleanup::new(&log, "This goes to the clipboard after the retry.");
+    let focus = FakeFocus::textedit();
+    let frontmost = focus.app.clone();
+    let mut h = Harness::start_full(
+        &log,
+        speech,
+        cleanup,
+        settings(),
+        focus,
+        FakeHistory::new(&log),
+    );
+
+    h.send(Event::KeyDown).await;
+    tokio::time::sleep(ms(600)).await;
+    h.send(Event::KeyUp).await;
+    h.until(&Status::Idle).await;
+    *finish_error.lock().unwrap() = None;
+    *frontmost.lock().unwrap() = "Safari".to_owned();
+    h.send(Event::Retry).await;
+    h.until(&Status::Copied { raw: false }).await;
+    assert!(log.pasted().is_empty());
+    assert!(log.has("copy: This goes to the clipboard after the retry."));
+}
+
+/// R-31: a retry that fails again keeps the audio and offers Retry again.
+#[tokio::test(start_paused = true)]
+async fn a_failed_retry_can_be_retried() {
+    let log = Log::new();
+    let speech = FakeSpeech::new(&log, "still failing");
+    *speech.finish_error.lock().unwrap() = Some(err(ErrorKind::Network, "connection reset"));
+    let mut h = Harness::start(&log, speech, FakeCleanup::new(&log, "x"), settings());
+    h.send(Event::KeyDown).await;
+    tokio::time::sleep(ms(600)).await;
+    h.send(Event::KeyUp).await;
+    h.until(&Status::Idle).await;
+    h.send(Event::Retry).await;
+    let seen = h.until(&Status::Idle).await;
+    assert!(
+        seen.iter()
+            .any(|s| matches!(s, Status::Failed { retry: true, .. })),
+        "{seen:?}"
+    );
+    h.send(Event::Retry).await;
+    let seen = h.until(&Status::Idle).await;
+    assert!(
+        seen.iter()
+            .any(|s| matches!(s, Status::Failed { retry: true, .. })),
+        "{seen:?}"
+    );
+}
+
+/// AC-24 (R-32): the start and stop sounds play when the setting is on, and not when it is off.
+#[tokio::test(start_paused = true)]
+async fn sounds_follow_the_setting() {
+    for on in [true, false] {
+        let log = Log::new();
+        let mut settings = settings();
+        settings.sounds = on;
+        let speech = FakeSpeech::new(&log, "ok then");
+        let mut h = Harness::start(&log, speech, FakeCleanup::new(&log, "x"), settings);
+        h.send(Event::KeyDown).await;
+        h.until(&Status::Recording).await;
+        let started = log.has("sound Start");
+        tokio::time::sleep(ms(600)).await;
+        h.send(Event::KeyUp).await;
+        h.until(&Status::Idle).await;
+        assert_eq!(started, on, "start sound with sounds = {on}");
+        assert_eq!(log.has("sound Stop"), on, "stop sound with sounds = {on}");
+        if on {
+            assert!(
+                log.index("sound Stop") < log.index("finalize"),
+                "the stop sound plays at release"
+            );
+        }
+    }
 }

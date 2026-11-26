@@ -169,3 +169,20 @@ async fn an_empty_clipboard_stays_empty() {
     inserter.wait_for_restore();
     assert!(board.items().is_empty());
 }
+
+/// R-31: a retry in another app copies; the text stays on the clipboard, and a restore still
+/// pending from an earlier paste does not overwrite it.
+#[tokio::test]
+async fn copy_leaves_the_text_and_cancels_a_pending_restore() {
+    let board = FakeBoard::holding("original");
+    let (mut inserter, pasted) = inserter(&board);
+    inserter.paste("Pasted first.").await.unwrap();
+    inserter.copy("Copied after a retry.").await.unwrap();
+    inserter.wait_for_restore();
+    assert_eq!(board.text().as_deref(), Some("Copied after a retry."));
+    assert_eq!(
+        pasted.lock().unwrap().len(),
+        1,
+        "copy sends no paste shortcut"
+    );
+}

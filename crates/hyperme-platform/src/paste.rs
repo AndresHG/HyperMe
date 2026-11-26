@@ -125,4 +125,14 @@ impl<P: Pasteboard, K: Keystrokes + Send> Inserter for ClipboardInserter<P, K> {
     async fn paste(&mut self, text: &str) -> Result<(), Error> {
         self.paste_now(text)
     }
+
+    /// R-31: the text stays on the clipboard; there is nothing to restore.
+    async fn copy(&mut self, text: &str) -> Result<(), Error> {
+        // A restore still pending would overwrite this copy.
+        self.pending
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .take();
+        self.board.write_text(text).map(|_| ())
+    }
 }
