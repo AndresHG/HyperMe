@@ -8,6 +8,11 @@ All notable changes to HyperMe are recorded here. The format follows
 
 ### Added
 
+- `crates/hyperme-quality`, the quality harness (issue 99): replays a set of saved dictations
+  through the app's own state machine and providers and scores the pasted text against the
+  owner's corrected texts (zero-edit, edits per 100 characters, internal names), with flowbench's
+  definitions. `import` copies done dictations from the history into a set. Audio and texts stay
+  in the set folder; the results file holds numbers only.
 - A Cargo workspace at the root and `crates/hyperme-core`, starting with the config file:
   `config.toml` with the owner's defaults, written on first launch, with errors that name the
   file and line or the key, and a refusal of any key-like field (keys live in the keychain).
