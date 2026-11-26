@@ -112,6 +112,7 @@ pub fn bundle_of(executable: &std::path::Path) -> Option<std::path::PathBuf> {
 
 /// A level from the meter counts as the microphone working above this (0 to 1, on the meter's
 /// dB scale: about -38 dBFS, quiet speech).
+#[cfg(target_os = "macos")]
 pub const HEARD_LEVEL: f32 = 0.25;
 
 #[cfg(test)]

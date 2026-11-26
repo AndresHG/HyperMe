@@ -140,9 +140,11 @@ fn tray_menu(status: MenuItem<tauri::Wry>, retry: MenuItem<tauri::Wry>) -> Tray 
 
 // Elsewhere nothing updates the menu yet.
 #[cfg(not(target_os = "macos"))]
-type Tray = ();
+struct Tray;
 #[cfg(not(target_os = "macos"))]
-fn tray_menu(_status: MenuItem<tauri::Wry>, _retry: MenuItem<tauri::Wry>) -> Tray {}
+fn tray_menu(_status: MenuItem<tauri::Wry>, _retry: MenuItem<tauri::Wry>) -> Tray {
+    Tray
+}
 
 /// The pill: hidden while idle in Phase 1 (docs/UX.md, U-1).
 #[cfg(target_os = "macos")]
