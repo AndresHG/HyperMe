@@ -62,6 +62,19 @@ pub struct Item {
     pub message: Option<String>,
 }
 
+/// The two numbers on the Home page (#98 R-7).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Stats {
+    /// Words of the dictations done since Monday 00:00 local time.
+    pub words_this_week: u64,
+    /// Seconds those words would take to type at [`TYPING_WPM`], less the time spent speaking
+    /// them; never below zero.
+    pub seconds_saved: i64,
+}
+
+/// The typing speed time saved is counted against (#98 R-7).
+pub const TYPING_WPM: u64 = 40;
+
 /// The columns [`item_from_row`] reads, in order.
 const ITEM_COLUMNS: &str = "id, started_ms, app, language, text, state, audio_bytes, message";
 
@@ -397,6 +410,37 @@ impl SqliteHistory {
         self.scan(before, limit, |item| {
             let text = fold(item.text.as_deref().unwrap_or_default());
             words.iter().all(|w| text.contains(w))
+        })
+    }
+
+    /// Words this week and time saved (#98 R-7, AC-6). The week starts on Monday at 00:00 in
+    /// the local time `utc_offset_minutes` east of UTC. Speaking time is the length of each
+    /// dictation's audio.
+    pub fn stats(&self, now_ms: i64, utc_offset_minutes: i32) -> Result<Stats, Error> {
+        let offset_ms = i64::from(utc_offset_minutes) * 60_000;
+        let local_day = (now_ms + offset_ms).div_euclid(DAY_MS);
+        // Day 4 since the epoch, 5 January 1970, was a Monday.
+        let since_monday = (local_day - 4).rem_euclid(7);
+        let week_start = (local_day - since_monday) * DAY_MS - offset_ms;
+
+        let mut query = Self::sql(self.db.prepare(
+            "SELECT text, audio_bytes FROM dictations
+             WHERE state = 'done' AND started_ms >= ?1 AND started_ms <= ?2",
+        ))?;
+        let mut rows = Self::sql(query.query(params![week_start, now_ms]))?;
+        let mut words: u64 = 0;
+        let mut audio_bytes: u64 = 0;
+        while let Some(row) = Self::sql(rows.next())? {
+            let text: Option<String> = Self::sql(row.get(0))?;
+            words += text.map_or(0, |t| t.split_whitespace().count() as u64);
+            let bytes = Self::sql(row.get::<_, i64>(1))? as u64;
+            audio_bytes += bytes.saturating_sub(HEADER_BYTES);
+        }
+        let typing_ms = words * 60_000 / TYPING_WPM;
+        let speaking_ms = audio_bytes * 1000 / (u64::from(SAMPLE_RATE) * 2);
+        Ok(Stats {
+            words_this_week: words,
+            seconds_saved: (typing_ms.saturating_sub(speaking_ms) / 1000) as i64,
         })
     }
 

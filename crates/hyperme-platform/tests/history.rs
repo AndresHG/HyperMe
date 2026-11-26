@@ -490,3 +490,80 @@ fn search_is_fast_on_ten_thousand_items() {
         "search took {elapsed:?}, bound {bound_ms} ms"
     );
 }
+
+const HOUR_MS: i64 = 60 * 60 * 1000;
+/// Day 102 since the epoch (13 April 1970) was a Monday.
+const MONDAY: i64 = 102 * DAY_MS;
+
+/// Dictates `text` with `ms` of audio, starting at `at_ms`.
+fn dictate_at(store: &mut SqliteHistory, clock: &AtomicI64, at_ms: i64, text: &str, ms: usize) {
+    clock.store(at_ms, Ordering::SeqCst);
+    dictate(store, text, ms);
+}
+
+fn words(n: usize) -> String {
+    vec!["word"; n].join(" ")
+}
+
+/// #98 AC-6 (R-7): words this week and time saved match a hand count, for a week that starts
+/// on Monday at midnight local time.
+#[test]
+fn stats_count_this_weeks_words_and_time_saved() {
+    let dir = temp_dir("stats");
+    let (mut store, clock) = open_store(&dir, on(Retention::Days(30), 1024));
+    // UTC+1: Monday 00:00 local is Sunday 23:00 UTC.
+    let offset = 60;
+    let week_start = MONDAY - HOUR_MS;
+    // Sunday 23:59:59.999 local: last week.
+    dictate_at(&mut store, &clock, week_start - 1, &words(4), 1000);
+    // Monday 00:00 local, to the millisecond: this week. 30 words, 10 s of speech.
+    dictate_at(&mut store, &clock, week_start, &words(30), 10_000);
+    // Monday 09:00 local: 2 words, 4 s of speech.
+    dictate_at(
+        &mut store,
+        &clock,
+        week_start + 9 * HOUR_MS,
+        "Hola  mundo.",
+        4000,
+    );
+    // A failed dictation this week counts for nothing.
+    clock.store(week_start + 9 * HOUR_MS + 1, Ordering::SeqCst);
+    fail(&mut store, "dropped", 5000);
+
+    let now = week_start + 10 * HOUR_MS;
+    let stats = store.stats(now, offset).unwrap();
+    assert_eq!(stats.words_this_week, 32);
+    // 32 words at 40 a minute is 48 s of typing, less 14 s of speaking.
+    assert_eq!(stats.seconds_saved, 34);
+
+    // At Monday 00:00 local the week holds only the item started that instant.
+    let stats = store.stats(week_start, offset).unwrap();
+    assert_eq!(stats.words_this_week, 30);
+    assert_eq!(stats.seconds_saved, 45 - 10);
+
+    // In UTC the same instants fall on Sunday until Monday 00:00 UTC: only "Hola mundo."
+    // counts, and 3 s of typing less 4 s of speaking is never below zero.
+    let stats = store.stats(now, 0).unwrap();
+    assert_eq!(stats.words_this_week, 2);
+    assert_eq!(stats.seconds_saved, 0);
+
+    // A week later, last week's items no longer count.
+    let stats = store.stats(now + 7 * DAY_MS, offset).unwrap();
+    assert_eq!(stats.words_this_week, 0);
+    assert_eq!(stats.seconds_saved, 0);
+}
+
+/// #98 AC-6: a time zone west of UTC, where local Monday starts after UTC Monday.
+#[test]
+fn stats_week_in_a_western_time_zone() {
+    let dir = temp_dir("stats-west");
+    let (mut store, clock) = open_store(&dir, on(Retention::Days(30), 1024));
+    // UTC−5: Monday 00:00 local is Monday 05:00 UTC.
+    let offset = -300;
+    let week_start = MONDAY + 5 * HOUR_MS;
+    dictate_at(&mut store, &clock, week_start - 1, &words(10), 1000);
+    dictate_at(&mut store, &clock, week_start + HOUR_MS, &words(40), 20_000);
+    let stats = store.stats(week_start + 2 * HOUR_MS, offset).unwrap();
+    assert_eq!(stats.words_this_week, 40);
+    assert_eq!(stats.seconds_saved, 60 - 20);
+}
