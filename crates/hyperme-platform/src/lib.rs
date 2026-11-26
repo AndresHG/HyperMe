@@ -2,5 +2,7 @@
 //! works on one OS sits in a `cfg(target_os)` module.
 
 pub mod hotkey;
+#[cfg(target_os = "macos")]
+pub mod keychain;
 pub mod microphone;
 pub mod paste;
