@@ -547,8 +547,7 @@ How the bars behave (the owner chose them over the ribbon, 26 November 2026):
 
 | Detail | Proposed | Why |
 | --- | --- | --- |
-| Pill and card colour | Always dark, whatever the system theme | It must stand out on any window behind it, and the owner likes Wispr Flow's dark capsule. Home and Settings follow the system |
-| Language | After a dictation, "Pasted · ES" or "Pasted · EN" for a moment | Language is detected on its own (`CLAUDE.md`), so the user sees which one was heard |
+| Pill and card colour | Always dark, whatever the system theme (owner, U-16) | It must stand out on any window behind it, and the owner likes Wispr Flow's dark capsule. Home and Settings follow the system |
 | The dot by default | Shown, once Phase 3 brings it; it can be hidden in General | The owner likes the bubble |
 | Sounds | Soft start and stop sounds, already decided (U-5) | |
 
@@ -588,12 +587,7 @@ Design details, answered by the owner on 26 November 2026 ("I like B, for the pi
 | U-13 | The dot at rest | B, glass that breathes: still, with a violet halo that breathes three times when something new waits (owner) |
 | U-14 | The motion while you talk | 1, level bars in the style of Wispr Flow (owner). Our own drawing, not its code or assets |
 | U-15 | The pill while working | The bars settle into a line and a light runs along it (owner) |
-
-Still open:
-
-| # | Question | Proposed |
-| --- | --- | --- |
-| U-16 | Pill and card colour; language on the pill | Always dark; "Pasted · ES" or "Pasted · EN" for a moment |
+| U-16 | Pill and card colour; language on the pill | Always dark (owner). No language label: the owner found it unneeded, so the pill just says "Pasted" |
 
 ## Not decided here
 
