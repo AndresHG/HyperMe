@@ -42,6 +42,12 @@ struct Shared {
     show_while_idle: bool,
     /// Hotkey listening must live as long as the app.
     _hotkey: Option<HotkeyListener>,
+    /// A dictation or retry is in progress: from its first status until Idle.
+    busy: bool,
+    /// The dictation Home asked to retry, while that retry runs (spec 98, R-16).
+    home_retry: Option<DictationId>,
+    /// History is on in the config (spec 98, R-19).
+    history_enabled: bool,
 }
 
 type State = Mutex<Shared>;
@@ -100,6 +106,10 @@ pub fn start(app: &AppHandle, menu: TrayMenu) {
         show_while_idle: Config::load_or_create(&data_dir(app).join("config.toml"))
             .map_or(true, |config| config.dictation.show_while_idle),
         _hotkey: None,
+        busy: false,
+        home_retry: None,
+        history_enabled: Config::load_or_create(&data_dir(app).join("config.toml"))
+            .map_or(true, |config| config.history.enabled),
     }));
     settle(app);
     // Home shows the history even before the keys are in, or when one cannot be read.
@@ -214,6 +224,7 @@ async fn show_statuses(app: AppHandle, mut statuses: mpsc::UnboundedReceiver<Sta
     // Key release, for the walkthrough's "Pasted in 0.43 s".
     let mut released: Option<Instant> = None;
     while let Some(status) = statuses.recv().await {
+        follow_for_home(&app, &status);
         match status {
             Status::Transcribing if released.is_none() => released = Some(Instant::now()),
             Status::Done { .. } => {
@@ -351,6 +362,85 @@ pub fn pill_clicked(app: AppHandle) {
     if retry && let Some(events) = events {
         let _ = events.try_send(Event::Retry(None));
     }
+}
+
+/// Tells Home how a retry it asked for is going, and that the history changed after any other
+/// dictation (spec 98, R-16, AC-15).
+fn follow_for_home(app: &AppHandle, status: &Status) {
+    use crate::home::{RetryEvent, RetryUpdate, retry_update};
+    let retrying = {
+        let mut shared = lock(app);
+        shared.busy = *status != Status::Idle;
+        shared.home_retry
+    };
+    let Some(id) = retrying else {
+        if matches!(
+            status,
+            Status::Done { .. } | Status::Copied { .. } | Status::Failed { retry: true, .. }
+        ) {
+            crate::home::emit_changed(app);
+        }
+        return;
+    };
+    let event = |state, text, message| RetryEvent {
+        id,
+        state,
+        text,
+        message,
+    };
+    let (event, ended) = match retry_update(status) {
+        Some(RetryUpdate::Working) => (event("working", None, None), false),
+        Some(RetryUpdate::Done) => {
+            let text = with_history(app, |h| h.item(id))
+                .ok()
+                .flatten()
+                .and_then(|i| i.text);
+            (event("done", text, None), true)
+        }
+        Some(RetryUpdate::Failed(message)) => (event("failed", None, Some(message)), true),
+        Some(RetryUpdate::Ended) => (event("ended", None, None), true),
+        None => return,
+    };
+    if ended {
+        lock(app).home_retry = None;
+    }
+    crate::home::emit_retry(app, event);
+}
+
+/// Home's Retry (spec 98, R-16): refused while a dictation runs, as Phase 1 refuses a second
+/// one, so the row says so instead of waiting on nothing.
+pub fn retry_from_home(app: &AppHandle, id: DictationId) -> Result<(), String> {
+    let mut shared = lock(app);
+    if shared.busy || shared.home_retry.is_some() {
+        return Err("A dictation is in progress; retry when it is done".to_owned());
+    }
+    let events = shared.events.clone().ok_or_else(|| {
+        "Retry needs the speech and cleanup keys; add them in Settings".to_owned()
+    })?;
+    events
+        .try_send(Event::Retry(Some(id)))
+        .map_err(|_| "HyperMe is busy; try again".to_owned())?;
+    shared.home_retry = Some(id);
+    Ok(())
+}
+
+/// History is on in the config (spec 98, R-19).
+pub fn history_enabled(app: &AppHandle) -> bool {
+    lock(app).history_enabled
+}
+
+/// Runs `change` on the history store, for Home's actions.
+pub fn with_history_mut<T>(
+    app: &AppHandle,
+    change: impl FnOnce(&mut SqliteHistory) -> Result<T, Error>,
+) -> Result<T, String> {
+    let history = lock(app).history.clone();
+    let mut inner = history.lock().unwrap_or_else(PoisonError::into_inner);
+    let store = inner
+        .store
+        .as_mut()
+        .ok_or_else(|| "History is not available yet".to_owned())?;
+    change(store).map_err(|e| e.message)
 }
 
 /// Runs `read` on the history store, for Home's commands. An error when the history is not

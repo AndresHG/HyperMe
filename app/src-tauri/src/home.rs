@@ -91,6 +91,188 @@ pub fn hash(resolved: (&str, Option<&str>)) -> String {
     }
 }
 
+// ---- Row actions (slice 4): the decisions, pure and tested on every platform ----
+
+use hyperme_core::dictation::Status;
+use hyperme_core::traits::{Added, Correction, DictationId, Dictionary, Error, Inserter};
+
+/// The app that was in front before Home took focus (R-15).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FrontApp {
+    pub pid: i32,
+    pub name: String,
+}
+
+/// What Paste again does (R-15, AC-9).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PasteDecision {
+    /// The recorded app is in front again: paste there.
+    Paste,
+    /// Copy instead, and say why.
+    Copy(String),
+}
+
+/// Paste again pastes only into the app recorded before Home took focus, once it is in front;
+/// never while Home itself is in front. `frontmost` is the app in front after asking the
+/// recorded one to come forward (R-15, AC-9).
+pub fn paste_decision(
+    recorded: Option<&FrontApp>,
+    own_pid: i32,
+    frontmost: Option<i32>,
+) -> PasteDecision {
+    match recorded {
+        Some(app) if app.pid != own_pid && frontmost == Some(app.pid) => PasteDecision::Paste,
+        Some(app) if app.pid != own_pid => {
+            PasteDecision::Copy(format!("Copied: {} is no longer open", app.name))
+        }
+        _ => PasteDecision::Copy("Copied: there was no app to paste into".to_owned()),
+    }
+}
+
+/// Brings an app to the front and says which app is in front afterwards.
+pub trait Focuser {
+    fn bring_to_front(&self, pid: i32) -> impl std::future::Future<Output = Option<i32>> + Send;
+}
+
+/// What Paste again did, for the page.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct PasteOutcome {
+    pub pasted: bool,
+    pub notice: Option<String>,
+}
+
+/// Paste again (R-15, AC-9): back to the recorded app and paste, or copy with a notice when it
+/// is gone or does not come to the front.
+pub async fn paste_again<I: Inserter>(
+    inserter: &mut I,
+    focus: &impl Focuser,
+    recorded: Option<&FrontApp>,
+    own_pid: i32,
+    text: &str,
+) -> Result<PasteOutcome, Error> {
+    let frontmost = match recorded {
+        Some(app) if app.pid != own_pid => focus.bring_to_front(app.pid).await,
+        _ => None,
+    };
+    match paste_decision(recorded, own_pid, frontmost) {
+        PasteDecision::Paste => {
+            inserter.paste(text).await?;
+            Ok(PasteOutcome {
+                pasted: true,
+                notice: None,
+            })
+        }
+        PasteDecision::Copy(notice) => {
+            inserter.copy(text).await?;
+            Ok(PasteOutcome {
+                pasted: false,
+                notice: Some(notice),
+            })
+        }
+    }
+}
+
+/// One action on a selected row, with its key (R-13).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct Action {
+    pub id: &'static str,
+    pub label: &'static str,
+    pub key: &'static str,
+}
+
+/// The actions a row offers (R-13): Copy and Paste again need text, Retry needs the audio
+/// (R-16, AC-10), Fix a word needs a dictionary and text (R-17, R-21), Delete is always there.
+pub fn actions(has_text: bool, has_audio: bool, dictionary: bool) -> Vec<Action> {
+    let mut list = Vec::new();
+    let mut add = |id, label, key| list.push(Action { id, label, key });
+    if has_text {
+        add("copy", "Copy", "⌘C");
+        add("paste", "Paste again", "↵");
+    }
+    if has_audio {
+        add("retry", "Retry", "⌘R");
+    }
+    if has_text && dictionary {
+        add("fix", "Fix a word", "⌘F");
+    }
+    add("delete", "Delete", "⌘⌫");
+    list
+}
+
+/// What Fix a word did (R-17, AC-11).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(tag = "outcome", rename_all = "snake_case")]
+pub enum FixOutcome {
+    /// Added: the row's text with the correction, to store and show.
+    Fixed { text: String },
+    /// The dictionary warns that the word is common; ask, then send again confirmed.
+    NeedsConfirm { heard: String },
+}
+
+/// Sends a correction to the dictionary (R-17, R-20, AC-11). The selection `heard` must be in
+/// the row's text. On success the row's text has every `heard` replaced, as the dictionary will
+/// do from now on; a hard refusal is the dictionary's message and changes nothing.
+pub fn fix_word(
+    dictionary: &mut dyn Dictionary,
+    id: DictationId,
+    text: &str,
+    language: Option<&str>,
+    heard: &str,
+    wanted: &str,
+    confirmed_common: bool,
+) -> Result<FixOutcome, String> {
+    let heard = heard.trim();
+    let wanted = wanted.trim();
+    if heard.is_empty() || wanted.is_empty() {
+        return Err("Select a word and type what it should be".to_owned());
+    }
+    if !text.contains(heard) {
+        return Err(format!("“{heard}” is not in this dictation"));
+    }
+    let correction = Correction {
+        heard: heard.to_owned(),
+        wanted: wanted.to_owned(),
+        dictation: Some(id),
+        language: language.map(str::to_owned),
+        confirmed_common,
+    };
+    match dictionary.add_correction(correction) {
+        Ok(Added::Added) => Ok(FixOutcome::Fixed {
+            text: text.replace(heard, wanted),
+        }),
+        Ok(Added::NeedsConfirm(_)) => Ok(FixOutcome::NeedsConfirm {
+            heard: heard.to_owned(),
+        }),
+        Err(error) => Err(error.message),
+    }
+}
+
+/// How a Home retry is going, from the engine's statuses (R-16, AC-10).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RetryUpdate {
+    Working,
+    /// The new text is in the store and on the clipboard.
+    Done,
+    /// The old text stays; the message says why.
+    Failed(String),
+    /// The retry ended without a result (back to idle).
+    Ended,
+}
+
+pub fn retry_update(status: &Status) -> Option<RetryUpdate> {
+    match status {
+        Status::Transcribing | Status::Cleaning | Status::Pasting => Some(RetryUpdate::Working),
+        Status::Copied { .. } | Status::Done { .. } => Some(RetryUpdate::Done),
+        Status::Failed { message, .. } => Some(RetryUpdate::Failed(message.clone())),
+        Status::NothingHeard => Some(RetryUpdate::Failed(
+            "Nothing heard in the audio; the text is unchanged".to_owned(),
+        )),
+        Status::Cancelled => Some(RetryUpdate::Failed("Cancelled".to_owned())),
+        Status::Idle => Some(RetryUpdate::Ended),
+        _ => None,
+    }
+}
+
 #[cfg(target_os = "macos")]
 pub use window::*;
 
@@ -99,13 +281,20 @@ mod window {
     use std::path::PathBuf;
     use std::sync::{Mutex, PoisonError};
 
-    use hyperme_core::traits::FocusInfo;
+    use std::sync::Arc;
+    use std::time::{Duration, Instant};
+
+    use hyperme_core::traits::{DictationId, Dictionary, History, Inserter};
     use hyperme_platform::history::{Item, Stats};
-    use hyperme_platform::paste::macos::MacFocus;
+    use hyperme_platform::paste::macos::{self as mac, CmdV, MacPasteboard};
+    use hyperme_platform::paste::{ClipboardInserter, RESTORE_AFTER};
     use serde::{Deserialize, Serialize};
     use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 
-    use super::{Block, HOME, Section, blocks, hash, resolve, sections};
+    use super::{
+        Action, Block, FixOutcome, Focuser, FrontApp, HOME, PasteOutcome, Section, actions, blocks,
+        fix_word, hash, paste_again, resolve, sections,
+    };
 
     /// Sent to the page when the attention dot changes (R-22).
     pub const ATTENTION: &str = "home://attention";
@@ -121,14 +310,23 @@ mod window {
     const MIN_SIZE: (f64, f64) = (720.0, 480.0);
     /// At most this many items per page or search call.
     const MAX_LIMIT: usize = 200;
+    /// How long Paste again waits for the recorded app to come to the front (R-15).
+    const FRONT_WAIT: Duration = Duration::from_millis(500);
+    /// Sent to the page when a dictation is added or changed outside Home (R-22, AC-15).
+    pub const CHANGED: &str = "home://changed";
+    /// Sent to the page as a retry from Home goes, keyed by the item's id (R-16).
+    pub const RETRY: &str = "home://retry";
 
     /// Home's state while the app runs.
     #[derive(Default)]
     pub struct HomeState {
         /// The violet dot on Home in the sidebar (R-22).
         attention: bool,
-        /// The app in front before Home took focus, for Paste again (R-15, slice 4).
-        front_app: Option<String>,
+        /// The app in front before Home took focus, for Paste again (R-15).
+        front_app: Option<FrontApp>,
+        /// The personal dictionary, when the app holds one (R-21). None until #93 brings it;
+        /// while it is None nothing in Home mentions the dictionary.
+        dictionary: Option<Box<dyn Dictionary + Send>>,
     }
 
     type State = Mutex<HomeState>;
@@ -145,10 +343,8 @@ mod window {
         app.manage::<State>(Mutex::new(HomeState::default()));
     }
 
-    /// The app that was in front before Home took focus (R-15).
-    #[allow(dead_code)] // Paste again uses it in the next change (slice 4).
-    pub fn front_app(app: &AppHandle) -> Option<String> {
-        state(app).front_app.clone()
+    fn has_dictionary(app: &AppHandle) -> bool {
+        state(app).dictionary.is_some()
     }
 
     /// The window's size and position, kept between openings (R-4).
@@ -196,7 +392,7 @@ mod window {
 
     /// Opens Home at `target` (R-1, R-6), or brings it to the front there.
     pub fn open(app: &AppHandle, target: &str) {
-        let resolved = hash(resolve(target, &sections(false), &blocks()));
+        let resolved = hash(resolve(target, &sections(has_dictionary(app)), &blocks()));
         if let Some(window) = app.get_webview_window(HOME) {
             // Already in front: the app in front is Home itself, so keep the one recorded.
             if !window.is_focused().unwrap_or(false) {
@@ -227,6 +423,8 @@ mod window {
                 let win = window.clone();
                 window.on_window_event(move |event| match event {
                     WindowEvent::CloseRequested { .. } => save_geometry(&handle, &win),
+                    // The user went to another app: that is where Paste again goes back to.
+                    WindowEvent::Focused(false) => record_front_app(&handle),
                     WindowEvent::Destroyed => closed(&handle),
                     _ => {}
                 });
@@ -245,9 +443,17 @@ mod window {
         }
     }
 
+    fn own_pid() -> i32 {
+        std::process::id() as i32
+    }
+
+    /// Records the app in front, unless it is HyperMe itself (R-15).
     fn record_front_app(app: &AppHandle) {
-        let front = MacFocus.frontmost_app();
-        state(app).front_app = front;
+        if let Some((pid, name)) = mac::frontmost()
+            && pid != own_pid()
+        {
+            state(app).front_app = Some(FrontApp { pid, name });
+        }
     }
 
     /// Shows or hides the violet dot on Home in the sidebar (R-22). For other modules.
@@ -263,9 +469,8 @@ mod window {
 
     /// The sidebar's sections (R-5).
     #[tauri::command]
-    pub fn home_sections() -> Vec<Section> {
-        // The app holds no dictionary yet (R-21); #93 brings it.
-        sections(false)
+    pub fn home_sections(app: AppHandle) -> Vec<Section> {
+        sections(has_dictionary(&app))
     }
 
     /// The Home page's blocks (R-9).
@@ -309,20 +514,22 @@ mod window {
         pub message: Option<String>,
         /// Whether Retry can be offered (R-16).
         pub has_audio: bool,
+        /// What the row offers when selected, with keys (R-13).
+        pub actions: Vec<Action>,
     }
 
-    impl From<Item> for ItemView {
-        fn from(item: Item) -> Self {
-            ItemView {
-                id: item.id,
-                started_ms: item.started_ms,
-                app: item.app,
-                language: item.language,
-                text: item.text,
-                state: item.state,
-                message: item.message,
-                has_audio: item.has_audio,
-            }
+    fn view(item: Item, dictionary: bool) -> ItemView {
+        let has_text = item.state == "done" && item.text.as_deref().is_some_and(|t| !t.is_empty());
+        ItemView {
+            actions: actions(has_text, item.has_audio, dictionary),
+            id: item.id,
+            started_ms: item.started_ms,
+            app: item.app,
+            language: item.language,
+            text: item.text,
+            state: item.state,
+            message: item.message,
+            has_audio: item.has_audio,
         }
     }
 
@@ -348,8 +555,9 @@ mod window {
             .map_or(0, |d| d.as_millis() as i64)
     }
 
-    fn views(items: Vec<Item>) -> Vec<ItemView> {
-        items.into_iter().map(ItemView::from).collect()
+    fn views(app: &AppHandle, items: Vec<Item>) -> Vec<ItemView> {
+        let dictionary = has_dictionary(app);
+        items.into_iter().map(|i| view(i, dictionary)).collect()
     }
 
     /// The page's local time zone comes from the page, which knows it (R-7).
@@ -367,7 +575,8 @@ mod window {
         before: Option<(i64, i64)>,
         limit: usize,
     ) -> Result<Vec<ItemView>, String> {
-        crate::runtime::with_history(&app, |h| h.page(before, limit.min(MAX_LIMIT))).map(views)
+        crate::runtime::with_history(&app, |h| h.page(before, limit.min(MAX_LIMIT)))
+            .map(|items| views(&app, items))
     }
 
     /// History's search (R-12).
@@ -379,7 +588,162 @@ mod window {
         limit: usize,
     ) -> Result<Vec<ItemView>, String> {
         crate::runtime::with_history(&app, |h| h.search(&query, before, limit.min(MAX_LIMIT)))
-            .map(views)
+            .map(|items| views(&app, items))
+    }
+
+    /// What the page needs to know once (R-19, R-21).
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+    pub struct Info {
+        /// History is on; while it is off, History lists only failed items with audio.
+        pub history: bool,
+        pub dictionary: bool,
+    }
+
+    #[tauri::command]
+    pub fn home_info(app: AppHandle) -> Info {
+        Info {
+            history: crate::runtime::history_enabled(&app),
+            dictionary: has_dictionary(&app),
+        }
+    }
+
+    /// History while history is off: the failed dictations still waiting for a retry (R-19).
+    #[tauri::command]
+    pub fn home_failed(app: AppHandle) -> Result<Vec<ItemView>, String> {
+        crate::runtime::with_history(&app, |h| h.failed_with_audio()).map(|i| views(&app, i))
+    }
+
+    /// One item again, after an action changed it.
+    #[tauri::command]
+    pub fn home_item(app: AppHandle, id: DictationId) -> Result<Option<ItemView>, String> {
+        let dictionary = has_dictionary(&app);
+        crate::runtime::with_history(&app, |h| h.item(id)).map(|i| i.map(|i| view(i, dictionary)))
+    }
+
+    /// The text of a finished dictation, from the store, not from the page.
+    fn text_of(app: &AppHandle, id: DictationId) -> Result<(String, Option<String>), String> {
+        let item = crate::runtime::with_history(app, |h| h.item(id))?
+            .ok_or_else(|| "This dictation is gone".to_owned())?;
+        match item.text {
+            Some(text) if item.state == "done" && !text.is_empty() => Ok((text, item.language)),
+            _ => Err("This dictation has no text".to_owned()),
+        }
+    }
+
+    fn inserter() -> ClipboardInserter<MacPasteboard, CmdV> {
+        ClipboardInserter::new(Arc::new(MacPasteboard), CmdV, RESTORE_AFTER)
+    }
+
+    /// Copy (R-14).
+    #[tauri::command]
+    pub async fn home_copy(app: AppHandle, id: DictationId) -> Result<(), String> {
+        let (text, _) = text_of(&app, id)?;
+        inserter().copy(&text).await.map_err(|e| e.message)
+    }
+
+    /// Brings an app forward and waits, at most [`FRONT_WAIT`], until it is in front.
+    struct MacFocuser;
+
+    impl Focuser for MacFocuser {
+        async fn bring_to_front(&self, pid: i32) -> Option<i32> {
+            let waited = tauri::async_runtime::spawn_blocking(move || {
+                if !mac::activate(pid) {
+                    return mac::frontmost().map(|(p, _)| p);
+                }
+                let start = Instant::now();
+                loop {
+                    let front = mac::frontmost().map(|(p, _)| p);
+                    if front == Some(pid) || start.elapsed() >= FRONT_WAIT {
+                        return front;
+                    }
+                    std::thread::sleep(Duration::from_millis(15));
+                }
+            });
+            waited.await.ok().flatten()
+        }
+    }
+
+    /// Paste again (R-15, AC-9): back to the app in front before Home, paste there; Home stays
+    /// open behind it. Copies with a notice when that app is gone.
+    #[tauri::command]
+    pub async fn home_paste(app: AppHandle, id: DictationId) -> Result<PasteOutcome, String> {
+        let (text, _) = text_of(&app, id)?;
+        let recorded = state(&app).front_app.clone();
+        paste_again(
+            &mut inserter(),
+            &MacFocuser,
+            recorded.as_ref(),
+            own_pid(),
+            &text,
+        )
+        .await
+        .map_err(|e| e.message)
+    }
+
+    /// Retry (R-16): the engine sends the saved audio again; the row follows `home://retry`.
+    #[tauri::command]
+    pub fn home_retry(app: AppHandle, id: DictationId) -> Result<(), String> {
+        crate::runtime::retry_from_home(&app, id)
+    }
+
+    /// Delete (R-18, AC-12): the item's text and audio.
+    #[tauri::command]
+    pub fn home_delete(app: AppHandle, id: DictationId) -> Result<(), String> {
+        crate::runtime::with_history_mut(&app, |h| h.delete_item(id))
+    }
+
+    /// Fix a word (R-17, AC-11): the selection and what it should be go to the dictionary; on
+    /// success the row's text in the store has the correction.
+    #[tauri::command]
+    pub fn home_fix_word(
+        app: AppHandle,
+        id: DictationId,
+        heard: String,
+        wanted: String,
+        confirmed_common: bool,
+    ) -> Result<FixOutcome, String> {
+        let (text, language) = text_of(&app, id)?;
+        let outcome = {
+            let mut home = state(&app);
+            let dictionary = home
+                .dictionary
+                .as_deref_mut()
+                .ok_or_else(|| "There is no dictionary yet".to_owned())?;
+            fix_word(
+                dictionary,
+                id,
+                &text,
+                language.as_deref(),
+                &heard,
+                &wanted,
+                confirmed_common,
+            )?
+        };
+        if let FixOutcome::Fixed { text } = &outcome {
+            crate::runtime::with_history_mut(&app, |h| {
+                h.replace_text(id, text, language.as_deref())
+            })?;
+        }
+        Ok(outcome)
+    }
+
+    /// A retry from Home moved on (R-16): the page updates that row.
+    #[derive(Debug, Clone, Serialize)]
+    pub struct RetryEvent {
+        pub id: DictationId,
+        /// `working`, `done`, `failed` or `ended`.
+        pub state: &'static str,
+        pub text: Option<String>,
+        pub message: Option<String>,
+    }
+
+    pub fn emit_retry(app: &AppHandle, event: RetryEvent) {
+        let _ = app.emit_to(HOME, RETRY, event);
+    }
+
+    /// Tells an open Home that the history changed outside it (AC-15).
+    pub fn emit_changed(app: &AppHandle) {
+        let _ = app.emit_to(HOME, CHANGED, ());
     }
 
     #[cfg(test)]
@@ -389,17 +753,20 @@ mod window {
         /// AC-14 (R-24): an item sent to the page holds no audio path, size or key.
         #[test]
         fn item_view_has_no_audio_path_or_key() {
-            let view = ItemView::from(Item {
-                id: 3,
-                started_ms: 1000,
-                app: Some("Mail".into()),
-                language: Some("es".into()),
-                text: Some("Hola.".into()),
-                state: "done".into(),
-                audio_bytes: 4800,
-                has_audio: true,
-                message: None,
-            });
+            let view = view(
+                Item {
+                    id: 3,
+                    started_ms: 1000,
+                    app: Some("Mail".into()),
+                    language: Some("es".into()),
+                    text: Some("Hola.".into()),
+                    state: "done".into(),
+                    audio_bytes: 4800,
+                    has_audio: true,
+                    message: None,
+                },
+                false,
+            );
             let json = serde_json::to_value(&view).unwrap();
             let mut keys: Vec<&str> = json
                 .as_object()
@@ -411,6 +778,7 @@ mod window {
             assert_eq!(
                 keys,
                 [
+                    "actions",
                     "app",
                     "has_audio",
                     "id",
@@ -421,8 +789,16 @@ mod window {
                     "text"
                 ]
             );
+            // No value carries a path; the actions' `key` is a keyboard shortcut, not a secret.
             let text = json.to_string();
-            assert!(!text.contains(".wav") && !text.contains("audio/") && !text.contains("key"));
+            assert!(!text.contains(".wav") && !text.contains("audio/") && !text.contains("/Users"));
+            let action_keys: Vec<&str> = json["actions"][0]
+                .as_object()
+                .unwrap()
+                .keys()
+                .map(|k| k.as_str())
+                .collect();
+            assert_eq!(action_keys, ["id", "key", "label"]);
         }
 
         /// R-4: a saved size and position comes back; a broken or too small one is ignored.
@@ -495,5 +871,225 @@ mod tests {
         }
         // The page emits the event other modules listen for (R-22).
         assert!(page.contains("'home://block-viewed'"));
+    }
+
+    // ---- Slice 4 ----
+
+    use hyperme_core::traits::{ErrorKind, Refusal};
+    use std::sync::{Arc, Mutex};
+
+    fn safari() -> FrontApp {
+        FrontApp {
+            pid: 42,
+            name: "Safari".to_owned(),
+        }
+    }
+
+    /// AC-9 (R-15): paste only into the recorded app once it is in front; copy with a notice
+    /// when it is gone or stays behind; never paste while Home itself is in front.
+    #[test]
+    fn paste_goes_only_to_the_recorded_app() {
+        let own = 7;
+        assert_eq!(
+            paste_decision(Some(&safari()), own, Some(42)),
+            PasteDecision::Paste
+        );
+        let gone = PasteDecision::Copy("Copied: Safari is no longer open".to_owned());
+        assert_eq!(paste_decision(Some(&safari()), own, None), gone);
+        assert_eq!(paste_decision(Some(&safari()), own, Some(own)), gone);
+        assert_eq!(paste_decision(Some(&safari()), own, Some(99)), gone);
+        let home = FrontApp {
+            pid: own,
+            name: "HyperMe".to_owned(),
+        };
+        assert!(matches!(
+            paste_decision(Some(&home), own, Some(own)),
+            PasteDecision::Copy(_)
+        ));
+        assert!(matches!(
+            paste_decision(None, own, Some(42)),
+            PasteDecision::Copy(_)
+        ));
+    }
+
+    #[derive(Clone, Default)]
+    struct FakeInserter(Arc<Mutex<Vec<String>>>);
+
+    impl Inserter for FakeInserter {
+        async fn paste(&mut self, text: &str) -> Result<(), Error> {
+            self.0.lock().unwrap().push(format!("paste: {text}"));
+            Ok(())
+        }
+        async fn copy(&mut self, text: &str) -> Result<(), Error> {
+            self.0.lock().unwrap().push(format!("copy: {text}"));
+            Ok(())
+        }
+    }
+
+    /// A focuser that records who it was asked to bring forward, and which app ends in front.
+    struct FakeFocus {
+        asked: Arc<Mutex<Vec<i32>>>,
+        ends_in_front: Option<i32>,
+    }
+
+    impl Focuser for FakeFocus {
+        async fn bring_to_front(&self, pid: i32) -> Option<i32> {
+            self.asked.lock().unwrap().push(pid);
+            self.ends_in_front
+        }
+    }
+
+    /// AC-9: Paste again sends the text to the inserter after focus goes back to the recorded
+    /// app, and copies with a notice when that app is gone.
+    #[test]
+    fn paste_again_returns_to_the_app_then_pastes() {
+        let block = tauri::async_runtime::block_on;
+        let log = FakeInserter::default();
+        let asked = Arc::new(Mutex::new(Vec::new()));
+        let back = FakeFocus {
+            asked: asked.clone(),
+            ends_in_front: Some(42),
+        };
+        let app = safari();
+        let mut inserter = log.clone();
+        let outcome = block(paste_again(&mut inserter, &back, Some(&app), 7, "Hola.")).unwrap();
+        assert!(outcome.pasted);
+        assert_eq!(*asked.lock().unwrap(), [42]);
+        assert_eq!(*log.0.lock().unwrap(), ["paste: Hola."]);
+
+        let log = FakeInserter::default();
+        let gone = FakeFocus {
+            asked: Arc::default(),
+            ends_in_front: None,
+        };
+        let mut inserter = log.clone();
+        let outcome = block(paste_again(&mut inserter, &gone, Some(&app), 7, "Hola.")).unwrap();
+        assert_eq!(
+            outcome,
+            PasteOutcome {
+                pasted: false,
+                notice: Some("Copied: Safari is no longer open".to_owned())
+            }
+        );
+        assert_eq!(*log.0.lock().unwrap(), ["copy: Hola."]);
+    }
+
+    /// AC-10, AC-11 (R-13, R-16, R-21): Retry only with audio; Fix a word only with a
+    /// dictionary; a failed row offers Retry and Delete.
+    #[test]
+    fn rows_offer_only_what_they_can_do() {
+        let ids = |list: Vec<Action>| -> Vec<&str> { list.iter().map(|a| a.id).collect() };
+        assert_eq!(
+            ids(actions(true, true, false)),
+            ["copy", "paste", "retry", "delete"]
+        );
+        assert_eq!(
+            ids(actions(true, false, false)),
+            ["copy", "paste", "delete"]
+        );
+        assert_eq!(
+            ids(actions(true, true, true)),
+            ["copy", "paste", "retry", "fix", "delete"]
+        );
+        assert_eq!(ids(actions(false, true, true)), ["retry", "delete"]);
+        let keys: Vec<&str> = actions(true, true, true).iter().map(|a| a.key).collect();
+        assert_eq!(keys, ["⌘C", "↵", "⌘R", "⌘F", "⌘⌫"]);
+    }
+
+    /// A dictionary that records corrections and answers from a queue (`Added` when empty).
+    #[derive(Default)]
+    struct FakeDictionary {
+        corrections: Vec<Correction>,
+        answers: Vec<Result<Added, Error>>,
+    }
+
+    impl Dictionary for FakeDictionary {
+        fn add_correction(&mut self, c: Correction) -> Result<Added, Error> {
+            self.corrections.push(c);
+            if self.answers.is_empty() {
+                Ok(Added::Added)
+            } else {
+                self.answers.remove(0)
+            }
+        }
+    }
+
+    /// AC-11 (R-17, R-20): the exact selection and typed word go to the dictionary;
+    /// NeedsConfirm asks, and a confirm sends again with `confirmed_common`; success replaces the
+    /// word in the row's text.
+    #[test]
+    fn fix_a_word_confirms_common_words() {
+        let mut dict = FakeDictionary {
+            answers: vec![Ok(Added::NeedsConfirm(Refusal::CommonWord))],
+            ..Default::default()
+        };
+        let text = "Ask cloud about the cloud deploy.";
+        let first = fix_word(&mut dict, 5, text, Some("en"), "cloud", "Claude", false);
+        assert_eq!(
+            first,
+            Ok(FixOutcome::NeedsConfirm {
+                heard: "cloud".to_owned()
+            })
+        );
+        let second = fix_word(&mut dict, 5, text, Some("en"), "cloud", "Claude", true);
+        assert_eq!(
+            second,
+            Ok(FixOutcome::Fixed {
+                text: "Ask Claude about the Claude deploy.".to_owned()
+            })
+        );
+        assert_eq!(dict.corrections.len(), 2);
+        assert_eq!(dict.corrections[0].heard, "cloud");
+        assert_eq!(dict.corrections[0].wanted, "Claude");
+        assert_eq!(dict.corrections[0].dictation, Some(5));
+        assert_eq!(dict.corrections[0].language.as_deref(), Some("en"));
+        assert!(!dict.corrections[0].confirmed_common);
+        assert!(dict.corrections[1].confirmed_common);
+    }
+
+    /// AC-11: a hard refusal shows its message and changes nothing; a selection that is not in
+    /// the text never reaches the dictionary.
+    #[test]
+    fn fix_a_word_shows_refusals() {
+        let mut dict = FakeDictionary {
+            answers: vec![Err(Error {
+                kind: ErrorKind::Other,
+                message: "The dictionary is full.".to_owned(),
+            })],
+            ..Default::default()
+        };
+        assert_eq!(
+            fix_word(&mut dict, 1, "Hola mundo.", None, "mundo", "Mundo", false),
+            Err("The dictionary is full.".to_owned())
+        );
+        assert!(fix_word(&mut dict, 1, "Hola mundo.", None, "adiós", "Adiós", false).is_err());
+        assert!(fix_word(&mut dict, 1, "Hola mundo.", None, "mundo", "  ", false).is_err());
+        assert_eq!(dict.corrections.len(), 1);
+    }
+
+    /// AC-10 (R-16): the row shows working, then the new text or the error.
+    #[test]
+    fn retry_statuses_become_row_updates() {
+        assert_eq!(
+            retry_update(&Status::Transcribing),
+            Some(RetryUpdate::Working)
+        );
+        assert_eq!(
+            retry_update(&Status::Copied { raw: false }),
+            Some(RetryUpdate::Done)
+        );
+        assert_eq!(
+            retry_update(&Status::Failed {
+                message: "Speech: connection reset".into(),
+                retry: false
+            }),
+            Some(RetryUpdate::Failed("Speech: connection reset".into()))
+        );
+        assert!(matches!(
+            retry_update(&Status::NothingHeard),
+            Some(RetryUpdate::Failed(_))
+        ));
+        assert_eq!(retry_update(&Status::Idle), Some(RetryUpdate::Ended));
+        assert_eq!(retry_update(&Status::Recording), None);
     }
 }
