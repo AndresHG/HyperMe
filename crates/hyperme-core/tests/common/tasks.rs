@@ -4,7 +4,8 @@
 use std::sync::Mutex;
 
 use hyperme_core::tasks::{
-    Finish, NewTask, Status, Task, TaskError, TaskId, TaskStore, TaskUpdate, cycle, roll_over,
+    Finish, NewTask, Source, Status, Task, TaskError, TaskId, TaskStore, TaskUpdate, cycle,
+    roll_over,
 };
 use time::Date;
 
@@ -24,6 +25,19 @@ fn find(tasks: &mut [Task], id: TaskId) -> Result<&mut Task, TaskError> {
         .iter_mut()
         .find(|t| t.id == id)
         .ok_or(TaskError::NotFound(id))
+}
+
+/// What identifies a mirrored item: source name, account and reference.
+fn mirror_key(source: &Source) -> Option<(&str, Option<&str>, &str)> {
+    match source {
+        Source::HyperMe => None,
+        Source::Mirror {
+            name,
+            account,
+            reference,
+            ..
+        } => Some((name, account.as_deref(), reference)),
+    }
 }
 
 impl TaskStore for MemoryTaskStore {
@@ -77,6 +91,55 @@ impl TaskStore for MemoryTaskStore {
             task.finished_at = Some(at_ms);
             Ok(())
         })
+    }
+
+    async fn remove(&self, id: TaskId) -> Result<(), TaskError> {
+        self.with(|tasks| {
+            find(tasks, id)?;
+            tasks.retain(|t| t.id != id);
+            for t in tasks.iter_mut() {
+                t.blocked_by.retain(|b| *b != id);
+            }
+            Ok(())
+        })
+    }
+
+    async fn upsert_mirror(
+        &self,
+        new: NewTask,
+        closed_at: Option<i64>,
+    ) -> Result<TaskId, TaskError> {
+        let existing = self.with(|tasks| {
+            tasks
+                .iter()
+                .find(|t| mirror_key(&new.source).is_some_and(|k| mirror_key(&t.source) == Some(k)))
+                .map(|t| t.id)
+        });
+        let id = match existing {
+            Some(id) => {
+                self.with(|tasks| {
+                    let task = find(tasks, id)?;
+                    task.title = new.title;
+                    task.notes = new.notes;
+                    task.due = new.due;
+                    task.source = new.source;
+                    Ok::<_, TaskError>(())
+                })?;
+                id
+            }
+            None => self.add(new).await?,
+        };
+        if let Some(at) = closed_at {
+            self.with(|tasks| {
+                let task = find(tasks, id)?;
+                if task.status == Status::Open {
+                    task.status = Status::Done;
+                    task.finished_at = Some(at);
+                }
+                Ok::<_, TaskError>(())
+            })?;
+        }
+        Ok(id)
     }
 
     async fn block(&self, blocked: TaskId, blocker: TaskId) -> Result<(), TaskError> {
