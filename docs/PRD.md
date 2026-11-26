@@ -33,7 +33,7 @@ forget it is running. Mac first; Linux and Windows later.
 
 ## 2. Identity: voice to done
 
-*Proposed (interview question 1).* Dictation apps turn voice into text. HyperMe turns voice into
+Decided by the owner on 26 November 2026 (Q-1). Dictation apps turn voice into text. HyperMe turns voice into
 an outcome: text, an answer, an action, a task or an agent run. Text is the first outcome and
 the one that has to be perfect, because it is used dozens of times a day.
 
@@ -259,7 +259,7 @@ Asked in the interview of 26 November 2026. Recommendations first.
 
 | ID | Question | Recommendation | Status |
 | --- | --- | --- | --- |
-| Q-1 | Product identity | "Voice to done"; Wispr Flow as the bar for dictation only | Asked |
+| Q-1 | Product identity | "Voice to done"; Wispr Flow as the bar for dictation only | Decided 26 November 2026: voice to done |
 | Q-2 | Phase 0 gate | Declare passed on the Wispr comparison and approve the Phase 1 spec | Decided 26 November 2026: Phase 1 approved to start, with the spec's open questions answered (hotkey Fn, cleanup deadline 1.5 s, speed gate wired only) |
 | Q-3 | One key or two | One key; "Hyper, …" routes to commands; optional command key | Asked |
 | Q-4 | First outside user | Developers who dictate into coding agents and chat | Asked |
