@@ -67,7 +67,7 @@ tests and real providers for numbers. See [its README](spikes/flowbench/README.m
 ## Try the app on your Mac (development build)
 
 ```sh
-scripts/create-signing-identity.sh   # once: a local signing identity, so permissions survive rebuilds
+scripts/create-signing-identity.sh   # once: a local signing identity, so permissions survive rebuilds (asks for your login and an administrator password)
 scripts/bundle-macos.sh              # builds HyperMe.app into ~/Applications
 open ~/Applications/HyperMe.app
 ```

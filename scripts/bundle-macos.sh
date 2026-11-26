@@ -81,4 +81,9 @@ fi
 rm -rf "$app"
 mv "$bundle" "$app"
 echo "Installed $app, signed $signed."
+if ! security dump-trust-settings -d 2>/dev/null | grep -q "$identity"; then
+  echo "Note: this build has a new signature hash, and macOS's system privacy service cannot check" >&2
+  echo "the local identity until it is trusted for the whole Mac, so switch HyperMe off and on in" >&2
+  echo "Accessibility after each rebuild. Run scripts/create-signing-identity.sh once to fix that." >&2
+fi
 echo "Start it with: open \"$app\""
