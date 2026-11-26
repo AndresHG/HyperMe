@@ -15,6 +15,11 @@ All notable changes to HyperMe are recorded here. The format follows
 
 ### Added
 
+- The hint line under each provider role (issue 128, slice 6 of `specs/96-provider-settings`):
+  the monthly cost for the user's talking time, the same figure onboarding shows; the latency
+  the project measured with a link to the result, or "Speed not measured"; and with the timing
+  log on, the user's own median over their last 50 dictations on that provider. Onboarding's
+  talking-time choice is saved as `dictation.talking_minutes_per_day` (default 30).
 - Test checks the key and the model (issue 127, slice 5 of `specs/96-provider-settings`): the
   cleanup Test has the chosen model clean one word through the same request a dictation sends,
   so a wrong model fails Test. A rejected key, a model that does not exist (in OpenAI's, Groq's

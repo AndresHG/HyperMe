@@ -6,6 +6,7 @@ pub mod brief;
 pub mod config;
 pub mod cost;
 pub mod dictation;
+pub mod hints;
 pub mod schedule;
 pub mod scheduler;
 pub mod secrets;

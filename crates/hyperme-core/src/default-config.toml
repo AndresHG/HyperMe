@@ -18,6 +18,8 @@ short_dictation_words = 4
 sounds = true
 # A small still bead at the bottom centre while idle; it grows into the pill when you dictate.
 show_while_idle = true
+# Minutes of talking a day, for the cost estimates in onboarding and Settings. 1 to 600.
+talking_minutes_per_day = 30
 # Optional: a text file with your own terms, one per line.
 # dictionary = "/Users/you/hyperme-dictionary.txt"
 
