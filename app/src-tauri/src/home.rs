@@ -888,6 +888,18 @@ mod tests {
         assert!(page.contains("'home://block-viewed'"));
     }
 
+    /// AC-2: rows are made only by the list that keeps the rows near the viewport, never for a
+    /// whole page of items at once.
+    #[test]
+    fn rows_are_made_only_by_the_list() {
+        let page = include_str!("../../ui/home.html");
+        // The definition, and the one call inside the list's render.
+        assert_eq!(page.matches("rowNode(").count(), 2);
+        let render = &page[page.find("    render() {").unwrap()..];
+        assert!(render.find("rowNode(").unwrap() < render.find("\n    node(id)").unwrap());
+        assert!(page.contains("const OVERSCAN"));
+    }
+
     // ---- Slice 4 ----
 
     use hyperme_core::traits::{ErrorKind, Refusal};

@@ -13,7 +13,7 @@ code has no such hook.
   windows from `CGWindowListCopyWindowInfo`
 - Network: not involved
 
-## Result (final run)
+## Result (first measurement, before fixes)
 
 | Step | `hyperme` | WebKit GPU | WebKit Networking | Pill WebContent | Home WebContent | **All** |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -66,3 +66,43 @@ Runs differ by 2 to 4 MB from run to run at the same step. In run 1 the History 
 rows than later runs, so its History figure is left out. A layout where the document scrolls
 instead of the page's main box lowered History's graphics to 30 MB but raised the Home page's to
 31 MB, so it was not kept.
+
+## After fixes
+
+Three changes, then the same five steps on the same data, with `origin/master` merged in (PR 120's
+pill fix). The resting pill was turned off in the scratch config for this run so the test build
+showed nothing at the bottom of the screen; idle memory matched the first measurement.
+
+1. History and Recent keep only the rows near the viewport in the page; item data stays in memory.
+2. After Home closes, an empty AppKit event makes the main loop free the closed window at once.
+   Before, it stayed off screen until the next open.
+3. The 8 MB decoded image in `hyperme` at idle was looked for: it stays when the pill and the
+   menu-bar icon are both left out, so it is not drawn by HyperMe. Its size matches AppKit's
+   decoded application icon for a binary run outside a bundle.
+
+| Step | `hyperme` | WebKit GPU | WebKit Networking | Pill WebContent | Home WebContent | **All** |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1. Idle, Home never opened, 30 s | 29 MB | 11 MB | 6.4 MB | 13 MB | none | **59.4 MB** |
+| 2a. Home open on the Home page, 10 s | 36 MB | 15 MB | 6.4 MB | 13 MB | 38 MB | **108.4 MB** |
+| 2b. History, scrolled through the same pages | 36 MB | 18 MB | 6.4 MB | 13 MB | 52 MB | **125.4 MB** |
+| 3. 30 s after Home closed | 35 MB | 16 MB | 6.4 MB | 13 MB | gone | **70.4 MB** |
+| 4. Five more open and close cycles, then 30 s idle | 35 MB | 16 MB | 6.4 MB | 13 MB | gone | **70.4 MB** |
+
+Idle CPU after close: 0.00%. Windows of the app left after close, on or off screen: none.
+
+| Target (AC-2) | Before fixes | After fixes | Verdict |
+| --- | --- | --- | --- |
+| Home open on 1,000 items: under 100 MB | 113.4 MB | 108.4 MB | **Fails** |
+| 30 s after close: within 5 MB of step 1 | 14.8 MB above | 11.0 MB above | **Fails** |
+| Home's WebContent process gone after close | Gone | Gone | Passes |
+| Five cycles grow it by no more than 5 MB | No growth | No growth | Passes |
+| Idle CPU after close near 0% | 0.00% | 0.00% | Passes |
+
+What still holds the memory:
+
+- **Open.** Home's page process is 38 MB, about 20 MB of it graphics (an empty Home page is
+  23 MB). `hyperme` grows by 7 MB and the GPU process by 4 MB. Everything but Home's page adds up
+  to 70 MB, so the open target needs the page at about 30 MB or less.
+- **After close.** `hyperme` stays 6 MB and the GPU process 5 MB above idle although the window and
+  Home's page process are gone. Further cycles add nothing, which points at caches kept after the
+  first window rather than anything Home holds.
