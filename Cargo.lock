@@ -1584,6 +1584,7 @@ dependencies = [
 name = "hyperme-platform"
 version = "0.1.0"
 dependencies = [
+ "block2",
  "core-foundation",
  "core-graphics",
  "cpal",
