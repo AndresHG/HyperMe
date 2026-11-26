@@ -51,7 +51,7 @@ fn lock(app: &AppHandle) -> std::sync::MutexGuard<'_, Shared> {
 }
 
 /// HyperMe's data folder: `~/Library/Application Support/HyperMe` (design.md).
-fn data_dir(app: &AppHandle) -> PathBuf {
+pub fn data_dir(app: &AppHandle) -> PathBuf {
     app.path()
         .data_dir()
         .unwrap_or_else(|_| PathBuf::from("."))
@@ -276,6 +276,7 @@ pub fn menu_action(app: &AppHandle, id: &str) {
                 };
             });
         }
+        "settings" => crate::settings::open(app, "setup"),
         "retry" => {
             if let Some(events) = lock(app).events.clone() {
                 let _ = events.try_send(Event::Retry);
