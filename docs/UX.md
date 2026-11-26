@@ -94,9 +94,9 @@ that turns red while recording. Its menu ([ux/menubar-onboarding.svg](ux/menubar
 - Status line: "Ready", or the last error in a few words.
 - **Paste last dictation** and **Copy last dictation** (R-18), the way out when paste fails.
   OpenWhispr and Wispr Flow both offer this.
-- "Hold Right Option to dictate" (the current hotkey, as a reminder).
-- Timing log on or off (R-30).
 - Settings…, Quit HyperMe.
+
+The full menu plan by phase is under [Menus](#menus).
 
 ### Onboarding
 
@@ -117,28 +117,108 @@ later phases add their own short "what's new" card.
 
 ### Settings window
 
-An ordinary window with a sidebar ([ux/settings.svg](ux/settings.svg)). Phase 1 sections:
+Phase 1 shows the first seven sections of the settings plan below: General, Shortcuts, Providers,
+Privacy, Advanced, About, and a Setup check at the top. Mockup: [ux/settings.svg](ux/settings.svg).
 
-| Section | Holds |
+## Settings, tabs and menus
+
+HyperMe needs more setup than a dictation app: two or more providers with keys, then
+connectors, scheduled jobs and meetings. The owner's bar is a UI as slim as Wispr Flow's, which
+the owner likes and uses every day. So the setup has to be well organised and mostly out of sight.
+
+### How the top tools organise it
+
+From their public docs, read on 26 November 2026.
+
+| Tool | How it is organised | Take or avoid |
+| --- | --- | --- |
+| Wispr Flow | A main window (the "Hub") whose sidebar holds what you use and personalise: Home, Dictionary, Snippets, Style, Notes and more. Settings sits at the bottom of that sidebar with few sections: General (shortcuts, microphone, languages), System (launch at login, Flow Bar, notifications, Dock icon) and Account ([docs](https://docs.wisprflow.ai/articles/5096240724-navigating-the-wispr-flow-app-desktop-ios-and-android)) | **Take:** personalisation is not a setting. Dictionary and style live where you use them, and Settings stays short |
+| Superwhisper | Settings has Configuration, Modes and Sound. Advanced settings stay hidden until you switch them on at the bottom of Configuration. You can open Settings from the menu bar, by right-clicking the recording window, with ⌘, or through a deep link (`superwhisper://settings`) ([docs](https://superwhisper.com/docs/get-started/settings.md), [advanced](https://superwhisper.com/docs/get-started/settings-advanced)) | **Take:** hide Advanced by default; many ways in; deep links to a page; "pause media while recording" |
+| Raycast | Settings on ⌘, with General for everyday options and Advanced for power users ([manual](https://manual.raycast.com/settings)) | **Take:** an everyday-versus-advanced split |
+| OpenWhispr | Nine sections. The speech and model sections each have per-feature tabs, and every tab keeps its own engine ([docs](https://docs.openwhispr.com/help/customise/settings-reference.md)) | **Avoid:** "switch to local" turns into many settings, and people look in the right section but on the wrong tab |
+| macOS System Settings | A sidebar with search at the top | **Take:** search across every setting |
+
+### Where each thing lives
+
+Every setting has exactly one home, chosen by how often it is used:
+
+| Place | What goes there | Examples |
+| --- | --- | --- |
+| Pill and orb | Nothing to configure. Right-click opens the same menu as the menu-bar icon | |
+| Menu-bar menu | Things you do several times a day, at most 8 items | Paste last dictation, start a meeting, pause notifications |
+| Panel tabs (Phase 3+) | Work, and the personalisation that comes from using it | Add a word to the dictionary from a dictation, mark a card "Not important" |
+| Settings window | Setup you do once, and preferences you rarely change | Keys, providers, shortcuts, connectors |
+| `config.toml` | Everything, for people who prefer a file. Settings writes to it, and Advanced has "Open config file" | Endpoints, thresholds, model names (R-26) |
+
+### The settings plan
+
+One window with a search field at the top and a sidebar in two groups. A section shows up only
+once its feature exists: no "coming soon" pages.
+
+| Group | Section | Holds | From |
+| --- | --- | --- | --- |
+| | **Setup check** | One line per requirement with a green tick or a fix button: microphone, accessibility, each provider key, each connector. The first page until everything is green, and the place every error links to | 1 |
+| Everyday | **General** | Launch at login; pill position and whether it shows while idle; sounds (start and stop: soft, off); pause media while dictating; theme follows the system | 1 |
+| | **Shortcuts** | Dictation (hold), hands-free, cancel (Esc), paste last dictation, open panel; later command and meeting. One list, with conflicts flagged | 1 |
+| | **Dictionary** | Words and sound-alike replacements, with import and export. Also reachable from the panel | 2 |
+| | **Style** | Cleanup level (none, light, medium) and a style per kind of app: personal chat, work chat, email, other. Same groups as Wispr Flow | 2 |
+| Setup | **Providers** | One page for every model service. Each row shows provider, model, key status and a Test button, and says which features use it ("Used by: dictation, meetings"). Choosing what each feature uses is a short table on the same page, never a tab per feature | 1 |
+| | **Connectors** | MCP servers (GitHub first). Each has its tools, a switch per tool, and "ask before" on for anything that writes (`CLAUDE.md`) | 3 |
+| | **Automations** | Scheduled jobs: a prompt, a schedule and a tool allowlist each (SPEC section 4), with last run and next run | 4 |
+| | **Meetings** | Calendar, capture (mic and system audio), cleanup **Cloud, Local or Off**, what happens after the meeting | 5 |
+| | **Privacy** | In plain words, what leaves the Mac and to whom; history kept or not and for how long; timing log; "no audio on disk" | 1 |
+| | **Advanced** | Hidden until "Show advanced" at the bottom of General: deadlines, thresholds, endpoints, log files, open config file, reset | 1 |
+| | **About** | Version, licence, updates (Phase 2), links | 1 |
+
+### Rules that keep it slim
+
+1. **Two keys to start.** With the defaults, a new user only enters a Speechmatics key and a Groq
+   key. Everything else has a good default.
+2. **Saves as you go**, as macOS settings do. No Save button. Each section has a quiet "Reset
+   section".
+3. **A test next to every secret.** A key field shows its state ("Works, 151 ms") and never the
+   key again (R-25).
+4. **Each page fits the window** at its default size. A longer page means it should be split, or
+   part of it belongs in Advanced.
+5. **Errors link to their row.** "Speechmatics key rejected · Settings" opens Providers with that
+   row highlighted. The app supports `hyperme://settings/<section>` links, like Superwhisper.
+6. **Search finds every setting**, including Advanced ones, by its name and by common words
+   ("hotkey" finds Shortcuts).
+7. **One name per thing.** Settings, menus and pill copy use the same words: "dictation", "pill",
+   "panel", "Hyper".
+
+### Menus
+
+The **menu-bar menu** grows by phase but stays at 8 items or fewer:
+
+| Item | From |
 | --- | --- |
-| General | Launch at login, start sound, pill position, show the pill while idle (off) |
-| Hotkey | Dictation hotkey, minimum hold, maximum length |
-| Speech | Provider and model (from config, R-26), key with Test, endpoint region |
-| Cleanup | Provider and model, key with Test, deadline (1000 ms), on or off |
-| Privacy | What leaves the Mac, in plain words; timing log; "no audio on disk" stated |
-| About | Version, licence, links |
+| Status: "Ready", or the open problem with a link to Setup check | 1 |
+| Paste last dictation ⌃⌥V · Copy last dictation | 1 |
+| Open HyperMe (the panel) | 3 |
+| Start meeting notes / Stop | 5 |
+| Pause Hyper for 1 hour (no nudges, no automations; dictation still works) | 4 |
+| Settings… ⌘, | 1 |
+| Quit HyperMe ⌘Q | 1 |
 
-Phase 2 adds **Dictionary** (words and sound-alike replacements, already in `flowbench`),
-**Cleanup level** (none, light, medium) and **Style per app**. OpenWhispr's settings show a trap
-to avoid: each feature keeps its own engine on a separate tab, so "switch to local" is not one
-setting ([docs](https://docs.openwhispr.com/help/customise/settings-reference.md)). HyperMe groups
-by step instead: one Speech page and one Cleanup page, each listing which features use it.
+Right-clicking the pill or the orb shows the same menu. Timing log moves to Privacy, so the menu
+holds actions only.
+
+### Panel tabs
+
+- A tab appears only once its feature is set up. A fresh install that has connected GitHub but
+  not mail sees Chat and Needs you, not To do.
+- Never more than six tabs. If a seventh ever comes up, two of them merge.
+- Badges only where they carry meaning: red on Needs you, grey on To do, nothing anywhere else.
+- The panel's sliders icon opens the Settings window at the section for the current tab (from
+  Meetings, it opens Meetings). There are no settings inside the panel, so the panel stays slim.
 
 ## Phase 2: quality and first release
 
+
 Still no panel required. What changes on screen:
 
-- **Dictionary** in Settings, plus "Add to dictionary" from the menu after a wrong word.
+- **Dictionary** and **Style** sections in Settings ([the settings plan](#the-settings-plan)).
 - **Cleanup level** and **style per app**, shown as the app's name on the pill while working, so
   the user sees which style ran.
 - **Hands-free**, if the owner adopts it here: double-tap the hotkey to lock recording, tap again
@@ -236,7 +316,7 @@ an earlier OpenWhispr slow and dislikes its UI (FIELD.md).
 | Paste failure | "Select a textbox first", Paste last transcript | Pasted without cleanup is announced | Raw text label, Paste last dictation |
 | Cleanup off or failed | Not documented here | "Pasted without AI cleanup" note; cleanup has its own model | Raw text label (R-20) |
 | Commands | Command Mode on its own shortcut, off by default | Four hotkeys, plus the agent's name in dictation | One key, routed, with the route shown (Phase 3) |
-| Settings | Shortcuts, mic, languages, Flow Bar visibility | Nine sections; engines per feature on tabs | Grouped by step: Speech, Cleanup, Dictionary |
+| Settings | Shortcuts, mic, languages, Flow Bar visibility | Nine sections; engines per feature on tabs | Setup check first; one Providers page with a feature table; Advanced hidden ([the settings plan](#the-settings-plan)) |
 
 Sources: [Wispr hands-free](https://docs.wisprflow.ai/articles/6391241694-use-flow-hands-free),
 [Wispr Command Mode](https://docs.wisprflow.ai/articles/4816967992-how-to-use-command-mode),
