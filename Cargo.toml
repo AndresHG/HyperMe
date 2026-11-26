@@ -3,7 +3,12 @@
 
 [workspace]
 resolver = "3"
-members = ["crates/hyperme-core", "crates/hyperme-platform", "crates/hyperme-providers"]
+members = [
+    "app/src-tauri",
+    "crates/hyperme-core",
+    "crates/hyperme-platform",
+    "crates/hyperme-providers",
+]
 exclude = ["spikes"]
 
 [workspace.package]
