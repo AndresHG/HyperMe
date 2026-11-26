@@ -2,7 +2,7 @@
 //! recommended setup costs a month for a given amount of talking a day. Every price and estimate
 //! comes from the config file, next to the model names (R-26); none is written here.
 
-use crate::config::Config;
+use crate::config::{Cleanup, Config, ModelEntry};
 
 /// A month for the estimate.
 const DAYS_PER_MONTH: f64 = 30.0;
@@ -51,16 +51,30 @@ impl Cost {
 /// The monthly cost of `minutes_per_day` of talking (time actually speaking), a month being 30
 /// days.
 pub fn monthly_cost(config: &Config, minutes_per_day: u32) -> Cost {
-    let hours = f64::from(minutes_per_day) * DAYS_PER_MONTH / 60.0;
-    let c = &config.cleanup;
-    let dictations = hours * c.estimate_dictations_per_hour();
-    let per_token = |price_per_million: f64| price_per_million / 1_000_000.0;
     Cost {
-        speech_usd: hours * config.speech.price_per_hour_usd(),
-        cleanup_usd: dictations
-            * (c.estimate_input_tokens() * per_token(c.price_input_per_million_usd())
-                + c.estimate_output_tokens() * per_token(c.price_output_per_million_usd())),
+        speech_usd: speech_usd(&config.speech_model(), minutes_per_day),
+        cleanup_usd: cleanup_usd(&config.cleanup_model(), &config.cleanup, minutes_per_day),
     }
+}
+
+/// Hours of talking in a month of `minutes_per_day`.
+fn hours_a_month(minutes_per_day: u32) -> f64 {
+    f64::from(minutes_per_day) * DAYS_PER_MONTH / 60.0
+}
+
+/// A month of one speech model, from its catalogue price; 0 when the catalogue has none.
+pub fn speech_usd(model: &ModelEntry, minutes_per_day: u32) -> f64 {
+    hours_a_month(minutes_per_day) * model.price_per_hour_usd.unwrap_or_default()
+}
+
+/// A month of one cleanup model, from its catalogue prices and the cleanup section's estimate
+/// of what an hour of talking sends; 0 when the catalogue has no prices.
+pub fn cleanup_usd(model: &ModelEntry, estimate: &Cleanup, minutes_per_day: u32) -> f64 {
+    let dictations = hours_a_month(minutes_per_day) * estimate.estimate_dictations_per_hour();
+    let per_token = |price_per_million: Option<f64>| price_per_million.unwrap_or_default() / 1e6;
+    dictations
+        * (estimate.estimate_input_tokens() * per_token(model.price_input_per_million_usd)
+            + estimate.estimate_output_tokens() * per_token(model.price_output_per_million_usd))
 }
 
 /// "About $6 a month", or cents under a dollar.
@@ -84,13 +98,15 @@ pub fn display_name(provider: &str) -> String {
 /// nothing when the config names no credit.
 pub fn free_credit_line(config: &Config) -> Option<String> {
     let credit = config.speech.free_credit_usd();
-    let price = config.speech.price_per_hour_usd();
+    let price = config.speech_model().price_per_hour_usd.unwrap_or_default();
     if credit <= 0.0 || price <= 0.0 {
         return None;
     }
     Some(format!(
         "{} gives new accounts USD {} of free credit, about {} hours of talking.",
-        display_name(&config.speech.provider),
+        config
+            .provider(&config.speech.provider)
+            .map_or_else(|| display_name(&config.speech.provider), |p| p.name.clone()),
         credit.round(),
         (credit / price).round()
     ))
