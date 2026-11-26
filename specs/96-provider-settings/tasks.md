@@ -21,7 +21,7 @@ now, beside Phase 1; Part B waits for Phase 2 (owner, 26 November 2026, P-1 in [
 | # | Slice | Proves | Size | Depends on |
 | --- | --- | --- | --- | --- |
 | 8 | OpenAI streaming speech (`openai-realtime`), ported from `spikes/flowbench` and checked against OpenAI's current docs; a local fake server; measured on the owner's samples, numbers to `docs/results/` | AC-11 (speech half) | M | 2 |
-| 9 | Cleanup fallback: `Fallback<AnyCleanup>`, inside the deadline; "via" on the pill; provider on the timing line | AC-10 | S | 2 |
+| 9 | Cleanup fallback: `Fallback<AnyCleanup>`, inside the deadline; "via" on the pill; provider on the timing line | AC-10, AC-10a | S | 2 |
 | 10 | Speech fallback: `Fallback<AnySpeech>` with the frame buffer and replay; mid-dictation drop sends saved audio on release; three-in-a-row notice | AC-11, AC-12, AC-13 | M | 8 |
 | 11 | Privacy section lists every provider set, fallbacks included; request-counting test | AC-14 | S | 3, 9 |
 | 12 | Speed check: flowbench replay and timing log with the recommended pair after slices 2 and 10, written to `docs/results/` | AC-15 | S | 2, 10 |

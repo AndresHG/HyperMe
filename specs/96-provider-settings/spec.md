@@ -1,6 +1,6 @@
 # Choose the speech and cleanup provider
 
-**Status:** draft, 26 November 2026; P-1 to P-3 answered by the owner the same day. Needs the owner's approval before any production code.
+**Status:** approved by the owner, 26 November 2026 (P-1 to P-3 answered the same day). Part A may start; Part B waits for Phase 2.
 **Issue:** [#96](https://github.com/AndresHG/hyperme/issues/96). **Size:** L.
 **Design:** [design.md](design.md). **Slices:** [tasks.md](tasks.md).
 **Traces to:** [PRD](../../docs/PRD.md) 7.1 ("Choose a provider and model per role", P1, phase 2;
@@ -127,6 +127,11 @@ mechanism later and are named only so the design leaves room for them.
 - R-24. If the cleanup call fails before the deadline and a fallback cleanup is set, the app
   shall send the transcript to the fallback within the time left; if that fails too, or time runs
   out, it shall paste the raw transcript as today.
+- R-24a. A fallback shall count as set only while its provider has a key that passed Test (or
+  needs no key). The app shall not save a fallback until its Test passes. If a fallback's key is
+  later missing or rejected, the app shall skip it, keep today's behaviour (raw text for cleanup,
+  the error and Retry for speech), and turn its row red in the Setup check; it shall never block
+  or slow a dictation because of a fallback.
 - R-25. If the speech session cannot open (network error, server error, or key rejected) and a
   fallback speech provider is set, the app shall open the fallback at once and stream the audio
   captured so far into it, so the dictation is not lost and the user does not repeat it.
@@ -171,6 +176,9 @@ mechanism later and are named only so the design leaves room for them.
   the server is slow. (R-21 to R-23)
 - AC-10. With a fallback cleanup set and the main one answering 500, the dictation is cleaned by
   the fallback inside the deadline, and the pill says "via" the fallback. (R-24, R-27)
+- AC-10a. A fallback cannot be saved before its Test passes; with a saved fallback whose key is
+  then deleted, a failing main provider gives today's behaviour with no extra delay, and the
+  Setup check shows the fallback's row red. (R-24a)
 - AC-11. With a fallback speech provider set and the main one refusing the connection, a dictation
   is transcribed by the fallback with no audio lost (the fake server receives every captured
   frame), and the timing line names the fallback. (R-25, R-27)
