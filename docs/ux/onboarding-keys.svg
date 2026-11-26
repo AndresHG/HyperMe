@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="620" viewBox="0 0 720 620" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Rounded', 'SF Pro Text', 'Helvetica Neue', Arial, sans-serif">
+  <title>HyperMe onboarding, step 4: recommended setup, keys and cost</title>
+  <rect width="720" height="620" fill="#2A2D34"/>
+  <rect x="40" y="20" width="640" height="580" rx="14" fill="#FBFAF8"/>
+  <circle cx="60" cy="38" r="6" fill="#FF5F57"/><circle cx="80" cy="38" r="6" fill="#FEBC2E"/><circle cx="100" cy="38" r="6" fill="#28C840"/>
+  <g fill="#D4D0C8"><circle cx="330" cy="40" r="4"/><circle cx="346" cy="40" r="4"/><circle cx="362" cy="40" r="4"/></g><circle cx="378" cy="40" r="4" fill="#7C5CFF"/><circle cx="394" cy="40" r="4" fill="#D4D0C8"/>
+  <text x="80" y="88" fill="#18181B" font-size="22" font-weight="700">Connect your speech and text services</text>
+  <text x="80" y="112" fill="#71717A" font-size="13">HyperMe uses your own keys. Nothing goes through our servers.</text>
+  <!-- recommended card -->
+  <rect x="80" y="130" width="560" height="64" rx="12" fill="#EFEBFF" stroke="#D9D3FF"/>
+  <rect x="96" y="146" width="100" height="20" rx="6" fill="#7C5CFF"/><text x="106" y="160" fill="#FFFFFF" font-size="11" font-weight="700">Recommended</text>
+  <text x="208" y="160" fill="#2E1F8F" font-size="13" font-weight="700">Speechmatics hears you, Groq cleans up the text.</text>
+  <text x="96" y="182" fill="#4B3BB5" font-size="12">The fastest pair we measured: 0.43 s from key release to text.</text>
+  <!-- keys -->
+  <g font-size="13">
+    <text x="80" y="226" fill="#18181B" font-weight="700">Speechmatics key</text>
+    <rect x="80" y="234" width="330" height="32" rx="8" fill="#FFFFFF" stroke="#E4E1DA"/><text x="94" y="255" fill="#A1A1AA">••••••••••••••••</text>
+    <rect x="420" y="234" width="96" height="32" rx="8" fill="#FFFFFF" stroke="#E4E1DA"/><text x="438" y="255" fill="#18181B" font-size="12">Get a key ↗</text>
+    <circle cx="534" cy="250" r="5" fill="#22C55E"/><text x="544" y="255" fill="#15803D" font-size="12">Works · 18 ms</text>
+    <text x="80" y="296" fill="#18181B" font-weight="700">Groq key</text>
+    <rect x="80" y="304" width="330" height="32" rx="8" fill="#FFFFFF" stroke="#7C5CFF"/><text x="94" y="325" fill="#A1A1AA">Paste your key</text>
+    <rect x="420" y="304" width="96" height="32" rx="8" fill="#FFFFFF" stroke="#E4E1DA"/><text x="438" y="325" fill="#18181B" font-size="12">Get a key ↗</text>
+    <rect x="526" y="304" width="58" height="32" rx="8" fill="#F2F0EC"/><text x="542" y="325" fill="#71717A" font-size="12">Test</text>
+    <text x="80" y="356" fill="#71717A" font-size="11">1. Sign up at console.groq.com  ·  2. Create an API key  ·  3. Paste it here</text>
+  </g>
+  <!-- cost -->
+  <text x="80" y="398" fill="#18181B" font-size="13" font-weight="700">How much do you talk a day?</text>
+  <g font-size="12">
+    <rect x="80" y="410" width="176" height="62" rx="10" fill="#FFFFFF" stroke="#E4E1DA"/>
+    <text x="96" y="434" fill="#18181B" font-weight="700">A little</text><text x="96" y="452" fill="#71717A" font-size="11">10 min a day</text><text x="180" y="452" fill="#18181B" font-weight="700">~$2/mo</text>
+    <rect x="272" y="410" width="176" height="62" rx="10" fill="#EFEBFF" stroke="#7C5CFF" stroke-width="1.5"/>
+    <text x="288" y="434" fill="#2E1F8F" font-weight="700">A fair amount</text><text x="288" y="452" fill="#4B3BB5" font-size="11">30 min a day</text><text x="372" y="452" fill="#2E1F8F" font-weight="700">~$6/mo</text>
+    <rect x="464" y="410" width="176" height="62" rx="10" fill="#FFFFFF" stroke="#E4E1DA"/>
+    <text x="480" y="434" fill="#18181B" font-weight="700">A lot</text><text x="480" y="452" fill="#71717A" font-size="11">1 hour a day</text><text x="560" y="452" fill="#18181B" font-weight="700">~$12/mo</text>
+  </g>
+  <text x="80" y="496" fill="#71717A" font-size="12">Speechmatics gives new accounts $100 of free credit, about 250 hours of talking.</text>
+  <text x="80" y="514" fill="#A1A1AA" font-size="11">Prices from the providers, checked 24 Nov 2026. You pay them directly.</text>
+  <!-- footer -->
+  <line x1="40" y1="540" x2="680" y2="540" stroke="#ECE9E3"/>
+  <text x="80" y="574" fill="#71717A" font-size="12">Use other providers</text>
+  <rect x="514" y="554" width="126" height="32" rx="9" fill="#D4D0C8"/><text x="562" y="575" fill="#FFFFFF" font-size="13" font-weight="700">Next</text>
+</svg>
