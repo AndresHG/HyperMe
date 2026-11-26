@@ -9,11 +9,12 @@ use core_graphics::event_source::{CGEventSource, CGEventSourceStateID};
 use hyperme_core::traits::{Error, ErrorKind, FocusInfo};
 use objc2::rc::Retained;
 use objc2::runtime::ProtocolObject;
+use objc2::MainThreadMarker;
 use objc2_app_kit::{
-    NSApplicationActivationOptions, NSPasteboard, NSPasteboardItem, NSPasteboardWriting,
-    NSRunningApplication, NSWorkspace,
+    NSApplication, NSApplicationActivationOptions, NSEvent, NSEventModifierFlags, NSEventType,
+    NSPasteboard, NSPasteboardItem, NSPasteboardWriting, NSRunningApplication, NSWorkspace,
 };
-use objc2_foundation::{NSArray, NSData, NSString};
+use objc2_foundation::{NSArray, NSData, NSPoint, NSString};
 
 use super::{Item, Keystrokes, Pasteboard};
 
@@ -171,4 +172,28 @@ pub fn activate(pid: i32) -> bool {
     NSRunningApplication::runningApplicationWithProcessIdentifier(pid).is_some_and(|app| {
         app.activateWithOptions(NSApplicationActivationOptions::ActivateAllWindows)
     })
+}
+
+/// Posts an empty application event, so AppKit runs one turn of its main loop. A closed window is
+/// freed on that turn; a menu-bar app at rest gets no events, so without this the window and its
+/// backing store stay until something else happens (spec 98, AC-2). Main thread only; elsewhere
+/// it does nothing.
+pub fn wake_main_loop() {
+    let Some(main) = MainThreadMarker::new() else {
+        return;
+    };
+    let event = NSEvent::otherEventWithType_location_modifierFlags_timestamp_windowNumber_context_subtype_data1_data2(
+        NSEventType::ApplicationDefined,
+        NSPoint::new(0.0, 0.0),
+        NSEventModifierFlags::empty(),
+        0.0,
+        0,
+        None,
+        0,
+        0,
+        0,
+    );
+    if let Some(event) = event {
+        NSApplication::sharedApplication(main).postEvent_atStart(&event, false);
+    }
 }

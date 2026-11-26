@@ -47,9 +47,16 @@
   .stat span { font-size: 11px; color: var(--muted); }
   h2 { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin: 0 0 8px; }
   .day { font-size: 11px; font-weight: 600; color: var(--muted); margin: 18px 0 4px; }
-  .rows { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--card); }
-  .row { display: grid; grid-template-columns: 52px 110px 1fr; gap: 10px; align-items: baseline; padding: 8px 12px; border-top: 1px solid var(--line); }
-  .row:first-child { border-top: 0; }
+  /* Rows sit in a list that keeps only those near the viewport (AC-2): each is placed by its
+     offset, collapsed rows have a fixed height, and the first and last of a day round the group. */
+  #recent, #list { position: relative; }
+  #recent > .row, #recent > .day, #list > .row, #list > .day { position: absolute; left: 0; right: 0; }
+  .day { height: 40px; box-sizing: border-box; padding-top: 18px; margin: 0 !important; }
+  .row { display: grid; grid-template-columns: 52px 110px 1fr; gap: 10px; align-items: baseline; padding: 8px 12px; height: 36px; box-sizing: border-box; overflow: hidden; background: var(--card); border: 1px solid var(--line); border-top: 0; }
+  .row.first { border-top: 1px solid var(--line); border-radius: 12px 12px 0 0; }
+  .row.last { border-radius: 0 0 12px 12px; }
+  .row.first.last { border-radius: 12px; }
+  .row.open { height: auto; }
   .row:hover { background: var(--hover); }
   .row time { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 12px; }
   .row .app { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -245,12 +252,123 @@
 
   const queryWords = () => (historyQuery.trim() ? Array.from(new Set(historyQuery.trim().split(/\s+/).map((w) => Array.from(w).map(foldChar).join('')))) : []);
 
-  function row(item, words) {
+  // Per-row state that outlives the row's element: the step in progress, a notice, a retry.
+  const ui = new Map();
+  const stateOf = (id) => { if (!ui.has(id)) ui.set(id, { mode: null, say: null, working: false }); return ui.get(id); };
+
+  // ---- A list that keeps only the rows near the viewport in the page (AC-2) ----
+  // Collapsed rows and day headings have fixed heights; the selected row is measured. Item data
+  // stays in memory (a few hundred bytes each); only elements come and go.
+  const ROW_H = 36;
+  const DAY_H = 40;
+  const OVERSCAN = 600;
+  const main = $('main');
+
+  class List {
+    constructor(el, empty) {
+      this.el = el;
+      this.empty = empty;
+      this.items = [];
+      this.words = [];
+      this.entries = [];
+      this.nodes = new Map();
+      this.tall = new Map();
+    }
+    set(items, words = []) { this.items = items.slice(); this.words = words; this.nodes.forEach((n) => n.remove()); this.nodes.clear(); this.rebuild(); }
+    append(items) { this.items.push(...items); this.rebuild(); }
+    prepend(items) { this.items.unshift(...items); this.nodes.forEach((n) => n.remove()); this.nodes.clear(); this.rebuild(); }
+    has(id) { return this.items.some((i) => i.id === id); }
+    get(id) { return this.items.find((i) => i.id === id); }
+    remove(id) { this.items = this.items.filter((i) => i.id !== id); this.forget(id); this.rebuild(); }
+    replace(item) { const at = this.items.findIndex((i) => i.id === item.id); if (at !== -1) { this.items[at] = item; this.redraw(item.id); } }
+    forget(id) { this.nodes.forEach((n, k) => { if (k.endsWith(':' + id)) { n.remove(); this.nodes.delete(k); } }); }
+    redraw(id) { this.forget(id); this.layout(); this.render(); }
+    visible() { return this.el.closest('section').classList.contains('on'); }
+    rebuild() {
+      this.entries = [];
+      let label = null;
+      for (const item of this.items) {
+        const day = dayLabel(item.started_ms);
+        if (day !== label) {
+          if (this.entries.length) this.entries[this.entries.length - 1].last = true;
+          this.entries.push({ key: 'day:' + day, day });
+          label = day;
+          this.entries.push({ key: 'row:' + item.id, item, first: true });
+        } else {
+          this.entries.push({ key: 'row:' + item.id, item });
+        }
+      }
+      if (this.entries.length) this.entries[this.entries.length - 1].last = true;
+      this.layout();
+      this.render();
+    }
+    height(entry) {
+      if (entry.day) return DAY_H;
+      return isSelected(entry.item.id) || stateOf(entry.item.id).working ? (this.tall.get(entry.item.id) || ROW_H * 3) : ROW_H;
+    }
+    layout() {
+      let top = 0;
+      for (const entry of this.entries) { entry.top = top; top += this.height(entry); }
+      this.total = top;
+    }
+    render() {
+      if (this.items.length === 0) {
+        this.nodes.forEach((n) => n.remove()); this.nodes.clear();
+        this.el.style.height = '';
+        if (this.empty && !this.el.querySelector('.empty')) this.el.replaceChildren(Object.assign(document.createElement('p'), { className: 'empty', textContent: this.empty() }));
+        return;
+      }
+      this.el.querySelector('.empty')?.remove();
+      this.el.style.height = this.total + 'px';
+      if (!this.visible()) return;
+      const offset = this.el.offsetTop;
+      const from = main.scrollTop - offset - OVERSCAN;
+      const to = main.scrollTop - offset + main.clientHeight + OVERSCAN;
+      const keep = new Set();
+      let remeasure = false;
+      for (const entry of this.entries) {
+        const bottom = entry.top + this.height(entry);
+        if (bottom < from || entry.top > to) continue;
+        keep.add(entry.key);
+        let node = this.nodes.get(entry.key);
+        if (!node) {
+          node = entry.day ? dayNode(entry.day) : rowNode(entry, this.words);
+          this.nodes.set(entry.key, node);
+          this.el.append(node);
+        }
+        node.style.top = entry.top + 'px';
+        if (!entry.day && node.classList.contains('open')) {
+          const h = node.offsetHeight;
+          if (h && h !== this.tall.get(entry.item.id)) { this.tall.set(entry.item.id, h); remeasure = true; }
+        }
+      }
+      this.nodes.forEach((n, k) => { if (!keep.has(k)) { n.remove(); this.nodes.delete(k); } });
+      if (remeasure) { this.layout(); this.render(); }
+    }
+    node(id) { return this.nodes.get('row:' + id); }
+    top(id) { const e = this.entries.find((x) => x.item && x.item.id === id); return e ? e.top : 0; }
+  }
+
+  const recentList = new List($('recent'), () => (info.history ? 'No dictations in the last 7 days. Hold your shortcut and talk.' : 'History is off, and no dictation is waiting for a retry.'));
+  const historyList = new List($('list'), null);
+  const lists = [recentList, historyList];
+  const currentList = () => ($('history').classList.contains('on') ? historyList : recentList);
+
+  function dayNode(label) {
+    const d = document.createElement('div');
+    d.className = 'day';
+    d.textContent = label;
+    return d;
+  }
+
+  function rowNode(entry, words) {
+    const item = entry.item;
+    const state = stateOf(item.id);
     const div = document.createElement('div');
-    div.className = 'row' + (item.state === 'failed' ? ' failed' : '');
+    const open = isSelected(item.id) || state.working;
+    div.className = 'row' + (item.state === 'failed' ? ' failed' : '') + (entry.first ? ' first' : '') + (entry.last ? ' last' : '') + (isSelected(item.id) ? ' sel' : '') + (state.working ? ' working' : '') + (open ? ' open' : '');
     div.dataset.id = item.id;
     div.tabIndex = -1;
-    div.item = item;
     const time = document.createElement('time');
     time.textContent = timeFormat.format(new Date(item.started_ms));
     const app = document.createElement('span');
@@ -260,52 +378,24 @@
     text.className = 'text';
     if (item.state === 'failed') text.textContent = item.message || 'Failed';
     else fillText(text, item.text || '', words);
-    const bar = document.createElement('div');
-    bar.className = 'bar';
-    div.append(time, app, text, bar);
-    div.addEventListener('mousedown', () => select(div, false));
-    text.addEventListener('mouseup', () => offerFix(div));
-    text.addEventListener('dblclick', () => setTimeout(() => offerFix(div), 0));
+    div.append(time, app, text);
+    if (open) {
+      const bar = document.createElement('div');
+      bar.className = 'bar';
+      drawBar(bar, item);
+      div.append(bar);
+    }
+    div.addEventListener('mousedown', (e) => { if (!e.target.closest('.bar')) select(item.id, false); });
+    text.addEventListener('mouseup', () => offerFix(item.id));
+    text.addEventListener('dblclick', () => setTimeout(() => offerFix(item.id), 0));
     return div;
   }
 
-  // Appends items to `into`, starting a new day group whenever the day changes.
-  function appendGrouped(into, items, words) {
-    for (const item of items) {
-      const label = dayLabel(item.started_ms);
-      let group = into.lastElementChild;
-      if (!group || group.dataset.day !== label) {
-        group = dayGroup(label);
-        into.append(group);
-      }
-      group.querySelector('.rows').append(row(item, words));
-    }
-  }
-
-  function dayGroup(label) {
-    const heading = document.createElement('div');
-    heading.className = 'day';
-    heading.textContent = label;
-    const rows = document.createElement('div');
-    rows.className = 'rows';
-    const group = document.createElement('div');
-    group.dataset.day = label;
-    group.append(heading, rows);
-    return group;
-  }
-
-  // New dictations go on top (AC-15).
-  function prependGrouped(into, items) {
-    for (const item of items.slice().reverse()) {
-      const label = dayLabel(item.started_ms);
-      let group = into.firstElementChild;
-      if (!group || group.dataset.day !== label) {
-        group = dayGroup(label);
-        into.prepend(group);
-      }
-      group.querySelector('.rows').prepend(row(item, []));
-    }
-  }
+  main.addEventListener('scroll', () => {
+    currentList().render();
+    if ($('history').classList.contains('on') && main.scrollTop + main.clientHeight > main.scrollHeight - 600) loadMoreHistory();
+  }, { passive: true });
+  window.addEventListener('resize', () => currentList().render());
 
   const cursor = (items) => {
     const last = items[items.length - 1];
@@ -313,46 +403,50 @@
   };
 
   // ---- Selection and actions (R-13 to R-18) ----
-  let selected = null;
+  let selected = null; // { list, id }
+  const isSelected = (id) => selected !== null && selected.id === id;
+  const selectedItem = () => (selected ? selected.list.get(selected.id) : null);
 
-  function visibleRows() {
-    const section = document.querySelector('main > section.on');
-    return section ? Array.from(section.querySelectorAll('.row')) : [];
+  // Redraws a row wherever it shows.
+  function refresh(id) { for (const l of lists) if (l.has(id)) l.redraw(id); }
+
+  function select(id, scroll = true, list = currentList()) {
+    if (selected && selected.id === id && selected.list === list) return;
+    const previous = selected;
+    selected = id === null ? null : { list, id };
+    closeMenu();
+    if (previous) { stateOf(previous.id).mode = null; refresh(previous.id); }
+    if (id === null) return;
+    refresh(id);
+    if (scroll) reveal(list, id);
+    list.node(id)?.focus({ preventScroll: true });
   }
 
-  function select(div, scroll = true) {
-    if (selected === div) return;
-    const previous = selected;
-    selected = div;
-    if (previous) { previous.classList.remove('sel'); previous.mode = null; drawBar(previous); }
-    closeMenu();
-    if (!div) return;
-    div.classList.add('sel');
-    drawBar(div);
-    if (scroll) div.scrollIntoView({ block: 'nearest' });
+  function reveal(list, id) {
+    const top = list.el.offsetTop + list.top(id);
+    const height = list.tall.get(id) || ROW_H * 3;
+    if (top < main.scrollTop) main.scrollTop = top - 8;
+    else if (top + height > main.scrollTop + main.clientHeight) main.scrollTop = top + height - main.clientHeight + 8;
+    list.render();
   }
 
   function move(step) {
-    const rows = visibleRows();
-    if (rows.length === 0) return;
-    const at = rows.indexOf(selected);
-    const next = at === -1 ? (step > 0 ? 0 : rows.length - 1) : Math.max(0, Math.min(rows.length - 1, at + step));
-    select(rows[next]);
-    if (step > 0 && next >= rows.length - 3 && $('history').classList.contains('on')) loadMoreHistory();
+    const list = currentList();
+    const items = list.items;
+    if (items.length === 0) return;
+    const at = selected && selected.list === list ? items.findIndex((i) => i.id === selected.id) : -1;
+    const next = at === -1 ? (step > 0 ? 0 : items.length - 1) : Math.max(0, Math.min(items.length - 1, at + step));
+    select(items[next].id, true, list);
+    if (step > 0 && next >= items.length - 5 && list === historyList) loadMoreHistory();
   }
 
   const key = (k) => { const e = document.createElement('kbd'); e.textContent = k; return e; };
   const span = (cls, ...parts) => { const e = document.createElement('span'); e.className = cls; e.append(...parts); return e; };
 
   // The bar under a selected row: its actions, or the step in progress (R-13, R-16 to R-18).
-  function drawBar(div) {
-    const bar = div.querySelector('.bar');
-    const item = div.item;
-    bar.replaceChildren();
-    // Only the selected row and a row with a retry running show a bar; the others stay light,
-    // so a long Recent or History costs little memory (AC-2).
-    if (div !== selected && !div.classList.contains('working')) return;
-    const mode = div.mode;
+  function drawBar(bar, item) {
+    const state = stateOf(item.id);
+    const mode = state.mode;
     if (mode && mode.kind === 'confirm-delete') {
       bar.append(span('ask', 'Delete this dictation and its audio? ', key('↵'), ' Delete · ', key('Esc'), ' Keep'));
       return;
@@ -366,9 +460,10 @@
       input.placeholder = 'Should be';
       input.setAttribute('aria-label', 'What “' + mode.heard + '” should be');
       input.value = mode.wanted || '';
+      input.addEventListener('input', () => { mode.wanted = input.value; });
       input.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); mode.wanted = input.value; sendFix(div, false); }
-        if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); div.mode = null; drawBar(div); div.focus(); }
+        if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); mode.wanted = input.value; sendFix(item.id, false); }
+        if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); state.mode = null; refresh(item.id); }
       });
       bar.append(span('say', '“' + mode.heard + '” should be: '), input, span('say', ' ', key('↵')));
       setTimeout(() => input.focus(), 0);
@@ -378,138 +473,121 @@
       bar.append(span('ask warn', '“' + mode.heard + '” is a common word and will be replaced everywhere. ', key('↵'), ' Replace anyway · ', key('Esc'), ' Cancel'));
       return;
     }
-    if (div.classList.contains('working')) {
+    if (state.working) {
       bar.append(span('say', 'Working…'));
       return;
     }
     for (const action of item.actions || []) {
       const button = document.createElement('button');
       button.append(action.label, key(action.key));
-      button.addEventListener('mousedown', (e) => e.stopPropagation());
-      button.addEventListener('click', () => run(div, action.id));
+      button.addEventListener('click', () => run(item.id, action.id));
       bar.append(button);
     }
-    if (div.say) bar.append(span('say' + (div.say.bad ? ' bad' : ''), div.say.text));
+    if (state.say) bar.append(span('say' + (state.say.bad ? ' bad' : ''), state.say.text));
   }
 
-  function say(div, text, bad = false) {
-    div.say = { text, bad };
-    drawBar(div);
-    const mine = div.say;
-    if (!bad) setTimeout(() => { if (div.say === mine) { div.say = null; drawBar(div); } }, 3000);
+  function say(id, text, bad = false) {
+    const state = stateOf(id);
+    const mine = { text, bad };
+    state.say = mine;
+    refresh(id);
+    if (!bad) setTimeout(() => { if (state.say === mine) { state.say = null; refresh(id); } }, 3000);
   }
 
-  const has = (div, id) => (div.item.actions || []).some((a) => a.id === id);
+  const itemOf = (id) => { for (const l of lists) { const i = l.get(id); if (i) return i; } return null; };
+  const has = (id, action) => (itemOf(id)?.actions || []).some((a) => a.id === action);
 
-  async function run(div, id) {
-    if (!div || !has(div, id)) return;
-    select(div, false);
-    const itemId = div.item.id;
+  async function run(id, action) {
+    if (id === null || !has(id, action)) return;
     try {
-      if (id === 'copy') { await invoke('home_copy', { id: itemId }); say(div, 'Copied'); }
-      if (id === 'paste') {
-        const outcome = await invoke('home_paste', { id: itemId });
-        say(div, outcome.pasted ? 'Pasted' : outcome.notice);
+      if (action === 'copy') { await invoke('home_copy', { id }); say(id, 'Copied'); }
+      if (action === 'paste') {
+        const outcome = await invoke('home_paste', { id });
+        say(id, outcome.pasted ? 'Pasted' : outcome.notice);
       }
-      if (id === 'retry') {
-        await invoke('home_retry', { id: itemId });
-        setWorking(itemId, true);
-      }
-      if (id === 'fix') { div.mode = { kind: 'fix-select' }; drawBar(div); offerFix(div); }
-      if (id === 'delete') { div.mode = { kind: 'confirm-delete' }; drawBar(div); div.focus(); }
+      if (action === 'retry') { await invoke('home_retry', { id }); setWorking(id, true); }
+      if (action === 'fix') { stateOf(id).mode = { kind: 'fix-select' }; refresh(id); offerFix(id); }
+      if (action === 'delete') { stateOf(id).mode = { kind: 'confirm-delete' }; refresh(id); }
     } catch (error) {
-      say(div, String(error), true);
+      say(id, String(error), true);
     }
   }
 
-  async function confirmDelete(div) {
+  async function confirmDelete(id) {
     try {
-      await invoke('home_delete', { id: div.item.id });
-      const rows = visibleRows();
-      const next = rows[rows.indexOf(div) + 1] || rows[rows.indexOf(div) - 1] || null;
-      removeRows(div.item.id);
-      select(next && next.isConnected ? next : null);
+      await invoke('home_delete', { id });
+      const list = selected ? selected.list : currentList();
+      const at = list.items.findIndex((i) => i.id === id);
+      const next = list.items[at + 1] || list.items[at - 1] || null;
+      selected = null;
+      ui.delete(id);
+      for (const l of lists) if (l.has(id)) l.remove(id);
+      if (next) select(next.id, true, list);
     } catch (error) {
-      div.mode = null;
-      say(div, String(error), true);
+      stateOf(id).mode = null;
+      say(id, String(error), true);
     }
-  }
-
-  function removeRows(id) {
-    document.querySelectorAll('.row[data-id="' + id + '"]').forEach((r) => {
-      const group = r.closest('[data-day]');
-      r.remove();
-      if (group && !group.querySelector('.row')) group.remove();
-    });
-  }
-
-  // Every copy of a row (Recent and History) shows the same state.
-  function rowsFor(id) {
-    return Array.from(document.querySelectorAll('.row[data-id="' + id + '"]'));
   }
 
   function setWorking(id, on) {
-    for (const r of rowsFor(id)) { r.classList.toggle('working', on); drawBar(r); }
+    stateOf(id).working = on;
+    refresh(id);
   }
 
   function updateItem(id, item) {
-    for (const r of rowsFor(id)) {
-      r.item = item;
-      const text = r.querySelector('.text');
-      r.classList.toggle('failed', item.state === 'failed');
-      if (item.state === 'failed') text.textContent = item.message || 'Failed';
-      else fillText(text, item.text || '', r.closest('#list') ? queryWords() : []);
-      drawBar(r);
-    }
+    for (const l of lists) l.replace(item);
   }
 
   // Fix a word (R-17): a selection inside the selected row's text starts it, once asked for.
-  function offerFix(div) {
-    if (!info.dictionary || !has(div, 'fix')) return;
-    if (!div.mode || (div.mode.kind !== 'fix-select' && div.mode.kind !== 'fix-type')) return;
+  function offerFix(id) {
+    const item = itemOf(id);
+    const state = stateOf(id);
+    if (!info.dictionary || !item || !has(id, 'fix')) return;
+    if (!state.mode || (state.mode.kind !== 'fix-select' && state.mode.kind !== 'fix-type')) return;
     const chosen = String(window.getSelection() || '').trim();
-    if (!chosen || !(div.item.text || '').includes(chosen)) return;
-    div.mode = { kind: 'fix-type', heard: chosen, wanted: '' };
-    drawBar(div);
+    if (!chosen || !(item.text || '').includes(chosen)) return;
+    state.mode = { kind: 'fix-type', heard: chosen, wanted: '' };
+    refresh(id);
   }
 
-  async function sendFix(div, confirmed) {
-    const mode = div.mode;
+  async function sendFix(id, confirmed) {
+    const state = stateOf(id);
+    const mode = state.mode;
     try {
-      const outcome = await invoke('home_fix_word', { id: div.item.id, heard: mode.heard, wanted: mode.wanted, confirmedCommon: confirmed });
+      const outcome = await invoke('home_fix_word', { id, heard: mode.heard, wanted: mode.wanted, confirmedCommon: confirmed });
       if (outcome.outcome === 'needs_confirm') {
-        div.mode = { kind: 'fix-confirm', heard: mode.heard, wanted: mode.wanted };
-        drawBar(div);
-        div.focus();
+        state.mode = { kind: 'fix-confirm', heard: mode.heard, wanted: mode.wanted };
+        refresh(id);
         return;
       }
-      div.mode = null;
-      const item = await invoke('home_item', { id: div.item.id });
-      if (item) updateItem(item.id, item);
-      say(div, 'Fixed. Press ↵ to paste it again');
-      div.focus();
+      state.mode = null;
+      const item = await invoke('home_item', { id });
+      if (item) updateItem(id, item);
+      say(id, 'Fixed. Press ↵ to paste it again');
     } catch (error) {
-      div.mode = null;
-      say(div, String(error), true);
+      state.mode = null;
+      say(id, String(error), true);
     }
   }
 
   // ⌘K: the selected row's actions with their keys (R-13).
   let menuAt = 0;
   function openMenu() {
-    if (!selected) return;
+    const item = selectedItem();
+    if (!item) return;
     const menu = $('menu');
-    const list = selected.item.actions || [];
+    const list = item.actions || [];
     menu.replaceChildren(...list.map((a, i) => {
       const d = document.createElement('div');
       d.setAttribute('role', 'menuitem');
       d.append(a.label, key(a.key));
-      d.addEventListener('mousedown', (e) => { e.preventDefault(); const target = selected; closeMenu(); run(target, a.id); });
+      d.addEventListener('mousedown', (e) => { e.preventDefault(); closeMenu(); run(item.id, a.id); });
       d.classList.toggle('on', i === 0);
       return d;
     }));
     menuAt = 0;
-    const box = selected.getBoundingClientRect();
+    const node = selected.list.node(item.id);
+    const box = node ? node.getBoundingClientRect() : { right: window.innerWidth - 40, top: 100 };
     menu.style.left = Math.max(12, box.right - 220) + 'px';
     menu.style.top = Math.min(window.innerHeight - 40 * list.length - 12, box.top + 30) + 'px';
     menu.classList.add('on');
@@ -527,9 +605,9 @@
         items.forEach((d, i) => d.classList.toggle('on', i === menuAt));
       } else if (e.key === 'Enter') {
         e.preventDefault();
-        const action = (selected.item.actions || [])[menuAt];
+        const action = (selectedItem()?.actions || [])[menuAt];
         closeMenu();
-        if (action) run(selected, action.id);
+        if (action) run(selected.id, action.id);
       } else if (e.key === 'Escape' || (e.metaKey && e.key === 'k')) {
         e.preventDefault();
         closeMenu();
@@ -544,24 +622,25 @@
       return;
     }
     if (!selected || (typing && e.target.id !== 'search')) return;
-    const mode = selected.mode;
+    const id = selected.id;
+    const mode = stateOf(id).mode;
     if (e.key === 'Escape') {
       e.preventDefault();
-      if (mode) { selected.mode = null; drawBar(selected); } else select(null);
+      if (mode) { stateOf(id).mode = null; refresh(id); } else select(null);
       return;
     }
     if (e.key === 'Enter' && !typing) {
       e.preventDefault();
-      if (mode && mode.kind === 'confirm-delete') confirmDelete(selected);
-      else if (mode && mode.kind === 'fix-confirm') sendFix(selected, true);
-      else if (!mode) run(selected, 'paste');
+      if (mode && mode.kind === 'confirm-delete') confirmDelete(id);
+      else if (mode && mode.kind === 'fix-confirm') sendFix(id, true);
+      else if (!mode) run(id, 'paste');
       return;
     }
     if (!e.metaKey || e.altKey || e.ctrlKey || typing) return;
-    if (e.key === 'c' && String(window.getSelection() || '') === '') { e.preventDefault(); run(selected, 'copy'); }
-    else if (e.key === 'r') { e.preventDefault(); run(selected, 'retry'); }
-    else if (e.key === 'f') { e.preventDefault(); run(selected, 'fix'); }
-    else if (e.key === 'Backspace') { e.preventDefault(); run(selected, 'delete'); }
+    if (e.key === 'c' && String(window.getSelection() || '') === '') { e.preventDefault(); run(id, 'copy'); }
+    else if (e.key === 'r') { e.preventDefault(); run(id, 'retry'); }
+    else if (e.key === 'f') { e.preventDefault(); run(id, 'fix'); }
+    else if (e.key === 'Backspace') { e.preventDefault(); run(id, 'delete'); }
     else if (e.key === 'k') { e.preventDefault(); openMenu(); }
   });
   document.addEventListener('mousedown', (e) => { if (!e.target.closest('#menu')) closeMenu(); });
@@ -580,8 +659,7 @@
     return Math.floor(minutes / 60) + ' h ' + (minutes % 60) + ' min';
   }
 
-  async function loadHome() {
-    greet();
+  async function loadStats() {
     try {
       const stats = await invoke('home_stats', { utcOffsetMinutes: -new Date().getTimezoneOffset() });
       $('words').textContent = stats.words_this_week.toLocaleString(LOCALE);
@@ -590,9 +668,13 @@
       $('words').textContent = '–';
       $('saved').textContent = '–';
     }
+  }
+
+  async function loadHome() {
+    greet();
+    await loadStats();
     await loadBlocks();
-    const recent = $('recent');
-    if (selected && recent.contains(selected)) selected = null;
+    if (selected && selected.list === recentList) selected = null;
     try {
       // The last 7 days, a page at a time; with history off, only what waits for a retry.
       const since = startOfDay(Date.now()) - 6 * DAY_MS;
@@ -606,16 +688,10 @@
         if (page.length < PAGE || fresh.length < page.length) break;
         before = cursor(page);
       }
-      recent.replaceChildren();
-      if (items.length === 0) {
-        recent.innerHTML = info.history
-          ? '<p class="empty">No dictations in the last 7 days. Hold your shortcut and talk.</p>'
-          : '<p class="empty">History is off, and no dictation is waiting for a retry.</p>';
-      } else {
-        appendGrouped(recent, items);
-      }
+      recentList.set(items);
     } catch (error) {
-      recent.replaceChildren(Object.assign(document.createElement('p'), { className: 'error', textContent: String(error) }));
+      recentList.set([]);
+      $('recent').replaceChildren(Object.assign(document.createElement('p'), { className: 'error', textContent: String(error) }));
     }
   }
 
@@ -654,10 +730,10 @@
     historyBefore = null;
     historyDone = false;
     historyToken += 1;
-    if (selected && $('list').contains(selected)) selected = null;
+    if (selected && selected.list === historyList) selected = null;
     $('off').hidden = info.history;
     $('search').hidden = !info.history;
-    $('list').replaceChildren();
+    historyList.set([], queryWords());
     $('more').textContent = '';
     loadMoreHistory();
   }
@@ -673,10 +749,10 @@
           ? await invoke('home_search', { query: historyQuery, before: historyBefore, limit: PAGE })
           : await invoke('home_page', { before: historyBefore, limit: PAGE });
       if (token !== historyToken) return;
-      appendGrouped($('list'), page, queryWords());
+      historyList.append(page);
       historyBefore = cursor(page) || historyBefore;
       historyDone = !info.history || page.length < PAGE;
-      if ($('list').childElementCount === 0) {
+      if (historyList.items.length === 0) {
         $('more').textContent = !info.history ? 'No dictation is waiting for a retry.' : historyQuery.trim() ? 'Nothing matches.' : 'No dictations yet.';
       } else {
         $('more').textContent = historyDone ? '' : 'Scroll for more';
@@ -697,19 +773,12 @@
     }, 120);
   });
 
-  $('main').addEventListener('scroll', () => {
-    const main = $('main');
-    if ($('history').classList.contains('on') && main.scrollTop + main.clientHeight > main.scrollHeight - 300) {
-      loadMoreHistory();
-    }
-  }, { passive: true });
-
   // Typing anywhere in History goes to the search field. It is not focused on entry: a focused
   // field kept about 20 MB of graphics memory alive (AC-2).
   document.addEventListener('keydown', (e) => {
     if (!$('history').classList.contains('on') || e.metaKey || e.ctrlKey || e.altKey) return;
     if (e.target instanceof HTMLInputElement || e.key.length !== 1 || $('search').hidden) return;
-    if (selected && selected.mode) return;
+    if (selected && stateOf(selected.id).mode) return;
     $('search').focus();
   });
 
@@ -717,25 +786,15 @@
 
   // A dictation made while Home is open goes on top of Recent and History (AC-15).
   async function showNew() {
-    const fetchNew = async (container) => {
-      const known = new Set(Array.from(container.querySelectorAll('.row')).map((r) => Number(r.dataset.id)));
-      const first = container.querySelector('.row');
-      const newest = first ? first.item.started_ms : -Infinity;
-      const page = info.history ? await invoke('home_page', { before: null, limit: PAGE }) : await invoke('home_failed');
-      return page.filter((i) => !known.has(i.id) && i.started_ms >= newest);
-    };
     try {
-      if ($('recent').querySelector('.row') || $('recent').querySelector('.empty')) {
-        const fresh = await fetchNew($('recent'));
-        if (fresh.length) { $('recent').querySelector('.empty')?.remove(); prependGrouped($('recent'), fresh); }
-        const stats = await invoke('home_stats', { utcOffsetMinutes: -new Date().getTimezoneOffset() });
-        $('words').textContent = stats.words_this_week.toLocaleString(LOCALE);
-        $('saved').textContent = duration(stats.seconds_saved);
+      const page = info.history ? await invoke('home_page', { before: null, limit: PAGE }) : await invoke('home_failed');
+      for (const list of [recentList, historyList]) {
+        if (list === historyList && (historyQuery.trim() || list.items.length === 0)) continue;
+        const newest = list.items.length ? list.items[0].started_ms : -Infinity;
+        const fresh = page.filter((i) => !list.has(i.id) && i.started_ms >= newest);
+        if (fresh.length) list.prepend(fresh);
       }
-      if (!historyQuery.trim() && $('list').childElementCount > 0) {
-        const fresh = await fetchNew($('list'));
-        if (fresh.length) prependGrouped($('list'), fresh);
-      }
+      await loadStats();
     } catch (_) { /* the next open shows them */ }
   }
 
@@ -746,13 +805,15 @@
   listen('home://retry', async (e) => {
     const { id, state, message } = e.payload;
     if (state === 'working') { setWorking(id, true); return; }
-    setWorking(id, false);
+    stateOf(id).working = false;
     if (state === 'done') {
       const item = await invoke('home_item', { id });
       if (item) updateItem(id, item);
-      rowsFor(id).forEach((r) => say(r, 'Retried · new text copied'));
+      say(id, 'Retried · new text copied');
     } else if (state === 'failed') {
-      rowsFor(id).forEach((r) => say(r, message, true));
+      say(id, message, true);
+    } else {
+      refresh(id);
     }
   });
 

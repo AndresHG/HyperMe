@@ -446,6 +446,16 @@ mod window {
         if !others.iter().any(|w| app.get_webview_window(w).is_some()) {
             let _ = app.set_activation_policy(tauri::ActivationPolicy::Accessory);
         }
+        // AppKit frees the closed window on its next main-loop turn; post an event so that turn
+        // comes now, not at the next open (AC-2). Twice, a moment apart: the first turn runs
+        // the close, the second the release.
+        let app = app.clone();
+        std::thread::spawn(move || {
+            for _ in 0..2 {
+                std::thread::sleep(Duration::from_millis(300));
+                let _ = app.run_on_main_thread(mac::wake_main_loop);
+            }
+        });
     }
 
     fn own_pid() -> i32 {

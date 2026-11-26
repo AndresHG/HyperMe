@@ -18,8 +18,8 @@ core-graphics = "0.25.0"
 core-foundation = "0.10.1"
 objc2 = "0.6.5"
 security-framework = "3.7.0"
-objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSArray", "NSData", "NSEnumerator", "NSString"] }
-objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "libc", "NSPasteboard", "NSPasteboardItem", "NSRunningApplication", "NSSound", "NSWorkspace"] }
+objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSArray", "NSData", "NSDate", "NSEnumerator", "NSGeometry", "NSString"] }
+objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "libc", "NSApplication", "NSEvent", "NSGraphicsContext", "NSPasteboard", "NSPasteboardItem", "NSResponder", "NSRunningApplication", "NSSound", "NSWorkspace"] }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt", "sync"] }
