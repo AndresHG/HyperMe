@@ -51,6 +51,11 @@ pub fn accessibility() -> bool {
 }
 
 fn accessibility_call_allowed() -> bool {
+    AX_ALLOWED.contains(&accessibility_call_error())
+}
+
+/// The error code of the live Accessibility call (0 when it worked).
+fn accessibility_call_error() -> i32 {
     use core_foundation::base::TCFType;
     use core_foundation::string::CFString;
 
@@ -63,7 +68,8 @@ fn accessibility_call_allowed() -> bool {
     let error = unsafe {
         let system = ffi::AXUIElementCreateSystemWide();
         if system.is_null() {
-            return false;
+            // kAXErrorFailure.
+            return -25200;
         }
         let error =
             ffi::AXUIElementCopyAttributeValue(system, attribute.as_concrete_TypeRef(), &mut value);
@@ -73,7 +79,22 @@ fn accessibility_call_allowed() -> bool {
         ffi::CFRelease(system);
         error
     };
-    AX_ALLOWED.contains(&error)
+    error
+}
+
+/// One line of raw permission facts, for the permissions log when a grant does not show up:
+/// what each check answers, and which executable is asking. No user data.
+pub fn diagnostics() -> String {
+    let exe = std::env::current_exe()
+        .map(|p| p.display().to_string())
+        .unwrap_or_default();
+    format!(
+        "AXIsProcessTrusted={} ax_call_error={} preflight_listen={} exe={}",
+        ffi::AXIsProcessTrusted(),
+        accessibility_call_error(),
+        ffi::CGPreflightListenEventAccess(),
+        exe
+    )
 }
 
 /// Whether HyperMe may listen for the hotkey.
