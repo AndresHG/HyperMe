@@ -10,7 +10,7 @@ dictate, with a menu-bar icon and a settings window around it. In Phase 3 the pi
 it grows upward into a card with the answer or a preview that waits for ↵. Work that outlives a
 card lives in **Home**, one plain window with a few views taken from the roadmap: History, Today
 and Meetings. The rule that holds it together: **quick things happen at the pill, lasting things
-in Home, opened from the bubble.** Dictation never needs Home. Each surface comes from a job in the roadmap, and the
+in Home, a sheet that rises from the same spot.** Dictation never needs Home. Each surface comes from a job in the roadmap, and the
 patterns are borrowed from the best Mac apps, not from any single app.
 
 ## Principles
@@ -20,17 +20,18 @@ patterns are borrowed from the best Mac apps, not from any single app.
 2. **Never take focus.** The pill and its cards are non-activating panels (spec R-23). Typing
    goes on in the app you were in. Only Home, a normal window, takes focus, and only when you
    open it.
-3. **Quiet until needed.** Nothing on screen while idle in Phase 1. Later, the bubble is small
-   and still, with a dot only when something waits.
+3. **Quiet until needed.** Nothing on screen while idle in Phase 1. Later, a small dot on the
+   bottom edge, with a ring only when something waits.
 4. **Say what happened, in a few words.** Every state has one short label ("Raw text",
    "Nothing heard"). Errors name the provider and point to the fix (R-21), never show a key.
 5. **Preview before anything leaves the app.** Any action that creates, sends or posts shows a
    card and waits for Enter (`CLAUDE.md`). Email is draft-only.
 6. **Light to run.** No front-end framework, no build step (design.md). Home's web view is
    created when opened and dropped when closed, so idle memory stays under 100 MB.
-7. **Dense but calm.** The pill and cards are dark capsules, as in Wispr Flow, which the owner
-   likes. Home follows the system's light or dark mode like any Mac app. White or black bold
-   type for what matters, grey for the rest, one accent for state.
+7. **Calm, and recognisably HyperMe.** The pill and cards are dark capsules, as in Wispr Flow,
+   which the owner likes. Home is a frosted sheet in the system's light or dark mode. One
+   signature colour, Hyper violet, marks focus, the main key and things waiting for you.
+   Actions show as keycaps ("↵ Review"), not as rows of buttons.
 8. **Keyboard everywhere.** ↵ does the main thing, Esc backs out, ⌘K shows everything else.
 
 ## Visual language
@@ -39,10 +40,11 @@ patterns are borrowed from the best Mac apps, not from any single app.
 | --- | --- | --- |
 | Surface | `#111113` pill and card, `#1B1B1F` raised, `#26262B` hover | Pill and cards (Home uses the system's colours) |
 | Text | `#FFFFFF` primary, `#A1A1AA` secondary, `#6B6B73` live or muted | White is final, grey is provisional (this matters in meetings) |
-| Accent | `#FF4D4F` recording, `#22C55E` ready or done, `#F59E0B` raw text or warning | State only, never decoration |
-| Radius | 999 px pill, 14 px card | |
-| Type | System font (SF Pro on macOS), 13 px body, 15 px bold titles, 11 px meta | Native feel, no font download |
-| Motion | 120 ms ease-out for show and hide; level meter at 30 fps | Respect "Reduce motion": no slide, only fade |
+| Signature | `#7C5CFF` Hyper violet | Focus, the main key on a card, the waiting ring on the dot |
+| State | `#FF4D4F` recording, `#22C55E` done, `#F59E0B` raw text or warning | State only, never decoration |
+| Radius | 999 px dot and pill, 18 px card and sheet | |
+| Type | SF Pro Rounded for titles and the pill, SF Pro for body; 13 px body, 15 px titles, 11 px meta | Native, no font download; the rounded titles match the shape |
+| Motion | One 180 ms spring from the dot's centre for every size change; level meter at 30 fps | With "Reduce motion", cross-fade only |
 
 Colour is never the only signal: each state also has an icon and a word. Contrast of text on the
 surfaces meets WCAG AA. Everything in the cards and Home is reachable by keyboard: Tab between controls,
@@ -282,36 +284,49 @@ opens and focus stays where it was.
   "this" was taken to be, so you can fix it before ↵. Window text only behind the visible
   switch that is off by default (`CLAUDE.md`).
 
-### The bubble
+### One shape that grows
 
-The owner likes a small floating bubble as an app's home on the desktop, so HyperMe keeps one
-from Phase 3 (U-1). What it does comes from our roadmap:
+HyperMe's signature is a single shape at the bottom centre of the screen that changes size with
+the conversation. It never jumps to a corner and never spawns a panel with a tail. Everything
+grows out of the same point and goes back into it, so there is only one place to look.
 
-- **Where:** a 40 pt circle, bottom right by default, draggable, hidden in General if unwanted.
-  The dictation pill stays at the bottom centre; the two never merge, so dictation keeps its
-  fixed place.
-- **What it shows:** still and quiet when nothing is happening. A small dot when something waits
-  for a yes, a slow ring while an agent or job runs, a red ring while a meeting is recorded
-  (safety rule). No number badge.
-- **Click** opens Home as a compact popover anchored above the bubble. ⌘↑ or the pop-out button
-  turns it into a normal window for longer work. **Right-click** shows the menu-bar menu.
-- **Alerts come out of the bubble** (see [Alerts](#alerts-phase-4)), so there is one place to
-  look.
+![The one shape: dot, pill, card, sheet](ux/morph.svg)
+
+| Size | When | Looks like |
+| --- | --- | --- |
+| **Dot** | At rest, from Phase 3 | A small round dot, 12 pt, on the bottom edge. A ring of the accent colour when something waits for a yes, a slow sweep while an agent or job runs, red while a meeting is recorded (safety rule) |
+| **Pill** | While you talk, from Phase 1 | The dictation pill: level meter, then the route ("Dictation", "Question", "Action") |
+| **Card** | When Hyper answers, previews or alerts, from Phase 3 | Rises from the pill, up to 360 pt wide. ↵, Esc, ⌘K |
+| **Sheet** | When you open Home, from Phase 2 | Rises from the bottom edge to about 760 by 460 pt, centred. Esc or a click outside sinks it back into the dot |
+
+- **Moving it.** Drag the dot along the bottom edge; all four sizes follow. Hidden in General if
+  unwanted; the menu-bar icon still works.
+- **Click the dot** to open the sheet. **Right-click** shows the menu-bar menu. **Hover** shows
+  "Hold Fn to talk · Click for Home".
+- **⌘↑** pops the sheet out into a normal window for long work, such as reading meeting notes.
+- **Motion** is one spring, 180 ms, that grows from the dot's centre. With "Reduce motion" on,
+  the sizes cross-fade instead.
+
+The dot keeps the owner's liking for a small bubble on the desktop, but its place, behaviour and
+look are HyperMe's own.
 
 ### Home
 
-![Home: Today with what waits for you, the day, and what runs](ux/home-today.svg)
+![Home sheet: Today, with what waits, the day and what runs](ux/home-sheet.svg)
 
-Opened from the bubble, the menu, or a shortcut (⌥Space, proposed): a popover above the bubble
-for a quick look, or a normal window when popped out. It is light or dark with the system, like a
-native app. Its
-sidebar holds only what the roadmap needs, added by phase:
+Home opens as the sheet, from the dot, the menu, or a shortcut (⌥Space, proposed). It is a light
+or dark frosted sheet that follows the system, not a black panel. There are no tabs along the top:
+the views sit in a small switcher at the bottom of the sheet, next to where the pill lives, and
+⌘1, ⌘2 and ⌘3 jump between them. Views are added by phase:
 
 | View | Phase | Holds |
 | --- | --- | --- |
 | **History** | 2 | Everything you said: dictations, questions and actions, newest first, searchable. Each item can be copied, pasted again, retried if it failed, or used to fix a word into the dictionary |
-| **Today** | 4 | Three parts, top to bottom. **Waiting for you:** every proposal that needs a yes (mail drafts, proposed tickets, agent results to review), one queue, since everything that leaves the app needs a preview anyway. **The day:** a calendar of meetings, nudges and scheduled jobs, as a day column with a Day and Week toggle; each meeting offers Join and take notes. **Running:** agent tasks and jobs in progress, with their state |
+| **Today** | 4 | Two columns. Left, **Waiting for you:** every proposal that needs a yes (mail drafts, proposed tickets, agent results to review), one queue, since everything that leaves the app needs a preview anyway. Right, **the day:** a calendar column of meetings, alerts and scheduled jobs with a Day and Week toggle, and below it what is **running** now |
 | **Meetings** | 5 | Past and upcoming meetings, each with notes, action points and proposed tickets |
+
+Items are single rows, not cards with button rows. Each row has a source glyph, one line of text,
+and its key on the right ("↵ Review"). ⌘K on a row shows its other actions.
 
 Settings stays its own window (⌘,). Home never holds settings.
 
@@ -328,7 +343,7 @@ and Linear's command menu runs any action or opens any page by name
 
 ### Alerts (Phase 4)
 
-An alert is a card that comes out of the bubble, never a macOS notification, so it never steals
+An alert is a card that grows out of the dot, never a macOS notification, so it never steals
 focus and stays in one place. Each kind maps to a roadmap job:
 
 | Alert | Example | Keys |
@@ -338,7 +353,7 @@ focus and stays in one place. Each kind maps to a roadmap job:
 | Agent done | "Claude Code finished: pull request ready" | ↵ Review |
 | Job failed | "Morning plan could not reach your calendar" | ↵ Fix (opens the setting) |
 
-An unanswered alert folds back into the bubble as its dot and stays in Today. "Pause Hyper for 1
+An unanswered alert shrinks back into the dot as its ring and stays in Today. "Pause Hyper for 1
 hour" in the menu holds all alerts; meeting capture indicators are never held. Notion Calendar shows upcoming events in the menu bar
 and has a system-wide "join meeting" shortcut
 ([help](https://www.notion.com/help/notion-calendar-settings)); HyperMe puts the next meeting in
@@ -360,7 +375,7 @@ Built on the on-device design adopted on
 - **Cleanup setting** as a chip in the header with three choices: **Cloud** (Groq, default),
   **Local** (any OpenAI-compatible server), **Off** (grey text stays grey; nothing leaves the
   Mac). The chip says what leaves the Mac in a tooltip.
-- **Always visible while recording** (safety rule): a red ring on the bubble and a red menu-bar icon,
+- **Always visible while recording** (safety rule): a red dot on the bottom edge and a red menu-bar icon,
   with a timer, for as long as capture runs.
 - **After the meeting:** notes, action points and **proposed tickets** with owner and the exact
   quote. Proposals stay pending until the user applies them (Anarlog's pattern, FIELD.md); each
@@ -380,7 +395,7 @@ an earlier OpenWhispr slow and dislikes its UI (FIELD.md).
 | --- | --- | --- | --- |
 | Default hotkey | Fn hold to talk; Fn + Space hands-free | Globe (Fn), via a bundled listener; tap by default, hold optional | Fn hold (owner, U-2); Right Option offered |
 | Hands-free | Separate shortcut or double-tap; second press within 0.5 s cancels | Tap mode is the default | Phase 2, double-tap (owner, U-3) |
-| On-screen bar | Flow Bar shown by default; click to start, stop button | Floating panel, bottom right by default, auto-hide off | Pill only while dictating in Phase 1; the bubble from Phase 3 |
+| On-screen bar | Flow Bar shown by default; click to start, stop button | Floating panel, bottom right by default, auto-hide off | Pill only while dictating in Phase 1; from Phase 3 a dot at rest that grows into pill, card or sheet |
 | Paste failure | "Select a textbox first", Paste last transcript | Pasted without cleanup is announced | Raw text label, Paste last dictation |
 | Cleanup off or failed | Not documented here | "Pasted without AI cleanup" note; cleanup has its own model | Raw text label (R-20) |
 | Commands | Command Mode on its own shortcut, off by default | Four hotkeys, plus the agent's name in dictation | One key, routed, with the route shown (Phase 3) |
@@ -401,7 +416,7 @@ Answered by the owner on 26 November 2026.
 
 | # | Question | Decided |
 | --- | --- | --- |
-| U-1 | When does the always-visible bubble appear? | Phase 3. Phase 1 shows the pill only while dictating |
+| U-1 | When does the always-visible bubble appear? | Phase 3. Phase 1 shows the pill only while dictating. The bubble became the dot at the bottom centre (U-8) |
 | U-2 | Default dictation hotkey | Hold Fn (Globe); Right Option and chords offered |
 | U-3 | Hands-free (double-tap to lock) | Phase 2 |
 | U-4 | Dictation history | On by default, kept 30 days or unlimited, under a total size limit the user sets (default 1 GB, our pick). Above all, a dropped connection must never lose a dictation: the audio is kept and the pill and menu offer **Retry**, even with history off (spec R-18, R-31). Searchable in Home → History from Phase 2 |
@@ -411,8 +426,9 @@ Open, after the owner asked on 26 November 2026 for a design of our own, with vi
 
 | # | Question | Proposed |
 | --- | --- | --- |
-| U-6 | Quick answers and previews as cards from the pill, and lasting work in Home (History, Today, Meetings) opened from the bubble, instead of a tabbed panel? | Yes. The bubble stays; its tabs come from the roadmap, not the reference |
+| U-6 | Quick answers and previews as cards from the pill, and lasting work in Home (History, Today, Meetings), instead of a tabbed panel? | Yes; views come from the roadmap, not the reference |
 | U-7 | One "Waiting for you" queue in Today, or separate lists for things that need you and things to do? | One queue, since everything outbound waits for a yes anyway |
+| U-8 | One shape at the bottom centre (dot, pill, card, sheet) instead of a corner bubble with a panel above it, so nobody can recognise another product in it (owner, 26 November 2026: "I don't want anyone to be able to recognize the other product") | Yes: the dot, a frosted Home sheet, Hyper violet, keycaps instead of button rows |
 
 ## Not decided here
 
