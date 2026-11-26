@@ -1613,6 +1613,7 @@ dependencies = [
  "tauri-build",
  "tauri-nspanel",
  "tauri-plugin-updater",
+ "time",
  "tokio",
 ]
 
