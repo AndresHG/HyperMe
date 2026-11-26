@@ -1,0 +1,5 @@
+//! HyperMe's core: config, the dictation state machine and the traits that keep platform and
+//! network code out of it. Nothing here calls the OS or the network.
+
+pub mod config;
+pub mod secrets;
