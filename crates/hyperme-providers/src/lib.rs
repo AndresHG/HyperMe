@@ -3,4 +3,5 @@
 //! keychain, and never appear in an error message (R-25).
 
 pub mod cleanup;
+pub mod oauth;
 pub mod speechmatics;
