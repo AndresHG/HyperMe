@@ -147,6 +147,8 @@ to the next release; **P2** is nice to have. The phase is from [ROADMAP.md](ROAD
 | Pill with state, start and stop sounds | 1 | P0 | [UX.md](UX.md) |
 | Dictation history on the Mac, retry after a lost connection | 1 | P0 | Owner, 26 November 2026 |
 | Keys in the keychain, onboarding that tests each step | 1 | P0 | |
+| Recommended setup in onboarding: our pick of speech and cleanup models, the keys it needs, and an estimate of the monthly cost from the hours a week you dictate | 1 | P0 | Owner, Q-5. Version 1 asks only for the recommended keys (Speechmatics, Groq) |
+| Choose a provider and model per role (speech, cleanup, answers) in Settings → Advanced, from a list, with any OpenAI-compatible hosted model | 2 | P1 | Owner, Q-5. The range of options follows OpenWhispr's, not its interface. OpenAI is the first extra provider |
 | Personal dictionary, learned from corrections, in the Home window | 2 | P0 | Replace sound-alikes before cleanup: 7 of 7 names right ([results](results/2026-11-26-dictionary.md)) |
 | Cleanup levels (none, light, medium) and tone per app, on the Style page of the Home window | 2 | P1 | |
 | Hands-free: double-tap to lock recording | 2 | P1 | Owner, U-3 |
@@ -190,7 +192,8 @@ to the next release; **P2** is nice to have. The phase is from [ROADMAP.md](ROAD
 ### 7.5 Later
 
 Memory and learning beyond the dictionary ("knows you better every day", plain files the user
-owns); local speech models for dictation; Linux and Windows; a wake word. Jira is not on the roadmap; it may come later, and an MCP server the user
+owns); a free local mode with speech and cleanup models you download in the app, so no key is
+needed (owner, Q-5); Linux and Windows; a wake word. Jira is not on the roadmap; it may come later, and an MCP server the user
 adds already works (owner, 26 November 2026).
 
 ## 8. Non-goals
@@ -216,7 +219,7 @@ adds already works (owner, 26 November 2026).
 | Keys | OS keychain only; never in files, logs or the web view | Spec R-25 |
 | Agent safety | Text read from mail, tickets or web pages is data, never instructions; each scheduled job has a tool allowlist | [SPEC.md](SPEC.md) section 4 |
 | Meetings | A visible indicator whenever capture runs | [SPEC.md](SPEC.md) section 4 |
-| Keys model | Bring your own keys only, in version 1 | *Proposed* (question 5) |
+| Keys model | Bring your own keys. Onboarding guides you to our recommended models and keys, with a cost estimate; other hosted providers live in Settings → Advanced; local models that you download come in a later version | Owner, 26 November 2026 (Q-5) |
 
 ## 10. Success
 
@@ -266,7 +269,7 @@ Asked in the interview of 26 November 2026. Recommendations first.
 | Q-2 | Phase 0 gate | Declare passed on the Wispr comparison and approve the Phase 1 spec | Decided 26 November 2026: Phase 1 approved to start, with the spec's open questions answered (hotkey Fn, cleanup deadline 1.5 s, speed gate wired only) |
 | Q-3 | One key or two | One key; "Hyper, …" routes to commands; optional command key | Decided 26 November 2026: one key, "Hyper" prefix |
 | Q-4 | First outside user | Developers who dictate into coding agents and chat | Decided 26 November 2026: people in tech companies, developers first, product owners and data people too |
-| Q-5 | Keys model for outside users | Bring your own keys only in version 1 | Open |
+| Q-5 | Keys model for outside users | Bring your own keys only in version 1 | Decided 26 November 2026: own keys with a recommended setup and cost estimate; other providers in Advanced; a local mode in a later version |
 | Q-6 | Email (phase 4) before meetings (phase 5) | Keep email first | Open |
 | Q-7 | Mail and calendar provider | Google first | Open |
 | Q-8 | Ticket creation: wait for Enter or fire at once | Wait for Enter, per-tool relaxing later | Open |
