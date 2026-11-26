@@ -42,7 +42,7 @@ for name in MARKS:
     light_ac = "#6440F2" if name == "e4-speed-pill" else "#FFFFFF"
     (OUT / f"{name}-icon-light.svg").write_text(icon(name, "#9077FF", "#6440F2", "#FFFFFF", light_ac))
     (OUT / f"{name}-icon-dark.svg").write_text(icon(name, "#26262B", "#111113", "#FFFFFF", "#8F74FF", ' stroke="#3A3A42" stroke-width="4"'))
-    body = MARKS[name]("#000", "#000")[1]
+    body = MARKS[name]("#000", "#000")[1].replace('opacity=".4"', 'opacity=".55"').replace('opacity=".25"', 'opacity=".35"')
     if name == "e4-speed-pill":  # the dot is cut out of the pill, so it still shows in a one-colour template
         body = body.replace('<circle cx="666" cy="512" r="48" fill="#000"/>', '<circle cx="666" cy="512" r="48" fill="#fff"/>')
         body = f'<mask id="m"><rect x="0" y="0" width="1024" height="1024" fill="#fff"/><circle cx="666" cy="512" r="48" fill="#000"/></mask><g mask="url(#m)">{body.replace(chr(60)+"circle cx=\"666\" cy=\"512\" r=\"48\" fill=\"#fff\"/>", "")}</g>'
