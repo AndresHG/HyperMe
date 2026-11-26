@@ -86,6 +86,8 @@ struct KeysView {
 struct SetupView {
     accessibility: bool,
     input_monitoring: bool,
+    /// The terminal that holds the permissions while HyperMe runs as a bare binary.
+    host_app: Option<String>,
 }
 
 fn hotkey_text(hotkey: &Hotkey) -> String {
@@ -151,6 +153,7 @@ pub fn settings_view(app: AppHandle) -> View {
         setup: SetupView {
             accessibility: permissions::accessibility(),
             input_monitoring: permissions::input_monitoring(),
+            host_app: permissions::host_app(),
         },
         version: env!("CARGO_PKG_VERSION"),
     }
@@ -262,6 +265,18 @@ pub async fn key_test(app: AppHandle, role: String) -> Result<u64, String> {
 pub fn settings_open(app: AppHandle, what: String) -> Result<(), String> {
     let target = match what.as_str() {
         "config" => config_path(&app).display().to_string(),
+        "request-accessibility" => {
+            permissions::request_accessibility();
+            permissions::settings_url("accessibility")
+                .unwrap_or_default()
+                .to_owned()
+        }
+        "request-input-monitoring" => {
+            permissions::request_input_monitoring();
+            permissions::settings_url("input-monitoring")
+                .unwrap_or_default()
+                .to_owned()
+        }
         permission => permissions::settings_url(permission)
             .ok_or_else(|| format!("{permission} is not something Settings opens"))?
             .to_owned(),

@@ -55,7 +55,8 @@
   <section class="screen" data-step="permissions">
     <h1>Accessibility and Input Monitoring</h1>
     <p>HyperMe needs Accessibility to paste your words, and Input Monitoring to see the dictation key. Each turns green by itself once allowed.</p>
-    <div class="row"><span>Accessibility</span><span><span id="ax-state"></span> <button data-request="accessibility">Open Settings</button></span></div>
+    <p class="muted" id="host-note">Click each button, then switch <b class="host-name">HyperMe</b> on in the list.</p>
+    <div class="row"><span>Accessibility</span><span><span id="ax-state"></span> <button data-request="accessibility">Allow</button></span></div>
     <div class="row"><span>Input Monitoring</span><span><span id="im-state"></span> <button data-request="input-monitoring">Allow</button></span></div>
   </section>
 
@@ -109,6 +110,12 @@
     checks.input_monitoring = p.input_monitoring;
     mark($('ax-state'), p.accessibility, '✓ Allowed', 'Not yet');
     mark($('im-state'), p.input_monitoring, '✓ Allowed', 'Not yet');
+    // Run from a terminal (cargo run), macOS gives the permissions to that terminal, which must
+    // be quit and reopened before they take effect.
+    if (p.host_app) {
+      $('host-note').innerHTML = 'HyperMe is running from <b></b>, so macOS lists <b></b>, not HyperMe. Click each button, switch <b></b> on in the list, then quit <b></b> (⌘Q), open it again and start HyperMe again.';
+      $('host-note').querySelectorAll('b').forEach((b) => { b.textContent = p.host_app; });
+    }
     if (p.speech_provider) $('speech-name').textContent = p.speech_provider;
     if (p.cleanup_provider) $('cleanup-name').textContent = p.cleanup_provider;
     update();

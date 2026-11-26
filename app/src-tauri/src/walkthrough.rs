@@ -71,6 +71,9 @@ pub fn open(app: &AppHandle) {
 pub struct Permissions {
     accessibility: bool,
     input_monitoring: bool,
+    /// The terminal macOS gives the permissions to while HyperMe runs as a bare binary; `None`
+    /// for HyperMe.app.
+    host_app: Option<String>,
     speech_provider: String,
     cleanup_provider: String,
 }
@@ -82,6 +85,7 @@ pub fn onboarding_checks(app: AppHandle) -> Permissions {
     Permissions {
         accessibility: permissions::accessibility(),
         input_monitoring: permissions::input_monitoring(),
+        host_app: permissions::host_app(),
         speech_provider: config
             .as_ref()
             .map_or_else(String::new, |c| c.speech.provider.clone()),
@@ -128,10 +132,16 @@ pub fn onboarding_mic(app: AppHandle, on: bool) -> Result<(), String> {
     Ok(())
 }
 
-/// Asks macOS for a permission: the Input Monitoring prompt, or the System Settings page.
+/// Asks macOS for a permission: first its own prompt, which also adds the app's row to System
+/// Settings (switched off), then the System Settings page where the user switches it on.
 #[tauri::command]
 pub fn onboarding_request(app: AppHandle, what: String) -> Result<(), String> {
-    if what == "input-monitoring" && permissions::request_input_monitoring() {
+    let allowed = match what.as_str() {
+        "accessibility" => permissions::request_accessibility(),
+        "input-monitoring" => permissions::request_input_monitoring(),
+        _ => false,
+    };
+    if allowed {
         return Ok(());
     }
     crate::settings::settings_open(app, what)
