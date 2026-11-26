@@ -18,11 +18,8 @@ use serde_json::{Value, json};
 const KEY: &str = "not-a-real-key-for-tests";
 
 fn speech(endpoint: &str) -> Speechmatics {
-    let config = config::Speech {
-        provider: "speechmatics".to_owned(),
-        model: "melia-1".to_owned(),
-        endpoint: endpoint.to_owned(),
-    };
+    let mut config = config::Config::default().speech;
+    config.endpoint = endpoint.to_owned();
     Speechmatics::new(&config, KEY.to_owned())
 }
 

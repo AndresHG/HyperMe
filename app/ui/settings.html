@@ -124,7 +124,13 @@
   let view = null;
 
   function showSection() {
-    const id = (location.hash || '#setup').slice(1);
+    let id = (location.hash || '#setup').slice(1);
+    // From the walkthrough's "Use other providers" (U-12): Providers, with Advanced showing.
+    if (id === 'providers-advanced') {
+      id = 'providers';
+      $('show-advanced').checked = true;
+      $('nav-advanced').classList.remove('hidden');
+    }
     document.querySelectorAll('section').forEach((s) => s.classList.toggle('on', s.id === id));
     document.querySelectorAll('nav a').forEach((a) => a.classList.toggle('on', a.getAttribute('href') === '#' + id));
   }

@@ -198,7 +198,17 @@ pub fn settings_set(
     // Write beside the file, then rename, so a crash never leaves half a config.
     let temp = path.with_extension("toml.new");
     std::fs::write(&temp, updated).map_err(|e| format!("{}: {e}", temp.display()))?;
-    std::fs::rename(&temp, &path).map_err(|e| format!("{}: {e}", path.display()))
+    std::fs::rename(&temp, &path).map_err(|e| format!("{}: {e}", path.display()))?;
+    if section == "speech" || section == "cleanup" {
+        providers_changed(&app);
+    }
+    Ok(())
+}
+
+/// Tells a waiting walkthrough to test the providers again (U-12).
+fn providers_changed(app: &AppHandle) {
+    use tauri::Emitter;
+    let _ = app.emit_to(crate::walkthrough::WALKTHROUGH, "providers-changed", ());
 }
 
 fn provider_for(app: &AppHandle, role: &str) -> Result<(Config, String), String> {

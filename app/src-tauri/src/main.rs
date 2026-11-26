@@ -40,6 +40,9 @@ fn main() {
             walkthrough::onboarding_request,
             walkthrough::onboarding_try,
             walkthrough::onboarding_can_continue,
+            walkthrough::onboarding_keys_screen,
+            walkthrough::onboarding_get_key,
+            walkthrough::onboarding_other_providers,
             walkthrough::onboarding_done,
         ]);
     builder
