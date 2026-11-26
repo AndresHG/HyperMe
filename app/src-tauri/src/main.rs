@@ -1,9 +1,13 @@
 //! HyperMe: a menu-bar app with no Dock icon and no main window (spec R-22), and the pill, a
 //! non-activating panel at the bottom centre that never takes focus and shows above full-screen
-//! apps (R-23). Slice 1 is the shell only; the dictation is wired in later slices.
+//! apps (R-23). The dictation runs in `hyperme-core`'s state machine; this file wires the real
+//! providers and devices to it and shows its states in the pill and the menu.
 
 mod geometry;
 mod icon;
+mod pill;
+#[cfg(target_os = "macos")]
+mod runtime;
 
 use tauri::AppHandle;
 use tauri::image::Image;
@@ -16,38 +20,73 @@ const PILL: &str = "pill";
 fn main() {
     let builder = tauri::Builder::default();
     #[cfg(target_os = "macos")]
-    let builder = builder.plugin(tauri_nspanel::init());
+    let builder = builder
+        .plugin(tauri_nspanel::init())
+        .invoke_handler(tauri::generate_handler![runtime::pill_clicked]);
     builder
         .setup(|app| {
             // R-22: a menu-bar app, no Dock icon.
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
-            tray(app.handle())?;
+            let menu = tray(app.handle())?;
             pill(app.handle())?;
+            #[cfg(target_os = "macos")]
+            runtime::start(app.handle(), menu);
+            #[cfg(not(target_os = "macos"))]
+            let _ = menu;
             Ok(())
         })
         .run(tauri::generate_context!())
         .expect("HyperMe could not start");
 }
 
-/// The menu-bar icon and its menu (docs/UX.md, "Menu-bar icon"). Paste last and Copy last come
-/// with slice 10, Settings with slice 9.
-fn tray(app: &AppHandle) -> tauri::Result<()> {
-    let status = MenuItem::with_id(app, "status", "Ready", false, None::<&str>)?;
+/// The menu items whose text or state changes while the app runs.
+pub(crate) struct TrayMenu {
+    pub(crate) status: MenuItem<tauri::Wry>,
+    pub(crate) retry: MenuItem<tauri::Wry>,
+}
+
+/// The menu-bar icon and its menu (docs/UX.md, "Menu-bar icon"): status, Paste last and Copy
+/// last dictation (R-18), Retry (R-31), Quit. Settings comes with slice 9.
+fn tray(app: &AppHandle) -> tauri::Result<TrayMenu> {
+    let status = MenuItem::with_id(app, "status", "Starting…", false, None::<&str>)?;
+    let paste_last = MenuItem::with_id(
+        app,
+        "paste-last",
+        "Paste last dictation",
+        true,
+        None::<&str>,
+    )?;
+    let copy_last = MenuItem::with_id(app, "copy-last", "Copy last dictation", true, None::<&str>)?;
+    let retry = MenuItem::with_id(app, "retry", "Retry last dictation", false, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Quit HyperMe", true, Some("CmdOrCtrl+Q"))?;
-    let menu = Menu::with_items(app, &[&status, &PredefinedMenuItem::separator(app)?, &quit])?;
+    let separator = || PredefinedMenuItem::separator(app);
+    let menu = Menu::with_items(
+        app,
+        &[
+            &status,
+            &separator()?,
+            &paste_last,
+            &copy_last,
+            &retry,
+            &separator()?,
+            &quit,
+        ],
+    )?;
     TrayIconBuilder::with_id("hyperme")
         .icon(Image::new_owned(icon::waveform(), icon::SIZE, icon::SIZE))
         .icon_as_template(true)
         .tooltip("HyperMe")
         .menu(&menu)
-        .on_menu_event(|app, event| {
-            if event.id() == "quit" {
-                app.exit(0);
-            }
+        .on_menu_event(|app, event| match event.id().as_ref() {
+            "quit" => app.exit(0),
+            #[cfg(target_os = "macos")]
+            id => runtime::menu_action(app, id),
+            #[cfg(not(target_os = "macos"))]
+            _ => {}
         })
         .build(app)?;
-    Ok(())
+    Ok(TrayMenu { status, retry })
 }
 
 /// The pill: hidden while idle in Phase 1 (docs/UX.md, U-1).
@@ -67,21 +106,8 @@ fn pill(app: &AppHandle) -> tauri::Result<()> {
         })
     }
 
-    let (x, y) = match app.primary_monitor()? {
-        Some(monitor) => {
-            let scale = monitor.scale_factor();
-            let area = monitor.work_area();
-            let work = geometry::Rect {
-                x: f64::from(area.position.x) / scale,
-                y: f64::from(area.position.y) / scale,
-                width: f64::from(area.size.width) / scale,
-                height: f64::from(area.size.height) / scale,
-            };
-            geometry::bottom_centre(work, geometry::PILL_SIZE)
-        }
-        None => (0.0, 0.0),
-    };
     let (width, height) = geometry::PILL_SIZE;
+    let (x, y) = runtime::pill_origin(app, width);
     let panel = PanelBuilder::<_, PillPanel>::new(app, PILL)
         .url(WebviewUrl::App("pill.html".into()))
         .size(Size::Logical(LogicalSize::new(width, height)))

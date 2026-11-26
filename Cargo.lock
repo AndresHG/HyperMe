@@ -1559,9 +1559,14 @@ dependencies = [
 name = "hyperme-app"
 version = "0.1.0"
 dependencies = [
+ "hyperme-core",
+ "hyperme-platform",
+ "hyperme-providers",
+ "serde",
  "tauri",
  "tauri-build",
  "tauri-nspanel",
+ "tokio",
 ]
 
 [[package]]
