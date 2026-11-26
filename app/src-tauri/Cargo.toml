@@ -31,6 +31,8 @@ tauri-nspanel = "2.1.1"
 # native-tls like the rest of the app, so no second TLS stack (rustls, ring) comes in.
 tauri-plugin-updater = { version = "2.14.1", default-features = false, features = ["native-tls"] }
 tokio = { workspace = true, features = ["sync", "time"] }
+# The clock for Settings → Connectors' sync ages (connectors.rs). Already in the tree.
+time = { workspace = true, features = ["std"] }
 
 [dev-dependencies]
 # The pure modules (pill, onboarding, geometry) are tested on every platform.

@@ -8,14 +8,16 @@
 //! secrets: a key-like field is an error. Unknown keys are an error naming the file and line,
 //! and out-of-range values name the key.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::fmt;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use time::{Time, Weekday};
 
+use crate::connector_settings::AccountEntry;
+use crate::registry::{CustomServer, ToolLists};
 use crate::schedule::Schedule;
 use crate::tasks::{DayRules, WeekdaySet};
 
@@ -40,6 +42,26 @@ pub struct Config {
     /// The provider catalogue: the built-in one with the user's entries over it (R-1, R-5).
     #[serde(default)]
     pub providers: BTreeMap<String, ProviderEntry>,
+    /// The user's own MCP servers (specs/97-google-connectors, R-4). Optional: an older file
+    /// has none.
+    #[serde(default)]
+    pub connectors: Connectors,
+}
+
+/// `[connectors]`: custom MCP servers, connected accounts and the user's tool switches.
+/// Presets are data files, not config. Settings writes this part of the file whole
+/// (`connector_settings::write_connectors`).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct Connectors {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub custom: Vec<CustomServer>,
+    /// Signed-in accounts, by connector and label (R-11). Their tokens are in the keychain.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub accounts: Vec<AccountEntry>,
+    /// The user's tool switches per connector id, exact tool names (R-5).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub tools: BTreeMap<String, ToolLists>,
 }
 
 /// How the app talks to a provider. The code knows protocols, not providers (R-2, D-7): adding
@@ -889,6 +911,24 @@ impl Config {
             }
         }
         range("tasks.stale_after", t.stale_after.into(), 1, 30)?;
+
+        for server in &self.connectors.custom {
+            if let Err(message) = server.check() {
+                invalid("connectors.custom", message)?;
+            }
+        }
+        let mut accounts = HashSet::new();
+        for account in &self.connectors.accounts {
+            if let Err(message) = account.check() {
+                invalid("connectors.accounts", message)?;
+            }
+            if !accounts.insert((&account.connector, &account.label)) {
+                invalid(
+                    "connectors.accounts",
+                    format!("has {}:{} twice", account.connector, account.label),
+                )?;
+            }
+        }
         Ok(())
     }
 }
@@ -1074,7 +1114,7 @@ fn find_secret_line(text: &str) -> Option<(usize, String)> {
 }
 
 /// `api_key`, `key`, `groq_key`, `token`, `secret`, `password` and the like. Not `hotkey`.
-fn looks_like_secret(name: &str) -> bool {
+pub(crate) fn looks_like_secret(name: &str) -> bool {
     let name = name.to_lowercase();
     ["key", "apikey", "token", "secret", "password", "passwd"]
         .iter()

@@ -63,6 +63,7 @@
   <a href="#shortcuts">Shortcuts</a>
   <div class="group">Setup</div>
   <a href="#providers">Providers</a>
+  <a href="#connectors">Connectors</a>
   <a href="#privacy">Privacy</a>
   <a href="#advanced" id="nav-advanced" class="hidden">Advanced</a>
   <a href="#about">About</a>
@@ -79,6 +80,7 @@
     <div class="row" data-words="microphone permission"><div class="what">Microphone<small>macOS asks the first time you dictate.</small></div><button data-open="microphone">Open</button></div>
     <div class="row" data-words="speech key speechmatics"><div class="what">Speech key<small id="setup-speech-name"></small></div><span class="state" id="setup-speech"></span></div>
     <div class="row" data-words="cleanup key groq"><div class="what">Cleanup key<small id="setup-cleanup-name"></small></div><span class="state" id="setup-cleanup"></span></div>
+    <div id="setup-connectors"></div>
   </section>
 
   <section id="general">
@@ -111,6 +113,36 @@
         <tbody id="roles-body"></tbody>
       </table>
       <div class="toolbar"><small class="lead" style="margin:0">Changes save at once and reach the next dictation.</small><button id="reset-providers">Reset to recommended</button></div>
+    </div>
+  </section>
+
+  <section id="connectors">
+    <div id="connectors-list">
+      <div class="row" style="border:0;padding-top:0"><div><h1>Connectors</h1><p class="lead" style="margin:0">MCP servers Hyper reads from and acts in, each with its accounts and tools.</p></div><button class="main" id="connectors-add" style="white-space:nowrap">+ Add connector</button></div>
+      <div id="connectors-rows"></div>
+      <p class="lead hidden" id="connectors-empty">No connectors yet. Add one to let Hyper read your calendar, mail or tracker.</p>
+    </div>
+    <div id="connectors-sheet" class="hidden">
+      <h1>Add connector</h1>
+      <p class="lead">A preset, or your own MCP server.</p>
+      <div id="connectors-choices"></div>
+      <div id="connectors-custom" class="hidden">
+        <div class="row" data-words="custom mcp server name"><div class="what">Name</div><input type="text" id="custom-name" placeholder="Team wiki"></div>
+        <div class="row" data-words="custom mcp server url"><div class="what">URL<small>https://, or http:// to this Mac</small></div><input type="text" id="custom-url" placeholder="https://wiki.example.com/mcp"></div>
+        <div class="row" data-words="custom mcp server command stdio"><div class="what">Or a command<small>Servers started by a command are not supported yet.</small></div><input type="text" id="custom-command" placeholder="my-mcp-server" disabled></div>
+        <div class="row" data-words="custom mcp server bearer token sign in"><div class="what">Sign-in</div><select id="custom-auth"><option value="none">None</option><option value="bearer">Bearer token</option></select></div>
+        <div class="row" style="border:0"><span></span><span><button id="custom-cancel">Cancel</button> <button class="main" id="custom-add">Add</button></span></div>
+      </div>
+      <p><button id="sheet-close">Cancel</button></p>
+    </div>
+    <div id="connectors-page" class="hidden">
+      <p><a href="#connectors" id="page-back">‹ Connectors</a></p>
+      <h1 id="page-title"></h1>
+      <p class="lead"><span class="state" id="page-state"></span></p>
+      <div class="row" id="page-enabled-row" data-words="connector account on off"><div class="what">Use this account<small>Off keeps the sign-in but stops using it.</small></div><input type="checkbox" id="page-enabled"></div>
+      <div class="row hidden" id="page-token-row" data-words="connector bearer token"><div class="what">Bearer token<small>Kept in the macOS keychain, never shown again.</small></div><span><input type="password" id="page-token" placeholder="Paste a token" autocomplete="off"> <button id="page-token-save">Save</button></span></div>
+      <p class="lead" style="margin-top:14px">Tools<span id="page-unverified" class="warn hidden"> · names not checked against the live server yet</span></p>
+      <div id="page-tools"></div>
     </div>
   </section>
 
@@ -148,6 +180,10 @@
 
   function showSection() {
     let id = (location.hash || '#setup').slice(1);
+    // hyperme://settings/connectors/<id> opens Connectors at that row (connectors.js).
+    const item = id.includes('/') ? id.slice(id.indexOf('/') + 1) : null;
+    id = id.split('/')[0];
+    if (window.connectorsShow) window.connectorsShow(id === 'connectors' ? item : undefined);
     // From the walkthrough's "Use other providers" (U-12): Providers, with Advanced showing.
     if (id === 'providers-advanced') {
       id = 'providers';
@@ -440,5 +476,6 @@
   showSection();
   refresh().catch((e) => { $('error').textContent = String(e); });
 </script>
+<script src="connectors.js"></script>
 </body>
 </html>
