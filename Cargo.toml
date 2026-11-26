@@ -8,6 +8,7 @@ members = [
     "crates/hyperme-core",
     "crates/hyperme-platform",
     "crates/hyperme-providers",
+    "crates/hyperme-quality",
 ]
 exclude = ["spikes"]
 
