@@ -8,6 +8,15 @@ All notable changes to HyperMe are recorded here. The format follows
 
 ### Added
 
+- `crates/hyperme-quality`, the quality harness (issue 99): replays a set of saved dictations
+  through the app's own state machine and providers and scores the pasted text against the
+  owner's corrected texts (zero-edit, edits per 100 characters, internal names), with flowbench's
+  definitions. `import` copies done dictations from the history into a set. Audio and texts stay
+  in the set folder; the results file holds numbers only.
+- Releases made on the owner's Mac (`scripts/release-macos.sh`, `docs/RELEASING.md`): Developer ID
+  signing with the hardened runtime, notarisation, a DMG, and a signed update with its
+  `latest.json`; `--unsigned` for a trial run without an Apple account. **Check for updates…** in
+  the menu-bar menu checks and installs signed updates with Tauri's updater, only when clicked.
 - A Cargo workspace at the root and `crates/hyperme-core`, starting with the config file:
   `config.toml` with the owner's defaults, written on first launch, with errors that name the
   file and line or the key, and a refusal of any key-like field (keys live in the keychain).
@@ -71,3 +80,7 @@ All notable changes to HyperMe are recorded here. The format follows
 - Fixed: in the walkthrough, a key typed and saved with Test now shows "Testing…" and then its
   result. Saving a key never told the walkthrough, so the field cleared and nothing happened. A
   key not typed yet no longer shows as "Not working".
+- The pill rests as a small still glass bead at the bottom centre (U-13, brought forward by the
+  owner), and grows into the pill when you dictate; "Show while idle" in Settings > General
+  turns it off. The pill's window is transparent, so no white rectangle shows around it, and its
+  label and voice sit in the exact centre.

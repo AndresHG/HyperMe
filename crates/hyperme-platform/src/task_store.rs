@@ -11,12 +11,15 @@ use std::fmt;
 use std::path::Path;
 use std::sync::{Mutex, MutexGuard};
 
+use hyperme_core::schedule::Schedule;
+use hyperme_core::scheduler::{Job, JobKind, JobStatus, JobStore};
 use hyperme_core::tasks::{
     Due, Finish, NewTask, Source, Status, Task, TaskError, TaskId, TaskStore, TaskUpdate,
+    WeekdaySet,
 };
 use hyperme_core::traits::{Error, ErrorKind};
 use rusqlite::{Connection, OptionalExtension, Row, Transaction, params};
-use time::{Date, Month, Time};
+use time::{Date, Month, SignedDuration, Time, UtcDateTime, Weekday};
 
 /// One entry per schema version: entry n takes `user_version` from n to n + 1.
 const MIGRATIONS: &[&str] = &[
@@ -52,6 +55,21 @@ const MIGRATIONS: &[&str] = &[
         captured INTEGER NOT NULL DEFAULT 0, done INTEGER NOT NULL DEFAULT 0,
         moved INTEGER NOT NULL DEFAULT 0,    dropped INTEGER NOT NULL DEFAULT 0,
         morning_at INTEGER, evening_at INTEGER, closed_at INTEGER
+    ) WITHOUT ROWID;",
+    // 2: the scheduler's jobs (R-31). The schedule is text: `at HH:MM 1111100`,
+    // `every 30` or `presence HH:MM HH:MM 1111100`, weekdays Monday first.
+    "CREATE TABLE job (
+        name         TEXT PRIMARY KEY,
+        kind         TEXT NOT NULL,
+        schedule     TEXT NOT NULL,
+        enabled      INTEGER NOT NULL DEFAULT 1,
+        catch_up_min INTEGER NOT NULL,
+        allowlist    TEXT,
+        prompt       TEXT,
+        last_run     INTEGER,
+        last_status  TEXT,
+        fails_today  INTEGER NOT NULL DEFAULT 0,
+        fails_day    TEXT
     ) WITHOUT ROWID;",
 ];
 
@@ -629,5 +647,228 @@ impl TaskStore for SqliteTaskStore {
 
     async fn snapshot(&self, today: Date, day_began_ms: i64) -> Result<Vec<Task>, TaskError> {
         self.snapshot_now(today, day_began_ms)
+    }
+}
+
+// --- The job table ----------------------------------------------------------------------------
+
+const WEEK: [Weekday; 7] = [
+    Weekday::Monday,
+    Weekday::Tuesday,
+    Weekday::Wednesday,
+    Weekday::Thursday,
+    Weekday::Friday,
+    Weekday::Saturday,
+    Weekday::Sunday,
+];
+
+fn weekdays_text(days: WeekdaySet) -> String {
+    WEEK.iter()
+        .map(|d| if days.contains(*d) { '1' } else { '0' })
+        .collect()
+}
+
+fn parse_weekdays(text: &str) -> Result<WeekdaySet, TaskError> {
+    if text.len() != 7 || !text.bytes().all(|b| b == b'0' || b == b'1') {
+        return Err(store_error(format!("bad weekdays {text:?}")));
+    }
+    let mut days = WeekdaySet::EMPTY;
+    for (day, bit) in WEEK.iter().zip(text.bytes()) {
+        if bit == b'1' {
+            days.insert(*day);
+        }
+    }
+    Ok(days)
+}
+
+fn schedule_text(schedule: &Schedule) -> String {
+    match *schedule {
+        Schedule::At { time, weekdays } => {
+            format!("at {} {}", time_text(time), weekdays_text(weekdays))
+        }
+        Schedule::EveryWhilePresent { minutes } => format!("every {minutes}"),
+        Schedule::OnPresenceAfter {
+            from,
+            latest,
+            weekdays,
+        } => format!(
+            "presence {} {} {}",
+            time_text(from),
+            time_text(latest),
+            weekdays_text(weekdays)
+        ),
+    }
+}
+
+fn parse_schedule(text: &str) -> Result<Schedule, TaskError> {
+    let parts: Vec<&str> = text.split(' ').collect();
+    match parts.as_slice() {
+        ["at", time, days] => Ok(Schedule::At {
+            time: parse_time(time)?,
+            weekdays: parse_weekdays(days)?,
+        }),
+        ["every", minutes] => Ok(Schedule::EveryWhilePresent {
+            minutes: minutes.parse().map_err(store_error)?,
+        }),
+        ["presence", from, latest, days] => Ok(Schedule::OnPresenceAfter {
+            from: parse_time(from)?,
+            latest: parse_time(latest)?,
+            weekdays: parse_weekdays(days)?,
+        }),
+        _ => Err(store_error(format!("bad schedule {text:?}"))),
+    }
+}
+
+fn kind_text(kind: &JobKind) -> String {
+    match kind {
+        JobKind::RollOver => "rollover".into(),
+        JobKind::Morning => "morning".into(),
+        JobKind::Evening => "evening".into(),
+        JobKind::Nudge => "nudge".into(),
+        JobKind::Sync(connector) => format!("sync:{connector}"),
+        JobKind::Prompt => "prompt".into(),
+    }
+}
+
+fn parse_kind(text: &str) -> Result<JobKind, TaskError> {
+    Ok(match text {
+        "rollover" => JobKind::RollOver,
+        "morning" => JobKind::Morning,
+        "evening" => JobKind::Evening,
+        "nudge" => JobKind::Nudge,
+        "prompt" => JobKind::Prompt,
+        other => match other.strip_prefix("sync:") {
+            Some(connector) => JobKind::Sync(connector.to_owned()),
+            None => return Err(store_error(format!("bad job kind {other:?}"))),
+        },
+    })
+}
+
+fn status_text_of(status: &JobStatus) -> String {
+    match status {
+        JobStatus::Ok => "ok".into(),
+        JobStatus::Failed(message) => format!("failed: {message}"),
+    }
+}
+
+fn parse_status(text: &str) -> JobStatus {
+    match text.strip_prefix("failed: ") {
+        Some(message) => JobStatus::Failed(message.to_owned()),
+        None => JobStatus::Ok,
+    }
+}
+
+fn unix_ms(at: UtcDateTime) -> i64 {
+    (at.unix_timestamp_nanos() / 1_000_000) as i64
+}
+
+fn from_unix_ms(ms: i64) -> Result<UtcDateTime, TaskError> {
+    UtcDateTime::from_unix_timestamp_nanos(i128::from(ms) * 1_000_000).map_err(store_error)
+}
+
+/// A job row as stored, before its text is parsed.
+type RawJob = (
+    String,
+    String,
+    String,
+    bool,
+    i64,
+    Option<String>,
+    Option<String>,
+    Option<i64>,
+    Option<String>,
+    u32,
+    Option<String>,
+);
+
+fn job_from_raw(raw: RawJob) -> Result<Job, TaskError> {
+    let (
+        name,
+        kind,
+        schedule,
+        enabled,
+        catch_up_min,
+        allowlist,
+        prompt,
+        last_run,
+        status,
+        fails,
+        day,
+    ) = raw;
+    Ok(Job {
+        name,
+        kind: parse_kind(&kind)?,
+        schedule: parse_schedule(&schedule)?,
+        enabled,
+        catch_up: SignedDuration::minutes(catch_up_min),
+        allowlist: allowlist
+            .filter(|a| !a.is_empty())
+            .map(|a| a.split(',').map(str::to_owned).collect())
+            .unwrap_or_default(),
+        prompt,
+        last_run: last_run.map(from_unix_ms).transpose()?,
+        last_status: status.as_deref().map(parse_status),
+        fails_today: fails,
+        fails_day: day.as_deref().map(parse_date).transpose()?,
+    })
+}
+
+impl SqliteTaskStore {
+    fn jobs_now(&self) -> Result<Vec<Job>, TaskError> {
+        let db = self.db();
+        let mut query = sql(db.prepare(
+            "SELECT name, kind, schedule, enabled, catch_up_min, allowlist, prompt, last_run,
+                    last_status, fails_today, fails_day
+             FROM job ORDER BY name",
+        ))?;
+        let raw: Vec<RawJob> = sql(sql(query.query_map([], |r| {
+            Ok((
+                r.get(0)?,
+                r.get(1)?,
+                r.get(2)?,
+                r.get(3)?,
+                r.get(4)?,
+                r.get(5)?,
+                r.get(6)?,
+                r.get(7)?,
+                r.get(8)?,
+                r.get(9)?,
+                r.get(10)?,
+            ))
+        }))?
+        .collect())?;
+        raw.into_iter().map(job_from_raw).collect()
+    }
+
+    fn save_job_now(&self, job: &Job) -> Result<(), TaskError> {
+        sql(self.db().execute(
+            "INSERT OR REPLACE INTO job (name, kind, schedule, enabled, catch_up_min, allowlist,
+                                         prompt, last_run, last_status, fails_today, fails_day)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+            params![
+                job.name,
+                kind_text(&job.kind),
+                schedule_text(&job.schedule),
+                job.enabled,
+                job.catch_up.whole_minutes(),
+                job.allowlist.join(","),
+                job.prompt,
+                job.last_run.map(unix_ms),
+                job.last_status.as_ref().map(status_text_of),
+                job.fails_today,
+                job.fails_day.map(date_text),
+            ],
+        ))?;
+        Ok(())
+    }
+}
+
+impl JobStore for SqliteTaskStore {
+    async fn jobs(&self) -> Result<Vec<Job>, TaskError> {
+        self.jobs_now()
+    }
+
+    async fn save_job(&self, job: &Job) -> Result<(), TaskError> {
+        self.save_job_now(job)
     }
 }

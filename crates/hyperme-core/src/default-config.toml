@@ -16,6 +16,8 @@ max_length_s = 120
 short_dictation_words = 4
 # A soft sound when recording starts and stops.
 sounds = true
+# A small still bead at the bottom centre while idle; it grows into the pill when you dictate.
+show_while_idle = true
 # Optional: a text file with your own terms, one per line.
 # dictionary = "/Users/you/hyperme-dictionary.txt"
 
@@ -68,3 +70,15 @@ size_limit_mb = 1024
 [timing]
 # Write one line of stage timings per dictation, numbers only, never text.
 log = false
+
+[tasks]
+# The hour the day turns over, as "HH:MM". A task done before it counts for the day before.
+day_start = "04:00"
+# The days you work: mon, tue, wed, thu, fri, sat, sun. Morning cards come on these days.
+workdays = ["mon", "tue", "wed", "thu", "fri"]
+# Roll-overs after which Today asks whether to keep a task, give it a day or drop it. 1 to 30.
+stale_after = 3
+# The morning card shows the first time you are at the Mac after this time on a workday,
+morning_from = "06:00"
+# or at this time if you are already there. Later than morning_from.
+morning_latest = "09:30"
