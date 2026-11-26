@@ -169,10 +169,10 @@ to the next release; **P2** is nice to have. The phase is from [ROADMAP.md](ROAD
 
 | Feature | Phase | Priority | Notes |
 | --- | --- | --- | --- |
-| Calendar connector, "meeting now" nudges | 4 | P0 | Provider: question 7 |
+| Calendar connector, "meeting now" nudges | 4 | P0 | Google first, Microsoft 365 later (owner, Q-7) |
 | Scheduled jobs: a prompt plus a tool allowlist each | 4 | P0 | Built in, small; no agent runtime |
 | Daily plan: what's next, what's pending for tomorrow | 4 | P0 | |
-| Email triage and reply drafts, draft-only | 4 | P0 | Never sends |
+| Email triage and reply drafts, draft-only | 4 | P0 | Gmail first. Never sends |
 | One "Waiting for you" queue on the Home page of the Home window, its top three in the quick sheet | 4 | P1 | [UX.md](UX.md) |
 
 ### 7.4 Meetings (J-6)
@@ -272,7 +272,7 @@ Asked in the interview of 26 November 2026. Recommendations first.
 | Q-4 | First outside user | Developers who dictate into coding agents and chat | Decided 26 November 2026: people in tech companies, developers first, product owners and data people too |
 | Q-5 | Keys model for outside users | Bring your own keys only in version 1 | Decided 26 November 2026: own keys with a recommended setup and cost estimate; other providers in Advanced; a local mode in a later version |
 | Q-6 | Email (phase 4) before meetings (phase 5) | Keep email first | Decided 26 November 2026: daily tasks and email first, meetings next or in parallel; coding agents move to later, as a hand-off only |
-| Q-7 | Mail and calendar provider | Google first | Open |
+| Q-7 | Mail and calendar provider | Google first | Decided 26 November 2026: Google first, Microsoft 365 later |
 | Q-8 | Ticket creation: wait for Enter or fire at once | Wait for Enter, per-tool relaxing later | Open |
 | Q-9 | Adoption measure | Downloads, stars, 10 outside weekly users in three months | Open |
 | Q-10 | Languages at public release | English and Spanish only | Open |
