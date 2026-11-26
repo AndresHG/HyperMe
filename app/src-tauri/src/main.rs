@@ -43,6 +43,7 @@ fn main() {
             walkthrough::onboarding_keys_screen,
             walkthrough::onboarding_get_key,
             walkthrough::onboarding_other_providers,
+            walkthrough::onboarding_relaunch,
             walkthrough::onboarding_done,
         ]);
     builder
@@ -60,8 +61,16 @@ fn main() {
             let _ = menu;
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("HyperMe could not start");
+        .build(tauri::generate_context!())
+        .expect("HyperMe could not start")
+        .run(|_app, _event| {
+            // Opening HyperMe while it runs (`open`, a double-click in Finder) brings up the
+            // walkthrough or Settings, so a menu-bar app with no window is never invisible.
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Reopen { .. } = _event {
+                walkthrough::reopen(_app);
+            }
+        });
 }
 
 /// The menu items whose text or state changes while the app runs.

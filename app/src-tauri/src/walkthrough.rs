@@ -33,7 +33,7 @@ fn at_launch(app: &AppHandle) -> AtLaunch {
         |provider: Option<&str>| provider.is_some_and(|p| matches!(keys.get(p), Ok(Some(_))));
     AtLaunch {
         accessibility: permissions::accessibility(),
-        input_monitoring: permissions::input_monitoring(),
+        input_monitoring: input_monitoring(),
         speech_key_saved: saved(config.as_ref().map(|c| c.speech.provider.as_str())),
         cleanup_key_saved: saved(config.as_ref().map(|c| c.cleanup.provider.as_str())),
     }
@@ -46,22 +46,38 @@ pub fn open_if_needed(app: &AppHandle) {
     if std::env::var_os("HYPERME_NO_WALKTHROUGH").is_some() {
         return;
     }
-    if onboarding::should_open(&at_launch(app)) {
-        open(app);
+    // After "Relaunch HyperMe", come back on the same screen.
+    let resume = std::fs::read_to_string(resume_file(app))
+        .ok()
+        .and_then(|name| onboarding::Step::from_name(&name));
+    let _ = std::fs::remove_file(resume_file(app));
+    if resume.is_some() || onboarding::should_open(&at_launch(app)) {
+        open(app, resume.unwrap_or(onboarding::Step::Welcome));
     }
 }
 
-pub fn open(app: &AppHandle) {
+/// The app was opened again while running: the walkthrough while setup is unfinished,
+/// otherwise Settings.
+pub fn reopen(app: &AppHandle) {
+    if onboarding::should_open(&at_launch(app)) {
+        open(app, onboarding::Step::Welcome);
+    } else {
+        crate::settings::open(app, "setup");
+    }
+}
+
+pub fn open(app: &AppHandle, step: onboarding::Step) {
     if let Some(window) = app.get_webview_window(WALKTHROUGH) {
+        let _ = window.show();
         let _ = window.set_focus();
         return;
     }
-    let built =
-        WebviewWindowBuilder::new(app, WALKTHROUGH, WebviewUrl::App("onboarding.html".into()))
-            .title("Welcome to HyperMe")
-            .inner_size(520.0, 440.0)
-            .resizable(false)
-            .build();
+    let url = format!("onboarding.html#{}", step.name());
+    let built = WebviewWindowBuilder::new(app, WALKTHROUGH, WebviewUrl::App(url.into()))
+        .title("Welcome to HyperMe")
+        .inner_size(520.0, 440.0)
+        .resizable(false)
+        .build();
     if let Ok(window) = built {
         let _ = window.set_focus();
     }
@@ -74,6 +90,8 @@ pub struct Permissions {
     /// The terminal macOS gives the permissions to while HyperMe runs as a bare binary; `None`
     /// for HyperMe.app.
     host_app: Option<String>,
+    /// Running as HyperMe.app, so "Relaunch HyperMe" can reopen it.
+    bundled: bool,
     speech_provider: String,
     cleanup_provider: String,
 }
@@ -84,8 +102,9 @@ pub fn onboarding_checks(app: AppHandle) -> Permissions {
     let config = Config::load_or_create(&crate::runtime::data_dir(&app).join("config.toml")).ok();
     Permissions {
         accessibility: permissions::accessibility(),
-        input_monitoring: permissions::input_monitoring(),
+        input_monitoring: input_monitoring(),
         host_app: permissions::host_app(),
+        bundled: onboarding::bundle_of(&std::env::current_exe().unwrap_or_default()).is_some(),
         speech_provider: config
             .as_ref()
             .map_or_else(String::new, |c| c.speech.provider.clone()),
@@ -132,19 +151,61 @@ pub fn onboarding_mic(app: AppHandle, on: bool) -> Result<(), String> {
     Ok(())
 }
 
-/// Asks macOS for a permission: first its own prompt, which also adds the app's row to System
-/// Settings (switched off), then the System Settings page where the user switches it on.
+/// Input Monitoring as the walkthrough sees it: the preflight check, or a tap that can be
+/// created, since the preflight can lag behind a fresh grant.
+pub fn input_monitoring() -> bool {
+    permissions::input_monitoring() || hyperme_platform::hotkey::macos::can_listen()
+}
+
+/// Asks macOS for a permission. The first click (`prompt`) shows macOS's own dialog, which adds
+/// the app's row to System Settings and has its own "Open System Settings" button, so the page
+/// is not opened as well. Later clicks open the System Settings page directly. The page polls
+/// only the checks that never prompt, so the dialog never comes back by itself.
 #[tauri::command]
-pub fn onboarding_request(app: AppHandle, what: String) -> Result<(), String> {
-    let allowed = match what.as_str() {
-        "accessibility" => permissions::request_accessibility(),
-        "input-monitoring" => permissions::request_input_monitoring(),
-        _ => false,
-    };
-    if allowed {
-        return Ok(());
+pub fn onboarding_request(app: AppHandle, what: String, prompt: bool) -> Result<(), String> {
+    if prompt {
+        let allowed = match what.as_str() {
+            "accessibility" => permissions::request_accessibility(),
+            "input-monitoring" => permissions::request_input_monitoring(),
+            _ => false,
+        };
+        if allowed || what == "accessibility" || what == "input-monitoring" {
+            return Ok(());
+        }
     }
     crate::settings::settings_open(app, what)
+}
+
+/// The file that tells a relaunched HyperMe which walkthrough screen to come back to.
+fn resume_file(app: &AppHandle) -> std::path::PathBuf {
+    crate::runtime::data_dir(app).join("walkthrough-resume")
+}
+
+/// "Relaunch HyperMe": some grants (Input Monitoring above all) only reach the app after a
+/// restart. Notes the screen, starts a fresh copy of HyperMe.app a moment after this one quits,
+/// and quits.
+#[tauri::command]
+pub fn onboarding_relaunch(app: AppHandle, step: String) -> Result<(), String> {
+    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    let bundle = onboarding::bundle_of(&exe).ok_or_else(|| {
+        "HyperMe is running from a terminal: quit that terminal app (⌘Q), open it again and start HyperMe again".to_owned()
+    })?;
+    if let Some(step) = onboarding::Step::from_name(&step) {
+        let path = resume_file(&app);
+        if let Some(dir) = path.parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+        std::fs::write(&path, step.name()).map_err(|e| e.to_string())?;
+    }
+    // A detached shell waits until this process has gone, then reopens the bundle.
+    std::process::Command::new("/bin/sh")
+        .arg("-c")
+        .arg("sleep 1; /usr/bin/open -n \"$0\"")
+        .arg(&bundle)
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    app.exit(0);
+    Ok(())
 }
 
 /// The Try it screen: starts the dictation with the keys just tested.
