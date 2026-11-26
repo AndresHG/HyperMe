@@ -3,9 +3,13 @@
 //! apps (R-23). The dictation runs in `hyperme-core`'s state machine; this file wires the real
 //! providers and devices to it and shows its states in the pill and the menu.
 
+// Pure and tested everywhere; only the macOS app uses them until Linux and Windows follow.
+#[cfg(any(target_os = "macos", test))]
 mod geometry;
 mod icon;
+#[cfg(any(target_os = "macos", test))]
 mod onboarding;
+#[cfg(any(target_os = "macos", test))]
 mod pill;
 #[cfg(target_os = "macos")]
 mod runtime;
@@ -20,6 +24,7 @@ use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::TrayIconBuilder;
 
 /// The pill window's label.
+#[cfg(target_os = "macos")]
 const PILL: &str = "pill";
 
 fn main() {
@@ -51,14 +56,15 @@ fn main() {
             // R-22: a menu-bar app, no Dock icon.
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+            #[cfg(target_os = "macos")]
             let menu = tray(app.handle())?;
+            #[cfg(not(target_os = "macos"))]
+            tray(app.handle())?;
             pill(app.handle())?;
             #[cfg(target_os = "macos")]
             runtime::start(app.handle(), menu);
             #[cfg(target_os = "macos")]
             walkthrough::open_if_needed(app.handle());
-            #[cfg(not(target_os = "macos"))]
-            let _ = menu;
             Ok(())
         })
         .build(tauri::generate_context!())
@@ -74,6 +80,7 @@ fn main() {
 }
 
 /// The menu items whose text or state changes while the app runs.
+#[cfg(target_os = "macos")]
 pub(crate) struct TrayMenu {
     pub(crate) status: MenuItem<tauri::Wry>,
     pub(crate) retry: MenuItem<tauri::Wry>,
@@ -81,7 +88,7 @@ pub(crate) struct TrayMenu {
 
 /// The menu-bar icon and its menu (docs/UX.md, "Menu-bar icon"): status, Paste last and Copy
 /// last dictation (R-18), Retry (R-31), Settings, Quit.
-fn tray(app: &AppHandle) -> tauri::Result<TrayMenu> {
+fn tray(app: &AppHandle) -> tauri::Result<Tray> {
     let status = MenuItem::with_id(app, "status", "Starting…", false, None::<&str>)?;
     let paste_last = MenuItem::with_id(
         app,
@@ -121,7 +128,22 @@ fn tray(app: &AppHandle) -> tauri::Result<TrayMenu> {
             _ => {}
         })
         .build(app)?;
-    Ok(TrayMenu { status, retry })
+    Ok(tray_menu(status, retry))
+}
+
+#[cfg(target_os = "macos")]
+type Tray = TrayMenu;
+#[cfg(target_os = "macos")]
+fn tray_menu(status: MenuItem<tauri::Wry>, retry: MenuItem<tauri::Wry>) -> Tray {
+    TrayMenu { status, retry }
+}
+
+// Elsewhere nothing updates the menu yet.
+#[cfg(not(target_os = "macos"))]
+struct Tray;
+#[cfg(not(target_os = "macos"))]
+fn tray_menu(_status: MenuItem<tauri::Wry>, _retry: MenuItem<tauri::Wry>) -> Tray {
+    Tray
 }
 
 /// The pill: hidden while idle in Phase 1 (docs/UX.md, U-1).

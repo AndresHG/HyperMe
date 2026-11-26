@@ -15,18 +15,22 @@ path = "src/main.rs"
 tauri-build = { version = "2.7.6", default-features = false }
 
 [dependencies]
+tauri = { version = "2.12.7", features = ["macos-private-api", "tray-icon"] }
+
+# The dictation, settings and walkthrough run on macOS only until Linux and Windows follow.
+[target.'cfg(target_os = "macos")'.dependencies]
 hyperme-core.workspace = true
 hyperme-platform = { path = "../../crates/hyperme-platform" }
 hyperme-providers = { path = "../../crates/hyperme-providers" }
 serde.workspace = true
 serde_json.workspace = true
-tauri = { version = "2.12.7", features = ["macos-private-api", "tray-icon"] }
+tauri-nspanel = "2.1.1"
 tokio = { workspace = true, features = ["sync", "time"] }
 
-[target.'cfg(target_os = "macos")'.dependencies]
-tauri-nspanel = "2.1.1"
-
 [dev-dependencies]
+# The pure modules (pill, onboarding, geometry) are tested on every platform.
+hyperme-core.workspace = true
+serde.workspace = true
 # tauri's own mock runtime, to test that commands send their events. Not a new crate.
 tauri = { version = "2.12.7", features = ["macos-private-api", "tray-icon", "test"] }
 
