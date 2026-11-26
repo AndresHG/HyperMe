@@ -1,6 +1,6 @@
 # HyperMe UX and UI
 
-**Status:** draft, 26 November 2026. The owner decided U-1 to U-10 the same day. Nothing here changes a phase gate in [ROADMAP.md](ROADMAP.md); it says what each phase
+**Status:** draft, 26 November 2026. The owner decided U-1 to U-12 the same day. Nothing here changes a phase gate in [ROADMAP.md](ROADMAP.md); it says what each phase
 looks like and feels like. Mockups are in [ux/](ux/).
 
 ## The idea in one paragraph
@@ -521,12 +521,12 @@ After the owner asked on 26 November 2026 for a design of our own, with views fr
 | U-9 | Home's style | Decided by the owner, 26 November 2026: a window in Wispr Flow's style, with a Home page and sections from our roadmap |
 | U-10 | What does clicking the dot open? | Decided by the owner, 26 November 2026: a small quick sheet for in-the-moment things, with a switch to the full Home window |
 
-Open, for the owner (onboarding models and keys, 26 November 2026):
+Onboarding models and keys, accepted by the owner on 26 November 2026 ("looks good"):
 
-| # | Question | Proposed |
+| # | Question | Decided |
 | --- | --- | --- |
-| U-11 | How the wizard asks for usage to estimate cost | Three choices by talking time a day (10 min, 30 min, 1 hour) with the monthly cost under each, rather than an hours-a-week slider |
-| U-12 | Where "Use other providers" leads | Settings → Providers with Advanced showing, while the wizard waits for every role to pass its test, rather than a custom step inside the wizard |
+| U-11 | How the wizard asks for usage to estimate cost | Three choices by talking time a day (10 min, 30 min, 1 hour) with the monthly cost under each, rather than an hours-a-week slider (owner) |
+| U-12 | Where "Use other providers" leads | Settings → Providers with Advanced showing, while the wizard waits for every role to pass its test, rather than a custom step inside the wizard (owner) |
 
 ## Not decided here
 
