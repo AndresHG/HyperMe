@@ -1,6 +1,6 @@
 # Choose the speech and cleanup provider
 
-**Status:** draft, 26 November 2026. Needs the owner's approval before any production code.
+**Status:** draft, 26 November 2026; P-1 to P-3 answered by the owner the same day. Needs the owner's approval before any production code.
 **Issue:** [#96](https://github.com/AndresHG/hyperme/issues/96). **Size:** L.
 **Design:** [design.md](design.md). **Slices:** [tasks.md](tasks.md).
 **Traces to:** [PRD](../../docs/PRD.md) 7.1 ("Choose a provider and model per role", P1, phase 2;
@@ -239,4 +239,4 @@ For the owner (asked on decision cards in the project thread, 26 November 2026):
 | --- | --- | --- | --- |
 | P-1 | When to build it: the cleanup half beside Phase 1, or all of it in Phase 2 as the PRD says | Cleanup half now (slices 1 to 7): no new protocol, and it helps close the formatting gap. Speech and fallbacks in Phase 2 | Decided 26 November 2026 (owner): cleanup half (slices 1 to 7) now, beside Phase 1; speech and fallbacks in Phase 2 |
 | P-2 | Which speech provider to add first | OpenAI, as the PRD says: 50 of 50 languages right, though about 0.5 s slower than Speechmatics ([results](../../docs/results/2026-11-25-full-benchmark.md)), so it is the fallback, not a daily choice | Decided 26 November 2026 (owner): OpenAI |
-| P-3 | Speech fallback: automatic, or a Retry button | Automatic, with "via OpenAI" on the pill | Open |
+| P-3 | Speech fallback: automatic, or a Retry button | Automatic, with "via OpenAI" on the pill | Decided 26 November 2026 (owner): automatic, with "via" on the pill |
