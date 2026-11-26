@@ -98,10 +98,10 @@ Consequences:
   user set their project to "In production" and checks it before it finishes. For a project used
   only by its owner this needs no verification; Google shows an "unverified app" screen once, at
   consent, which the sheet explains beforehand.
-- Still to check in slice 1, over 14 days on the owner's account: that an "In production"
-  personal client keeps its token, and whether Google's personal mode is already "In production"
-  by itself. If a personal client cannot avoid expiry, the spec comes back to the owner before
-  slice 2.
+- Still to check, over 14 days on the owner's account: that an "In production" personal client
+  keeps its token, and whether Google's personal mode is already "In production" by itself. This
+  does not block the other slices (owner, 26 November 2026); it is tracked in
+  [#119](https://github.com/AndresHG/hyperme/issues/119).
 
 ## Why bring your own client (G-1)
 

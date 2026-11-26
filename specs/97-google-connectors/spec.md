@@ -154,7 +154,7 @@ EARS form. "The app" is HyperMe running on macOS.
 - AC-3. After sign-in, the refresh token is in the Keychain (fake keychain in tests) and in no
   file under the app's data folder or log; a grep of logs for the token finds nothing (R-9).
 - AC-4a. On the owner's account, a connected account still syncs 14 days after sign-in with no
-  new consent, recorded in `docs/results/` (R-10a). Against the fake OAuth server, a client
+  new consent, recorded in `docs/results/` (R-10a; checked in #119, not blocking). Against the fake OAuth server, a client
   reported as "Testing" stops the setup sheet with the step that fixes it.
 - AC-4. With an access token expired at the fake server, the next tool call refreshes and
   succeeds; with the refresh token revoked, the account shows "Sign in again" and exactly one
@@ -201,7 +201,7 @@ It is three months later and this failed. Why?
 
 | Why | Becomes |
 | --- | --- |
-| The owner is signed out every week: Google expires refresh tokens after 7 days for clients in "Testing" | R-10a and AC-4a: the setup sheet requires a project "In production"; slice 1 measures token life over 14 days before any other slice. Design, "Token life" |
+| The owner is signed out every week: Google expires refresh tokens after 7 days for clients in "Testing" | R-10a and AC-4a: the setup sheet requires a project "In production"; the 14-day check runs in [#119](https://github.com/AndresHG/hyperme/issues/119) without blocking the other slices (owner). Design, "Token life" |
 | Setting up a Google Cloud client is too hard for anyone but developers | The guided step does it in three screens with links straight to each console page, and a `gcloud` path; first users are developers (PRD Q-4). A shared client stays open as G-1's later option |
 | Polling drains the battery or eats the quota | R-16, R-17, R-20, AC-8 |
 | A mail tells Hyper to do something and it does | R-22, AC-10, AC-11; destructive tools off by default (R-5) |
