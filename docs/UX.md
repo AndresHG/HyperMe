@@ -212,7 +212,7 @@ The **menu-bar menu** grows by phase but stays at 8 rows or fewer:
 | Status: "Ready", or the open problem with a link to Setup check. From Phase 4 it also shows the next meeting: "Next: Weekly planning, 10:30" | 1 |
 | **Recent**: the last three dictations, one line each. Click copies; a failed one shows **Retry** | 1 |
 | Paste last dictation ⌃⌥V | 1 |
-| Open Home ⌥Space | 2 |
+| Open HyperMe (the Home window) ⌥⌘Space | 2 |
 | Start meeting notes / Stop | 5 |
 | Pause Hyper for 1 hour (no nudges, no jobs; dictation still works) | 4 |
 | Settings… ⌘, | 1 |
@@ -297,16 +297,37 @@ grows out of the same point and goes back into it, so there is only one place to
 | **Dot** | At rest, from Phase 3 | A small round dot, 12 pt, on the bottom edge. A ring of the accent colour when something waits for a yes, a slow sweep while an agent or job runs, red while a meeting is recorded (safety rule) |
 | **Pill** | While you talk, from Phase 1 | The dictation pill: level meter, then the route ("Dictation", "Question", "Action") |
 | **Card** | When Hyper answers, previews or alerts, from Phase 3 | Rises from the pill, up to 360 pt wide. ↵, Esc, ⌘K |
+| **Quick sheet** | When you click the dot, from Phase 3 | Rises from the dot, about 380 by 440 pt. Only what matters right now (below). Esc or a click outside sinks it back |
 
-- **Moving it.** Drag the dot along the bottom edge; all three sizes follow. Hidden in General if
+- **Moving it.** Drag the dot along the bottom edge; every size follows. Hidden in General if
   unwanted; the menu-bar icon still works.
-- **Click the dot** to open Home. **Right-click** shows the menu-bar menu. **Hover** shows
-  "Hold Fn to talk · Click for Home".
+- **Click the dot** (or ⌥Space) to open the quick sheet. **Right-click** shows the menu-bar menu.
+  **Hover** shows "Hold Fn to talk · Click for now".
 - **Motion** is one spring, 180 ms, that grows from the dot's centre. With "Reduce motion" on,
   the sizes cross-fade instead.
 
 The dot keeps the owner's liking for a small bubble on the desktop, but its place, behaviour and
 look are HyperMe's own.
+
+### The quick sheet
+
+![Quick sheet: what matters right now, and the way into the full app](ux/quick-sheet.svg)
+
+Two ways into HyperMe, for two moments (owner, 26 November 2026). The **quick sheet** is for
+the things you want to do right now. The **Home window** is the full app, for looking back,
+tuning and longer work. The quick sheet holds, top to bottom, only what is there:
+
+| Block | Shows |
+| --- | --- |
+| Ask | A field: "Ask Hyper or give an order", with the mic. Hold Fn works too |
+| Now | The meeting starting within 15 minutes (↵ Join and take notes), and what is running, with its progress |
+| Waiting for you | The top three proposals that need a yes, each with ↵ Review; "3 more" opens Home |
+| Last dictation | The last one, with copy, paste again, and Retry when its connection dropped |
+| Footer | **Open HyperMe ⌘↑** switches to the Home window on the same item; ⌘, Settings |
+
+Rules: ↑ and ↓ move between rows and ↵ acts on the selected one. The quick sheet never scrolls far (if a block grows, it shows three items and a link to
+Home), it has no sidebar or sections, and nothing in it is a setting. Because you open it on
+purpose, its Ask field may take the keyboard; Esc gives it straight back to the app you were in.
 
 ### Home
 
@@ -320,7 +341,7 @@ date and your statistics ([docs](https://docs.wisprflow.ai/articles/5096240724-n
 The colours and type here are our own (Hyper violet, rounded titles), and the sections come from
 our roadmap. It follows the system's light or dark mode.
 
-Open it by clicking the dot, from the menu, or with ⌥Space (proposed). ⌘1 to ⌘5 jump between
+Open it with **Open HyperMe ⌘↑** in the quick sheet, from the menu, or with ⌥⌘Space (proposed). While the window is open HyperMe shows a Dock icon, which goes away when it closes, as OpenWhispr does with its control panel ([docs](https://docs.openwhispr.com/platform/running-in-the-background.md)). ⌘1 to ⌘5 jump between
 sections. Sections are added by phase:
 
 | Section | Phase | Holds |
@@ -438,6 +459,7 @@ Open, after the owner asked on 26 November 2026 for a design of our own, with vi
 | U-7 | One "Waiting for you" queue in Today, or separate lists for things that need you and things to do? | One queue, since everything outbound waits for a yes anyway |
 | U-8 | One shape at the bottom centre (dot, pill, card) instead of a corner bubble with a panel above it, so nobody can recognise another product in it (owner, 26 November 2026: "I don't want anyone to be able to recognize the other product") | Yes: the dot, Hyper violet, keycaps instead of button rows |
 | U-9 | Home's style | Decided by the owner, 26 November 2026: a window in Wispr Flow's style, with a Home page and sections from our roadmap |
+| U-10 | What does clicking the dot open? | Decided by the owner, 26 November 2026: a small quick sheet for in-the-moment things, with a switch to the full Home window |
 
 ## Not decided here
 
