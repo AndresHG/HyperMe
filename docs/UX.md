@@ -94,8 +94,8 @@ mention moving and hiding it; the exact edge rules are not checked).
 
 ### Menu-bar icon
 
-The app has no Dock icon and no main window (R-22). The menu-bar icon is a small waveform glyph
-that turns red while recording. Its menu ([ux/menubar-onboarding.svg](ux/menubar-onboarding.svg)):
+The app has no Dock icon and no main window (R-22). The menu-bar icon is the logo's speed pill
+([brand/README.md](brand/README.md)), and it turns red while recording. Its menu ([ux/menubar-onboarding.svg](ux/menubar-onboarding.svg)):
 
 - Status line: "Ready", or the last error in a few words.
 - **Paste last dictation** and **Copy last dictation** (R-18), the way out when paste fails.

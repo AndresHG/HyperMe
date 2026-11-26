@@ -109,7 +109,7 @@ fn tray(app: &AppHandle) -> tauri::Result<TrayMenu> {
         ],
     )?;
     TrayIconBuilder::with_id("hyperme")
-        .icon(Image::new_owned(icon::waveform(), icon::SIZE, icon::SIZE))
+        .icon(Image::new_owned(icon::speed_pill(), icon::SIZE, icon::SIZE))
         .icon_as_template(true)
         .tooltip("HyperMe")
         .menu(&menu)
