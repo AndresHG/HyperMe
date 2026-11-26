@@ -1,6 +1,6 @@
 # Google account (Calendar and Gmail) and the Connectors settings
 
-**Status:** draft, 26 November 2026; G-1 to G-3 answered by the owner the same day. Needs the owner's approval before any production code. The
+**Status:** approved by the owner, 26 November 2026, with G-1 to G-3 answered the same day. The
 Connectors section belongs to phase 3 and the Google connector to phase 4 ([ROADMAP.md](../../docs/ROADMAP.md));
 neither starts before the gate of the phase before it. Only slice 1 in [tasks.md](tasks.md), a
 spike that writes no production code, may run earlier, with the owner's yes.
