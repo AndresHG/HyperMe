@@ -171,6 +171,7 @@ to the next release; **P2** is nice to have. The phase is from [ROADMAP.md](ROAD
 
 | Feature | Phase | Priority | Notes |
 | --- | --- | --- | --- |
+| One profile with several accounts per service; you say which ("in my personal calendar") | 4 | P0 | Owner, Q-12. Separate profiles only if people ask |
 | Calendar connector, "meeting now" nudges | 4 | P0 | Google first, Microsoft 365 later (owner, Q-7) |
 | Scheduled jobs: a prompt plus a tool allowlist each | 4 | P0 | Built in, small; no agent runtime |
 | Daily plan: what's next, what's pending for tomorrow | 4 | P0 | |
@@ -281,7 +282,7 @@ Asked in the interview of 26 November 2026. Recommendations first.
 | Q-10 | Languages at public release | English and Spanish only | Decided 26 November 2026: Spanish and English tested; others work, labelled untested |
 | Q-11 | What answers questions | A fast model, web search when needed | Decided 26 November 2026: its own model setting, cheap and fast by default, switchable from the card with regenerate |
 | Q-14 | Spoken answers (text-to-speech) | Text first, an optional voice later | Decided 26 November 2026: not for now, maybe later |
-| Q-12 | Work and personal profiles ([SPEC.md](SPEC.md) section 4) | Drop from version 1; one profile | Open |
+| Q-12 | Work and personal profiles ([SPEC.md](SPEC.md) section 4) | Drop from version 1; one profile | Decided 26 November 2026: one profile, several accounts |
 | Q-13 | Adopt the trial and baseline checks as gates ([RESEARCH.md](RESEARCH.md) section 1.3) | Drop as gates; the Wispr comparison covers the baseline | Open |
 
 ## 13. Contradictions found in the existing documents
@@ -300,7 +301,7 @@ confirms, unless marked "fixed here".
 | C-7 | [ROADMAP.md](ROADMAP.md) "Where we stand" | Says formatting quality is "not measured"; the Wispr comparison measured 7.6 against 11.6 edits per 100 characters | Update the table |
 | C-8 | ROADMAP phase 2 gate | "Zero-edit rate at or above Wispr Flow's": already met on paper (5 of 50 against 4 of 50), so it no longer separates good from not | Gate on edits per 100 characters and on internal names, and on the owner's week of use |
 | C-9 | Phase 1 spec decisions | Cleanup prompt `v1`, deadline 1000 ms; the pipeline now uses dictionary substitution and prompt `v4`, deadline 1500 ms | Being fixed in the spec by the UX thread (owner, 26 November 2026) |
-| C-10 | [SPEC.md](SPEC.md) section 4 | "Work and personal profiles keep separate connectors and storage"; no phase or spec has profiles, and work data is out of scope | Q-12 |
+| C-10 | [SPEC.md](SPEC.md) section 4 | "Work and personal profiles keep separate connectors and storage"; no phase or spec has profiles, and work data is out of scope | Q-12 decided: one profile, several accounts; fix SPEC section 4 |
 | C-11 | Budgets in `CLAUDE.md` vs ROADMAP phase 0 gate | "Under 800 ms" vs "median ≤ 800, p90 ≤ 1200" | Both kept: the gate is the median rule; under 800 ms at p90 is the design target (section 10) |
 | C-12 | [PITCH.md](PITCH.md) and README | Positioning is framed entirely against Wispr Flow | Q-1 |
 | C-13 | Open-decision lists in `CLAUDE.md`, ROADMAP and RESEARCH | Overlap and disagree on what is still open (licence and first connector are decided) | This section is the single list; the others link here |
