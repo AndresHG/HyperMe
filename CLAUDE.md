@@ -74,6 +74,9 @@ passes, update this section and record the evidence in `docs/results/`.
 - Public positioning leads with the full copilot ("the open-source voice copilot for your
   workday"), and says plainly that it starts with dictation. The name HyperMe stays for the
   public launch (owner, 25 November 2026). See `docs/PITCH.md`.
+- Meetings run on device first: Apple's on-device recognizer for the live transcript, and a
+  cleanup setting of cloud (Groq, default), local model, or off (owner, 26 November 2026). See
+  `docs/ROADMAP.md`, "Meetings on device". Dictation stays on cloud speech.
 
 ## Budgets (targets to design against)
 

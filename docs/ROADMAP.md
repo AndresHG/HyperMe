@@ -29,8 +29,31 @@ formatting quality and the app itself.
 | **2. Wispr-level quality and first release** | Match Wispr Flow on formatting, then let others install it | Gold set and zero-edit rate; prompt tuning; personal dictionary; cleanup levels (none, light, medium); tone per app; clean text in pieces while the user speaks; a second speech provider as fallback; signed and notarised build | Zero-edit rate on the owner's samples at or above Wispr Flow's on the same samples. Then the first public release: "open-source dictation for your Mac, as fast as Wispr Flow" ([RESEARCH.md](RESEARCH.md) section 3). Licence decided: MIT OR Apache-2.0 |
 | **3. Smart routing and actions** | One key for everything you say | The same key routes to dictation, a question or an action; command mode sends the transcript to a tool-calling model; one MCP client (`rmcp`); the first tracker connector; "speak, preview card, Enter" in under a second; short spoken questions answered in the pill | Owner uses commands every day for two weeks. Covers items 1 and 2 of "what nobody ships" ([RESEARCH.md](RESEARCH.md) section 1.2) |
 | **4. Daily tasks and email** | The copilot for the workday | Calendar connector; crons and "meeting now" nudges, each job with a tool allowlist; email triage and replies, draft-only | Owner relies on it for a week of daily planning and mail drafts |
-| **5. Meetings and coding agents** | Meetings become tasks; agents take orders | Note-taker with live gray transcript and batch cleanup to white ([#20](https://github.com/AndresHG/hyperme/issues/20)); proposed tickets with owner and quote; start and follow Claude Code and Devin tasks by voice | Tickets from a real meeting accepted with few edits; one agent task started and reported back from the pill |
-| **Later** | | Memory and learning ("knows you better every day"); local speech models; Linux and Windows | |
+| **5. Meetings and coding agents** | Meetings become tasks; agents take orders | Note-taker with live gray transcript and batch cleanup to white ([#20](https://github.com/AndresHG/hyperme/issues/20)), local-first: see [meetings on device](#meetings-on-device) below; proposed tickets with owner and quote; start and follow Claude Code and Devin tasks by voice | Tickets from a real meeting accepted with few edits; one agent task started and reported back from the pill |
+| **Later** | | Memory and learning ("knows you better every day"); local speech models for dictation; Linux and Windows | |
+
+## Meetings on device
+
+**Adopted by the owner on 26 November 2026.** Meetings do not need dictation's
+speed, so they can run on the Mac instead of paying Speechmatics by the minute. That would
+avoid USD 10 to 16 a month at 8 hours of meetings a week. Measured on the owner's Mac
+([results](results/2026-11-26-local-meetings.md)):
+
+| Step | Proposal | Why | Load on the Mac |
+| --- | --- | --- | --- |
+| Live gray transcript | Apple's on-device recognizer (SpeechAnalyzer, macOS 26), behind the speech trait in a `cfg(target_os = "macos")` module with a small Swift bridge | Spanish and English, 15% of words wrong on the samples against 13% (es) and 11% (en) for Wispr Flow's engine. Free, nothing to download or ship | About 1 to 2.5% of one CPU core, runs on the Neural Engine, no GPU |
+| White text, in batches of sentences | The cleanup trait, as in dictation, with a setting of three choices (owner, 26 November 2026): **cloud** (Groq `gpt-oss-20b`, the default), **local** (a model through any OpenAI-compatible server: Ollama, LM Studio, `mlx_lm.server`), or **off** (the transcript only, no cleanup, nothing leaves the Mac) | Groq cleans clearly better (7.2 edits per 100 characters against 9.8 for local Qwen3 4B) and costs about USD 0.2 to 0.35 a month for 8 hours a week | Groq: none. Local Qwen3 4B: GPU busy about 15% of the meeting, 2.3 GB of memory |
+| Who spoke | Two tracks to start: the microphone is "me", system audio is "them", named from the calendar invite. Real diarization later, after the meeting, with FluidAudio (Apache-2.0, on the Neural Engine) | No extra model for the first version | None for two tracks |
+| After the meeting | Notes, action points and proposed tickets from the cleaned transcript, with the same language model provider | A 4-minute transcript summarised locally in 10 s; the cloud is quicker | Short burst |
+
+Not chosen: NVIDIA Parakeet v3 switched to English on meeting-length Spanish audio; Whisper small
+made too many Spanish errors; Whisper large-v3-turbo is accurate but keeps the GPU busy, so it is
+kept only as an optional re-transcription after the meeting. For the settings screen and the
+meeting view, look first at how Wispr Flow and OpenWhispr present them; check the licence before
+borrowing any code and record it in `NOTICE.md`. Still to measure before phase 5:
+battery drain, Apple's live mode on far-field meeting audio, and diarization.
+
+This does not change the dictation core, which stays on cloud speech for speed.
 
 ## How this differs from the earlier plan
 
@@ -55,6 +78,8 @@ formatting quality and the app itself.
 5. Whether to adopt the trial of existing tools ([#6](https://github.com/AndresHG/hyperme/issues/6))
    and the Wispr Flow baseline ([#5](https://github.com/AndresHG/hyperme/issues/5)) as gates.
 6. The first outside user.
+7. ~~Where meeting cleanup runs~~: decided 26 November 2026, a setting with three choices: cloud
+   (Groq, default), local model, or off. See [meetings on device](#meetings-on-device).
 
 ## Not checked
 

@@ -15,3 +15,5 @@ All notable changes to HyperMe are recorded here. The format follows
 - Project documents: spec, roadmap, research, pitch, contributing rules, security policy, code
   of conduct, issue and pull-request templates, CI.
 - Licence: MIT OR Apache-2.0.
+- `spikes/localmeet` and its results: local speech and language models for meeting notes on
+  the owner's Mac, with a proposed on-device design for phase 5 in `docs/ROADMAP.md`.
