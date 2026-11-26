@@ -22,11 +22,12 @@ macOS code in `hyperme-platform`, as the dictation history already does
 
 Linux and Windows later only add a `presence` module; nothing in the core changes (`CLAUDE.md`).
 
-**New dependency:** `chrono` in `hyperme-core`, for local dates, weekdays and time zone offsets.
-It is already in `Cargo.lock` through other crates, MIT OR Apache-2.0. No time zone database
-crate (T-9): the core asks the platform for the current local offset at a given instant
-(`chrono::Local` on the Mac), and tests pass a fake zone with a daylight saving rule. No cron
-crate (T-8).
+**New dependency:** `time` in `hyperme-core`, for local dates, weekdays and time zone offsets.
+It is already in `Cargo.lock` through Tauri, MIT OR Apache-2.0. Not `chrono`, as first planned:
+RUSTSEC-2026-0543 marks it unmaintained and recommends `time` or `jiff`, and `deny.toml` fails on
+unmaintained crates (slice 1, 26 November 2026). No time zone database crate (T-9): the core asks
+the platform for the current local offset at a given instant, and tests pass a fake zone with a
+daylight saving rule. No cron crate (T-8).
 
 ## The store
 

@@ -285,5 +285,5 @@ It is three months later and this failed. Why?
 | T-5 | When to build | Keep phase 4 for the app, but build the pure core slices (store, dependencies, roll-over, scheduler; tests only, no UI) now, beside phases 1 and 2 | Decided by the owner, 26 November 2026: build core slices 1 to 6 now |
 | T-6 | Dependency model | "Blocked by" links between tasks, a graph without cycles, as Linear and GitHub do; no sub-tasks | Our pick |
 | T-7 | Day and due as two fields | Yes, as Things and Todoist do: day is when you plan to do it, due is the hard cut-off | Our pick |
-| T-8 | Scheduler crate | None: three schedule shapes in about 200 lines on `chrono` (already in the tree). `croner` (MIT) only if cron expressions are ever needed | Our pick |
+| T-8 | Scheduler crate | None: three schedule shapes in about 200 lines on `time` (already in the tree; `chrono` is unmaintained, RUSTSEC-2026-0543). `croner` (MIT) only if cron expressions are ever needed | Our pick |
 | T-9 | Time zone | The Mac's current local zone; no time zone database crate | Our pick |

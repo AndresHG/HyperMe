@@ -3,6 +3,8 @@
 
 #![allow(dead_code)]
 
+pub mod tasks;
+
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
