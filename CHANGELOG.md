@@ -14,6 +14,9 @@ All notable changes to HyperMe are recorded here. The format follows
 - The dictation state machine in `hyperme-core`, with every provider and device behind a trait:
   hold to record, tap and Esc to cancel, maximum length, finalize then paste, short dictations
   without cleanup, raw text after the cleanup deadline or a cleanup error.
+- `crates/hyperme-providers` with Speechmatics streaming, ported from flowbench: audio in chunks
+  of at most 100 ms, explicit finalize, no expected language, and errors that name the provider
+  and never the key.
 - `spikes/flowbench`, a command-line speed test for dictation: upload against streaming,
   several speech and cleanup providers, stage timings, a quality score against gold texts.
 - Phase 0 results in `docs/results/`: Speechmatics (EU) with Groq cleanup reaches a median of
