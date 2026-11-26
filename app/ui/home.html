@@ -62,6 +62,30 @@
   .search { width: 100%; padding: 8px 12px; border-radius: 9px; border: 1px solid var(--line); background: Canvas; color: inherit; font: inherit; margin: 0 0 8px; }
   .search:focus { outline: none; border-color: var(--violet); box-shadow: 0 0 0 3px color-mix(in srgb, var(--violet) 25%, transparent); }
   .more { color: var(--faint); font-size: 12px; padding: 12px 0; text-align: center; }
+  /* Slice 4: a selected row shows its full text and its actions (R-11, R-13). */
+  .row { cursor: default; outline: none; }
+  .row.sel { background: color-mix(in srgb, var(--violet) 9%, var(--card)); box-shadow: inset 3px 0 0 var(--violet); }
+  .row.sel .text { white-space: pre-wrap; overflow: visible; }
+  .row .bar { grid-column: 1 / -1; display: none; align-items: center; gap: 6px; flex-wrap: wrap; padding-top: 6px; font-size: 12px; }
+  .row.sel .bar { display: flex; }
+  .bar button { font: inherit; font-size: 12px; padding: 3px 8px; border-radius: 6px; border: 1px solid var(--line); background: Canvas; color: inherit; cursor: default; }
+  .bar button:hover { border-color: var(--violet); }
+  .bar button kbd { font: 11px -apple-system, sans-serif; color: var(--faint); margin-left: 4px; }
+  .bar .say { color: var(--muted); }
+  .bar .say.bad { color: var(--bad); }
+  .bar .say.warn { color: var(--warn); }
+  .bar .ask { color: CanvasText; }
+  .bar .ask kbd, .bar .say kbd { font: 11px -apple-system, sans-serif; color: var(--faint); padding: 0 2px; }
+  .bar input { font: inherit; font-size: 12px; padding: 3px 8px; border-radius: 6px; border: 1px solid var(--violet); background: Canvas; color: inherit; width: 200px; }
+  .row.working .text { color: var(--muted); }
+  mark { background: color-mix(in srgb, var(--violet) 28%, transparent); color: inherit; border-radius: 3px; padding: 0 1px; }
+  .off { padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); margin-bottom: 12px; color: var(--muted); }
+  .off a { color: var(--violet); text-decoration: none; }
+  #menu { position: fixed; display: none; min-width: 200px; padding: 4px; border-radius: 10px; border: 1px solid var(--line); background: Canvas; box-shadow: 0 8px 28px rgba(0,0,0,.18); z-index: 10; }
+  #menu.on { display: block; }
+  #menu div { display: flex; justify-content: space-between; gap: 18px; padding: 6px 8px; border-radius: 6px; }
+  #menu div.on, #menu div:hover { background: var(--on); }
+  #menu kbd { font: 11px -apple-system, sans-serif; color: var(--faint); }
 </style>
 </head>
 <body>
@@ -93,11 +117,13 @@
 
   <section id="history" aria-label="History">
     <header><div><h1>History</h1><p class="lead">Everything you dictated, newest first.</p></div></header>
+    <div class="off" id="off" hidden>History is off · <a href="#" id="off-link">Settings → Privacy</a>. Only dictations waiting for a retry are listed.</div>
     <input id="search" class="search" type="search" placeholder="Search your dictations" aria-label="Search your dictations" autocomplete="off">
     <div id="list"></div>
     <div class="more" id="more"></div>
   </section>
 </main>
+<div id="menu" role="menu" aria-label="Actions"></div>
 <script>
   const { invoke } = window.__TAURI__.core;
   const { listen, emit } = window.__TAURI__.event;
@@ -171,6 +197,8 @@
   const LOCALE = 'en-GB';
   const timeFormat = new Intl.DateTimeFormat(LOCALE, { hour: '2-digit', minute: '2-digit' });
   const dayFormat = new Intl.DateTimeFormat(LOCALE, { weekday: 'long', day: 'numeric', month: 'long' });
+  // What the app said once: history on or off, a dictionary or not (R-19, R-21).
+  let info = { history: true, dictionary: false };
 
   function startOfDay(ms) {
     const d = new Date(ms);
@@ -186,10 +214,43 @@
     return dayFormat.format(new Date(ms));
   }
 
-  function row(item) {
+  // Case and accents fold as the search does (R-12), keeping each character's place, so the
+  // matches can be marked in the original text.
+  const foldChar = (c) => c.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+
+  function fillText(el, text, words) {
+    el.replaceChildren();
+    if (!words || words.length === 0) { el.textContent = text; return; }
+    const chars = Array.from(text);
+    let folded = '';
+    const start = [];
+    chars.forEach((c, i) => { const f = foldChar(c); for (let k = 0; k < f.length; k++) start.push(i); folded += f; });
+    const marked = new Array(chars.length).fill(false);
+    for (const w of words) {
+      let at = folded.indexOf(w);
+      while (at !== -1) {
+        for (let k = at; k < at + w.length; k++) marked[start[k]] = true;
+        at = folded.indexOf(w, at + w.length);
+      }
+    }
+    let i = 0;
+    while (i < chars.length) {
+      let j = i;
+      while (j < chars.length && marked[j] === marked[i]) j++;
+      const piece = chars.slice(i, j).join('');
+      if (marked[i]) { const m = document.createElement('mark'); m.textContent = piece; el.append(m); } else { el.append(piece); }
+      i = j;
+    }
+  }
+
+  const queryWords = () => (historyQuery.trim() ? Array.from(new Set(historyQuery.trim().split(/\s+/).map((w) => Array.from(w).map(foldChar).join('')))) : []);
+
+  function row(item, words) {
     const div = document.createElement('div');
     div.className = 'row' + (item.state === 'failed' ? ' failed' : '');
     div.dataset.id = item.id;
+    div.tabIndex = -1;
+    div.item = item;
     const time = document.createElement('time');
     time.textContent = timeFormat.format(new Date(item.started_ms));
     const app = document.createElement('span');
@@ -197,28 +258,53 @@
     app.textContent = item.app || '—';
     const text = document.createElement('span');
     text.className = 'text';
-    text.textContent = item.state === 'failed' ? (item.message || 'Failed') : (item.text || '');
-    div.append(time, app, text);
+    if (item.state === 'failed') text.textContent = item.message || 'Failed';
+    else fillText(text, item.text || '', words);
+    const bar = document.createElement('div');
+    bar.className = 'bar';
+    div.append(time, app, text, bar);
+    div.addEventListener('mousedown', () => select(div, false));
+    text.addEventListener('mouseup', () => offerFix(div));
+    text.addEventListener('dblclick', () => setTimeout(() => offerFix(div), 0));
+    drawBar(div);
     return div;
   }
 
   // Appends items to `into`, starting a new day group whenever the day changes.
-  function appendGrouped(into, items) {
+  function appendGrouped(into, items, words) {
     for (const item of items) {
       const label = dayLabel(item.started_ms);
       let group = into.lastElementChild;
       if (!group || group.dataset.day !== label) {
-        const heading = document.createElement('div');
-        heading.className = 'day';
-        heading.textContent = label;
-        const rows = document.createElement('div');
-        rows.className = 'rows';
-        group = document.createElement('div');
-        group.dataset.day = label;
-        group.append(heading, rows);
+        group = dayGroup(label);
         into.append(group);
       }
-      group.querySelector('.rows').append(row(item));
+      group.querySelector('.rows').append(row(item, words));
+    }
+  }
+
+  function dayGroup(label) {
+    const heading = document.createElement('div');
+    heading.className = 'day';
+    heading.textContent = label;
+    const rows = document.createElement('div');
+    rows.className = 'rows';
+    const group = document.createElement('div');
+    group.dataset.day = label;
+    group.append(heading, rows);
+    return group;
+  }
+
+  // New dictations go on top (AC-15).
+  function prependGrouped(into, items) {
+    for (const item of items.slice().reverse()) {
+      const label = dayLabel(item.started_ms);
+      let group = into.firstElementChild;
+      if (!group || group.dataset.day !== label) {
+        group = dayGroup(label);
+        into.prepend(group);
+      }
+      group.querySelector('.rows').prepend(row(item, []));
     }
   }
 
@@ -226,6 +312,256 @@
     const last = items[items.length - 1];
     return last ? [last.started_ms, last.id] : null;
   };
+
+  // ---- Selection and actions (R-13 to R-18) ----
+  let selected = null;
+
+  function visibleRows() {
+    const section = document.querySelector('main > section.on');
+    return section ? Array.from(section.querySelectorAll('.row')) : [];
+  }
+
+  function select(div, scroll = true) {
+    if (selected === div) return;
+    if (selected) { selected.classList.remove('sel'); selected.mode = null; drawBar(selected); }
+    selected = div;
+    closeMenu();
+    if (!div) return;
+    div.classList.add('sel');
+    drawBar(div);
+    if (scroll) div.scrollIntoView({ block: 'nearest' });
+  }
+
+  function move(step) {
+    const rows = visibleRows();
+    if (rows.length === 0) return;
+    const at = rows.indexOf(selected);
+    const next = at === -1 ? (step > 0 ? 0 : rows.length - 1) : Math.max(0, Math.min(rows.length - 1, at + step));
+    select(rows[next]);
+    if (step > 0 && next >= rows.length - 3 && $('history').classList.contains('on')) loadMoreHistory();
+  }
+
+  const key = (k) => { const e = document.createElement('kbd'); e.textContent = k; return e; };
+  const span = (cls, ...parts) => { const e = document.createElement('span'); e.className = cls; e.append(...parts); return e; };
+
+  // The bar under a selected row: its actions, or the step in progress (R-13, R-16 to R-18).
+  function drawBar(div) {
+    const bar = div.querySelector('.bar');
+    const item = div.item;
+    bar.replaceChildren();
+    const mode = div.mode;
+    if (mode && mode.kind === 'confirm-delete') {
+      bar.append(span('ask', 'Delete this dictation and its audio? ', key('↵'), ' Delete · ', key('Esc'), ' Keep'));
+      return;
+    }
+    if (mode && mode.kind === 'fix-select') {
+      bar.append(span('say', 'Select the wrong word in the text, or double-click it. ', key('Esc'), ' Cancel'));
+      return;
+    }
+    if (mode && mode.kind === 'fix-type') {
+      const input = document.createElement('input');
+      input.placeholder = 'Should be';
+      input.setAttribute('aria-label', 'What “' + mode.heard + '” should be');
+      input.value = mode.wanted || '';
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); mode.wanted = input.value; sendFix(div, false); }
+        if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); div.mode = null; drawBar(div); div.focus(); }
+      });
+      bar.append(span('say', '“' + mode.heard + '” should be: '), input, span('say', ' ', key('↵')));
+      setTimeout(() => input.focus(), 0);
+      return;
+    }
+    if (mode && mode.kind === 'fix-confirm') {
+      bar.append(span('ask warn', '“' + mode.heard + '” is a common word and will be replaced everywhere. ', key('↵'), ' Replace anyway · ', key('Esc'), ' Cancel'));
+      return;
+    }
+    if (div.classList.contains('working')) {
+      bar.append(span('say', 'Working…'));
+      return;
+    }
+    for (const action of item.actions || []) {
+      const button = document.createElement('button');
+      button.append(action.label, key(action.key));
+      button.addEventListener('mousedown', (e) => e.stopPropagation());
+      button.addEventListener('click', () => run(div, action.id));
+      bar.append(button);
+    }
+    if (div.say) bar.append(span('say' + (div.say.bad ? ' bad' : ''), div.say.text));
+  }
+
+  function say(div, text, bad = false) {
+    div.say = { text, bad };
+    drawBar(div);
+    const mine = div.say;
+    if (!bad) setTimeout(() => { if (div.say === mine) { div.say = null; drawBar(div); } }, 3000);
+  }
+
+  const has = (div, id) => (div.item.actions || []).some((a) => a.id === id);
+
+  async function run(div, id) {
+    if (!div || !has(div, id)) return;
+    select(div, false);
+    const itemId = div.item.id;
+    try {
+      if (id === 'copy') { await invoke('home_copy', { id: itemId }); say(div, 'Copied'); }
+      if (id === 'paste') {
+        const outcome = await invoke('home_paste', { id: itemId });
+        say(div, outcome.pasted ? 'Pasted' : outcome.notice);
+      }
+      if (id === 'retry') {
+        await invoke('home_retry', { id: itemId });
+        setWorking(itemId, true);
+      }
+      if (id === 'fix') { div.mode = { kind: 'fix-select' }; drawBar(div); offerFix(div); }
+      if (id === 'delete') { div.mode = { kind: 'confirm-delete' }; drawBar(div); div.focus(); }
+    } catch (error) {
+      say(div, String(error), true);
+    }
+  }
+
+  async function confirmDelete(div) {
+    try {
+      await invoke('home_delete', { id: div.item.id });
+      const rows = visibleRows();
+      const next = rows[rows.indexOf(div) + 1] || rows[rows.indexOf(div) - 1] || null;
+      removeRows(div.item.id);
+      select(next && next.isConnected ? next : null);
+    } catch (error) {
+      div.mode = null;
+      say(div, String(error), true);
+    }
+  }
+
+  function removeRows(id) {
+    document.querySelectorAll('.row[data-id="' + id + '"]').forEach((r) => {
+      const group = r.closest('[data-day]');
+      r.remove();
+      if (group && !group.querySelector('.row')) group.remove();
+    });
+  }
+
+  // Every copy of a row (Recent and History) shows the same state.
+  function rowsFor(id) {
+    return Array.from(document.querySelectorAll('.row[data-id="' + id + '"]'));
+  }
+
+  function setWorking(id, on) {
+    for (const r of rowsFor(id)) { r.classList.toggle('working', on); drawBar(r); }
+  }
+
+  function updateItem(id, item) {
+    for (const r of rowsFor(id)) {
+      r.item = item;
+      const text = r.querySelector('.text');
+      r.classList.toggle('failed', item.state === 'failed');
+      if (item.state === 'failed') text.textContent = item.message || 'Failed';
+      else fillText(text, item.text || '', r.closest('#list') ? queryWords() : []);
+      drawBar(r);
+    }
+  }
+
+  // Fix a word (R-17): a selection inside the selected row's text starts it, once asked for.
+  function offerFix(div) {
+    if (!info.dictionary || !has(div, 'fix')) return;
+    if (!div.mode || (div.mode.kind !== 'fix-select' && div.mode.kind !== 'fix-type')) return;
+    const chosen = String(window.getSelection() || '').trim();
+    if (!chosen || !(div.item.text || '').includes(chosen)) return;
+    div.mode = { kind: 'fix-type', heard: chosen, wanted: '' };
+    drawBar(div);
+  }
+
+  async function sendFix(div, confirmed) {
+    const mode = div.mode;
+    try {
+      const outcome = await invoke('home_fix_word', { id: div.item.id, heard: mode.heard, wanted: mode.wanted, confirmedCommon: confirmed });
+      if (outcome.outcome === 'needs_confirm') {
+        div.mode = { kind: 'fix-confirm', heard: mode.heard, wanted: mode.wanted };
+        drawBar(div);
+        div.focus();
+        return;
+      }
+      div.mode = null;
+      const item = await invoke('home_item', { id: div.item.id });
+      if (item) updateItem(item.id, item);
+      say(div, 'Fixed. Press ↵ to paste it again');
+      div.focus();
+    } catch (error) {
+      div.mode = null;
+      say(div, String(error), true);
+    }
+  }
+
+  // ⌘K: the selected row's actions with their keys (R-13).
+  let menuAt = 0;
+  function openMenu() {
+    if (!selected) return;
+    const menu = $('menu');
+    const list = selected.item.actions || [];
+    menu.replaceChildren(...list.map((a, i) => {
+      const d = document.createElement('div');
+      d.setAttribute('role', 'menuitem');
+      d.append(a.label, key(a.key));
+      d.addEventListener('mousedown', (e) => { e.preventDefault(); const target = selected; closeMenu(); run(target, a.id); });
+      d.classList.toggle('on', i === 0);
+      return d;
+    }));
+    menuAt = 0;
+    const box = selected.getBoundingClientRect();
+    menu.style.left = Math.max(12, box.right - 220) + 'px';
+    menu.style.top = Math.min(window.innerHeight - 40 * list.length - 12, box.top + 30) + 'px';
+    menu.classList.add('on');
+  }
+  function closeMenu() { $('menu').classList.remove('on'); }
+  const menuOpen = () => $('menu').classList.contains('on');
+
+  document.addEventListener('keydown', (e) => {
+    const typing = e.target instanceof HTMLInputElement;
+    if (menuOpen()) {
+      const items = Array.from($('menu').children);
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        menuAt = (menuAt + (e.key === 'ArrowDown' ? 1 : items.length - 1)) % items.length;
+        items.forEach((d, i) => d.classList.toggle('on', i === menuAt));
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        const action = (selected.item.actions || [])[menuAt];
+        closeMenu();
+        if (action) run(selected, action.id);
+      } else if (e.key === 'Escape' || (e.metaKey && e.key === 'k')) {
+        e.preventDefault();
+        closeMenu();
+      }
+      return;
+    }
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      if (typing && e.target.id !== 'search') return;
+      e.preventDefault();
+      if (typing) e.target.blur();
+      move(e.key === 'ArrowDown' ? 1 : -1);
+      return;
+    }
+    if (!selected || (typing && e.target.id !== 'search')) return;
+    const mode = selected.mode;
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      if (mode) { selected.mode = null; drawBar(selected); } else select(null);
+      return;
+    }
+    if (e.key === 'Enter' && !typing) {
+      e.preventDefault();
+      if (mode && mode.kind === 'confirm-delete') confirmDelete(selected);
+      else if (mode && mode.kind === 'fix-confirm') sendFix(selected, true);
+      else if (!mode) run(selected, 'paste');
+      return;
+    }
+    if (!e.metaKey || e.altKey || e.ctrlKey || typing) return;
+    if (e.key === 'c' && String(window.getSelection() || '') === '') { e.preventDefault(); run(selected, 'copy'); }
+    else if (e.key === 'r') { e.preventDefault(); run(selected, 'retry'); }
+    else if (e.key === 'f') { e.preventDefault(); run(selected, 'fix'); }
+    else if (e.key === 'Backspace') { e.preventDefault(); run(selected, 'delete'); }
+    else if (e.key === 'k') { e.preventDefault(); openMenu(); }
+  });
+  document.addEventListener('mousedown', (e) => { if (!e.target.closest('#menu')) closeMenu(); });
 
   // ---- The Home page (R-7, R-8, R-9) ----
   function greet() {
@@ -253,12 +589,14 @@
     }
     await loadBlocks();
     const recent = $('recent');
+    if (selected && recent.contains(selected)) selected = null;
     try {
-      // The last 7 days, a page at a time.
+      // The last 7 days, a page at a time; with history off, only what waits for a retry.
       const since = startOfDay(Date.now()) - 6 * DAY_MS;
       let items = [];
       let before = null;
-      for (;;) {
+      if (!info.history) items = (await invoke('home_failed')).filter((i) => i.started_ms >= since);
+      else for (;;) {
         const page = await invoke('home_page', { before, limit: PAGE });
         const fresh = page.filter((i) => i.started_ms >= since);
         items = items.concat(fresh);
@@ -267,7 +605,9 @@
       }
       recent.replaceChildren();
       if (items.length === 0) {
-        recent.innerHTML = '<p class="empty">No dictations in the last 7 days. Hold your shortcut and talk.</p>';
+        recent.innerHTML = info.history
+          ? '<p class="empty">No dictations in the last 7 days. Hold your shortcut and talk.</p>'
+          : '<p class="empty">History is off, and no dictation is waiting for a retry.</p>';
       } else {
         appendGrouped(recent, items);
       }
@@ -300,7 +640,7 @@
     }));
   }
 
-  // ---- History (R-10, R-12); actions come with the next change ----
+  // ---- History (R-10, R-12, R-19) ----
   let historyQuery = '';
   let historyBefore = null;
   let historyDone = false;
@@ -311,6 +651,9 @@
     historyBefore = null;
     historyDone = false;
     historyToken += 1;
+    if (selected && $('list').contains(selected)) selected = null;
+    $('off').hidden = info.history;
+    $('search').hidden = !info.history;
     $('list').replaceChildren();
     $('more').textContent = '';
     loadMoreHistory();
@@ -321,15 +664,17 @@
     historyLoading = true;
     const token = historyToken;
     try {
-      const page = historyQuery.trim()
-        ? await invoke('home_search', { query: historyQuery, before: historyBefore, limit: PAGE })
-        : await invoke('home_page', { before: historyBefore, limit: PAGE });
+      const page = !info.history
+        ? await invoke('home_failed')
+        : historyQuery.trim()
+          ? await invoke('home_search', { query: historyQuery, before: historyBefore, limit: PAGE })
+          : await invoke('home_page', { before: historyBefore, limit: PAGE });
       if (token !== historyToken) return;
-      appendGrouped($('list'), page);
+      appendGrouped($('list'), page, queryWords());
       historyBefore = cursor(page) || historyBefore;
-      historyDone = page.length < PAGE;
+      historyDone = !info.history || page.length < PAGE;
       if ($('list').childElementCount === 0) {
-        $('more').textContent = historyQuery.trim() ? 'Nothing matches.' : 'No dictations yet.';
+        $('more').textContent = !info.history ? 'No dictation is waiting for a retry.' : historyQuery.trim() ? 'Nothing matches.' : 'No dictations yet.';
       } else {
         $('more').textContent = historyDone ? '' : 'Scroll for more';
       }
@@ -356,12 +701,51 @@
     }
   });
 
-  // ---- Events from the app (R-22) ----
+  $('off-link').addEventListener('click', (e) => { e.preventDefault(); openSettings('privacy'); });
+
+  // A dictation made while Home is open goes on top of Recent and History (AC-15).
+  async function showNew() {
+    const fetchNew = async (container) => {
+      const known = new Set(Array.from(container.querySelectorAll('.row')).map((r) => Number(r.dataset.id)));
+      const first = container.querySelector('.row');
+      const newest = first ? first.item.started_ms : -Infinity;
+      const page = info.history ? await invoke('home_page', { before: null, limit: PAGE }) : await invoke('home_failed');
+      return page.filter((i) => !known.has(i.id) && i.started_ms >= newest);
+    };
+    try {
+      if ($('recent').querySelector('.row') || $('recent').querySelector('.empty')) {
+        const fresh = await fetchNew($('recent'));
+        if (fresh.length) { $('recent').querySelector('.empty')?.remove(); prependGrouped($('recent'), fresh); }
+        const stats = await invoke('home_stats', { utcOffsetMinutes: -new Date().getTimezoneOffset() });
+        $('words').textContent = stats.words_this_week.toLocaleString(LOCALE);
+        $('saved').textContent = duration(stats.seconds_saved);
+      }
+      if (!historyQuery.trim() && $('list').childElementCount > 0) {
+        const fresh = await fetchNew($('list'));
+        if (fresh.length) prependGrouped($('list'), fresh);
+      }
+    } catch (_) { /* the next open shows them */ }
+  }
+
+  // ---- Events from the app (R-16, R-22) ----
   listen('home://attention', (e) => showAttention(e.payload));
   listen('home://refresh', () => route());
+  listen('home://changed', () => showNew());
+  listen('home://retry', async (e) => {
+    const { id, state, message } = e.payload;
+    if (state === 'working') { setWorking(id, true); return; }
+    setWorking(id, false);
+    if (state === 'done') {
+      const item = await invoke('home_item', { id });
+      if (item) updateItem(id, item);
+      rowsFor(id).forEach((r) => say(r, 'Retried · new text copied'));
+    } else if (state === 'failed') {
+      rowsFor(id).forEach((r) => say(r, message, true));
+    }
+  });
 
   window.addEventListener('hashchange', route);
-  loadSections().then(route);
+  Promise.all([invoke('home_info').then((i) => { info = i; }), loadSections()]).then(route);
 </script>
 </body>
 </html>
