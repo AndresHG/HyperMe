@@ -67,7 +67,8 @@ pub struct Task {
     pub rolled: u32,
     /// Unix ms, when done or dropped.
     pub finished_at: Option<i64>,
-    /// The tasks this one waits for, in the order they were linked.
+    /// The tasks this one waits for. The first open one is shown under "Waiting on"; the
+    /// SQLite store lists them oldest first.
     pub blocked_by: Vec<TaskId>,
 }
 
@@ -482,6 +483,19 @@ pub trait TaskStore {
         how: Finish,
         at_ms: i64,
     ) -> impl Future<Output = Result<(), TaskError>> + Send;
+
+    /// Deletes a task and its links, for ⌘Z right after adding it (R-3).
+    fn remove(&self, id: TaskId) -> impl Future<Output = Result<(), TaskError>> + Send;
+
+    /// Adds or updates the task that mirrors a source item, found by source name, account and
+    /// reference; returns its id. An update takes the source's title, notes, due and link, and
+    /// keeps the user's day and blockers. `closed_at` (Unix ms) marks an open task done when
+    /// the item closed at its source (R-12). A task with the HyperMe source is simply added.
+    fn upsert_mirror(
+        &self,
+        task: NewTask,
+        closed_at: Option<i64>,
+    ) -> impl Future<Output = Result<TaskId, TaskError>> + Send;
 
     /// Links "`blocked` is blocked by `blocker`". A link that would close a loop is refused
     /// with [`TaskError::Cycle`] (R-7).
