@@ -3,5 +3,6 @@
 //! keychain, and never appear in an error message (R-25).
 
 pub mod cleanup;
+pub mod mcp;
 pub mod oauth;
 pub mod speechmatics;
