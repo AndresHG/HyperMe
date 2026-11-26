@@ -156,7 +156,7 @@ to the next release; **P2** is nice to have. The phase is from [ROADMAP.md](ROAD
 
 | Feature | Phase | Priority | Notes |
 | --- | --- | --- | --- |
-| "Hyper, …" routes the same key to a question or an action | 3 | P0 | *Proposed* (question 3) |
+| "Hyper, …" routes the same key to a question or an action; optional command key in Settings | 3 | P0 | Owner, 26 November 2026 (Q-3) |
 | Answers in a card that grows from the pill | 3 | P0 | Model-only answers first; web search as an MCP tool (question 11) |
 | Preview card for actions, Enter to confirm, Esc to drop | 3 | P0 | Under one second from release to card |
 | One MCP client; GitHub as the first connector | 3 | P0 | Owner, 25 November 2026 |
@@ -261,7 +261,7 @@ Asked in the interview of 26 November 2026. Recommendations first.
 | --- | --- | --- | --- |
 | Q-1 | Product identity | "Voice to done"; Wispr Flow as the bar for dictation only | Decided 26 November 2026: voice to done |
 | Q-2 | Phase 0 gate | Declare passed on the Wispr comparison and approve the Phase 1 spec | Decided 26 November 2026: Phase 1 approved to start, with the spec's open questions answered (hotkey Fn, cleanup deadline 1.5 s, speed gate wired only) |
-| Q-3 | One key or two | One key; "Hyper, …" routes to commands; optional command key | Asked |
+| Q-3 | One key or two | One key; "Hyper, …" routes to commands; optional command key | Decided 26 November 2026: one key, "Hyper" prefix |
 | Q-4 | First outside user | Developers who dictate into coding agents and chat | Asked |
 | Q-5 | Keys model for outside users | Bring your own keys only in version 1 | Open |
 | Q-6 | Email (phase 4) before meetings (phase 5) | Keep email first | Open |
@@ -282,7 +282,7 @@ confirms, unless marked "fixed here".
 | --- | --- | --- | --- |
 | C-1 | [PITCH.md](PITCH.md) (elevator pitch, positioning table, claims ledger), [RESEARCH.md](RESEARCH.md) section 2 | Say "keeps nothing on disk" and "no audio kept on disk"; the owner chose dictation history on disk on 26 November 2026 | Follow the newer decision; reword PITCH to "keeps your data on your Mac" |
 | C-2 | Phase 1 spec R-18 | Ends with "It shall not write it to disk", against the history it describes | Delete that sentence |
-| C-3 | [SPEC.md](SPEC.md) section 2 vs [ROADMAP.md](ROADMAP.md) phase 3 and [UX.md](UX.md) | Command mode on a second hotkey vs one key that routes | Q-3 |
+| C-3 | [SPEC.md](SPEC.md) section 2 vs [ROADMAP.md](ROADMAP.md) phase 3 and [UX.md](UX.md) | Command mode on a second hotkey vs one key that routes | Q-3 decided: one key; fix SPEC section 2 |
 | C-4 | `CLAUDE.md` introduction and examples | "Create a ticket for this in Linear"; GitHub is the first connector | Change the examples to GitHub |
 | C-5 | `CLAUDE.md` "No local models in version 1" vs meetings on device | Meetings use Apple's on-device recognizer and an optional local cleanup model | Reword: no local models for dictation in version 1; meetings on device are the decided exception |
 | C-6 | [RESEARCH.md](RESEARCH.md) section 5 "consume instead of building: meeting capture, scheduling" vs ROADMAP phases 4 and 5 | Research advised not to build capture or a scheduler; the roadmap builds both | The owner's later decisions win (meetings on device, 26 November). RESEARCH stays as history |
