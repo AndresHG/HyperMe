@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="820" height="560" viewBox="0 0 820 560" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Rounded', 'SF Pro Text', 'Helvetica Neue', Arial, sans-serif">
+  <title>HyperMe morning and evening cards rising from the dot</title>
+  <defs><linearGradient id="desk" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3B4150"/><stop offset="1" stop-color="#2A2D34"/></linearGradient></defs>
+  <rect width="820" height="560" fill="url(#desk)"/>
+  <text x="24" y="34" fill="#A1A1AA" font-size="12">The first time you sit down after 06:00, and at 18:30. Built from local data in under 150 ms. Never takes focus.</text>
+
+  <!-- MORNING -->
+  <text x="40" y="66" fill="#FFFFFF" font-size="13" font-weight="700">Morning card</text>
+  <rect x="40" y="76" width="360" height="410" rx="18" fill="#111113" stroke="#3A3A40"/>
+  <text x="58" y="106" fill="#FFFFFF" font-size="15" font-weight="700">Good morning · Friday 27</text>
+  <text x="58" y="124" fill="#A1A1AA" font-size="11">Yesterday: 6 done, 2 moved</text>
+  <text x="58" y="152" fill="#6B6B73" font-size="10" font-weight="700" letter-spacing="0.6">MEETINGS · 3</text>
+  <rect x="58" y="160" width="324" height="30" rx="9" fill="#1B1B1F"/>
+  <text x="72" y="179" fill="#FFFFFF" font-size="12">First: Weekly planning, 10:30</text>
+  <text x="58" y="216" fill="#6B6B73" font-size="10" font-weight="700" letter-spacing="0.6">TODAY · 7</text>
+  <g font-size="12">
+    <rect x="58" y="224" width="324" height="30" rx="9" fill="#1B1B1F"/>
+    <circle cx="72" cy="239" r="4" fill="#F59E0B"/><text x="84" y="243" fill="#FFFFFF">Call the dentist</text><text x="318" y="243" fill="#F59E0B" font-size="11">due 10:00</text>
+    <rect x="58" y="258" width="324" height="30" rx="9" fill="#1B1B1F"/>
+    <circle cx="72" cy="273" r="4" fill="#7C5CFF"/><text x="84" y="277" fill="#FFFFFF">Send Ana the numbers</text><text x="306" y="277" fill="#7C5CFF" font-size="11">unblocked</text>
+    <rect x="58" y="292" width="324" height="30" rx="9" fill="#1B1B1F"/>
+    <circle cx="72" cy="307" r="4" fill="none" stroke="#A1A1AA"/><text x="84" y="311" fill="#FFFFFF">Review the onboarding copy</text>
+    <rect x="58" y="326" width="324" height="30" rx="9" fill="#1B1B1F"/>
+    <circle cx="72" cy="341" r="4" fill="none" stroke="#A1A1AA"/><text x="84" y="345" fill="#FFFFFF">Book the room</text><text x="330" y="345" fill="#6B6B73" font-size="11">rolled 2</text>
+  </g>
+  <text x="58" y="378" fill="#A1A1AA" font-size="11">2 waiting on blockers · 3 more in Today</text>
+  <text x="58" y="406" fill="#6B6B73" font-size="10" font-weight="700" letter-spacing="0.6">FOR YOU</text>
+  <text x="58" y="424" fill="#FFFFFF" font-size="12">2 proposals to review · Mail: Updating…</text>
+  <rect x="58" y="444" width="122" height="26" rx="7" fill="#7C5CFF"/><text x="70" y="461" fill="#FFFFFF" font-size="11" font-weight="700">↵ Open Today</text>
+  <rect x="188" y="444" width="70" height="26" rx="7" fill="#26262B"/><text x="200" y="461" fill="#A1A1AA" font-size="11">Esc Later</text>
+  <rect x="266" y="444" width="58" height="26" rx="7" fill="#26262B"/><text x="278" y="461" fill="#A1A1AA" font-size="11">⌘K More</text>
+
+  <!-- EVENING -->
+  <text x="420" y="66" fill="#FFFFFF" font-size="13" font-weight="700">Evening card (deferred)</text>
+  <rect x="420" y="76" width="360" height="410" rx="18" fill="#111113" stroke="#3A3A40"/>
+  <text x="438" y="106" fill="#FFFFFF" font-size="15" font-weight="700">Day done · 6 of 9</text>
+  <text x="438" y="124" fill="#A1A1AA" font-size="11">Dentist, numbers to Ana, onboarding copy and 3 more</text>
+  <text x="438" y="152" fill="#6B6B73" font-size="10" font-weight="700" letter-spacing="0.6">STILL OPEN · 3</text>
+  <g font-size="12">
+    <rect x="438" y="160" width="324" height="30" rx="9" fill="#26262B" stroke="#7C5CFF"/>
+    <text x="452" y="179" fill="#FFFFFF">Book the room</text><text x="660" y="179" fill="#A1A1AA" font-size="11">T · P · D</text><text x="722" y="179" fill="#22C55E" font-size="11">Mon</text>
+    <rect x="438" y="194" width="324" height="30" rx="9" fill="#1B1B1F"/>
+    <text x="452" y="213" fill="#FFFFFF">Prepare the slides</text><text x="660" y="213" fill="#A1A1AA" font-size="11">T · P · D</text><text x="712" y="213" fill="#A1A1AA" font-size="11">Tomorrow</text>
+    <rect x="438" y="228" width="324" height="30" rx="9" fill="#1B1B1F"/>
+    <text x="452" y="247" fill="#FFFFFF">Old expense report</text><text x="660" y="247" fill="#A1A1AA" font-size="11">T · P · D</text><text x="722" y="247" fill="#FF4D4F" font-size="11">Drop</text>
+  </g>
+  <text x="438" y="284" fill="#6B6B73" font-size="10" font-weight="700" letter-spacing="0.6">ROLLED 3 TIMES · KEEP IT?</text>
+  <rect x="438" y="292" width="324" height="30" rx="9" fill="#1B1B1F"/>
+  <text x="452" y="311" fill="#FFFFFF" font-size="12">Update the insurance form</text><text x="664" y="311" fill="#A1A1AA" font-size="11">Keep · Day · Drop</text>
+  <text x="438" y="350" fill="#6B6B73" font-size="10" font-weight="700" letter-spacing="0.6">READY TOMORROW</text>
+  <text x="438" y="368" fill="#FFFFFF" font-size="12">Send the invite (room booked)</text>
+  <text x="438" y="398" fill="#A1A1AA" font-size="11">1 proposal still waiting for a yes</text>
+  <rect x="438" y="444" width="136" height="26" rx="7" fill="#7C5CFF"/><text x="450" y="461" fill="#FFFFFF" font-size="11" font-weight="700">↵ Close the day</text>
+  <rect x="582" y="444" width="70" height="26" rx="7" fill="#26262B"/><text x="594" y="461" fill="#A1A1AA" font-size="11">Esc Later</text>
+  <rect x="660" y="444" width="58" height="26" rx="7" fill="#26262B"/><text x="672" y="461" fill="#A1A1AA" font-size="11">⌘K More</text>
+
+  <!-- dot -->
+  <circle cx="410" cy="532" r="8" fill="#1B1B1F" stroke="#7C5CFF" stroke-width="2"/>
+  <text x="430" y="536" fill="#A1A1AA" font-size="11">Both grow from the dot and sink back into it as its ring</text>
+</svg>
