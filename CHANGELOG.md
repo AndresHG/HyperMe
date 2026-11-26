@@ -71,3 +71,7 @@ All notable changes to HyperMe are recorded here. The format follows
 - Fixed: in the walkthrough, a key typed and saved with Test now shows "Testing…" and then its
   result. Saving a key never told the walkthrough, so the field cleared and nothing happened. A
   key not typed yet no longer shows as "Not working".
+- The pill rests as a small still glass bead at the bottom centre (U-13, brought forward by the
+  owner), and grows into the pill when you dictate; "Show while idle" in Settings > General
+  turns it off. The pill's window is transparent, so no white rectangle shows around it, and its
+  label and voice sit in the exact centre.

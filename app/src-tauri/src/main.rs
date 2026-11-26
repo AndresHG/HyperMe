@@ -172,7 +172,14 @@ fn pill(app: &AppHandle) -> tauri::Result<()> {
         // Above full-screen apps (R-23).
         .level(PanelLevel::Status)
         // No title bar from Tauri; then the panel flag that keeps it from activating the app.
-        .with_window(|window| window.decorations(false).skip_taskbar(true))
+        .with_window(|window| {
+            // The web view draws no background, so only the capsule shows (owner: no white
+            // rectangle around the pill).
+            window
+                .decorations(false)
+                .skip_taskbar(true)
+                .transparent(true)
+        })
         .add_style_mask(StyleMask::empty().nonactivating_panel())
         .collection_behavior(
             CollectionBehavior::new()
