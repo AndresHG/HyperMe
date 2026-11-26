@@ -42,6 +42,11 @@ What that means for decisions:
   because that is what people compare. It does not copy Wispr Flow's product shape, its Hub
   window or its feature list. Where Wispr stops at text (its Command Mode takes no action in other
   apps, [FIELD.md](FIELD.md)), HyperMe keeps going.
+- **Wispr Flow's feel, OpenWhispr's choice.** The owner, a daily Wispr Flow user, finds its
+  dictation experience excellent and OpenWhispr's the opposite: rich options (many providers,
+  models listed from each key, downloadable local models) behind a poor experience. HyperMe aims
+  for both: Wispr-level use, with OpenWhispr's range of choice kept out of sight in Settings
+  (owner, 26 November 2026).
 - **Quick things happen at the pill, lasting things in Home** ([UX.md](UX.md), decisions U-8 to U-10).
   The pill and its cards are for talking. A small quick sheet from the dot at the bottom centre
   shows Ask, Now, the top three items waiting for you, and the last dictation with Retry. The
@@ -146,7 +151,7 @@ to the next release; **P2** is nice to have. The phase is from [ROADMAP.md](ROAD
 | Dictation history on the Mac, retry after a lost connection | 1 | P0 | Owner, 26 November 2026 |
 | Keys in the keychain, onboarding that tests each step | 1 | P0 | |
 | Recommended setup in onboarding: our pick of speech and cleanup models, the keys it needs, and an estimate of the monthly cost from the hours a week you dictate | 1 | P0 | Owner, Q-5. Version 1 asks only for the recommended keys (Speechmatics, Groq) |
-| Choose a provider and model per role (speech, cleanup, answers) in Settings → Advanced, from a list, with any OpenAI-compatible hosted model | 2 | P1 | Owner, Q-5. The range of options follows OpenWhispr's, not its interface. OpenAI is the first extra provider |
+| Choose a provider and model per role (speech, cleanup, answers) in Settings → Advanced: enter a provider's key and pick from the models that key offers, or any OpenAI-compatible hosted model | 2 | P1 | Owner, Q-5. The range of options follows OpenWhispr's, not its interface. OpenAI is the first extra provider |
 | Personal dictionary, learned from corrections, in the Home window | 2 | P0 | Replace sound-alikes before cleanup: 7 of 7 names right ([results](results/2026-11-26-dictionary.md)) |
 | Cleanup levels (none, light, medium) and tone per app, on the Style page of the Home window | 2 | P1 | |
 | Hands-free: double-tap to lock recording | 2 | P1 | Owner, U-3 |
@@ -283,7 +288,7 @@ Asked in the interview of 26 November 2026. Recommendations first.
 | Q-11 | What answers questions | A fast model, web search when needed | Decided 26 November 2026: its own model setting, cheap and fast by default, switchable from the card with regenerate |
 | Q-14 | Spoken answers (text-to-speech) | Text first, an optional voice later | Decided 26 November 2026: not for now, maybe later |
 | Q-12 | Work and personal profiles ([SPEC.md](SPEC.md) section 4) | Drop from version 1; one profile | Decided 26 November 2026: one profile, several accounts |
-| Q-13 | Adopt the trial and baseline checks as gates ([RESEARCH.md](RESEARCH.md) section 1.3) | Drop as gates; the Wispr comparison covers the baseline | Open |
+| Q-13 | Adopt the trial and baseline checks as gates ([RESEARCH.md](RESEARCH.md) section 1.3) | Drop as gates; the Wispr comparison covers the baseline | Decided 26 November 2026: drop both; read how Handy, Omi and OpenWhispr are built for ideas only |
 
 ## 13. Contradictions found in the existing documents
 
