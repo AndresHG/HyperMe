@@ -209,7 +209,7 @@ pub fn settings_set(
 }
 
 /// Tells a waiting walkthrough to test the providers again (U-12).
-fn providers_changed(app: &AppHandle) {
+fn providers_changed<R: tauri::Runtime>(app: &AppHandle<R>) {
     use tauri::Emitter;
     let _ = app.emit_to(crate::walkthrough::WALKTHROUGH, "providers-changed", ());
 }
@@ -229,9 +229,19 @@ fn provider_for(app: &AppHandle, role: &str) -> Result<(Config, String), String>
 #[tauri::command]
 pub fn key_set(app: AppHandle, role: String, key: String) -> Result<(), String> {
     let (_, provider) = provider_for(&app, &role)?;
-    KeychainStore::new()
-        .set(&provider, &key)
-        .map_err(|e| e.to_string())
+    save_key(&app, &KeychainStore::new(), &provider, &key)
+}
+
+/// Stores the key, then tells a waiting walkthrough to test it (U-12).
+fn save_key<R: tauri::Runtime>(
+    app: &AppHandle<R>,
+    store: &dyn SecretStore,
+    provider: &str,
+    key: &str,
+) -> Result<(), String> {
+    store.set(provider, key).map_err(|e| e.to_string())?;
+    providers_changed(app);
+    Ok(())
 }
 
 /// Tests a key against its provider: opens a speech session (no audio is sent) or warms the
@@ -294,6 +304,28 @@ pub fn app_restart(app: AppHandle) {
 
 #[cfg(test)]
 mod tests {
+    /// Bug, 26 November 2026: the walkthrough's Test button saves a typed key, clears the field
+    /// and waits for `providers-changed` to test it, but saving a key never sent that event, so
+    /// the key seemed to vanish untested. Saving a key must tell the walkthrough (U-12, AC-21).
+    #[test]
+    fn saving_a_key_tells_the_walkthrough() {
+        use hyperme_core::secrets::{MemorySecretStore, SecretStore};
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use tauri::Listener;
+
+        let app = tauri::test::mock_app();
+        let heard = Arc::new(AtomicUsize::new(0));
+        let counter = heard.clone();
+        app.listen_any("providers-changed", move |_| {
+            counter.fetch_add(1, Ordering::SeqCst);
+        });
+        let store = MemorySecretStore::default();
+        super::save_key(app.handle(), &store, "groq", "test-key").unwrap();
+        assert_eq!(store.get("groq").unwrap().as_deref(), Some("test-key"));
+        assert_eq!(heard.load(Ordering::SeqCst), 1);
+    }
+
     use super::*;
     use hyperme_core::config::Modifier;
     use serde_json::json;

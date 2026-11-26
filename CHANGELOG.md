@@ -68,3 +68,6 @@ All notable changes to HyperMe are recorded here. The format follows
   light running along it until the text lands. Done, raw text and nothing heard show the line in
   their colour. Reduce motion drops the ripple and the running light, and nothing is drawn while
   the pill is hidden.
+- Fixed: in the walkthrough, a key typed and saved with Test now shows "Testing…" and then its
+  result. Saving a key never told the walkthrough, so the field cleared and nothing happened. A
+  key not typed yet no longer shows as "Not working".

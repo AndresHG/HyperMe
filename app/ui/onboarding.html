@@ -484,7 +484,9 @@
       $(role + '-key').placeholder = 'Saved in your keychain';
     } catch (e) {
       checks[flag] = false;
-      keyState(role, 'bad', 'Not working', String(e));
+      // A key not typed yet is not an error: saving the other key tests both.
+      if (/^No \S+ key yet$/.test(String(e))) keyState(role, '', '');
+      else keyState(role, 'bad', 'Not working', String(e));
     }
     update();
   }
