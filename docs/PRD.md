@@ -106,7 +106,7 @@ agents ([RESEARCH.md](RESEARCH.md) section 2).
 | J-1 | am writing in any app | speak and get clean text at my cursor | I write three times faster, in my own words | 1, 2 |
 | J-2 | have a quick question mid-task | ask it out loud and see a short answer | I don't leave what I'm doing | 3 |
 | J-3 | think "this needs a ticket", "remind me", "tell X" | say it and confirm a preview | the task is captured in my tools in seconds | 3 |
-| J-4 | start or plan my day, or remember something mid-task | see what's next and what's pending, and add to it by voice | nothing slips | 3 (capture), 4 |
+| J-4 | start or plan my day, or remember something mid-task | see what's next and what's pending, and add to it by voice | nothing slips | 4 |
 | J-5 | face my inbox | get it triaged and replies drafted | mail takes minutes, and nothing is sent without me | 4 |
 | J-6 | finish a meeting | get notes, action points and proposed tickets | the meeting becomes work, not a document | 5 |
 | J-7 | want code written or a bug looked at | say it and have the task handed to Claude Code | I start the work without switching apps; the agent does the coding, not HyperMe | later |
@@ -188,7 +188,7 @@ few options.
 
 | Feature | Phase | Priority | Notes |
 | --- | --- | --- | --- |
-| "Hyper, remind me to …" adds to HyperMe's task list, with an optional day or date; the list on the Home page; roll-over | 3 | P0 | Owner, D-1 and D-3. Needs no connector |
+| "Hyper, remind me to …" adds to HyperMe's task list, with an optional day or date; the list on the Home page; roll-over | 4 | P0 | Owner, D-1 and D-3 |
 | Morning card at a time you set; nudges only before meetings and for due tasks | 4 | P0 | Owner, D-2 |
 | Pull new items from tracker, calendar and mail into the list, on a schedule | 4 | P0 | Owner, D-1 |
 | One profile with several accounts per service; you say which ("in my personal calendar") | 4 | P0 | Owner, Q-12. Separate profiles only if people ask |
@@ -354,4 +354,4 @@ and C-8 (the roadmap's "where we stand" table and the phase 2 gate). C-6 and C-1
 | C-13 | Open-decision lists in `CLAUDE.md`, ROADMAP and RESEARCH | Overlap and disagree on what is still open (licence and first connector are decided) | This section is the single list; the others link here |
 | C-14 | [ROADMAP.md](ROADMAP.md) phase 5, `CLAUDE.md` introduction, [SPEC.md](SPEC.md) | Phase 5 includes starting and following Claude Code and Devin tasks, and its gate needs an agent task reported back; the owner moved coding agents to later, as a hand-off only (Q-6) | Phase 5 becomes meetings only; agent hand-off moves to Later |
 | C-15 | `CLAUDE.md` "Memory and learning is part of the vision, not of a first version" | Memory now starts in phase 3 (M-3) | Reword: memory starts with commands in phase 3, after the first public release |
-| C-16 | [ROADMAP.md](ROADMAP.md) phase 3 scope | Has no task capture or memory; the owner put both in phase 3 (D-3, M-3) | Add them to phase 3 |
+| C-16 | [ROADMAP.md](ROADMAP.md) phase 3 scope | Has no memory; the owner put memory in phase 3 (M-3) and the whole task list in phase 4 (D-3) | Add memory to phase 3 and the task list to phase 4 |
