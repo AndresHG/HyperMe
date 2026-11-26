@@ -26,5 +26,9 @@ tokio = { workspace = true, features = ["sync", "time"] }
 [target.'cfg(target_os = "macos")'.dependencies]
 tauri-nspanel = "2.1.1"
 
+[dev-dependencies]
+# tauri's own mock runtime, to test that commands send their events. Not a new crate.
+tauri = { version = "2.12.7", features = ["macos-private-api", "tray-icon", "test"] }
+
 [lints]
 workspace = true
