@@ -92,8 +92,8 @@ EARS form. "The app" is HyperMe running on macOS.
   the user's own dictations without being corrected) shall never be added without the user's yes
   on that exact form, and the add dialog shall warn that it will be replaced everywhere.
 - R-18. The first time a candidate is seen, the app shall show it as a suggestion. When the same
-  candidate is seen a second time, the app shall add it and mark it as learned. *(Owner to
-  decide: open question 1.)*
+  candidate is seen a second time, the app shall add it and mark it as learned, with undo
+  (owner, 26 November 2026).
 - R-19. When the user dismisses a suggestion or deletes a learned heard form, the app shall
   never suggest that heard form for that entry again.
 - R-20. The app shall never read a secure text field, never read a field while secure input is
@@ -178,11 +178,11 @@ EARS form. "The app" is HyperMe running on macOS.
 | --- | --- | --- | --- |
 | Where the dictionary acts | Substitution on the Mac before the cleanup, plus the entries in the prompt | Speechmatics `additional_vocab`: names right too, but the `enhanced` model it was tested with mishears more of everything else (9.3 against 7.6 edits per 100 characters) and needed the language up front ([results](../../docs/results/2026-11-26-dictionary.md)) | Data, 26 November 2026; owner to confirm |
 | Where it is kept | SQLite in the app's data folder, with text and CSV import and export | A text file as the only store: no room for use counts, suggestions and dismissals without a second file | Proposed |
-| How learning is approved | Suggestion first, added on the second sighting, common words always asked | Silent add at once (Wispr Flow's learned words carry a marker; whether it asks is not in its docs); always ask (more taps than users give) | Owner to decide (open question 1) |
+| How learning is approved | Suggestion first, added on the second sighting, common words always asked | Silent add at once (Wispr Flow's learned words carry a marker; whether it asks is not in its docs); always ask (more taps than users give) | Owner, 26 November 2026 |
 | Learn from edits default | On, with a switch on the Dictionary page | Off by default: the field text never leaves the Mac, and without it the feature mostly does not happen | Proposed |
 
 ## Open questions for the owner
 
-1. **How learning is approved** (R-18): a correction seen twice is added on its own (marked
-   learned, with undo), or every learned word waits for a yes, or it is added at once as Wispr
-   Flow appears to do. Recommendation: twice, then on its own.
+1. ~~How learning is approved~~ (R-18): decided 26 November 2026, twice, then on its own:
+   a correction seen once is a suggestion, seen twice it is added, marked learned, with undo;
+   common words always ask.

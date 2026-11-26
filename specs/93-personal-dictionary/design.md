@@ -161,7 +161,7 @@ how it detects an edit, so the method above is ours.
 
 ### From candidate to entry
 
-Proposed (open question 1 in the spec):
+Decided by the owner on 26 November 2026 (twice, then on its own):
 
 | Situation | What happens |
 | --- | --- |
