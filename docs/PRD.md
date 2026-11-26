@@ -109,7 +109,7 @@ agents ([RESEARCH.md](RESEARCH.md) section 2).
 | J-5 | face my inbox | get it triaged and replies drafted | mail takes minutes, and nothing is sent without me | 4 |
 | J-6 | finish a meeting | get notes, action points and proposed tickets | the meeting becomes work, not a document | 5 |
 | J-7 | want code written or a bug looked at | say it and have the task handed to Claude Code | I start the work without switching apps; the agent does the coding, not HyperMe | later |
-| J-8 | use it every day | have it learn my words, names and style | it gets better the more I use it | later (dictionary from Phase 2) |
+| J-8 | use it every day | have it learn my words, names, people, projects and style | it gets better the more I use it | 2 (dictionary), 3 onward |
 
 ## 6. Principles
 
@@ -195,10 +195,30 @@ commands (owner, Q-6). Meetings follow daily tasks and email, or run in parallel
 | Notes, action points and proposed tickets with owner and quote | 5 | P0 | Tickets go through the preview |
 | Diarization after the meeting | 5+ | P2 | FluidAudio (Apache-2.0) |
 
-### 7.5 Later
+### 7.5 Memory and learning (J-8)
 
-Memory and learning beyond the dictionary ("knows you better every day", plain files the user
-owns); a free local mode with speech and cleanup models you download in the app, so no key is
+Decided by the owner on 26 November 2026 (M-1 to M-3). How the learning works is still to be
+designed: a design proposal will compare how other assistants build memory, before a spec.
+
+- **How it learns.** "Hyper, remember that …" saves at once. Hyper also notices things (a name
+  corrected twice, a person mentioned often) and proposes them as facts. Proposals wait in an
+  approval list on the Home page of the Home window; nothing is learned silently.
+- **Where it lives.** A folder of plain Markdown files on the user's Mac (people, projects,
+  preferences, facts), readable and editable in any editor and usable as an Obsidian vault, shown
+  as a graph. SQLite is only a search index over the files. The folder is the user's data: never
+  in any repository and never sent anywhere except as context to the user's own providers.
+- **The dictionary** learns from corrections and can be edited by hand.
+
+| Feature | Phase | Priority | Notes |
+| --- | --- | --- | --- |
+| Dictionary learned from corrections, editable by hand | 2 | P0 | See 7.1 |
+| "Hyper, remember …", the approval list, the Markdown folder | 3 | P0 | Answers and actions use it for people and projects |
+| Proposed facts from use (dictations, meetings, mail) | 4, 5 | P1 | Always through the approval list |
+| Graph view of the knowledge base | 5+ | P2 | Or open the folder in Obsidian |
+
+### 7.6 Later
+
+A free local mode with speech and cleanup models you download in the app, so no key is
 needed (owner, Q-5); handing a task to Claude Code by voice ("Hyper, create this and send it to
 Claude Code"), a trigger and nothing more, through MCP or the agent's own interface (owner, Q-6); Linux and Windows; a wake word; spoken answers (text-to-speech), not for now, maybe in the future
 (owner, Q-14). Jira is not on the roadmap; it may come later, and an MCP server the user
