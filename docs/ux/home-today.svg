@@ -34,6 +34,7 @@
   </g>
 
   <text x="228" y="276" fill="#71717A" font-size="11" font-weight="700" letter-spacing="0.6">THE DAY</text>
+  <rect x="748" y="262" width="108" height="22" rx="7" fill="#F4F4F5"/><rect x="750" y="264" width="50" height="18" rx="5" fill="#FFFFFF" stroke="#E4E4E7"/><text x="762" y="277" fill="#18181B" font-size="11" font-weight="600">Day</text><text x="812" y="277" fill="#71717A" font-size="11">Week</text>
   <g font-size="12">
     <line x1="268" y1="290" x2="268" y2="430" stroke="#E4E4E7" stroke-width="2"/>
     <text x="228" y="304" fill="#71717A">09:00</text><circle cx="268" cy="300" r="4" fill="#A1A1AA"/><text x="282" y="304" fill="#71717A">Morning plan sent to you · job</text>

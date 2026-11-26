@@ -10,7 +10,7 @@ dictate, with a menu-bar icon and a settings window around it. In Phase 3 the pi
 it grows upward into a card with the answer or a preview that waits for ↵. Work that outlives a
 card lives in **Home**, one plain window with a few views taken from the roadmap: History, Today
 and Meetings. The rule that holds it together: **quick things happen at the pill, lasting things
-in Home.** Dictation never needs Home. Each surface comes from a job in the roadmap, and the
+in Home, opened from the bubble.** Dictation never needs Home. Each surface comes from a job in the roadmap, and the
 patterns are borrowed from the best Mac apps, not from any single app.
 
 ## Principles
@@ -20,8 +20,8 @@ patterns are borrowed from the best Mac apps, not from any single app.
 2. **Never take focus.** The pill and its cards are non-activating panels (spec R-23). Typing
    goes on in the app you were in. Only Home, a normal window, takes focus, and only when you
    open it.
-3. **Quiet until needed.** Nothing on screen while idle in Phase 1. Later, the idle pill is a
-   thin line, with a dot only when something waits.
+3. **Quiet until needed.** Nothing on screen while idle in Phase 1. Later, the bubble is small
+   and still, with a dot only when something waits.
 4. **Say what happened, in a few words.** Every state has one short label ("Raw text",
    "Nothing heard"). Errors name the provider and point to the fix (R-21), never show a key.
 5. **Preview before anything leaves the app.** Any action that creates, sends or posts shows a
@@ -282,27 +282,35 @@ opens and focus stays where it was.
   "this" was taken to be, so you can fix it before ↵. Window text only behind the visible
   switch that is off by default (`CLAUDE.md`).
 
-### The idle pill
+### The bubble
 
-Wispr Flow keeps a small bar on screen while idle, and its docs say you can move or hide it
-([docs](https://docs.wisprflow.ai/articles/5096240724-navigating-the-wispr-flow-app-desktop-ios-and-android)).
-HyperMe does the same from Phase 3: a thin line at the bottom centre that grows into the pill on
-hover. Hovering shows "Hold Fn · Click for Home". A small dot appears on it when something is
-waiting for you; there is no number badge to nag. It can be hidden in General. This replaces the
-corner orb (decision U-6).
+The owner likes a small floating bubble as an app's home on the desktop, so HyperMe keeps one
+from Phase 3 (U-1). What it does comes from our roadmap:
+
+- **Where:** a 40 pt circle, bottom right by default, draggable, hidden in General if unwanted.
+  The dictation pill stays at the bottom centre; the two never merge, so dictation keeps its
+  fixed place.
+- **What it shows:** still and quiet when nothing is happening. A small dot when something waits
+  for a yes, a slow ring while an agent or job runs, a red ring while a meeting is recorded
+  (safety rule). No number badge.
+- **Click** opens Home as a compact popover anchored above the bubble. ⌘↑ or the pop-out button
+  turns it into a normal window for longer work. **Right-click** shows the menu-bar menu.
+- **Alerts come out of the bubble** (see [Alerts](#alerts-phase-4)), so there is one place to
+  look.
 
 ### Home
 
 ![Home: Today with what waits for you, the day, and what runs](ux/home-today.svg)
 
-One normal Mac window, opened from the idle pill, the menu, or a shortcut (⌥Space, proposed). It
-is light or dark with the system, like a native app, so it does not feel like an overlay. Its
+Opened from the bubble, the menu, or a shortcut (⌥Space, proposed): a popover above the bubble
+for a quick look, or a normal window when popped out. It is light or dark with the system, like a
+native app. Its
 sidebar holds only what the roadmap needs, added by phase:
 
 | View | Phase | Holds |
 | --- | --- | --- |
 | **History** | 2 | Everything you said: dictations, questions and actions, newest first, searchable. Each item can be copied, pasted again, retried if it failed, or used to fix a word into the dictionary |
-| **Today** | 4 | Three parts, top to bottom. **Waiting for you:** every proposal that needs a yes (mail drafts, proposed tickets, agent results to review), one queue, since everything that leaves the app needs a preview anyway. **The day:** a timeline of meetings, nudges and scheduled jobs. **Running:** agent tasks and jobs in progress, with their state |
+| **Today** | 4 | Three parts, top to bottom. **Waiting for you:** every proposal that needs a yes (mail drafts, proposed tickets, agent results to review), one queue, since everything that leaves the app needs a preview anyway. **The day:** a calendar of meetings, nudges and scheduled jobs, as a day column with a Day and Week toggle; each meeting offers Join and take notes. **Running:** agent tasks and jobs in progress, with their state |
 | **Meetings** | 5 | Past and upcoming meetings, each with notes, action points and proposed tickets |
 
 Settings stays its own window (⌘,). Home never holds settings.
@@ -318,10 +326,20 @@ teaches the shortcuts. Superhuman's Cmd+K works this way ([help](https://help.su
 and Linear's command menu runs any action or opens any page by name
 ([guide](https://linear.app/enablement/guides/navigating-linear)). Press ? for the full list.
 
-### Nudges (Phase 4)
+### Alerts (Phase 4)
 
-A nudge is a card from the pill, never a system notification. Example: "Weekly planning in
-2 min · ↵ Join and take notes · Esc". Notion Calendar shows upcoming events in the menu bar
+An alert is a card that comes out of the bubble, never a macOS notification, so it never steals
+focus and stays in one place. Each kind maps to a roadmap job:
+
+| Alert | Example | Keys |
+| --- | --- | --- |
+| Meeting now | "Weekly planning in 2 min" | ↵ Join and take notes · Esc |
+| Waiting for you | "Reply draft ready" | ↵ Review · ⌘K More |
+| Agent done | "Claude Code finished: pull request ready" | ↵ Review |
+| Job failed | "Morning plan could not reach your calendar" | ↵ Fix (opens the setting) |
+
+An unanswered alert folds back into the bubble as its dot and stays in Today. "Pause Hyper for 1
+hour" in the menu holds all alerts; meeting capture indicators are never held. Notion Calendar shows upcoming events in the menu bar
 and has a system-wide "join meeting" shortcut
 ([help](https://www.notion.com/help/notion-calendar-settings)); HyperMe puts the next meeting in
 the menu header and makes ↵ on the nudge join it and start notes.
@@ -342,7 +360,7 @@ Built on the on-device design adopted on
 - **Cleanup setting** as a chip in the header with three choices: **Cloud** (Groq, default),
   **Local** (any OpenAI-compatible server), **Off** (grey text stays grey; nothing leaves the
   Mac). The chip says what leaves the Mac in a tooltip.
-- **Always visible while recording** (safety rule): a red dot on the idle pill and the menu-bar icon,
+- **Always visible while recording** (safety rule): a red ring on the bubble and a red menu-bar icon,
   with a timer, for as long as capture runs.
 - **After the meeting:** notes, action points and **proposed tickets** with owner and the exact
   quote. Proposals stay pending until the user applies them (Anarlog's pattern, FIELD.md); each
@@ -362,7 +380,7 @@ an earlier OpenWhispr slow and dislikes its UI (FIELD.md).
 | --- | --- | --- | --- |
 | Default hotkey | Fn hold to talk; Fn + Space hands-free | Globe (Fn), via a bundled listener; tap by default, hold optional | Fn hold (owner, U-2); Right Option offered |
 | Hands-free | Separate shortcut or double-tap; second press within 0.5 s cancels | Tap mode is the default | Phase 2, double-tap (owner, U-3) |
-| On-screen bar | Flow Bar shown by default; click to start, stop button | Floating panel, bottom right by default, auto-hide off | Pill only while dictating in Phase 1; a thin idle pill from Phase 3 |
+| On-screen bar | Flow Bar shown by default; click to start, stop button | Floating panel, bottom right by default, auto-hide off | Pill only while dictating in Phase 1; the bubble from Phase 3 |
 | Paste failure | "Select a textbox first", Paste last transcript | Pasted without cleanup is announced | Raw text label, Paste last dictation |
 | Cleanup off or failed | Not documented here | "Pasted without AI cleanup" note; cleanup has its own model | Raw text label (R-20) |
 | Commands | Command Mode on its own shortcut, off by default | Four hotkeys, plus the agent's name in dictation | One key, routed, with the route shown (Phase 3) |
@@ -383,7 +401,7 @@ Answered by the owner on 26 November 2026.
 
 | # | Question | Decided |
 | --- | --- | --- |
-| U-1 | When does the always-visible orb appear? | Phase 3. Phase 1 shows the pill only while dictating. Revisited by U-6 after the owner asked for a design of our own |
+| U-1 | When does the always-visible bubble appear? | Phase 3. Phase 1 shows the pill only while dictating |
 | U-2 | Default dictation hotkey | Hold Fn (Globe); Right Option and chords offered |
 | U-3 | Hands-free (double-tap to lock) | Phase 2 |
 | U-4 | Dictation history | On by default, kept 30 days or unlimited, under a total size limit the user sets (default 1 GB, our pick). Above all, a dropped connection must never lose a dictation: the audio is kept and the pill and menu offer **Retry**, even with history off (spec R-18, R-31). Searchable in Home → History from Phase 2 |
@@ -393,7 +411,7 @@ Open, after the owner asked on 26 November 2026 for a design of our own, with vi
 
 | # | Question | Proposed |
 | --- | --- | --- |
-| U-6 | A corner orb with a tabbed panel, or the pill growing into cards plus a Home window? | The pill grows into cards for quick answers and previews; lasting work in Home (History, Today, Meetings); a thin idle pill instead of the orb |
+| U-6 | Quick answers and previews as cards from the pill, and lasting work in Home (History, Today, Meetings) opened from the bubble, instead of a tabbed panel? | Yes. The bubble stays; its tabs come from the roadmap, not the reference |
 | U-7 | One "Waiting for you" queue in Today, or separate lists for things that need you and things to do? | One queue, since everything outbound waits for a yes anyway |
 
 ## Not decided here
