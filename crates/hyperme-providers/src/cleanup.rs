@@ -34,6 +34,9 @@ dictionary, write the dictionary term. Otherwise change nothing.";
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
+/// Settings waits at most this long for a model list.
+const LIST_TIMEOUT: Duration = Duration::from_secs(5);
+
 /// The prompt for a version named in the config.
 pub fn prompt_named(version: &str) -> Option<String> {
     match version {
@@ -169,6 +172,82 @@ fn provider_error(provider: &str, kind: ErrorKind, what: impl fmt::Display) -> E
         kind,
         message: format!("{provider}: {what}"),
     }
+}
+
+/// The models a key offers: `GET {endpoint}/models`, the `id` of each entry in `data`
+/// (OpenAI's shape, which Groq, OpenRouter and Google's compatibility endpoint share). Google's
+/// ids start with `models/`, which is dropped. Called only from Settings, never on the dictation
+/// path (R-15). An empty `key` sends no `Authorization` header, for a local server.
+pub async fn list_models(provider: &str, endpoint: &str, key: &str) -> Result<Vec<String>, Error> {
+    let http = reqwest::Client::builder()
+        .connect_timeout(CONNECT_TIMEOUT)
+        .timeout(LIST_TIMEOUT)
+        .build()
+        .map_err(|e| {
+            provider_error(
+                provider,
+                ErrorKind::Other,
+                format!("could not set up HTTP: {e}"),
+            )
+        })?;
+    let mut request = http.get(format!("{}/models", endpoint.trim_end_matches('/')));
+    if !key.is_empty() {
+        let mut auth = HeaderValue::from_str(&format!("Bearer {key}")).map_err(|_| {
+            provider_error(
+                provider,
+                ErrorKind::Auth,
+                "the key has characters a header cannot carry",
+            )
+        })?;
+        auth.set_sensitive(true);
+        request = request.header(AUTHORIZATION, auth);
+    }
+    let response = request.send().await.map_err(|e| {
+        provider_error(
+            provider,
+            ErrorKind::Network,
+            format!("could not reach it: {e}"),
+        )
+    })?;
+    let status = response.status();
+    if status == StatusCode::UNAUTHORIZED || status == StatusCode::FORBIDDEN {
+        return Err(provider_error(
+            provider,
+            ErrorKind::Auth,
+            "the key was rejected",
+        ));
+    }
+    if !status.is_success() {
+        return Err(provider_error(
+            provider,
+            ErrorKind::Other,
+            format!("the model list answered {status}"),
+        ));
+    }
+    let text = response.text().await.map_err(|e| {
+        provider_error(
+            provider,
+            ErrorKind::Network,
+            format!("the model list broke off: {e}"),
+        )
+    })?;
+    let body: Value = serde_json::from_str(&text).map_err(|e| {
+        provider_error(
+            provider,
+            ErrorKind::Other,
+            format!("the model list was not JSON: {e}"),
+        )
+    })?;
+    Ok(body["data"]
+        .as_array()
+        .map(|models| {
+            models
+                .iter()
+                .filter_map(|m| m["id"].as_str())
+                .map(|id| id.strip_prefix("models/").unwrap_or(id).to_owned())
+                .collect()
+        })
+        .unwrap_or_default())
 }
 
 impl CleanupProvider for ChatCleanup {
