@@ -41,7 +41,7 @@
     <rect x="712" y="243" width="50" height="24" rx="6" fill="#26262B"/><text x="724" y="259" fill="#FFFFFF">Test</text>
     <rect x="236" y="292" width="540" height="40" rx="10" fill="none" stroke="#3A3A40" stroke-dasharray="4 4"/>
     <text x="252" y="317" fill="#A1A1AA">+ Add a provider</text><text x="372" y="317" fill="#6B6B73" font-size="11">OpenAI-compatible, local server, …</text>
-    <text x="236" y="366" fill="#6B6B73" font-size="10" font-weight="700" letter-spacing="0.6">WHAT EACH FEATURE USES</text>
+    <text x="236" y="366" fill="#6B6B73" font-size="10" font-weight="700" letter-spacing="0.6">ADVANCED · WHAT EACH ROLE USES</text>
     <line x1="236" y1="378" x2="776" y2="378" stroke="#26262B"/>
     <text x="236" y="400" fill="#FFFFFF">Dictation speech</text>
     <rect x="576" y="386" width="200" height="24" rx="6" fill="#1B1B1F" stroke="#3A3A40"/><text x="588" y="402" fill="#FFFFFF">Speechmatics</text><text x="760" y="402" fill="#6B6B73">▾</text>

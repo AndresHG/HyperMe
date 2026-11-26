@@ -114,14 +114,72 @@ Five short screens in one small window, each tested before "Next" lights up (R-2
    needed to see the Fn key, so the hotkey cannot work without it. One row each, each with a
    button that opens the right System Settings page; each row turns green by itself when its
    permission arrives.
-4. **Keys.** One field per provider (Speechmatics, Groq), each with **Test**. The key goes
-   straight to Rust and the keychain; the field never shows it again (R-25).
+4. **Keys for the recommended setup.** See [Models and keys in onboarding](#models-and-keys-in-onboarding)
+   below: two keys, a cost estimate, and one quiet link to other providers.
 5. **Try it.** A text box in the window: "Hold Fn and say anything." Shows the timing
    ("Pasted in 0.43 s") as the first proof of speed.
 
 OpenWhispr's onboarding runs dictation first, then notes and meetings, then a live agent demo
 ([docs](https://docs.openwhispr.com/quickstart.md)). HyperMe keeps only the dictation part until
 later phases add their own short "what's new" card.
+
+### Models and keys in onboarding
+
+![Onboarding keys step: recommended setup, two keys, cost estimate](ux/onboarding-keys.svg)
+
+The owner's rule (26 November 2026): the wizard guides people to our recommended models and asks
+only for those keys. Choosing any provider and model per role stays in Settings → Advanced.
+Downloadable local models come later.
+
+**The keys step** has three parts, top to bottom:
+
+1. **The recommended setup, already chosen.** One card: "Speechmatics hears you, Groq cleans up
+   the text. The fastest pair we measured: 0.43 s from key release to text." No model names on
+   this screen; they are in Advanced.
+2. **Two key fields**, one per provider. Each has a **Get a key** button that opens the
+   provider's sign-up page in the browser with three short steps beside the field (sign up, create
+   a key, paste it here), and a **Test** that turns green with the round-trip time. The key goes
+   straight to Rust and the keychain; the field never shows it again (R-25). Next lights up when
+   both are green.
+3. **What it will cost you.** One question: "How much do you talk a day?" with three choices,
+   and the monthly cost under each:
+
+| Choice | Talking time | Speech (Speechmatics) | Cleanup (Groq) | Shown as |
+| --- | --- | --- | --- | --- |
+| A little | 10 min a day, about 1 h a week | about USD 2 | about USD 0.05 | "About $2 a month" |
+| A fair amount | 30 min a day, about 3.5 h a week | about USD 6 | about USD 0.15 | "About $6 a month" |
+| A lot | 1 h a day, about 7 h a week | about USD 12 | about USD 0.30 | "About $12 a month" |
+
+   Under the choices: "Speechmatics gives new accounts USD 100 of free credit, about 250 hours of
+   talking." Talking time is time actually speaking, not time the app is open; a month counts as 30 days. Prices are
+   Speechmatics Melia 1 at USD 0.40 an hour and Groq `gpt-oss-20b` at USD 0.075 / 0.30 per
+   million tokens, from the research of 24 November 2026
+   ([research](research/2026-11-24/01-dictation.md), section 3). They live in the config file
+   next to the model names, and must be checked against the providers' pages before each release.
+   Meetings add little: speech runs on the Mac, and Groq cleanup costs about USD 0.20 to 0.35 a
+   month for 8 hours of meetings a week ([ROADMAP.md](ROADMAP.md)).
+
+**The way out** is one quiet link under the keys: "Use other providers". It opens Settings →
+Providers with Advanced showing, and the wizard waits; when every role has a provider whose test
+passes, the wizard's Next lights up. Most people never see it.
+
+**Settings → Providers** shows the recommended pair by default, as the wizard left it. "Show
+advanced" opens the full choice, one row per role, each with a provider and a model:
+
+| Role | From | Providers offered |
+| --- | --- | --- |
+| Dictation speech | 1 | Speechmatics (recommended), OpenAI first among the others, then Deepgram, AssemblyAI, ElevenLabs, Soniox |
+| Dictation cleanup | 1 | Groq (recommended), OpenAI first among the others, then Anthropic, Google Gemini, OpenRouter, any OpenAI-compatible endpoint |
+| Answers and actions | 3 | Same list as cleanup; a larger model by default |
+| Meeting cleanup | 5 | Cloud (Groq), Local (an OpenAI-compatible server on the Mac) or Off; meeting speech always runs on the Mac |
+| Local models to download | Later | Not in version 1 |
+
+This list follows the range OpenWhispr offers with your own keys (OpenAI, Groq, Deepgram,
+AssemblyAI, ElevenLabs, OpenRouter, Anthropic, Gemini, local and self-hosted endpoints)
+([docs](https://docs.openwhispr.com/guides/cloud-vs-local.md)), but not its layout: OpenWhispr
+spreads the choice over per-feature tabs, while HyperMe keeps one table of roles on one page.
+Each provider needs only one key, shared by every role that uses it. Choosing a provider shows
+its own cost line, worked out the same way as in the wizard.
 
 ### Settings window
 
@@ -168,7 +226,7 @@ once its feature exists: no "coming soon" pages.
 | | **Setup check** | One line per requirement with a green tick or a fix button: microphone, accessibility, input monitoring, each provider key, each connector. The first page until everything is green, and the place every error links to | 1 |
 | Everyday | **General** | Launch at login; pill position and whether it shows while idle; sounds (start and stop: soft, off); pause media while dictating; theme follows the system | 1 |
 | | **Shortcuts** | Dictation (hold), hands-free, cancel (Esc), paste last dictation, open Home; later command and meeting. One list, with conflicts flagged | 1 |
-| Setup | **Providers** | One page for every model service. Each row shows provider, model, key status and a Test button, and says which features use it ("Used by: dictation, meetings"). Choosing what each feature uses is a short table on the same page, never a tab per feature | 1 |
+| Setup | **Providers** | The recommended pair by default: each row shows provider, key status, a Test button and which features use it ("Used by: dictation"). "Show advanced" opens the table of roles, one provider and model each ([Models and keys](#models-and-keys-in-onboarding)), never a tab per feature | 1 |
 | | **Connectors** | MCP servers (GitHub first). Each has its tools, a switch per tool, and "ask before" on for anything that writes (`CLAUDE.md`) | 3 |
 | | **Automations** | Scheduled jobs: a prompt, a schedule and a tool allowlist each (SPEC section 4), with last run and next run | 4 |
 | | **Meetings** | Calendar, capture (mic and system audio), cleanup **Cloud, Local or Off**, what happens after the meeting | 5 |
@@ -462,6 +520,13 @@ After the owner asked on 26 November 2026 for a design of our own, with views fr
 | U-8 | One shape at the bottom centre (dot, pill, card) instead of a corner bubble with a panel above it, so nobody can recognise another product in it (owner, 26 November 2026: "I don't want anyone to be able to recognize the other product") | Yes: the dot, Hyper violet, keycaps instead of button rows (owner) |
 | U-9 | Home's style | Decided by the owner, 26 November 2026: a window in Wispr Flow's style, with a Home page and sections from our roadmap |
 | U-10 | What does clicking the dot open? | Decided by the owner, 26 November 2026: a small quick sheet for in-the-moment things, with a switch to the full Home window |
+
+Open, for the owner (onboarding models and keys, 26 November 2026):
+
+| # | Question | Proposed |
+| --- | --- | --- |
+| U-11 | How the wizard asks for usage to estimate cost | Three choices by talking time a day (10 min, 30 min, 1 hour) with the monthly cost under each, rather than an hours-a-week slider |
+| U-12 | Where "Use other providers" leads | Settings → Providers with Advanced showing, while the wizard waits for every role to pass its test, rather than a custom step inside the wizard |
 
 ## Not decided here
 
