@@ -255,4 +255,15 @@ mod level_tests {
         let loud = level(&[8000; 480]);
         assert!(0.0 < quiet && quiet < loud && loud < 1.0, "{quiet} {loud}");
     }
+
+    /// The page must ask for the current view once its listeners exist: the bead's view is sent
+    /// at launch, before the page has loaded, and was lost, so the bead showed the hidden
+    /// recording bars in an opaque square (owner, 26 November 2026).
+    #[test]
+    fn the_page_asks_for_the_current_view_when_it_loads() {
+        let page = include_str!("../../ui/pill.html");
+        assert!(page.contains("invoke('pill_view')"));
+        // Hidden means nothing drawn: no capsule, no bars left over from the warm-up.
+        assert!(page.contains(".pill.hidden { display: none; }"));
+    }
 }

@@ -66,6 +66,8 @@
     background: rgba(255, 255, 255, 0.35);
   }
   .pill.idle > * { display: none !important; }
+  /* Until the first view arrives, and whenever the panel is hidden, nothing is drawn. */
+  .pill.hidden { display: none; }
   /* The state's mark sits at the left edge, so the label and the voice stay in the exact centre. */
   .icon { position: absolute; left: 14px; top: 0; bottom: 0; display: flex; align-items: center; }
   .icon:empty { display: none; }
@@ -81,7 +83,7 @@
 </style>
 </head>
 <body>
-  <div id="pill" class="pill" role="status" aria-live="polite">
+  <div id="pill" class="pill hidden" role="status" aria-live="polite">
     <span id="icon" class="icon"></span>
     <canvas id="voice" aria-hidden="true"></canvas>
     <span id="label" class="label"></span>
@@ -234,6 +236,8 @@
   function hidden() {
     kind = 'hidden';
     stop();
+    pill.className = 'pill hidden';
+    canvas.style.display = 'none';
   }
 
   document.addEventListener('visibilitychange', () => {
@@ -246,9 +250,16 @@
 
   const tauri = window.__TAURI__;
   if (tauri) {
-    tauri.event.listen('pill', (event) => render(event.payload));
-    tauri.event.listen('pill-hidden', hidden);
-    tauri.event.listen('level', (event) => { target = event.payload; });
+    // A view sent before these listeners exist is lost (the bead is sent at launch), so once they
+    // are in place the page asks for the current one, unless an event has already come.
+    let heard = false;
+    Promise.all([
+      tauri.event.listen('pill', (event) => { heard = true; render(event.payload); }),
+      tauri.event.listen('pill-hidden', () => { heard = true; hidden(); }),
+      tauri.event.listen('level', (event) => { target = event.payload; }),
+    ]).then(() => tauri.core.invoke('pill_view')).then((view) => {
+      if (!heard && view) render(view);
+    });
     pill.addEventListener('click', () => tauri.core.invoke('pill_clicked'));
   }
 </script>
