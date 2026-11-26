@@ -123,6 +123,42 @@ pub trait History {
     ) -> Result<(), Error>;
 }
 
+/// A correction for the personal dictionary, from Home's "Fix a word" (#98 R-17, R-20): the
+/// word or phrase the speech model heard, and what it should be. The hand-off agreed with the
+/// dictionary (#93), which owns the implementation and storage.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Correction {
+    pub heard: String,
+    pub wanted: String,
+    /// The dictation it was fixed in, if any.
+    pub dictation: Option<DictationId>,
+    /// That dictation's language, if known.
+    pub language: Option<String>,
+    /// The user confirmed a [`Refusal::CommonWord`] warning.
+    pub confirmed_common: bool,
+}
+
+/// What became of a correction that was not refused outright.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Added {
+    Added,
+    /// Not added yet: send it again with `confirmed_common` if the user confirms.
+    NeedsConfirm(Refusal),
+}
+
+/// Why a correction needs the user's confirmation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Refusal {
+    /// The heard word is common and would be replaced everywhere.
+    CommonWord,
+}
+
+/// The personal dictionary, as Home sees it (#98 R-20). Hard refusals (too long, duplicate,
+/// list full) are an `Err` with a message to show.
+pub trait Dictionary {
+    fn add_correction(&mut self, c: Correction) -> Result<Added, Error>;
+}
+
 /// The start and stop sounds (R-32).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Sound {

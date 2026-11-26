@@ -10,8 +10,9 @@ use std::collections::BTreeMap;
 
 use hyperme_core::dictation::{Engine, Event, Parts, Settings, Status};
 use hyperme_core::traits::{
-    CleanupProvider, DictationId, Error, ErrorKind, FocusInfo, History, Inserter, LiveSession,
-    Microphone, Sound, Sounds, SpeechProvider, TimingLine, TimingLog, Transcript,
+    Added, CleanupProvider, Correction, DictationId, Dictionary, Error, ErrorKind, FocusInfo,
+    History, Inserter, LiveSession, Microphone, Sound, Sounds, SpeechProvider, TimingLine,
+    TimingLog, Transcript,
 };
 use tokio::sync::mpsc;
 use tokio::time::{Instant, sleep};
@@ -338,6 +339,21 @@ impl History for FakeHistory {
             language.unwrap_or("-")
         ));
         Ok(())
+    }
+}
+
+/// A dictionary that records every correction and answers from a queue: `Ok(Added::Added)`
+/// once the queue is empty (#98 R-20).
+#[derive(Default)]
+pub struct FakeDictionary {
+    pub corrections: Vec<Correction>,
+    pub answers: std::collections::VecDeque<Result<Added, Error>>,
+}
+
+impl Dictionary for FakeDictionary {
+    fn add_correction(&mut self, c: Correction) -> Result<Added, Error> {
+        self.corrections.push(c);
+        self.answers.pop_front().unwrap_or(Ok(Added::Added))
     }
 }
 
