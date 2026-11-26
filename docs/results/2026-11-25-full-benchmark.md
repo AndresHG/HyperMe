@@ -102,7 +102,7 @@ Main difference per sample, read by Claude (live outputs and replay together):
 
 - **Misheard by speech**, about 20 samples: names and terms ("long chain", "unchain", "BFS"),
   similar words ("your words" for keywords), and the lost English opening of `es-20`.
-- **Internal names a dictionary would fix**, 7 samples: Zentrix, Quorbit, HyperMe. Fixing
+- **Internal names a dictionary would fix**, 7 samples, three internal names. Fixing
   them alone makes 1 more sample exact.
 - **Cleanup rewording**, about 10: "like" removed, "gonna" to "going to", a profanity softened,
   a statement turned into questions, one English phrase translated into Spanish.

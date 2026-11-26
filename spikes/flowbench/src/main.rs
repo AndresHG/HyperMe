@@ -112,7 +112,7 @@ struct Args {
     reasoning_effort: String,
 
     /// Cleanup prompt: v1 (the runs of 25 November), v2 (fillers named, examples), v3 (strict:
-    /// change as little as possible), or a file
+    /// change as little as possible), v4 (v3 plus dictionary terms), or a file
     #[arg(long, default_value = "v1")]
     prompt: String,
 
@@ -120,6 +120,10 @@ struct Args {
     /// Speechmatics as additional_vocab and added to the cleanup prompt
     #[arg(long)]
     vocab: Option<PathBuf>,
+
+    /// Replace the dictionary's sound-alikes in the raw transcript before the cleanup: on or off
+    #[arg(long, default_value = "on", value_parser = ["on", "off"])]
+    vocab_replace: String,
 
     /// WebSocket URL for streaming transcription. Default: the provider's (EU for Speechmatics
     /// and Deepgram)
@@ -213,9 +217,9 @@ async fn main() -> Result<()> {
         )?;
         let saved = only_named(saved, &args.samples)?;
         if args.stt_provider == SttProvider::Fake {
-            return replay_run(&args, &saved, &FakeCleanup).await;
+            return replay_run(&args, &saved, &replacing(&args, FakeCleanup)?).await;
         }
-        let llm = chat_cleanup(&args, http_client()?)?;
+        let llm = replacing(&args, chat_cleanup(&args, http_client()?)?)?;
         return replay_run(&args, &saved, &llm).await;
     }
     // Samples are read before any key is read and before anything touches the network.
@@ -225,11 +229,11 @@ async fn main() -> Result<()> {
         (false, _) => audio::load_clips(&samples_dir(), &args.samples)?,
     };
     if args.stt_provider == SttProvider::Fake {
-        return run(&args, clips, &FakeSpeech, &FakeCleanup).await;
+        return run(&args, clips, &FakeSpeech, &replacing(&args, FakeCleanup)?).await;
     }
     // One client for the upload and the cleanup, so both use the same warm connection.
     let http = http_client()?;
-    let llm = chat_cleanup(&args, http.clone())?;
+    let llm = replacing(&args, chat_cleanup(&args, http.clone())?)?;
     let languages = match args.languages.as_str() {
         "off" => Vec::new(),
         list => list.split(',').map(|code| code.trim().to_owned()).collect(),
@@ -323,6 +327,21 @@ fn chat_cleanup(args: &Args, http: reqwest::Client) -> Result<ChatCleanup> {
         model: args.llm_model.clone(),
         reasoning_effort: (args.reasoning_effort != "off").then(|| args.reasoning_effort.clone()),
         prompt: cleanup::prompt_named(&args.prompt)? + &vocab::prompt_line(&vocab_terms(args)?),
+    })
+}
+
+/// The terms for the substitution step: none with `--vocab-replace off`.
+fn replace_terms(args: &Args) -> Result<Vec<vocab::Term>> {
+    if args.vocab_replace == "off" {
+        return Ok(Vec::new());
+    }
+    vocab_terms(args)
+}
+
+fn replacing<C>(args: &Args, inner: C) -> Result<vocab::Replacing<C>> {
+    Ok(vocab::Replacing {
+        inner,
+        terms: replace_terms(args)?,
     })
 }
 
@@ -586,4 +605,29 @@ async fn run<S: SpeechProvider, C: CleanupProvider>(
         );
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Issue 34, AC-4: the substitution step is on by default and `--vocab-replace off` turns it
+    /// off, while the dictionary still reaches the prompt.
+    #[test]
+    fn vocab_replace_can_be_turned_off() {
+        let dir = std::env::temp_dir().join(format!("flowbench-vocab-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("vocab.txt");
+        std::fs::write(&file, "Zentrix: zen trix\n").unwrap();
+        let path = file.to_str().unwrap();
+
+        let on = Args::try_parse_from(["flowbench", "--vocab", path]).unwrap();
+        assert_eq!(replace_terms(&on).unwrap().len(), 1);
+        let off =
+            Args::try_parse_from(["flowbench", "--vocab", path, "--vocab-replace", "off"]).unwrap();
+        assert!(replace_terms(&off).unwrap().is_empty());
+        assert_eq!(vocab_terms(&off).unwrap().len(), 1);
+        assert!(Args::try_parse_from(["flowbench", "--vocab-replace", "maybe"]).is_err());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
 }

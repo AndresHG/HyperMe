@@ -147,7 +147,9 @@ GROQ_API_KEY=$(security find-generic-password -a "$USER" -s GROQ_API_KEY -w) car
   languages, keeps only the final version after a self-correction, allows a word fix from
   context, forbids translating or answering, and has six made-up examples. `--prompt v3` is v1
   with strict limits: remove only hesitations and false starts, keep informal words and
-  swearing, never translate or rephrase. `--prompt FILE` reads any other prompt.
+  swearing, never translate or rephrase. `--prompt v4` is v3 plus one rule: when a word or short
+  phrase clearly sounds like a dictionary term, write the term. `--prompt FILE` reads any other
+  prompt.
 - `--vocab FILE` is your dictionary, one term per line, optionally with how it sounds:
   `Zentrix: zen trix`. The cleanup prompt gets the written forms. Speechmatics gets it as
   `additional_vocab` only with a single-language model such as `enhanced`: on 25 November 2026
@@ -156,6 +158,11 @@ GROQ_API_KEY=$(security find-generic-password -a "$USER" -s GROQ_API_KEY -w) car
   sends the dictionary to the cleanup only. Keep the file in `samples/`, which git ignores, if it holds internal
   names. Speechmatics warns that a dictionary can delay the session start by up to 15 s; the
   start is before key release, so `total_ms` does not include it.
+- With `--vocab`, a substitution step runs on the raw transcript before the cleanup: each
+  sound-alike (the part after `:`) becomes the written term, case-insensitive, whole words or
+  phrases only, the longest first. Text that already reads as the term is left alone. A
+  `[vocab]` line under each sample says how many substitutions were made and which, so wrong
+  ones can be counted. `--vocab-replace off` turns the step off and leaves only the prompt.
 - Times are from the moment the cleanup request is sent. Add the speech provider's `stt_ms` for
   the time from key release.
 - The table also counts texts left unchanged and fillers left (um, uh, eh, o sea, you know and
@@ -232,8 +239,9 @@ Then drop `es-01 en-01` for all samples, and repeat with `--stt-provider deepgra
 | `--llm-key-env` | `OPENAI_API_KEY` | Variable that holds the cleanup key |
 | `--llm-deadline-ms` | `1500` | After this, the raw transcript is used and counted as a fallback |
 | `--reasoning-effort` | `none` | `off` leaves the field out of the request |
-| `--prompt` | `v1` | Cleanup prompt: `v1`, `v2`, `v3` or a file |
+| `--prompt` | `v1` | Cleanup prompt: `v1`, `v2`, `v3`, `v4` or a file |
 | `--vocab FILE` | none | Dictionary for the cleanup, and for Speechmatics single-language models |
+| `--vocab-replace` | `on` | Replace the dictionary's sound-alikes before the cleanup; `off` for the prompt only |
 | `--deepgram-finalize-only` | | Deepgram: end on the Finalize reply, not after CloseStream. Faster, but lost final words |
 | `--net` | | Print TCP round trips to the provider hosts, then stop |
 | `--net-host HOST` | built-in list | Hosts for `--net`; repeatable |
