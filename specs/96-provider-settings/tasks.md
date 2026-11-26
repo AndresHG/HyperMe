@@ -1,8 +1,8 @@
 # Choose the speech and cleanup provider: slices
 
 Each slice is one pull request, starts from failing tests that cite its `AC-n`, and passes fmt,
-clippy and tests before it merges. Open one issue per slice when the spec is approved. When each
-part starts depends on the owner's answer to P-1 ([spec.md](spec.md), Decisions).
+clippy and tests before it merges. Open one issue per slice when the spec is approved. Part A starts
+now, beside Phase 1; Part B waits for Phase 2 (owner, 26 November 2026, P-1 in [spec.md](spec.md)).
 
 ## Part A: the cleanup half (no new protocol)
 
