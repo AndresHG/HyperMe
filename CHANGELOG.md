@@ -23,6 +23,8 @@ All notable changes to HyperMe are recorded here. The format follows
   frames to the state machine. Start latency measured in `docs/results/`.
 - The dictation hotkey: hold Fn (default), Right Option or a chord, and Esc to cancel, through a
   listen-only macOS event tap.
+- Paste at the cursor through the clipboard, restored afterwards unless something else changed
+  it; no recording while a password field has focus; the frontmost app's name for the cleanup.
 - `spikes/flowbench`, a command-line speed test for dictation: upload against streaming,
   several speech and cleanup providers, stage timings, a quality score against gold texts.
 - Phase 0 results in `docs/results/`: Speechmatics (EU) with Groq cleanup reaches a median of

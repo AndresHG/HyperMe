@@ -336,6 +336,9 @@ impl FocusInfo for NoFocus {
     fn frontmost_app(&self) -> Option<String> {
         None
     }
+    fn secure_input(&self) -> bool {
+        false
+    }
 }
 
 /// AC-6 end to end: with the real client, the paste comes after the server's final transcript.

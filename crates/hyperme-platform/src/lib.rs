@@ -3,3 +3,4 @@
 
 pub mod hotkey;
 pub mod microphone;
+pub mod paste;

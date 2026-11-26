@@ -77,6 +77,9 @@ pub enum Status {
     NothingHeard,
     /// A key-down while a dictation is still being processed; it is ignored.
     StillWorking,
+    /// A key-down while a password field has focus: nothing is recorded (R-17). The pill says
+    /// "Not available in password fields".
+    SecureInput,
     /// Nothing pasted; the message says why (R-19).
     Failed(String),
 }
@@ -170,6 +173,11 @@ where
             // The pill may be gone while the app quits; the dictation goes on regardless.
             let _ = status.send(s);
         };
+        // R-17: never record while a password field has focus.
+        if focus.secure_input() {
+            emit(Status::SecureInput);
+            return Flow::Ended;
+        }
         let start = Instant::now();
 
         // R-1, R-2: capture, the speech session and the cleanup warm-up start together; the
