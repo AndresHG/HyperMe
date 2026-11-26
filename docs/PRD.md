@@ -248,8 +248,8 @@ adds already works (owner, 26 November 2026).
 ### For the project
 
 Success is an open-source project other people install and use (owner, 24 November 2026). With
-no telemetry, adoption can only be seen from the outside. *Proposed* measure (question 9): release
-downloads, GitHub stars, and at least 10 people outside the owner reporting weekly use in issues or
+no telemetry, adoption can only be seen from the outside. The measure (owner, 26 November 2026,
+Q-9): release downloads, GitHub stars, and at least 10 people outside the owner reporting weekly use in issues or
 discussions within three months of the first release.
 
 ## 11. Platform and technical scope
@@ -274,7 +274,7 @@ Asked in the interview of 26 November 2026. Recommendations first.
 | Q-6 | Email (phase 4) before meetings (phase 5) | Keep email first | Decided 26 November 2026: daily tasks and email first, meetings next or in parallel; coding agents move to later, as a hand-off only |
 | Q-7 | Mail and calendar provider | Google first | Decided 26 November 2026: Google first, Microsoft 365 later |
 | Q-8 | Ticket creation: wait for Enter or fire at once | Wait for Enter, per-tool relaxing later | Decided 26 November 2026: wait for Enter |
-| Q-9 | Adoption measure | Downloads, stars, 10 outside weekly users in three months | Open |
+| Q-9 | Adoption measure | Downloads, stars, 10 outside weekly users in three months | Decided 26 November 2026: as recommended |
 | Q-10 | Languages at public release | English and Spanish only | Open |
 | Q-11 | What answers questions | The cleanup provider's larger model, web search as an MCP tool | Open |
 | Q-12 | Work and personal profiles ([SPEC.md](SPEC.md) section 4) | Drop from version 1; one profile | Open |
