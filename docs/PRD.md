@@ -176,7 +176,7 @@ to the next release; **P2** is nice to have. The phase is from [ROADMAP.md](ROAD
 ### 7.3 Daily tasks and email (J-4, J-5)
 
 Decided by the owner on 26 November 2026 (D-1 to D-3). HyperMe keeps **its own task list**,
-because things come up during the day ("Hyper, remind me to call Marta today") that belong in no
+because things come up during the day ("Hyper, remind me to call the dentist today") that belong in no
 tracker. Each item has an optional day or date, and items not done roll over to the next day. On
 a schedule, the list also pulls new items that are yours from the tracker, the calendar and mail,
 linked back to their source (whether marking an item done in HyperMe also closes it at the
