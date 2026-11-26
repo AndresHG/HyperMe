@@ -14,16 +14,14 @@
     <text x="40" y="152" fill="#6B6B73" font-size="10" font-weight="700" letter-spacing="0.6">EVERYDAY</text>
     <text x="40" y="176" fill="#A1A1AA">General</text>
     <text x="40" y="202" fill="#A1A1AA">Shortcuts</text>
-    <text x="40" y="228" fill="#A1A1AA">Dictionary</text>
-    <text x="40" y="254" fill="#A1A1AA">Style</text>
-    <text x="40" y="288" fill="#6B6B73" font-size="10" font-weight="700" letter-spacing="0.6">SETUP</text>
-    <rect x="30" y="298" width="170" height="26" rx="6" fill="#26262B"/>
-    <text x="40" y="316" fill="#FFFFFF" font-weight="600">Providers</text>
-    <text x="40" y="342" fill="#A1A1AA">Connectors</text>
-    <text x="40" y="368" fill="#A1A1AA">Automations</text>
-    <text x="40" y="394" fill="#A1A1AA">Meetings</text>
-    <text x="40" y="420" fill="#A1A1AA">Privacy</text>
-    <text x="40" y="446" fill="#A1A1AA">About</text>
+    <text x="40" y="236" fill="#6B6B73" font-size="10" font-weight="700" letter-spacing="0.6">SETUP</text>
+    <rect x="30" y="246" width="170" height="26" rx="6" fill="#26262B"/>
+    <text x="40" y="264" fill="#FFFFFF" font-weight="600">Providers</text>
+    <text x="40" y="290" fill="#A1A1AA">Connectors</text>
+    <text x="40" y="316" fill="#A1A1AA">Automations</text>
+    <text x="40" y="342" fill="#A1A1AA">Meetings</text>
+    <text x="40" y="368" fill="#A1A1AA">Privacy</text>
+    <text x="40" y="394" fill="#A1A1AA">About</text>
     <text x="40" y="482" fill="#6B6B73" font-size="10">Sections appear as features ship</text>
   </g>
   <!-- content -->

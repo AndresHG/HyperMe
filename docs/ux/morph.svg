@@ -1,11 +1,11 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="960" height="400" viewBox="0 0 960 400" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Rounded', 'SF Pro Text', 'Helvetica Neue', Arial, sans-serif">
-  <title>HyperMe one shape: dot, pill, card, sheet</title>
-  <rect width="960" height="400" fill="#2A2D34"/>
-  <text x="32" y="40" fill="#FFFFFF" font-size="18" font-weight="700">One shape at the bottom centre. Everything grows from the same point.</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="700" height="400" viewBox="0 0 700 400" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Rounded', 'SF Pro Text', 'Helvetica Neue', Arial, sans-serif">
+  <title>HyperMe one shape: dot, pill, card</title>
+  <rect width="700" height="400" fill="#2A2D34"/>
+  <text x="32" y="40" fill="#FFFFFF" font-size="18" font-weight="700">One shape at the bottom centre. It grows from the same point.</text>
   <!-- baselines -->
   <g stroke="#3A3A40" stroke-width="1">
     <line x1="32" y1="330" x2="200" y2="330"/><line x1="232" y1="330" x2="420" y2="330"/>
-    <line x1="452" y1="330" x2="660" y2="330"/><line x1="692" y1="330" x2="928" y2="330"/>
+    <line x1="452" y1="330" x2="660" y2="330"/>
   </g>
   <!-- Dot -->
   <g>
@@ -35,18 +35,5 @@
     <text x="452" y="362" fill="#FFFFFF" font-size="14" font-weight="700">Card</text>
     <text x="452" y="382" fill="#A1A1AA" font-size="12">Hyper answers, previews, alerts.</text>
   </g>
-  <!-- Sheet -->
-  <g>
-    <path d="M704 330 v-196 a18 18 0 0 1 18 -18 h176 a18 18 0 0 1 18 18 v196 z" fill="#ECECF1"/>
-    <text x="722" y="144" fill="#18181B" font-size="14" font-weight="700">Today</text>
-    <rect x="722" y="156" width="88" height="14" rx="4" fill="#FFFFFF"/><rect x="722" y="176" width="88" height="14" rx="4" fill="#FFFFFF"/>
-    <circle cx="730" cy="163" r="3" fill="#7C5CFF"/><circle cx="730" cy="183" r="3" fill="#7C5CFF"/>
-    <rect x="822" y="156" width="78" height="80" rx="6" fill="#FFFFFF"/>
-    <rect x="828" y="170" width="66" height="14" rx="3" fill="#E4E4EF"/><rect x="828" y="196" width="66" height="22" rx="3" fill="#D9D3FF"/>
-    <rect x="770" y="300" width="80" height="20" rx="10" fill="#FFFFFF"/>
-    <circle cx="786" cy="310" r="3" fill="#18181B"/><circle cx="810" cy="310" r="3" fill="#A1A1AA"/><circle cx="834" cy="310" r="3" fill="#A1A1AA"/>
-    <text x="692" y="362" fill="#FFFFFF" font-size="14" font-weight="700">Sheet</text>
-    <text x="692" y="382" fill="#A1A1AA" font-size="12">Home rises from the edge. Esc sinks it.</text>
-  </g>
-  <g fill="#6B6B73" font-size="18"><text x="204" y="320">→</text><text x="424" y="320">→</text><text x="664" y="320">→</text></g>
+  <g fill="#6B6B73" font-size="18"><text x="204" y="320">→</text><text x="424" y="320">→</text></g>
 </svg>
