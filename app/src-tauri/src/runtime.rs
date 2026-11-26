@@ -93,6 +93,20 @@ pub fn start(app: &AppHandle, menu: TrayMenu) {
     }
 }
 
+/// Starts the dictation if it is not running yet, as the walkthrough does once the keys are in.
+pub fn ensure_running(app: &AppHandle) -> Result<(), String> {
+    let history = {
+        let shared = lock(app);
+        if shared.events.is_some() {
+            return Ok(());
+        }
+        shared.history.clone()
+    };
+    wire(app, history)?;
+    set_status(app, "Ready");
+    Ok(())
+}
+
 fn wire(app: &AppHandle, history: Arc<Mutex<HistoryInner>>) -> Result<(), String> {
     let dir = data_dir(app);
     let config =
@@ -163,7 +177,20 @@ async fn forward_audio(
 
 /// Shows each state in the pill and the menu.
 async fn show_statuses(app: AppHandle, mut statuses: mpsc::UnboundedReceiver<Status>) {
+    // Key release, for the walkthrough's "Pasted in 0.43 s".
+    let mut released: Option<Instant> = None;
     while let Some(status) = statuses.recv().await {
+        match status {
+            Status::Transcribing if released.is_none() => released = Some(Instant::now()),
+            Status::Done { .. } => {
+                if let Some(at) = released.take() {
+                    let ms = at.elapsed().as_millis() as u64;
+                    let _ = app.emit_to(crate::walkthrough::WALKTHROUGH, "dictation-pasted", ms);
+                }
+            }
+            Status::Idle => released = None,
+            _ => {}
+        }
         if let Status::Failed { message, retry } = &status {
             set_status(&app, message);
             let shared = lock(&app);

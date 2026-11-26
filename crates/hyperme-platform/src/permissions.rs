@@ -14,6 +14,8 @@ mod ffi {
     unsafe extern "C" {
         /// True when this process may listen to keyboard events (Input Monitoring).
         pub safe fn CGPreflightListenEventAccess() -> u8;
+        /// Asks macOS to show the Input Monitoring prompt; true if already allowed.
+        pub safe fn CGRequestListenEventAccess() -> u8;
     }
 }
 
@@ -25,6 +27,11 @@ pub fn accessibility() -> bool {
 /// Whether HyperMe may listen for the hotkey.
 pub fn input_monitoring() -> bool {
     ffi::CGPreflightListenEventAccess() != 0
+}
+
+/// Shows macOS's own Input Monitoring prompt (once; later calls only report the state).
+pub fn request_input_monitoring() -> bool {
+    ffi::CGRequestListenEventAccess() != 0
 }
 
 /// The System Settings page for a permission, to open with `open`.
