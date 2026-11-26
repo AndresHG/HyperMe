@@ -229,3 +229,106 @@ fn audio_files_are_wav() {
         bytes.len() - 8
     );
 }
+
+// Home window and History (#98), slice 1: the store half of History and the Home page.
+
+fn fail(store: &mut SqliteHistory, message: &str, ms: usize) -> i64 {
+    let id = store.begin(Some("Mail")).unwrap();
+    store.append(id, &tone(ms)).unwrap();
+    store.failed(id, message).unwrap();
+    id
+}
+
+/// #98 R-11, R-16: an item says whether its audio is still there, and why it failed.
+#[test]
+fn items_carry_audio_flag_and_message() {
+    let dir = temp_dir("item-fields");
+    let (mut store, _) = open_store(&dir, on(Retention::Days(30), 1024));
+    let done = dictate(&mut store, "Done.", 100);
+    let failed = fail(&mut store, "connection dropped", 100);
+    let gone = dictate(&mut store, "Audio gone.", 100);
+    std::fs::remove_file(dir.join("audio").join(format!("{gone}.wav"))).unwrap();
+
+    let done = store.item(done).unwrap().unwrap();
+    assert!(done.has_audio);
+    assert_eq!(done.message, None);
+    let failed = store.item(failed).unwrap().unwrap();
+    assert!(failed.has_audio);
+    assert_eq!(failed.message.as_deref(), Some("connection dropped"));
+    assert!(!store.item(gone).unwrap().unwrap().has_audio);
+    assert_eq!(store.item(9999).unwrap(), None);
+}
+
+/// #98 AC-12 (R-18): Delete removes the row's text and its audio file.
+#[test]
+fn delete_item_removes_text_and_audio() {
+    let dir = temp_dir("delete-item");
+    let (mut store, _) = open_store(&dir, on(Retention::Days(30), 1024));
+    let keep = dictate(&mut store, "Keep.", 100);
+    let gone = dictate(&mut store, "Delete me.", 100);
+    store.delete_item(gone).unwrap();
+    assert_eq!(store.item(gone).unwrap(), None);
+    assert!(!dir.join("audio").join(format!("{gone}.wav")).exists());
+    assert_eq!(audio_files(&dir), 1);
+    assert!(store.item(keep).unwrap().is_some());
+}
+
+/// #98 AC-10, store half (R-16): a retry replaces the text and language and keeps the audio;
+/// an unknown id is an error.
+#[test]
+fn replace_text_after_a_retry() {
+    let dir = temp_dir("replace-text");
+    let (mut store, _) = open_store(&dir, on(Retention::Days(30), 1024));
+    let id = dictate(&mut store, "Old text.", 100);
+    store.replace_text(id, "Texto nuevo.", Some("es")).unwrap();
+    let item = store.item(id).unwrap().unwrap();
+    assert_eq!(item.text.as_deref(), Some("Texto nuevo."));
+    assert_eq!(item.language.as_deref(), Some("es"));
+    assert_eq!(item.state, "done");
+    assert!(item.has_audio);
+
+    let failed = fail(&mut store, "dropped", 100);
+    store
+        .replace_text(failed, "Recovered.", Some("en"))
+        .unwrap();
+    let item = store.item(failed).unwrap().unwrap();
+    assert_eq!(item.state, "done");
+    assert_eq!(item.message, None);
+
+    assert!(store.replace_text(9999, "Nothing.", None).is_err());
+}
+
+/// #98 R-16, Phase 1 R-28: with history off, a successful retry leaves nothing behind.
+#[test]
+fn replace_text_with_history_off_deletes_the_item() {
+    let dir = temp_dir("replace-off");
+    let (mut store, _) = open_store(&dir, off());
+    let id = fail(&mut store, "dropped", 100);
+    store.replace_text(id, "Private.", Some("en")).unwrap();
+    assert_eq!(store.item(id).unwrap(), None);
+    assert_eq!(audio_files(&dir), 0);
+}
+
+/// #98 AC-13, store half (R-19): with history off, History lists only the failed dictations
+/// that still have their audio, newest first.
+#[test]
+fn failed_with_audio_lists_retryable_items() {
+    let dir = temp_dir("failed-with-audio");
+    let (mut store, clock) = open_store(&dir, off());
+    let older = fail(&mut store, "dropped", 100);
+    clock.fetch_add(1000, Ordering::SeqCst);
+    dictate(&mut store, "Private.", 100);
+    clock.fetch_add(1000, Ordering::SeqCst);
+    let newer = fail(&mut store, "timed out", 100);
+    clock.fetch_add(1000, Ordering::SeqCst);
+    let no_audio = fail(&mut store, "dropped", 100);
+    std::fs::remove_file(dir.join("audio").join(format!("{no_audio}.wav"))).unwrap();
+
+    let ids: Vec<_> = store
+        .failed_with_audio()
+        .unwrap()
+        .iter()
+        .map(|i| i.id)
+        .collect();
+    assert_eq!(ids, [newer, older]);
+}

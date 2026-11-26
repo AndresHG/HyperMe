@@ -55,6 +55,29 @@ pub struct Item {
     /// `recording`, `done` or `failed`.
     pub state: String,
     pub audio_bytes: u64,
+    /// The audio file is still on disk and holds more than a header, so the item can be
+    /// retried (#98 R-16).
+    pub has_audio: bool,
+    /// Why a failed dictation failed (#98 R-11).
+    pub message: Option<String>,
+}
+
+/// The columns [`item_from_row`] reads, in order.
+const ITEM_COLUMNS: &str = "id, started_ms, app, language, text, state, audio_bytes, message";
+
+/// An item from a row of [`ITEM_COLUMNS`], before its audio is checked.
+fn item_from_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Item> {
+    Ok(Item {
+        id: r.get(0)?,
+        started_ms: r.get(1)?,
+        app: r.get(2)?,
+        language: r.get(3)?,
+        text: r.get(4)?,
+        state: r.get(5)?,
+        audio_bytes: r.get::<_, i64>(6)? as u64,
+        has_audio: false,
+        message: r.get(7)?,
+    })
 }
 
 /// The history store.
@@ -283,22 +306,69 @@ impl SqliteHistory {
 
     /// Every dictation, newest first.
     pub fn items(&self) -> Result<Vec<Item>, Error> {
-        let mut query = Self::sql(self.db.prepare(
-            "SELECT id, started_ms, app, language, text, state, audio_bytes FROM dictations
-             ORDER BY started_ms DESC, id DESC",
+        self.query_items(
+            &format!("SELECT {ITEM_COLUMNS} FROM dictations ORDER BY started_ms DESC, id DESC"),
+            [],
+        )
+    }
+
+    fn query_items(&self, sql: &str, args: impl rusqlite::Params) -> Result<Vec<Item>, Error> {
+        let mut query = Self::sql(self.db.prepare(sql))?;
+        let rows = Self::sql(query.query_map(args, item_from_row))?;
+        let items: Vec<Item> = Self::sql(rows.collect())?;
+        Ok(items.into_iter().map(|i| self.with_audio(i)).collect())
+    }
+
+    fn with_audio(&self, mut item: Item) -> Item {
+        item.has_audio = item.audio_bytes > HEADER_BYTES && self.audio_path(item.id).exists();
+        item
+    }
+
+    /// One dictation by id (#98).
+    pub fn item(&self, id: DictationId) -> Result<Option<Item>, Error> {
+        let sql = format!("SELECT {ITEM_COLUMNS} FROM dictations WHERE id = ?1");
+        Ok(self.query_items(&sql, params![id])?.pop())
+    }
+
+    /// Deletes a dictation's text and audio (#98 R-18, AC-12).
+    pub fn delete_item(&mut self, id: DictationId) -> Result<(), Error> {
+        self.delete(id)
+    }
+
+    /// Replaces a dictation's text after a retry from Home (#98 R-16). The audio stays. With
+    /// history off, a successful retry leaves nothing behind, as [`History::done`] does
+    /// (Phase 1 R-28).
+    pub fn replace_text(
+        &mut self,
+        id: DictationId,
+        text: &str,
+        language: Option<&str>,
+    ) -> Result<(), Error> {
+        if !self.settings.enabled {
+            return self.delete(id);
+        }
+        let now = (self.now)();
+        let changed = Self::sql(self.db.execute(
+            "UPDATE dictations SET state = 'done', text = ?2, language = ?3, finished_ms = ?4,
+             message = NULL WHERE id = ?1 AND state != 'recording'",
+            params![id, text, language, now],
         ))?;
-        let rows = Self::sql(query.query_map([], |r| {
-            Ok(Item {
-                id: r.get(0)?,
-                started_ms: r.get(1)?,
-                app: r.get(2)?,
-                language: r.get(3)?,
-                text: r.get(4)?,
-                state: r.get(5)?,
-                audio_bytes: r.get::<_, i64>(6)? as u64,
-            })
-        }))?;
-        Self::sql(rows.collect())
+        if changed == 0 {
+            return Err(error(format!("no finished dictation {id}")));
+        }
+        Ok(())
+    }
+
+    /// The failed dictations that still have their audio, newest first: all History lists
+    /// while history is off (#98 R-19, AC-13).
+    pub fn failed_with_audio(&self) -> Result<Vec<Item>, Error> {
+        let sql = format!(
+            "SELECT {ITEM_COLUMNS} FROM dictations WHERE state = 'failed'
+             ORDER BY started_ms DESC, id DESC"
+        );
+        let mut items = self.query_items(&sql, [])?;
+        items.retain(|i| i.has_audio);
+        Ok(items)
     }
 }
 
