@@ -128,8 +128,10 @@ pub fn read_wav(bytes: &[u8]) -> Result<Vec<i16>, String> {
             }
             let end = body.saturating_add(size).min(bytes.len());
             return Ok(bytes[body..end]
-                .chunks_exact(2)
-                .map(|pair| i16::from_le_bytes([pair[0], pair[1]]))
+                .as_chunks::<2>()
+                .0
+                .iter()
+                .map(|&pair| i16::from_le_bytes(pair))
                 .collect());
         }
         // Chunks are padded to an even size.
