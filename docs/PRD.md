@@ -43,9 +43,9 @@ What that means for decisions:
   because that is what people compare. It does not copy Wispr Flow's product shape, its Hub
   window or its feature list. Where Wispr stops at text (its Command Mode takes no action in other
   apps, [FIELD.md](FIELD.md)), HyperMe keeps going.
-- **Quick things happen at the pill, lasting things in Home** ([UX.md](UX.md), decision U-8).
-  One shape at the bottom centre (dot, pill, card) and one Home sheet that rises from the same
-  spot, never a new window per feature.
+- **Quick things happen at the pill, lasting things in Home** ([UX.md](UX.md), decisions U-8 and U-9).
+  One shape at the bottom centre (dot, pill, card) for quick things, and one Home window with a
+  sidebar (Home, History, Dictionary, Style, Meetings; Settings, Help) for lasting work.
 - **"Hyper" is someone you address.** Commands start with the name, the way you would address a
   colleague. The name is also the future wake word (`CLAUDE.md`).
 
@@ -110,14 +110,14 @@ These settle trade-offs when a spec does not.
 
 1. **Speed is the feature.** Dictation has a hard budget (section 10). Anything that adds
    latency to the dictation path needs a number that shows it fits.
-2. **Dictation is never worse because of the rest.** Commands, cards, Home and connectors must not
+2. **Dictation is never worse because of the rest.** Commands, cards, the Home window and connectors must not
    slow, complicate or break dictation. One key, but the dictation path stays the fast default.
 3. **Preview before anything leaves the app.** Anything that creates, sends or posts outside the
    app shows a preview and waits for confirmation. Email is draft-only (`CLAUDE.md`).
 4. **Your keys, your Mac.** Bring your own keys, data on disk only on your Mac, no telemetry, no
    account with us (section 9).
 5. **Light to run.** Under 100 MB idle, near 0% CPU; features that are not open cost nothing.
-6. **Never take focus.** The pill and its cards never steal the cursor from the app you are in; only Home takes focus, and only when you open it
+6. **Never take focus.** The pill and its cards never steal the cursor from the app you are in; only the Home window takes focus, and only when you open it
    ([UX.md](UX.md)).
 7. **Use what exists.** Connectors through MCP, scheduling through a small built-in scheduler,
    coding through the agents' own interfaces. No integration code per service, no agent
@@ -143,8 +143,8 @@ to the next release; **P2** is nice to have. The phase is from [ROADMAP.md](ROAD
 | Pill with state, start and stop sounds | 1 | P0 | [UX.md](UX.md) |
 | Dictation history on the Mac, retry after a lost connection | 1 | P0 | Owner, 26 November 2026 |
 | Keys in the keychain, onboarding that tests each step | 1 | P0 | |
-| Personal dictionary, learned from corrections | 2 | P0 | Replace sound-alikes before cleanup: 7 of 7 names right ([results](results/2026-11-26-dictionary.md)) |
-| Cleanup levels (none, light, medium) and tone per app | 2 | P1 | |
+| Personal dictionary, learned from corrections, in the Home window | 2 | P0 | Replace sound-alikes before cleanup: 7 of 7 names right ([results](results/2026-11-26-dictionary.md)) |
+| Cleanup levels (none, light, medium) and tone per app, on the Style page of the Home window | 2 | P1 | |
 | Hands-free: double-tap to lock recording | 2 | P1 | Owner, U-3 |
 | Second speech provider as fallback | 2 | P1 | |
 | Clean in pieces while speaking | 2 | P2 | Only if long dictations miss the budget |
@@ -170,7 +170,7 @@ to the next release; **P2** is nice to have. The phase is from [ROADMAP.md](ROAD
 | Scheduled jobs: a prompt plus a tool allowlist each | 4 | P0 | Built in, small; no agent runtime |
 | Daily plan: what's next, what's pending for tomorrow | 4 | P0 | |
 | Email triage and reply drafts, draft-only | 4 | P0 | Never sends |
-| One "Waiting for you" queue in Home → Today | 4 | P1 | [UX.md](UX.md) |
+| One "Waiting for you" queue on the Home page of the Home window | 4 | P1 | [UX.md](UX.md) |
 
 ### 7.4 Meetings and coding agents (J-6, J-7)
 
