@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>HyperMe pill</title>
+<style>
+  /* Tokens from docs/UX.md, "Visual language". */
+  :root {
+    --surface: #111113;
+    --text: #ffffff;
+    --muted: #a1a1aa;
+    --recording: #ff4d4f;
+  }
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: transparent;
+    overflow: hidden;
+    -webkit-user-select: none;
+    user-select: none;
+    cursor: default;
+  }
+  .pill {
+    box-sizing: border-box;
+    height: 100%;
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font: 500 13px ui-rounded, -apple-system, system-ui, sans-serif;
+  }
+  .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--recording);
+  }
+</style>
+</head>
+<body>
+  <!-- Slice 1: the shape only. The states (recording with level, working, done, raw text,
+       errors, notices, retry) arrive in slice 10. -->
+  <div class="pill" role="status" aria-label="HyperMe"><span class="dot"></span></div>
+</body>
+</html>

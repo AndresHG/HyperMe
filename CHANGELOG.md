@@ -29,6 +29,8 @@ All notable changes to HyperMe are recorded here. The format follows
 - The dictation history: each dictation's audio written to disk while it is captured, a SQLite
   index, retention and a size limit; Retry of a failed dictation from its saved audio; start and
   stop sounds behind a trait.
+- `app/`: the Tauri 2 menu-bar app with no Dock icon, and the pill as a non-activating panel at the
+  bottom centre. Idle memory of the empty shell measured in `docs/results/`.
 - `spikes/flowbench`, a command-line speed test for dictation: upload against streaming,
   several speech and cleanup providers, stage timings, a quality score against gold texts.
 - Phase 0 results in `docs/results/`: Speechmatics (EU) with Groq cleanup reaches a median of

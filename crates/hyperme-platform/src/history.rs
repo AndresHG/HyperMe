@@ -366,8 +366,10 @@ impl History for SqliteHistory {
         // the sizes unwritten.
         let data = bytes.get(HEADER_BYTES as usize..).unwrap_or_default();
         Ok(data
-            .chunks_exact(2)
-            .map(|b| i16::from_le_bytes([b[0], b[1]]))
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|b| i16::from_le_bytes(*b))
             .collect())
     }
 }

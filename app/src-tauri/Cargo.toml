@@ -1,0 +1,24 @@
+[package]
+name = "hyperme-app"
+description = "HyperMe's macOS app: the menu-bar item, the pill and the windows around the core."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "hyperme"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2.7.6", default-features = false }
+
+[dependencies]
+tauri = { version = "2.12.7", features = ["macos-private-api", "tray-icon"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+tauri-nspanel = "2.1.1"
+
+[lints]
+workspace = true
