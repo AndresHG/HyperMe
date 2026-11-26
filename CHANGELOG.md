@@ -6,6 +6,13 @@ All notable changes to HyperMe are recorded here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- The pill at rest showed a dark square with a row of white dots instead of the bead: the bead's
+  view was sent at launch before the page had loaded and was lost, so the page kept its warm-up
+  recording bars. The page now draws nothing until a view arrives and asks for the current view
+  (`pill_view`) once its listeners exist.
+
 ### Added
 
 - `crates/hyperme-quality`, the quality harness (issue 99): replays a set of saved dictations
