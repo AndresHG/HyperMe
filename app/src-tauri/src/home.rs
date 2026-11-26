@@ -419,10 +419,15 @@ mod window {
         };
         match builder.build() {
             Ok(window) => {
+                // The handler looks the window up by label: holding a clone of the window in its
+                // own handler is a cycle that keeps the native window alive after it closes.
                 let handle = app.clone();
-                let win = window.clone();
                 window.on_window_event(move |event| match event {
-                    WindowEvent::CloseRequested { .. } => save_geometry(&handle, &win),
+                    WindowEvent::CloseRequested { .. } => {
+                        if let Some(win) = handle.get_webview_window(HOME) {
+                            save_geometry(&handle, &win);
+                        }
+                    }
                     // The user went to another app: that is where Paste again goes back to.
                     WindowEvent::Focused(false) => record_front_app(&handle),
                     WindowEvent::Destroyed => closed(&handle),

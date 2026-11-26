@@ -67,7 +67,7 @@
   .row.sel { background: color-mix(in srgb, var(--violet) 9%, var(--card)); box-shadow: inset 3px 0 0 var(--violet); }
   .row.sel .text { white-space: pre-wrap; overflow: visible; }
   .row .bar { grid-column: 1 / -1; display: none; align-items: center; gap: 6px; flex-wrap: wrap; padding-top: 6px; font-size: 12px; }
-  .row.sel .bar { display: flex; }
+  .row.sel .bar, .row.working .bar { display: flex; }
   .bar button { font: inherit; font-size: 12px; padding: 3px 8px; border-radius: 6px; border: 1px solid var(--line); background: Canvas; color: inherit; cursor: default; }
   .bar button:hover { border-color: var(--violet); }
   .bar button kbd { font: 11px -apple-system, sans-serif; color: var(--faint); margin-left: 4px; }
@@ -143,7 +143,7 @@
       if (block) document.getElementById('block-' + block)?.scrollIntoView();
     } else if (id === 'history') {
       resetHistory();
-      $('search').focus();
+
     }
   }
 
@@ -266,7 +266,6 @@
     div.addEventListener('mousedown', () => select(div, false));
     text.addEventListener('mouseup', () => offerFix(div));
     text.addEventListener('dblclick', () => setTimeout(() => offerFix(div), 0));
-    drawBar(div);
     return div;
   }
 
@@ -323,8 +322,9 @@
 
   function select(div, scroll = true) {
     if (selected === div) return;
-    if (selected) { selected.classList.remove('sel'); selected.mode = null; drawBar(selected); }
+    const previous = selected;
     selected = div;
+    if (previous) { previous.classList.remove('sel'); previous.mode = null; drawBar(previous); }
     closeMenu();
     if (!div) return;
     div.classList.add('sel');
@@ -349,6 +349,9 @@
     const bar = div.querySelector('.bar');
     const item = div.item;
     bar.replaceChildren();
+    // Only the selected row and a row with a retry running show a bar; the others stay light,
+    // so a long Recent or History costs little memory (AC-2).
+    if (div !== selected && !div.classList.contains('working')) return;
     const mode = div.mode;
     if (mode && mode.kind === 'confirm-delete') {
       bar.append(span('ask', 'Delete this dictation and its audio? ', key('↵'), ' Delete · ', key('Esc'), ' Keep'));
@@ -699,6 +702,15 @@
     if ($('history').classList.contains('on') && main.scrollTop + main.clientHeight > main.scrollHeight - 300) {
       loadMoreHistory();
     }
+  }, { passive: true });
+
+  // Typing anywhere in History goes to the search field. It is not focused on entry: a focused
+  // field kept about 20 MB of graphics memory alive (AC-2).
+  document.addEventListener('keydown', (e) => {
+    if (!$('history').classList.contains('on') || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.target instanceof HTMLInputElement || e.key.length !== 1 || $('search').hidden) return;
+    if (selected && selected.mode) return;
+    $('search').focus();
   });
 
   $('off-link').addEventListener('click', (e) => { e.preventDefault(); openSettings('privacy'); });
