@@ -9,7 +9,7 @@ enough to forget it is running. Rust core, Tauri 2 shell, Mac first.
 
 It starts with dictation that aims to be as fast as Wispr Flow: hold a key, speak in English or
 Spanish, and clean text lands at your cursor. HyperMe streams to the speech and language models
-you choose, keeps no audio on disk and sends no telemetry. The rest arrives phase by phase.
+you choose, keeps your audio only on your Mac, for as long as you choose, and sends no telemetry. The rest arrives phase by phase.
 
 > **Status: pre-alpha. There is nothing to install yet.** Phase 0, a command-line speed test, is
 > under way. Speed passes; formatting quality does not yet. See [where we stand](#where-we-stand).

@@ -16,8 +16,9 @@ are small, well bounded, and need no Mac-specific knowledge.
 | 7 | `hyperme-platform` macOS: hold-to-talk hotkey and Esc | R-1, R-6, R-8 | `area: input` | 3 |
 | 8 | `hyperme-platform` macOS: paste at the cursor, clipboard restore, secure-input check, frontmost app | AC-12, AC-13, AC-14 | `area: input` | 3 |
 | 9 | Keychain `SecretStore` and the settings window | AC-18, R-24, R-25 | `area: app` | 2 |
-| 10 | Pill states and the menu-bar menu, including "Paste last" and "Copy last" | AC-15, AC-17 | `area: ui` | 1, 3 |
-| 11 | First-launch walkthrough for permissions and keys | AC-21 | `area: app` | 6 to 10 |
+| 10 | Pill states and the menu-bar menu, including "Paste last" and "Copy last" | AC-17 | `area: ui` | 1, 3 |
+| 10b | Dictation history: audio written while recording, SQLite index, retention and size limit, Retry after a failure; start and stop sounds | AC-15, AC-23, AC-24 | `area: core` | 3, 6 |
+| 11 | First-launch walkthrough for permissions and keys | AC-21 | `area: app` | 6 to 10b |
 | 12 | Timing log and the live measurement: AC-2, AC-10, AC-19 written to `docs/results/` | AC-2, AC-10, AC-19, AC-20 | `area: core` | all |
 
 ## Good first issues outside the slices

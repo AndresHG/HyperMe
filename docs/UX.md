@@ -1,7 +1,6 @@
 # HyperMe UX and UI
 
-**Status:** draft for the owner, 26 November 2026. The choices marked **Proposed** wait for the
-owner. Nothing here changes a phase gate in [ROADMAP.md](ROADMAP.md); it says what each phase
+**Status:** draft, 26 November 2026. The owner answered decisions U-1 to U-5 the same day. Nothing here changes a phase gate in [ROADMAP.md](ROADMAP.md); it says what each phase
 looks like and feels like. Mockups are in [ux/](ux/).
 
 ## The idea in one paragraph
@@ -58,11 +57,10 @@ hold hotkey ──► pill appears, recording, live level ──► release ─�
                                                               pill flashes "done" and hides
 ```
 
-- **Hold to talk** is the only mode in Phase 1 (spec non-goals). Hands-free comes later (see
-  decisions).
+- **Hold to talk** is the only mode in Phase 1. Hands-free comes in Phase 2 (owner, U-3).
 - A short **start sound** confirms the mic is live, as Wispr Flow does ("speak after the start
   sound", [Wispr docs](https://docs.wisprflow.ai/articles/6391241694-use-flow-hands-free)).
-  Proposed: on by default, with a switch.
+  Soft start and stop sounds, on by default, with a switch (owner, U-5; spec R-32).
 - **Esc** cancels at any time before paste. A key-down while working shows "Still working".
 
 ### The pill
@@ -81,6 +79,7 @@ It is hidden while idle.
 | Nothing heard | Grey | "Nothing heard" | 1.5 s (R-14) |
 | Notice | Grey lock | "Not available in password fields" | 2 s (R-17) |
 | Error | Red outline | "Speechmatics key rejected · Settings" | 4 s or until clicked; click opens Settings (R-19 to R-21) |
+| Saved, retry | Red outline, retry arrow | "Connection lost · Retry" | Until clicked or dismissed. The audio is kept, so Retry transcribes it again (R-31) |
 
 The pill is draggable along the bottom edge and remembers its place, like Wispr Flow's bar
 ([Wispr docs](https://docs.wisprflow.ai/articles/5096240724-navigating-the-wispr-flow-app-desktop-ios-and-android)
@@ -108,7 +107,7 @@ Five short screens in one small window, each tested before "Next" lights up (R-2
    turns green by itself when the permission arrives.
 4. **Keys.** One field per provider (Speechmatics, Groq), each with **Test**. The key goes
    straight to Rust and the keychain; the field never shows it again (R-25).
-5. **Try it.** A text box in the window: "Hold Right Option and say anything." Shows the timing
+5. **Try it.** A text box in the window: "Hold Fn and say anything." Shows the timing
    ("Pasted in 0.43 s") as the first proof of speed.
 
 OpenWhispr's onboarding runs dictation first, then notes and meetings, then a live agent demo
@@ -166,7 +165,7 @@ once its feature exists: no "coming soon" pages.
 | | **Connectors** | MCP servers (GitHub first). Each has its tools, a switch per tool, and "ask before" on for anything that writes (`CLAUDE.md`) | 3 |
 | | **Automations** | Scheduled jobs: a prompt, a schedule and a tool allowlist each (SPEC section 4), with last run and next run | 4 |
 | | **Meetings** | Calendar, capture (mic and system audio), cleanup **Cloud, Local or Off**, what happens after the meeting | 5 |
-| | **Privacy** | In plain words, what leaves the Mac and to whom; history kept or not and for how long; timing log; "no audio on disk" | 1 |
+| | **Privacy** | In plain words, what leaves the Mac and to whom; dictation history (on by default; 30 days or unlimited; size limit, default 1 GB); timing log; audio never leaves the Mac except to the speech provider | 1 |
 | | **Advanced** | Hidden until "Show advanced" at the bottom of General: deadlines, thresholds, endpoints, log files, open config file, reset | 1 |
 | | **About** | Version, licence, updates (Phase 2), links | 1 |
 
@@ -194,7 +193,7 @@ The **menu-bar menu** grows by phase but stays at 8 items or fewer:
 | Item | From |
 | --- | --- |
 | Status: "Ready", or the open problem with a link to Setup check | 1 |
-| Paste last dictation ⌃⌥V · Copy last dictation | 1 |
+| Paste last dictation ⌃⌥V · Copy last dictation · Retry last failed (only when one is waiting) | 1 |
 | Open HyperMe (the panel) | 3 |
 | Start meeting notes / Stop | 5 |
 | Pause Hyper for 1 hour (no nudges, no automations; dictation still works) | 4 |
@@ -221,7 +220,7 @@ Still no panel required. What changes on screen:
 - **Dictionary** and **Style** sections in Settings ([the settings plan](#the-settings-plan)).
 - **Cleanup level** and **style per app**, shown as the app's name on the pill while working, so
   the user sees which style ran.
-- **Hands-free**, if the owner adopts it here: double-tap the hotkey to lock recording, tap again
+- **Hands-free** (owner, U-3): double-tap the hotkey to lock recording, tap again
   to stop, with a stop button on the pill (Wispr Flow's pattern).
 - **History**, if adopted: a list of recent dictations to copy or re-paste. It is the first
   reason for a panel, so it becomes the panel's **Dictation** tab (see decisions).
@@ -310,8 +309,8 @@ an earlier OpenWhispr slow and dislikes its UI (FIELD.md).
 
 | Pattern | Wispr Flow | OpenWhispr | HyperMe |
 | --- | --- | --- | --- |
-| Default hotkey | Fn hold to talk; Fn + Space hands-free | Globe (Fn), via a bundled listener; tap by default, hold optional | Right Option hold (spec, proposed); Fn offered |
-| Hands-free | Separate shortcut or double-tap; second press within 0.5 s cancels | Tap mode is the default | Phase 2, double-tap (proposed) |
+| Default hotkey | Fn hold to talk; Fn + Space hands-free | Globe (Fn), via a bundled listener; tap by default, hold optional | Fn hold (owner, U-2); Right Option offered |
+| Hands-free | Separate shortcut or double-tap; second press within 0.5 s cancels | Tap mode is the default | Phase 2, double-tap (owner, U-3) |
 | On-screen bar | Flow Bar shown by default; click to start, stop button | Floating panel, bottom right by default, auto-hide off | Pill only while dictating in Phase 1; orb from Phase 3 |
 | Paste failure | "Select a textbox first", Paste last transcript | Pasted without cleanup is announced | Raw text label, Paste last dictation |
 | Cleanup off or failed | Not documented here | "Pasted without AI cleanup" note; cleanup has its own model | Raw text label (R-20) |
@@ -327,15 +326,17 @@ Sources: [Wispr hands-free](https://docs.wisprflow.ai/articles/6391241694-use-fl
 [OpenWhispr cleanup](https://docs.openwhispr.com/help/dictation/cleanup.md). Wispr Flow's Fn
 default for hold to talk is from common knowledge of the app, not re-checked here.
 
-## Decisions for the owner
+## Decisions
 
-| # | Question | Proposed |
+Answered by the owner on 26 November 2026.
+
+| # | Question | Decided |
 | --- | --- | --- |
-| U-1 | When does the always-visible orb appear? | Phase 3, when the panel has something to show. Phase 1 shows the pill only while dictating |
-| U-2 | Default dictation hotkey | Right Option hold, as in the Phase 1 spec, with Fn offered in onboarding |
-| U-3 | Hands-free (double-tap to lock) | Phase 2, not Phase 1 |
-| U-4 | Dictation history on disk | Opt-in, off by default, kept 7 days; it becomes the panel's Dictation tab |
-| U-5 | Start and stop sounds | On by default, soft, with a switch |
+| U-1 | When does the always-visible orb appear? | Phase 3. Phase 1 shows the pill only while dictating |
+| U-2 | Default dictation hotkey | Hold Fn (Globe); Right Option and chords offered |
+| U-3 | Hands-free (double-tap to lock) | Phase 2 |
+| U-4 | Dictation history | On by default, kept 30 days or unlimited, under a total size limit the user sets (default 1 GB, our pick). Above all, a dropped connection must never lose a dictation: the audio is kept and the pill and menu offer **Retry**, even with history off (spec R-18, R-31). It becomes the panel's Dictation tab |
+| U-5 | Start and stop sounds | On, soft, with a switch |
 
 ## Not decided here
 
