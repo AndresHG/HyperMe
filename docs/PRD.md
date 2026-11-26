@@ -43,9 +43,11 @@ What that means for decisions:
   because that is what people compare. It does not copy Wispr Flow's product shape, its Hub
   window or its feature list. Where Wispr stops at text (its Command Mode takes no action in other
   apps, [FIELD.md](FIELD.md)), HyperMe keeps going.
-- **Quick things happen at the pill, lasting things in Home** ([UX.md](UX.md), decisions U-8 and U-9).
-  One shape at the bottom centre (dot, pill, card) for quick things, and one Home window with a
-  sidebar (Home, History, Dictionary, Style, Meetings; Settings, Help) for lasting work.
+- **Quick things happen at the pill, lasting things in Home** ([UX.md](UX.md), decisions U-8 to U-10).
+  The pill and its cards are for talking. A small quick sheet from the dot at the bottom centre
+  shows Ask, Now, the top three items waiting for you, and the last dictation with Retry. The
+  Home window, with a sidebar (Home, History, Dictionary, Style, Meetings; Settings, Help), is
+  the full app for lasting work.
 - **"Hyper" is someone you address.** Commands start with the name, the way you would address a
   colleague. The name is also the future wake word (`CLAUDE.md`).
 
@@ -117,7 +119,7 @@ These settle trade-offs when a spec does not.
 4. **Your keys, your Mac.** Bring your own keys, data on disk only on your Mac, no telemetry, no
    account with us (section 9).
 5. **Light to run.** Under 100 MB idle, near 0% CPU; features that are not open cost nothing.
-6. **Never take focus.** The pill and its cards never steal the cursor from the app you are in; only the Home window takes focus, and only when you open it
+6. **Never take focus.** The pill, its cards and the quick sheet never steal the cursor from the app you are in; only the Home window takes focus, and only when you open it
    ([UX.md](UX.md)).
 7. **Use what exists.** Connectors through MCP, scheduling through a small built-in scheduler,
    coding through the agents' own interfaces. No integration code per service, no agent
@@ -159,7 +161,7 @@ to the next release; **P2** is nice to have. The phase is from [ROADMAP.md](ROAD
 | Preview card for actions, Enter to confirm, Esc to drop | 3 | P0 | Under one second from release to card |
 | One MCP client; GitHub as the first connector | 3 | P0 | Owner, 25 November 2026 |
 | Context of the frontmost app and selected text | 3 | P1 | Within the privacy boundary (section 9) |
-| Dot at the bottom centre, cards for answers and previews | 3 | P0 | Owner, U-8 |
+| Dot at the bottom centre with a quick sheet (Ask, Now, top 3 waiting, last dictation); cards for answers and previews | 3 | P0 | Owner, U-8 and U-10 |
 | Linear and Jira connectors | 3+ | P2 | Any MCP server the user adds works without code |
 
 ### 7.3 Daily tasks and email (J-4, J-5)
@@ -170,7 +172,7 @@ to the next release; **P2** is nice to have. The phase is from [ROADMAP.md](ROAD
 | Scheduled jobs: a prompt plus a tool allowlist each | 4 | P0 | Built in, small; no agent runtime |
 | Daily plan: what's next, what's pending for tomorrow | 4 | P0 | |
 | Email triage and reply drafts, draft-only | 4 | P0 | Never sends |
-| One "Waiting for you" queue on the Home page of the Home window | 4 | P1 | [UX.md](UX.md) |
+| One "Waiting for you" queue on the Home page of the Home window, its top three in the quick sheet | 4 | P1 | [UX.md](UX.md) |
 
 ### 7.4 Meetings and coding agents (J-6, J-7)
 
