@@ -1,8 +1,9 @@
 name: CI
 
 # Build, lint and test every Rust crate on every pull request and on master.
-# Today the only crate is spikes/flowbench; add new crates to the matrix's
-# `crate` list. CLAUDE.md: fmt, clippy -D warnings and tests pass before every commit.
+# `.` is the Cargo workspace at the root (crates/*); spikes/flowbench sits
+# outside it with its own lockfile. Add new standalone crates to the matrix's
+# `crate` list; workspace members need no entry. CLAUDE.md: fmt, clippy -D warnings and tests pass before every commit.
 
 on:
   pull_request:
@@ -59,7 +60,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        crate: [spikes/flowbench]
+        crate: [., spikes/flowbench]
         os: ${{ fromJSON(needs.plan.outputs.os) }}
     defaults:
       run:
@@ -87,6 +88,6 @@ jobs:
         run: cargo clippy --all-targets --locked -- -D warnings
 
       - name: Test
-        # Tests never call a paid API: they use the local fakes in src/fake.rs
-        # and src/testserver.rs, so CI needs no keys.
+        # Tests never call a paid API: they use local fakes and test servers,
+        # so CI needs no keys.
         run: cargo test --locked

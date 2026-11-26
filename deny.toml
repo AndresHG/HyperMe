@@ -1,4 +1,5 @@
 # cargo-deny policy for every crate in this repository. Run it locally with:
+#   cargo deny check                                                    (the workspace)
 #   cargo deny --manifest-path spikes/flowbench/Cargo.toml --config deny.toml check
 
 [graph]

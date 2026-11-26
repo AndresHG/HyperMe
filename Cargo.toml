@@ -1,0 +1,27 @@
+# HyperMe workspace. Each crate inherits the package fields, versions and lints below.
+# Spikes keep their own lockfiles and build on their own (`cd spikes/flowbench && cargo test`).
+
+[workspace]
+resolver = "3"
+members = ["crates/hyperme-core"]
+exclude = ["spikes"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+publish = false
+rust-version = "1.85"
+
+[workspace.dependencies]
+serde = { version = "1.0.229", features = ["derive"] }
+toml = "1.2.3"
+
+[workspace.lints.rust]
+# Platform code that needs `unsafe` allows it in the one module that does, with a comment.
+unsafe_code = "deny"
+missing_debug_implementations = "warn"
+
+[workspace.lints.clippy]
+dbg_macro = "warn"
+todo = "warn"

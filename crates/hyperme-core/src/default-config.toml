@@ -1,0 +1,52 @@
+# HyperMe settings. HyperMe writes this file on first launch when there is none.
+#
+# Keys never go here: they live in the macOS keychain, one per provider, set in Settings.
+# An unknown key, a missing key or a value out of range stops HyperMe with a message that
+# names it. Delete this file to get the defaults back.
+
+[dictation]
+# Hold this key to dictate: "fn" (the Globe key), "right_option", or a chord such as
+# "ctrl+option+space" (modifiers: cmd, ctrl, option, shift, fn; then one key).
+hotkey = "fn"
+# A shorter hold is a tap: nothing is pasted. 50 to 2000.
+min_hold_ms = 250
+# Recording stops and is processed at this length. 5 to 600.
+max_length_s = 120
+# Dictations with fewer words skip the cleanup model. 0 to 50; 0 always cleans.
+short_dictation_words = 4
+# A soft sound when recording starts and stops.
+sounds = true
+# Optional: a text file with your own terms, one per line.
+# dictionary = "/Users/you/hyperme-dictionary.txt"
+
+[speech]
+# Streaming speech-to-text. Supported providers: "speechmatics".
+provider = "speechmatics"
+model = "melia-1"
+# The EU region. wss://global.rt.speechmatics.com/v2 is the global one.
+endpoint = "wss://eu.rt.speechmatics.com/v2"
+
+[cleanup]
+# Any host with an OpenAI-compatible chat completions API. The provider name labels the
+# keychain entry and error messages.
+provider = "groq"
+model = "openai/gpt-oss-20b"
+endpoint = "https://api.groq.com/openai/v1"
+# Sent as reasoning_effort; "off" leaves the field out of the request.
+reasoning_effort = "low"
+# The cleanup prompt version.
+prompt = "v4"
+# After this many ms without cleaned text, the raw transcript is pasted. 100 to 10000.
+deadline_ms = 1500
+
+[history]
+# Keep each dictation's audio and text on this Mac.
+enabled = true
+# Days to keep, or "unlimited". 1 to 3650.
+retention_days = 30
+# The oldest items are deleted when history passes this size. 10 to 1000000.
+size_limit_mb = 1024
+
+[timing]
+# Write one line of stage timings per dictation, numbers only, never text.
+log = false
