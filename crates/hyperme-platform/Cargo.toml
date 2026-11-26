@@ -19,7 +19,7 @@ core-foundation = "0.10.1"
 objc2 = "0.6.5"
 security-framework = "3.7.0"
 objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSArray", "NSData", "NSEnumerator", "NSString"] }
-objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "NSPasteboard", "NSPasteboardItem", "NSRunningApplication", "NSWorkspace"] }
+objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "NSPasteboard", "NSPasteboardItem", "NSRunningApplication", "NSSound", "NSWorkspace"] }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt", "sync"] }

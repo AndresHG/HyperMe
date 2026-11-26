@@ -31,6 +31,9 @@ All notable changes to HyperMe are recorded here. The format follows
   stop sounds behind a trait.
 - `app/`: the Tauri 2 menu-bar app with no Dock icon, and the pill as a non-activating panel at the
   bottom centre. Idle memory of the empty shell measured in `docs/results/`.
+- The app runs the dictation: config and keychain keys, the real providers and devices, the
+  pill's states with a live level meter and Retry, and the menu with Paste and Copy last
+  dictation; soft system sounds for start and stop.
 - `spikes/flowbench`, a command-line speed test for dictation: upload against streaming,
   several speech and cleanup providers, stage timings, a quality score against gold texts.
 - Phase 0 results in `docs/results/`: Speechmatics (EU) with Groq cleanup reaches a median of

@@ -7,3 +7,5 @@ pub mod hotkey;
 pub mod keychain;
 pub mod microphone;
 pub mod paste;
+#[cfg(target_os = "macos")]
+pub mod sounds;

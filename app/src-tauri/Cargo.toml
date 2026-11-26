@@ -15,7 +15,12 @@ path = "src/main.rs"
 tauri-build = { version = "2.7.6", default-features = false }
 
 [dependencies]
+hyperme-core.workspace = true
+hyperme-platform = { path = "../../crates/hyperme-platform" }
+hyperme-providers = { path = "../../crates/hyperme-providers" }
+serde.workspace = true
 tauri = { version = "2.12.7", features = ["macos-private-api", "tray-icon"] }
+tokio = { workspace = true, features = ["sync", "time"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 tauri-nspanel = "2.1.1"
