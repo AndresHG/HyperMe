@@ -43,7 +43,14 @@ pub async fn model_menu(
             notice: None,
         };
     };
-    match cleanup::list_models(&entry.name, &entry.endpoint, &key).await {
+    // The chosen cleanup provider is asked at the address in use, which may be the user's own
+    // or a local server Settings found (R-22).
+    let endpoint = if config.cleanup.provider == provider {
+        &config.cleanup.endpoint
+    } else {
+        &entry.endpoint
+    };
+    match cleanup::list_models(&entry.name, endpoint, &key).await {
         Ok(listed) => {
             let mut extra: Vec<String> = listed
                 .into_iter()

@@ -4,6 +4,7 @@
 
 pub mod any;
 pub mod cleanup;
+pub mod local;
 pub mod models;
 pub mod oauth;
 pub mod speechmatics;

@@ -15,6 +15,13 @@ All notable changes to HyperMe are recorded here. The format follows
 
 ### Added
 
+- Local server for cleanup (issue 129, slice 7 of `specs/96-provider-settings`): any
+  OpenAI-compatible server on this Mac (Ollama, LM Studio, `mlx_lm.server`), with no key and no
+  `Authorization` header. Picking it in Settings looks on ports 11434, 1234 and 8080 at once and
+  offers the servers that answer with their models; another address can be typed. The address is
+  kept in `cleanup.endpoint`, the model menu lists that server's models, and the hint says it
+  runs on this Mac and nothing leaves it for cleanup. It keeps the same deadline and raw-text
+  fallback as any other cleanup.
 - The hint line under each provider role (issue 128, slice 6 of `specs/96-provider-settings`):
   the monthly cost for the user's talking time, the same figure onboarding shows; the latency
   the project measured with a link to the result, or "Speed not measured"; and with the timing

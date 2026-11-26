@@ -358,6 +358,51 @@ pub fn provider_add(app: AppHandle, name: String, endpoint: String) -> Result<St
     Ok(id)
 }
 
+/// A server found on this Mac, for the page (R-22).
+#[derive(Debug, Clone, Serialize)]
+pub struct LocalServerView {
+    port: u16,
+    endpoint: String,
+    models: Vec<String>,
+}
+
+/// When the user picks Local server: looks on the usual ports on this Mac, all at once, and
+/// returns the servers that answer with their models (R-22). Nothing leaves the Mac.
+#[tauri::command]
+pub async fn local_discover(app: AppHandle) -> Result<Vec<LocalServerView>, String> {
+    let config = load(&config_path(&app))?;
+    let ports = config
+        .provider("local")
+        .map(|p| p.ports.clone())
+        .unwrap_or_default();
+    Ok(hyperme_providers::local::discover(&ports)
+        .await
+        .into_iter()
+        .map(|found| LocalServerView {
+            port: found.port,
+            endpoint: found.endpoint,
+            models: found.models,
+        })
+        .collect())
+}
+
+/// Uses the local server at `endpoint`, found or typed, with `model` for cleanup (R-21, R-22).
+/// It needs no key, so the switch takes effect at once.
+#[tauri::command]
+pub fn local_use(app: AppHandle, endpoint: String, model: String) -> Result<(), String> {
+    let endpoint = endpoint.trim().trim_end_matches('/').to_owned();
+    rewrite_config(&app, |text| {
+        let chosen = config::choose_provider(text, Role::Cleanup, "local", &model)?;
+        config::set_value(&chosen, "cleanup", "endpoint", &toml_string(&endpoint))
+    })?;
+    model_cache()
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .remove("local");
+    use_new_providers(&app);
+    Ok(())
+}
+
 /// A model menu for the page: the models, and one line when the listing failed.
 #[derive(Debug, Clone, Serialize)]
 pub struct ModelMenuView {
