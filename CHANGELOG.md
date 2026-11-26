@@ -34,6 +34,9 @@ All notable changes to HyperMe are recorded here. The format follows
 - The app runs the dictation: config and keychain keys, the real providers and devices, the
   pill's states with a live level meter and Retry, and the menu with Paste and Copy last
   dictation; soft system sounds for start and stop.
+- The Settings window: setup check, general, shortcuts, providers with keys saved straight to the
+  keychain and a Test button, privacy and history, advanced values and the config file, with
+  search. Changes save at once to `config.toml`, keeping its comments.
 - `spikes/flowbench`, a command-line speed test for dictation: upload against streaming,
   several speech and cleanup providers, stage timings, a quality score against gold texts.
 - Phase 0 results in `docs/results/`: Speechmatics (EU) with Groq cleanup reaches a median of

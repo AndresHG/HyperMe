@@ -8,6 +8,8 @@ mod icon;
 mod pill;
 #[cfg(target_os = "macos")]
 mod runtime;
+#[cfg(target_os = "macos")]
+mod settings;
 
 use tauri::AppHandle;
 use tauri::image::Image;
@@ -22,7 +24,15 @@ fn main() {
     #[cfg(target_os = "macos")]
     let builder = builder
         .plugin(tauri_nspanel::init())
-        .invoke_handler(tauri::generate_handler![runtime::pill_clicked]);
+        .invoke_handler(tauri::generate_handler![
+            runtime::pill_clicked,
+            settings::settings_view,
+            settings::settings_set,
+            settings::key_set,
+            settings::key_test,
+            settings::settings_open,
+            settings::app_restart,
+        ]);
     builder
         .setup(|app| {
             // R-22: a menu-bar app, no Dock icon.
@@ -47,7 +57,7 @@ pub(crate) struct TrayMenu {
 }
 
 /// The menu-bar icon and its menu (docs/UX.md, "Menu-bar icon"): status, Paste last and Copy
-/// last dictation (R-18), Retry (R-31), Quit. Settings comes with slice 9.
+/// last dictation (R-18), Retry (R-31), Settings, Quit.
 fn tray(app: &AppHandle) -> tauri::Result<TrayMenu> {
     let status = MenuItem::with_id(app, "status", "Starting…", false, None::<&str>)?;
     let paste_last = MenuItem::with_id(
@@ -59,6 +69,7 @@ fn tray(app: &AppHandle) -> tauri::Result<TrayMenu> {
     )?;
     let copy_last = MenuItem::with_id(app, "copy-last", "Copy last dictation", true, None::<&str>)?;
     let retry = MenuItem::with_id(app, "retry", "Retry last dictation", false, None::<&str>)?;
+    let settings = MenuItem::with_id(app, "settings", "Settings…", true, Some("CmdOrCtrl+,"))?;
     let quit = MenuItem::with_id(app, "quit", "Quit HyperMe", true, Some("CmdOrCtrl+Q"))?;
     let separator = || PredefinedMenuItem::separator(app);
     let menu = Menu::with_items(
@@ -70,6 +81,7 @@ fn tray(app: &AppHandle) -> tauri::Result<TrayMenu> {
             &copy_last,
             &retry,
             &separator()?,
+            &settings,
             &quit,
         ],
     )?;

@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>HyperMe Settings</title>
+<style>
+  /* docs/UX.md: windows use the system's light or dark colours, one signature colour. */
+  :root {
+    color-scheme: light dark;
+    --violet: #7c5cff;
+    --ok: #22c55e;
+    --warn: #f59e0b;
+    --bad: #ff4d4f;
+    --line: color-mix(in srgb, CanvasText 12%, transparent);
+    --muted: color-mix(in srgb, CanvasText 55%, transparent);
+    --side: color-mix(in srgb, CanvasText 4%, Canvas);
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 13px -apple-system, system-ui, sans-serif; background: Canvas; color: CanvasText; display: grid; grid-template-columns: 200px 1fr; height: 100vh; }
+  nav { background: var(--side); border-right: 1px solid var(--line); padding: 14px 10px; display: flex; flex-direction: column; gap: 2px; }
+  nav input { width: 100%; margin-bottom: 10px; padding: 6px 8px; border-radius: 7px; border: 1px solid var(--line); background: Canvas; color: inherit; }
+  nav .group { font-size: 11px; color: var(--muted); margin: 10px 8px 4px; text-transform: uppercase; letter-spacing: 0.04em; }
+  nav a { padding: 6px 8px; border-radius: 7px; color: inherit; text-decoration: none; }
+  nav a.on { background: color-mix(in srgb, var(--violet) 18%, transparent); }
+  main { overflow: auto; padding: 22px 28px; }
+  h1 { font: 600 15px ui-rounded, -apple-system, sans-serif; margin: 0 0 4px; }
+  .lead { color: var(--muted); margin: 0 0 16px; }
+  section { display: none; }
+  section.on { display: block; }
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+  .row .what small { display: block; color: var(--muted); margin-top: 2px; }
+  input[type=text], input[type=number], input[type=password], select { padding: 5px 8px; border-radius: 6px; border: 1px solid var(--line); background: Canvas; color: inherit; font: inherit; min-width: 180px; }
+  button { padding: 5px 12px; border-radius: 6px; border: 1px solid var(--line); background: Canvas; color: inherit; font: inherit; cursor: pointer; }
+  button.main { background: var(--violet); color: white; border-color: var(--violet); }
+  .state { font-size: 12px; }
+  .ok { color: var(--ok); } .bad { color: var(--bad); } .warn { color: var(--warn); }
+  #banner { display: none; position: sticky; top: 0; margin: -22px -28px 16px; padding: 10px 28px; background: color-mix(in srgb, var(--violet) 14%, Canvas); border-bottom: 1px solid var(--line); align-items: center; justify-content: space-between; }
+  #banner.on { display: flex; }
+  .hidden { display: none !important; }
+  code { font-size: 12px; }
+</style>
+</head>
+<body>
+<nav>
+  <input id="search" type="search" placeholder="Search settings" aria-label="Search settings">
+  <a href="#setup">Setup check</a>
+  <div class="group">Everyday</div>
+  <a href="#general">General</a>
+  <a href="#shortcuts">Shortcuts</a>
+  <div class="group">Setup</div>
+  <a href="#providers">Providers</a>
+  <a href="#privacy">Privacy</a>
+  <a href="#advanced" id="nav-advanced" class="hidden">Advanced</a>
+  <a href="#about">About</a>
+</nav>
+<main>
+  <div id="banner"><span id="banner-text">Saved. Restart HyperMe to use the new settings.</span><button class="main" id="restart">Restart HyperMe</button></div>
+
+  <section id="setup">
+    <h1>Setup check</h1>
+    <p class="lead">What HyperMe needs before dictation works.</p>
+    <div class="row" data-words="accessibility paste permission"><div class="what">Accessibility<small>Needed to paste at the cursor.</small></div><span><span class="state" id="setup-accessibility"></span> <button data-open="accessibility">Open</button></span></div>
+    <div class="row" data-words="input monitoring hotkey keyboard permission"><div class="what">Input Monitoring<small>Needed to see the hotkey.</small></div><span><span class="state" id="setup-input"></span> <button data-open="input-monitoring">Open</button></span></div>
+    <div class="row" data-words="microphone permission"><div class="what">Microphone<small>macOS asks the first time you dictate.</small></div><button data-open="microphone">Open</button></div>
+    <div class="row" data-words="speech key speechmatics"><div class="what">Speech key<small id="setup-speech-name"></small></div><span class="state" id="setup-speech"></span></div>
+    <div class="row" data-words="cleanup key groq"><div class="what">Cleanup key<small id="setup-cleanup-name"></small></div><span class="state" id="setup-cleanup"></span></div>
+  </section>
+
+  <section id="general">
+    <h1>General</h1>
+    <p class="lead">Everyday preferences.</p>
+    <div class="row" data-words="sounds start stop"><div class="what">Start and stop sounds<small>A soft sound when recording starts and stops.</small></div><input type="checkbox" data-section="dictation" data-key="sounds"></div>
+    <div class="row" data-words="advanced"><div class="what">Show advanced<small>Deadlines, thresholds, endpoints and the config file.</small></div><input type="checkbox" id="show-advanced"></div>
+  </section>
+
+  <section id="shortcuts">
+    <h1>Shortcuts</h1>
+    <p class="lead">Hold the dictation key while you speak. Esc cancels.</p>
+    <div class="row" data-words="hotkey dictation fn globe option chord shortcut"><div class="what">Dictation (hold)<small>Fn is the Globe key. A chord looks like <code>ctrl+option+space</code>.</small></div>
+      <span><select id="hotkey-choice"><option value="fn">Fn (Globe)</option><option value="right_option">Right Option</option><option value="chord">Chord…</option></select>
+      <input type="text" id="hotkey-chord" class="hidden" placeholder="ctrl+option+space"></span></div>
+  </section>
+
+  <section id="providers">
+    <h1>Providers</h1>
+    <p class="lead">Every model service in one place. Keys stay in the macOS keychain and are never shown again.</p>
+    <div class="row" data-words="speech provider speechmatics model"><div class="what">Speech<small id="speech-name">Used by dictation</small></div><input type="text" data-section="speech" data-key="model" aria-label="Speech model"></div>
+    <div class="row" data-words="speech key speechmatics test"><div class="what">Speech key<small class="state" id="speech-state"></small></div><span><input type="password" id="speech-key" placeholder="Paste a new key" autocomplete="off"> <button data-key-save="speech">Save</button> <button data-key-test="speech">Test</button></span></div>
+    <div class="row" data-words="cleanup provider groq model language"><div class="what">Cleanup<small id="cleanup-name">Used by dictation cleanup</small></div><input type="text" data-section="cleanup" data-key="model" aria-label="Cleanup model"></div>
+    <div class="row" data-words="reasoning effort cleanup"><div class="what">Reasoning effort<small>"off" leaves it out of the request.</small></div><select data-section="cleanup" data-key="reasoning_effort"><option>off</option><option>low</option><option>medium</option><option>high</option></select></div>
+    <div class="row" data-words="cleanup key groq test"><div class="what">Cleanup key<small class="state" id="cleanup-state"></small></div><span><input type="password" id="cleanup-key" placeholder="Paste a new key" autocomplete="off"> <button data-key-save="cleanup">Save</button> <button data-key-test="cleanup">Test</button></span></div>
+  </section>
+
+  <section id="privacy">
+    <h1>Privacy</h1>
+    <p class="lead">Audio and text go only to the speech and cleanup providers above, under your keys. Nothing else leaves this Mac, and there is no telemetry. A dictation's audio stays on this Mac so a dropped connection never loses it.</p>
+    <div class="row" data-words="history dictation audio keep"><div class="what">Dictation history<small>Keeps each dictation's audio and text on this Mac.</small></div><input type="checkbox" data-section="history" data-key="enabled"></div>
+    <div class="row" data-words="history retention days unlimited"><div class="what">Keep for<small>Older dictations are deleted.</small></div><select id="retention"><option value="30">30 days</option><option value="unlimited">Unlimited</option></select></div>
+    <div class="row" data-words="history size limit"><div class="what">Size limit (MB)<small>The oldest dictations go first.</small></div><input type="number" min="10" data-section="history" data-key="size_limit_mb"></div>
+    <div class="row" data-words="timing log measure"><div class="what">Timing log<small>One line of stage timings per dictation, numbers only.</small></div><input type="checkbox" data-section="timing" data-key="log"></div>
+  </section>
+
+  <section id="advanced">
+    <h1>Advanced</h1>
+    <p class="lead">For tuning. Everything is also in the config file.</p>
+    <div class="row" data-words="cleanup deadline raw"><div class="what">Cleanup deadline (ms)<small>After it, the raw transcript is pasted.</small></div><input type="number" min="100" max="10000" data-section="cleanup" data-key="deadline_ms"></div>
+    <div class="row" data-words="minimum hold tap"><div class="what">Minimum hold (ms)</div><input type="number" min="50" max="2000" data-section="dictation" data-key="min_hold_ms"></div>
+    <div class="row" data-words="maximum length"><div class="what">Maximum length (s)</div><input type="number" min="5" max="600" data-section="dictation" data-key="max_length_s"></div>
+    <div class="row" data-words="short dictation words"><div class="what">Short dictation (words)<small>Fewer words skip cleanup.</small></div><input type="number" min="0" max="50" data-section="dictation" data-key="short_dictation_words"></div>
+    <div class="row" data-words="speech endpoint url"><div class="what">Speech endpoint</div><input type="text" data-section="speech" data-key="endpoint"></div>
+    <div class="row" data-words="cleanup endpoint url"><div class="what">Cleanup endpoint</div><input type="text" data-section="cleanup" data-key="endpoint"></div>
+    <div class="row" data-words="config file toml"><div class="what">Config file<small id="config-path"></small></div><button data-open="config">Open config file</button></div>
+  </section>
+
+  <section id="about">
+    <h1>About</h1>
+    <p class="lead">HyperMe <span id="version"></span>. Licensed MIT OR Apache-2.0.</p>
+  </section>
+  <p id="error" class="bad"></p>
+</main>
+<script>
+  const invoke = window.__TAURI__.core.invoke;
+  const $ = (id) => document.getElementById(id);
+  let view = null;
+
+  function showSection() {
+    const id = (location.hash || '#setup').slice(1);
+    document.querySelectorAll('section').forEach((s) => s.classList.toggle('on', s.id === id));
+    document.querySelectorAll('nav a').forEach((a) => a.classList.toggle('on', a.getAttribute('href') === '#' + id));
+  }
+  window.addEventListener('hashchange', showSection);
+
+  function mark(el, ok, yes, no) {
+    el.textContent = ok ? yes : no;
+    el.className = 'state ' + (ok ? 'ok' : 'bad');
+  }
+
+  async function refresh() {
+    view = await invoke('settings_view');
+    const c = view.config;
+    $('error').textContent = view.config_error || '';
+    $('version').textContent = view.version;
+    $('config-path').textContent = view.config_path;
+    mark($('setup-accessibility'), view.setup.accessibility, 'Allowed', 'Not allowed');
+    mark($('setup-input'), view.setup.input_monitoring, 'Allowed', 'Not allowed');
+    mark($('setup-speech'), view.keys.speech, 'Key saved', 'No key');
+    mark($('setup-cleanup'), view.keys.cleanup, 'Key saved', 'No key');
+    mark($('speech-state'), view.keys.speech, 'Key saved', 'No key yet');
+    mark($('cleanup-state'), view.keys.cleanup, 'Key saved', 'No key yet');
+    if (!c) return;
+    $('setup-speech-name').textContent = c.speech_provider;
+    $('setup-cleanup-name').textContent = c.cleanup_provider;
+    $('speech-name').textContent = c.speech_provider + ' · used by dictation';
+    $('cleanup-name').textContent = c.cleanup_provider + ' · used by dictation cleanup';
+    const values = {
+      'dictation.sounds': c.sounds, 'dictation.min_hold_ms': c.min_hold_ms, 'dictation.max_length_s': c.max_length_s,
+      'dictation.short_dictation_words': c.short_dictation_words, 'speech.model': c.speech_model, 'speech.endpoint': c.speech_endpoint,
+      'cleanup.model': c.cleanup_model, 'cleanup.endpoint': c.cleanup_endpoint, 'cleanup.reasoning_effort': c.reasoning_effort,
+      'cleanup.deadline_ms': c.deadline_ms, 'history.enabled': c.history, 'history.size_limit_mb': c.size_limit_mb, 'timing.log': c.timing_log,
+    };
+    document.querySelectorAll('[data-key]').forEach((el) => {
+      const v = values[el.dataset.section + '.' + el.dataset.key];
+      if (el.type === 'checkbox') el.checked = !!v; else el.value = v;
+    });
+    const preset = ['fn', 'right_option'].includes(c.hotkey);
+    $('hotkey-choice').value = preset ? c.hotkey : 'chord';
+    $('hotkey-chord').value = preset ? '' : c.hotkey;
+    $('hotkey-chord').classList.toggle('hidden', preset);
+    if (c.retention_days !== null && c.retention_days !== 30) {
+      $('retention').add(new Option(c.retention_days + ' days', String(c.retention_days)));
+    }
+    $('retention').value = c.retention_days === null ? 'unlimited' : String(c.retention_days);
+  }
+
+  async function save(section, key, value) {
+    try {
+      await invoke('settings_set', { section, key, value });
+      $('error').textContent = '';
+      $('banner').classList.add('on');
+    } catch (e) {
+      $('error').textContent = String(e);
+      refresh();
+    }
+  }
+
+  document.querySelectorAll('[data-key]').forEach((el) => {
+    el.addEventListener('change', () => {
+      let value = el.type === 'checkbox' ? el.checked : el.value;
+      if (el.type === 'number') value = Number(el.value);
+      save(el.dataset.section, el.dataset.key, value);
+    });
+  });
+  $('hotkey-choice').addEventListener('change', (e) => {
+    const chord = e.target.value === 'chord';
+    $('hotkey-chord').classList.toggle('hidden', !chord);
+    if (!chord) save('dictation', 'hotkey', e.target.value);
+  });
+  $('hotkey-chord').addEventListener('change', (e) => save('dictation', 'hotkey', e.target.value));
+  $('retention').addEventListener('change', (e) => save('history', 'retention_days', e.target.value === 'unlimited' ? 'unlimited' : Number(e.target.value)));
+  $('show-advanced').addEventListener('change', (e) => $('nav-advanced').classList.toggle('hidden', !e.target.checked));
+  $('restart').addEventListener('click', () => invoke('app_restart'));
+
+  document.querySelectorAll('[data-key-save]').forEach((button) => button.addEventListener('click', async () => {
+    const role = button.dataset.keySave;
+    const field = $(role + '-key');
+    if (!field.value.trim()) return;
+    try {
+      await invoke('key_set', { role, key: field.value });
+      field.value = '';
+      $('banner').classList.add('on');
+      refresh();
+    } catch (e) { $('error').textContent = String(e); }
+  }));
+  document.querySelectorAll('[data-key-test]').forEach((button) => button.addEventListener('click', async () => {
+    const role = button.dataset.keyTest;
+    const state = $(role + '-state');
+    state.textContent = 'Testing…';
+    state.className = 'state warn';
+    try {
+      const ms = await invoke('key_test', { role });
+      mark(state, true, 'Works, ' + ms + ' ms', '');
+    } catch (e) { mark(state, false, '', String(e)); }
+  }));
+  document.querySelectorAll('[data-open]').forEach((button) => button.addEventListener('click', () => invoke('settings_open', { what: button.dataset.open })));
+
+  // docs/UX.md rule 6: search finds every setting by its name and common words.
+  $('search').addEventListener('input', (e) => {
+    const q = e.target.value.trim().toLowerCase();
+    document.querySelectorAll('.row').forEach((row) => {
+      row.classList.toggle('hidden', !!q && !(row.textContent + ' ' + (row.dataset.words || '')).toLowerCase().includes(q));
+    });
+    document.querySelectorAll('section').forEach((s) => s.classList.toggle('on', q ? !!s.querySelector('.row:not(.hidden)') : s.id === (location.hash || '#setup').slice(1)));
+  });
+
+  showSection();
+  refresh().catch((e) => { $('error').textContent = String(e); });
+</script>
+</body>
+</html>

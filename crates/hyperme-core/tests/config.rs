@@ -384,3 +384,76 @@ fn unreadable_path_names_the_file() {
     let msg = Config::load_or_create(&path).unwrap_err().to_string();
     assert!(msg.contains(&path.display().to_string()), "{msg}");
 }
+
+/// Slice 9 (Settings): a change from the Settings window rewrites only that value in the file,
+/// keeping its comments, and is validated like the file itself.
+#[test]
+fn set_value_rewrites_one_line_and_keeps_comments() {
+    use hyperme_core::config::set_value;
+    let text = set_value(DEFAULT_CONFIG, "cleanup", "deadline_ms", "2000").unwrap();
+    assert_eq!(parse(&text).unwrap().cleanup.deadline_ms, 2000);
+    assert_eq!(text.lines().count(), DEFAULT_CONFIG.lines().count());
+    assert!(text.contains("# After this many ms without cleaned text"));
+
+    // Strings are written quoted; the same key name in another section is not touched.
+    let text = set_value(
+        DEFAULT_CONFIG,
+        "cleanup",
+        "model",
+        "\"llama-3.1-8b-instant\"",
+    )
+    .unwrap();
+    let config = parse(&text).unwrap();
+    assert_eq!(config.cleanup.model, "llama-3.1-8b-instant");
+    assert_eq!(config.speech.model, "melia-1");
+
+    let text = set_value(DEFAULT_CONFIG, "dictation", "hotkey", "\"right_option\"").unwrap();
+    assert_eq!(parse(&text).unwrap().dictation.hotkey, Hotkey::RightOption);
+    let text = set_value(DEFAULT_CONFIG, "history", "retention_days", "\"unlimited\"").unwrap();
+    assert_eq!(
+        parse(&text).unwrap().history.retention_days,
+        Retention::Unlimited
+    );
+}
+
+#[test]
+fn set_value_adds_a_commented_out_key() {
+    use hyperme_core::config::set_value;
+    let text = set_value(
+        DEFAULT_CONFIG,
+        "dictation",
+        "dictionary",
+        "\"/tmp/terms.txt\"",
+    )
+    .unwrap();
+    assert_eq!(
+        parse(&text).unwrap().dictation.dictionary,
+        Some(PathBuf::from("/tmp/terms.txt"))
+    );
+}
+
+/// A value the file would reject is rejected before anything is written, with the key named;
+/// so is a key-like field (R-26) and a key the file does not have.
+#[test]
+fn set_value_refuses_invalid_values_and_secrets() {
+    use hyperme_core::config::set_value;
+    let err = set_value(DEFAULT_CONFIG, "cleanup", "deadline_ms", "5")
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("cleanup.deadline_ms"), "{err}");
+    let err = set_value(DEFAULT_CONFIG, "cleanup", "api_key", "\"fake-key-gggg\"")
+        .unwrap_err()
+        .to_string();
+    assert!(
+        err.contains("keychain") && !err.contains("fake-key-gggg"),
+        "{err}"
+    );
+    let err = set_value(DEFAULT_CONFIG, "cleanup", "volume", "3")
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("volume"), "{err}");
+    let err = set_value(DEFAULT_CONFIG, "nowhere", "x", "1")
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("nowhere"), "{err}");
+}

@@ -476,3 +476,56 @@ fn line_of_key(text: &str, name: &str) -> Option<usize> {
         })
         .map(|index| index + 1)
 }
+
+/// Sets one value in config text, as the Settings window does, keeping every other line and
+/// comment. `value` is a TOML value (`2000`, `"right_option"`, `true`). A key that is commented
+/// out in the file (`# dictionary = ...`) is switched on. The result is validated like the file
+/// itself, so an out-of-range value, an unknown key or a key-like field (R-26) is refused and
+/// nothing changes.
+pub fn set_value(text: &str, section: &str, key: &str, value: &str) -> Result<String, ConfigError> {
+    let path = Path::new("config.toml");
+    let full = format!("{section}.{key}");
+    if looks_like_secret(key) {
+        return Err(ConfigError::Secret {
+            path: path.to_owned(),
+            key: full,
+            line: None,
+        });
+    }
+    let unknown = |what: String| ConfigError::Parse {
+        path: path.to_owned(),
+        message: what,
+    };
+    let mut lines: Vec<String> = text.lines().map(str::to_owned).collect();
+    let header = format!("[{section}]");
+    let start = lines
+        .iter()
+        .position(|l| l.trim() == header)
+        .ok_or_else(|| unknown(format!("there is no [{section}] section")))?;
+    let end = lines[start + 1..]
+        .iter()
+        .position(|l| l.trim_start().starts_with('['))
+        .map_or(lines.len(), |i| start + 1 + i);
+    let sets_key = |line: &str| {
+        line.trim_start()
+            .strip_prefix(key)
+            .is_some_and(|rest| rest.trim_start().starts_with('='))
+    };
+    let index = lines[start + 1..end]
+        .iter()
+        .position(|l| sets_key(l))
+        .or_else(|| {
+            lines[start + 1..end]
+                .iter()
+                .position(|l| l.trim_start().strip_prefix('#').is_some_and(&sets_key))
+        })
+        .map(|i| start + 1 + i)
+        .ok_or_else(|| unknown(format!("{full} is not a setting")))?;
+    lines[index] = format!("{key} = {value}");
+    let mut out = lines.join("\n");
+    if text.ends_with('\n') {
+        out.push('\n');
+    }
+    Config::parse(&out, path)?;
+    Ok(out)
+}
