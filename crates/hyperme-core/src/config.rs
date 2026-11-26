@@ -12,6 +12,7 @@ use std::path::{Path, PathBuf};
 use serde::Deserialize;
 use time::{Time, Weekday};
 
+use crate::registry::CustomServer;
 use crate::schedule::Schedule;
 use crate::tasks::{DayRules, WeekdaySet};
 
@@ -32,6 +33,18 @@ pub struct Config {
     /// The task list and the morning card. Optional: an older file takes the defaults.
     #[serde(default = "default_tasks")]
     pub tasks: Tasks,
+    /// The user's own MCP servers (specs/97-google-connectors, R-4). Optional: an older file
+    /// has none.
+    #[serde(default)]
+    pub connectors: Connectors,
+}
+
+/// `[connectors]`: custom MCP servers. Presets are data files, not config.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Connectors {
+    #[serde(default)]
+    pub custom: Vec<CustomServer>,
 }
 
 fn show_while_idle() -> bool {
@@ -610,6 +623,12 @@ impl Config {
             }
         }
         range("tasks.stale_after", t.stale_after.into(), 1, 30)?;
+
+        for server in &self.connectors.custom {
+            if let Err(message) = server.check() {
+                invalid("connectors.custom", message)?;
+            }
+        }
         Ok(())
     }
 }
@@ -681,7 +700,7 @@ fn find_secret_line(text: &str) -> Option<(usize, String)> {
 }
 
 /// `api_key`, `key`, `groq_key`, `token`, `secret`, `password` and the like. Not `hotkey`.
-fn looks_like_secret(name: &str) -> bool {
+pub(crate) fn looks_like_secret(name: &str) -> bool {
     let name = name.to_lowercase();
     ["key", "apikey", "token", "secret", "password", "passwd"]
         .iter()

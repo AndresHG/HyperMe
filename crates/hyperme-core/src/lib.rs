@@ -7,6 +7,7 @@ pub mod config;
 pub mod connectors;
 pub mod cost;
 pub mod dictation;
+pub mod registry;
 pub mod schedule;
 pub mod scheduler;
 pub mod secrets;

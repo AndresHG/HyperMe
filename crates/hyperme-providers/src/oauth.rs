@@ -17,6 +17,7 @@ use std::time::Duration;
 
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+use hyperme_core::registry::OAuthEndpoints;
 use hyperme_core::secrets::{SecretError, SecretStore};
 use reqwest::header::{CONTENT_TYPE, HeaderValue};
 use reqwest::{StatusCode, Url};
@@ -56,6 +57,24 @@ pub struct OAuthConfig {
     pub client_secret: Option<String>,
     /// Extra consent parameters from the preset, such as Google's `access_type=offline`.
     pub extra_auth_params: Vec<(String, String)>,
+}
+
+impl OAuthConfig {
+    /// The config for a connector's endpoints from the registry, with the user's own client.
+    pub fn from_endpoints(
+        endpoints: &OAuthEndpoints,
+        client_id: &str,
+        client_secret: Option<String>,
+    ) -> Self {
+        OAuthConfig {
+            auth_url: endpoints.auth_url.clone(),
+            token_url: endpoints.token_url.clone(),
+            revoke_url: endpoints.revoke_url.clone(),
+            client_id: client_id.to_owned(),
+            client_secret,
+            extra_auth_params: endpoints.extra_auth_params.clone(),
+        }
+    }
 }
 
 impl fmt::Debug for OAuthConfig {
