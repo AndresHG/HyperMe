@@ -80,7 +80,8 @@ agents ([RESEARCH.md](RESEARCH.md) section 2).
 - People who need offline or fully local dictation (later).
 - Windows and Linux users (later).
 - Teams that need admin controls, shared billing or single sign-on.
-- Languages other than English and Spanish (see question 10).
+- Languages other than English and Spanish as a promise: other languages the speech provider
+  detects work, labelled "untested", and contributors can add samples to test them (owner, Q-10).
 
 ## 4. Problems
 
@@ -139,7 +140,7 @@ to the next release; **P2** is nice to have. The phase is from [ROADMAP.md](ROAD
 | Hold-to-talk on one hotkey, default hold Fn | 1 | P0 | Spec R-1, R-8 |
 | Streaming speech, warm connections on key-down | 1 | P0 | Speechmatics `melia-1` EU today |
 | Cleanup with a small fast model, raw-text fallback after a deadline | 1 | P0 | Groq `gpt-oss-20b`, prompt `v4`; deadline 1.5 s, configurable |
-| Spanish and English, detected per dictation | 1 | P0 | Never translated |
+| Spanish and English, detected per dictation | 1 | P0 | Never translated. Other languages work, labelled "untested" (owner, Q-10) |
 | Paste at the cursor, clipboard restored | 1 | P0 | Paste matrix in the Phase 1 design |
 | Pill with state, start and stop sounds | 1 | P0 | [UX.md](UX.md) |
 | Dictation history on the Mac, retry after a lost connection | 1 | P0 | Owner, 26 November 2026 |
@@ -275,7 +276,7 @@ Asked in the interview of 26 November 2026. Recommendations first.
 | Q-7 | Mail and calendar provider | Google first | Decided 26 November 2026: Google first, Microsoft 365 later |
 | Q-8 | Ticket creation: wait for Enter or fire at once | Wait for Enter, per-tool relaxing later | Decided 26 November 2026: wait for Enter |
 | Q-9 | Adoption measure | Downloads, stars, 10 outside weekly users in three months | Decided 26 November 2026: as recommended |
-| Q-10 | Languages at public release | English and Spanish only | Open |
+| Q-10 | Languages at public release | English and Spanish only | Decided 26 November 2026: Spanish and English tested; others work, labelled untested |
 | Q-11 | What answers questions | The cleanup provider's larger model, web search as an MCP tool | Open |
 | Q-12 | Work and personal profiles ([SPEC.md](SPEC.md) section 4) | Drop from version 1; one profile | Open |
 | Q-13 | Adopt the trial and baseline checks as gates ([RESEARCH.md](RESEARCH.md) section 1.3) | Drop as gates; the Wispr comparison covers the baseline | Open |
