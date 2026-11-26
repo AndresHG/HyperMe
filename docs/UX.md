@@ -110,8 +110,10 @@ Five short screens in one small window, each tested before "Next" lights up (R-2
 
 1. **Welcome.** One line: "Hold a key, speak, and your words appear where you type."
 2. **Microphone.** Ask, then show a live level so the user sees it works.
-3. **Accessibility.** Needed to paste. A button opens the right System Settings page; the screen
-   turns green by itself when the permission arrives.
+3. **Accessibility and Input Monitoring.** Accessibility is needed to paste; Input Monitoring is
+   needed to see the Fn key, so the hotkey cannot work without it. One row each, each with a
+   button that opens the right System Settings page; each row turns green by itself when its
+   permission arrives.
 4. **Keys.** One field per provider (Speechmatics, Groq), each with **Test**. The key goes
    straight to Rust and the keychain; the field never shows it again (R-25).
 5. **Try it.** A text box in the window: "Hold Fn and say anything." Shows the timing
@@ -163,7 +165,7 @@ once its feature exists: no "coming soon" pages.
 
 | Group | Section | Holds | From |
 | --- | --- | --- | --- |
-| | **Setup check** | One line per requirement with a green tick or a fix button: microphone, accessibility, each provider key, each connector. The first page until everything is green, and the place every error links to | 1 |
+| | **Setup check** | One line per requirement with a green tick or a fix button: microphone, accessibility, input monitoring, each provider key, each connector. The first page until everything is green, and the place every error links to | 1 |
 | Everyday | **General** | Launch at login; pill position and whether it shows while idle; sounds (start and stop: soft, off); pause media while dictating; theme follows the system | 1 |
 | | **Shortcuts** | Dictation (hold), hands-free, cancel (Esc), paste last dictation, open Home; later command and meeting. One list, with conflicts flagged | 1 |
 | Setup | **Providers** | One page for every model service. Each row shows provider, model, key status and a Test button, and says which features use it ("Used by: dictation, meetings"). Choosing what each feature uses is a short table on the same page, never a tab per feature | 1 |
