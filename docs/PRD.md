@@ -1,7 +1,8 @@
 # HyperMe product requirements (PRD)
 
-**Status:** draft, 26 November 2026. Decisions marked *proposed* wait for the owner; the
-interview of 26 November 2026 settles them one by one ([section 12](#12-open-questions)).
+**Status:** adopted, 26 November 2026, after the owner's interview of the same day (section 12).
+Items still marked *proposed* wait for the owner. The PRD grows with the product: a phase spec
+that settles an open question updates it.
 
 ## How the documents fit together
 
@@ -105,7 +106,7 @@ agents ([RESEARCH.md](RESEARCH.md) section 2).
 | J-1 | am writing in any app | speak and get clean text at my cursor | I write three times faster, in my own words | 1, 2 |
 | J-2 | have a quick question mid-task | ask it out loud and see a short answer | I don't leave what I'm doing | 3 |
 | J-3 | think "this needs a ticket", "remind me", "tell X" | say it and confirm a preview | the task is captured in my tools in seconds | 3 |
-| J-4 | start or plan my day | hear or see what's next and what's pending | nothing slips | 4 |
+| J-4 | start or plan my day, or remember something mid-task | see what's next and what's pending, and add to it by voice | nothing slips | 3 (capture), 4 |
 | J-5 | face my inbox | get it triaged and replies drafted | mail takes minutes, and nothing is sent without me | 4 |
 | J-6 | finish a meeting | get notes, action points and proposed tickets | the meeting becomes work, not a document | 5 |
 | J-7 | want code written or a bug looked at | say it and have the task handed to Claude Code | I start the work without switching apps; the agent does the coding, not HyperMe | later |
@@ -174,12 +175,25 @@ to the next release; **P2** is nice to have. The phase is from [ROADMAP.md](ROAD
 
 ### 7.3 Daily tasks and email (J-4, J-5)
 
+Decided by the owner on 26 November 2026 (D-1 to D-3). HyperMe keeps **its own task list**,
+because things come up during the day ("Hyper, remind me to call Marta today") that belong in no
+tracker. Each item has an optional day or date, and items not done roll over to the next day. On
+a schedule, the list also pulls new items that are yours from the tracker, the calendar and mail,
+linked back to their source (whether marking an item done in HyperMe also closes it at the
+source, through the preview, is still open). A
+morning card from the dot, at a time you set, shows the day (meetings, top tasks, mail to
+answer); during the day the only nudges are a few minutes before a meeting and when a dated task
+is due. Everything else waits on the Home page. Google Keep sync was considered and rejected: too
+few options.
+
 | Feature | Phase | Priority | Notes |
 | --- | --- | --- | --- |
+| "Hyper, remind me to …" adds to HyperMe's task list, with an optional day or date; the list on the Home page; roll-over | 3 | P0 | Owner, D-1 and D-3. Needs no connector |
+| Morning card at a time you set; nudges only before meetings and for due tasks | 4 | P0 | Owner, D-2 |
+| Pull new items from tracker, calendar and mail into the list, on a schedule | 4 | P0 | Owner, D-1 |
 | One profile with several accounts per service; you say which ("in my personal calendar") | 4 | P0 | Owner, Q-12. Separate profiles only if people ask |
 | Calendar connector, "meeting now" nudges | 4 | P0 | Google first, Microsoft 365 later (owner, Q-7) |
 | Scheduled jobs: a prompt plus a tool allowlist each | 4 | P0 | Built in, small; no agent runtime |
-| Daily plan: what's next, what's pending for tomorrow | 4 | P0 | |
 | Email triage and reply drafts, draft-only | 4 | P0 | Gmail first. Never sends |
 | One "Waiting for you" queue on the Home page of the Home window, its top three in the quick sheet | 4 | P1 | [UX.md](UX.md) |
 
@@ -307,6 +321,10 @@ Asked in the interview of 26 November 2026. Recommendations first.
 | Q-10 | Languages at public release | English and Spanish only | Decided 26 November 2026: Spanish and English tested; others work, labelled untested |
 | Q-11 | What answers questions | A fast model, web search when needed | Decided 26 November 2026: its own model setting, cheap and fast by default, switchable from the card with regenerate |
 | Q-14 | Spoken answers (text-to-speech) | Text first, an optional voice later | Decided 26 November 2026: not for now, maybe later |
+| M-1 to M-3 | Memory: how it learns, where it lives, when | | Decided 26 November 2026: see 7.5 |
+| D-1 to D-3 | Daily tasks: whose list, how the day arrives, when | | Decided 26 November 2026: see 7.3 |
+| Q-15 | Quick notes ("Hyper, note that …"): a note in the memory folder, an item on the task list, or both | Into the task list when it has an action, into the memory folder otherwise | Open; decide with the phase 3 spec |
+| Q-16 | How self-learning memory works | A design proposal comparing how other assistants build memory | Open; research before the memory spec |
 | Q-12 | Work and personal profiles ([SPEC.md](SPEC.md) section 4) | Drop from version 1; one profile | Decided 26 November 2026: one profile, several accounts |
 | Q-13 | Adopt the trial and baseline checks as gates ([RESEARCH.md](RESEARCH.md) section 1.3) | Drop as gates; the Wispr comparison covers the baseline | Decided 26 November 2026: drop both; read how Handy, Omi and OpenWhispr are built for ideas only |
 
@@ -314,6 +332,10 @@ Asked in the interview of 26 November 2026. Recommendations first.
 
 Found while consolidating, 26 November 2026. Each is fixed in the document named once the owner
 confirms, unless marked "fixed here".
+
+Fixed in the pull request that adopted this PRD: C-1, C-3, C-4, C-5, C-10, C-12 (the identity
+line), C-13, C-14, C-15, C-16. Left for the Phase 1 spec owner: C-2 and C-9. Still open: C-7
+and C-8 (the roadmap's "where we stand" table and the phase 2 gate). C-6 and C-11 need no change.
 
 | # | Where | Contradiction | Resolution |
 | --- | --- | --- | --- |
@@ -331,3 +353,5 @@ confirms, unless marked "fixed here".
 | C-12 | [PITCH.md](PITCH.md) and README | Positioning is framed entirely against Wispr Flow | Q-1 |
 | C-13 | Open-decision lists in `CLAUDE.md`, ROADMAP and RESEARCH | Overlap and disagree on what is still open (licence and first connector are decided) | This section is the single list; the others link here |
 | C-14 | [ROADMAP.md](ROADMAP.md) phase 5, `CLAUDE.md` introduction, [SPEC.md](SPEC.md) | Phase 5 includes starting and following Claude Code and Devin tasks, and its gate needs an agent task reported back; the owner moved coding agents to later, as a hand-off only (Q-6) | Phase 5 becomes meetings only; agent hand-off moves to Later |
+| C-15 | `CLAUDE.md` "Memory and learning is part of the vision, not of a first version" | Memory now starts in phase 3 (M-3) | Reword: memory starts with commands in phase 3, after the first public release |
+| C-16 | [ROADMAP.md](ROADMAP.md) phase 3 scope | Has no task capture or memory; the owner put both in phase 3 (D-3, M-3) | Add them to phase 3 |

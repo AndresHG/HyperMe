@@ -17,7 +17,7 @@ architecture.
 | Connectors | GitHub first, then calendar and email; Linear and Jira later | Phase 3 onward |
 | Dictation | Hold a key, speak, get formatted text in any app, at Wispr Flow speed | Phases 1 and 2 |
 | Meetings | Record, transcribe, notes and action points, push tasks out | Phase 5 |
-| Coding agents | Start and follow tasks in Claude Code or Devin | Phase 5 |
+| Coding agents | Hand a task to Claude Code by voice, nothing more (owner, 26 November 2026) | Later |
 | Local speech models | Optional, for offline use | Later |
 | Linux and Windows | Same app | Later |
 
@@ -54,7 +54,7 @@ overlay. Models and connectors are remote.
 | Audio in | `cpal` for the microphone; Core Audio taps (`cidre`, or `cpal` 0.18 and later) for system audio on macOS | Taps need their own audio-capture permission, not Screen Recording |
 | Speech | Trait with providers: streaming cloud first, file upload fallback, local Parakeet later | Swap provider after the speed test without touching the rest |
 | Cleanup | Small model, reasoning off, streamed; prompt carries the personal dictionary and the active app name | This is where dictation quality is won |
-| Command mode | Second hotkey; transcript goes to a tool-calling model | Voice in, action out |
+| Command mode | Same hotkey; a transcript that starts with "Hyper, …" goes to a tool-calling model (owner, 26 November 2026) | Voice in, action out |
 | Tools | One MCP client (`rmcp`) to remote MCP servers | No per-service code |
 | Coding agents | Claude Code through `claude -p` or the Agent SDK; Devin through its MCP server | Start, poll, surface the result in the overlay |
 | Scheduler | Cron jobs in SQLite; each job is a self-contained prompt plus a tool allowlist | Jobs run with no memory of earlier chats |
@@ -93,7 +93,7 @@ These are targets and estimates. Phase 0 replaces the latency rows with measurem
 - Email is draft-only.
 - Text read from email, tickets or web pages is data, never instructions to the agent.
 - Each cron job has an explicit tool allowlist.
-- Work and personal profiles keep separate connectors and storage.
+- One profile, with several accounts per service; the user says which (owner, 26 November 2026).
 - Meeting capture always shows a visible indicator.
 
 ## 5. Roadmap and gates
