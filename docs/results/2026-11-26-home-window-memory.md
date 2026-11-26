@@ -25,7 +25,7 @@ code has no such hook.
 
 Idle CPU of all processes after Home closed: 0.00% over 12 seconds.
 
-## Verdict per target
+## Verdict per target (first wording of AC-2)
 
 | Target (AC-2) | Measured | Verdict |
 | --- | --- | --- |
@@ -90,13 +90,20 @@ showed nothing at the bottom of the screen; idle memory matched the first measur
 
 Idle CPU after close: 0.00%. Windows of the app left after close, on or off screen: none.
 
-| Target (AC-2) | Before fixes | After fixes | Verdict |
-| --- | --- | --- | --- |
-| Home open on 1,000 items: under 100 MB | 113.4 MB | 108.4 MB | **Fails** |
-| 30 s after close: within 5 MB of step 1 | 14.8 MB above | 11.0 MB above | **Fails** |
-| Home's WebContent process gone after close | Gone | Gone | Passes |
-| Five cycles grow it by no more than 5 MB | No growth | No growth | Passes |
-| Idle CPU after close near 0% | 0.00% | 0.00% | Passes |
+The owner set AC-2's targets after the first measurement (26 November 2026): the 100 MB budget
+applies at idle 30 s after Home closes, with no growth over cycles, and Home open may reach 130 MB
+on any page. The verdicts below are against that AC-2.
+
+| Target (AC-2, as revised) | After fixes | Verdict |
+| --- | --- | --- |
+| 30 s after Home closes: under 100 MB | 70.4 MB | Passes |
+| Home's WebContent process gone after close | Gone | Passes |
+| Five more open and close cycles grow it by no more than 5 MB | 70.4 MB after five cycles against 70.4 MB after the first: no growth | Passes |
+| Home open on 1,000 items, any page: under 130 MB | 108.4 MB on the Home page, 125.4 MB on History after scrolling | Passes |
+
+For the record, against the first wording of AC-2 (open under 100 MB; after close within 5 MB of
+idle) the fixes moved the open figure from 113.4 to 108.4 MB and the gap after close from 14.8 to
+11.0 MB; both were above those first targets. Idle CPU after close stayed at 0.00%.
 
 What still holds the memory:
 
