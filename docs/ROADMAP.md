@@ -1,32 +1,35 @@
 # HyperMe roadmap
 
 **Status: adopted by the owner on 25 November 2026.** What and why: [PRD.md](PRD.md); this file says when. It replaces the earlier phase table in
-[SPEC.md](SPEC.md) section 5. Phase 0 is still the only work under way. Each later phase starts only after the gate of the one before it passes
-(`CLAUDE.md`).
+[SPEC.md](SPEC.md) section 5. The owner approved Phase 1 on 26 November 2026 (PRD Q-2), and its code is merged; its gate is
+under way. On 26 November 2026 the owner also asked to start phase 2 work in parallel: see
+[the plan for phases 1 and 2](plans/2026-11-26-phases-1-2.md). The first public release still waits for both gates.
 
 ## Where we stand against Wispr Flow
 
-The owner's target is Wispr Flow's performance. Measured so far, on the owner's Mac:
+The owner's target is Wispr Flow's performance. Measured so far, on the owner's Mac (refreshed 26 November 2026):
 
 | Measure | Wispr Flow | HyperMe today (`flowbench`, CLI only) | Gap |
 | --- | --- | --- | --- |
 | Key release to cleaned text | Published budget under 700 ms, a p99 target ([Wispr, Sept 2025](https://wisprflow.ai/post/technical-challenges)). Not yet timed on the owner's Mac ([#5](https://github.com/AndresHG/hyperme/issues/5)) | Median 426 ms, p90 587 ms: Speechmatics `melia-1` EU plus Groq `gpt-oss-20b`, prompt `v1`, wired, 38 of 50 samples ([results](results/2026-11-25-eu-speech.md)) | Ahead of Wispr's own budget on paper. Needs the full 50 samples, Wi-Fi, and Wispr Flow timed side by side |
 | Language, Spanish and English | 21 languages; mixed-language behaviour not stated | 38 of 38 right | Even so far |
-| Formatting quality | 79.3% zero-edit rate on Voice Arena, US English only ([voicearena.com](https://voicearena.com/dictation-bench)) | Not measured. Claude's read: fewer misrecognitions than OpenAI, some dropped words, names wrong ("long chain"), fillers sometimes kept | **The real unknown.** Needs `samples/gold.json` corrected by the owner and a zero-edit rate on the same samples |
-| Personal dictionary, per-app style, cleanup levels | Yes | No | Not started |
-| Works in any app: hotkey, paste at cursor | Yes | No, CLI only | Not started |
-| Idle memory | Electron plus a Swift helper (third-party teardown, unverified) | No app yet | Budget under 100 MB |
+| Formatting quality, edits per 100 characters against the owner's gold texts (lower is better) | 11.6 on the owner's 50 samples, 4 of 50 exact ([results](results/2026-11-26-wispr-comparison.md)). Voice Arena reports 79.3% zero-edit, US English only ([voicearena.com](https://voicearena.com/dictation-bench)) | 7.6 with prompt `v3`, 5 of 50 exact; 6.5 and 8 of 50 exact with a dictionary learned from corrections ([results](results/2026-11-26-dictionary.md)) | Ahead on the same samples. Wispr still gets the owner's internal names right without help; the dictionary closes that |
+| Personal dictionary | Yes | Substitution before cleanup works in flowbench and in the app's config; no way to learn or edit it in the app | Being designed in its own thread |
+| Per-app style, cleanup levels | Yes | No | Phase 2 |
+| Works in any app: hotkey, paste at cursor | Yes | Yes: the Phase 1 menu-bar app, hold Fn, paste at the cursor, history and Retry (PRs #47 to #91) | Live checks and the owner's week of use still to run |
+| Key-down to recording | Not published | Median about 65 to 70 ms ([results](results/2026-11-26-mic-start-latency.md)) | Misses the 50 ms budget; a decision for the owner |
+| Idle memory | Electron plus a Swift helper (third-party teardown, unverified) | 59.4 MB and 0% CPU, before any dictation ([results](results/2026-11-26-idle-usage-baseline.md)) | Within the 100 MB budget; still to measure after 20 dictations |
 
-Speed, the hardest part on paper, looks solved. What separates us from Wispr Flow now is
-formatting quality and the app itself.
+Speed and formatting are ahead of Wispr Flow on the owner's samples. What separates us now is
+daily use of the app itself, the personal dictionary in the app, and a release others can install.
 
 ## Phases
 
 | Phase | Goal | Scope | Gate to pass before the next phase |
 | --- | --- | --- | --- |
-| **0. Speed test** (now) | Prove Wispr Flow speed on the owner's voice | All 50 samples; full benchmark on Speechmatics EU; Wispr Flow timed on the same samples ([#4](https://github.com/AndresHG/hyperme/issues/4), [#5](https://github.com/AndresHG/hyperme/issues/5), [#15](https://github.com/AndresHG/hyperme/issues/15)) | Median at or under 800 ms, p90 at or under 1200 ms, language right on 50 of 50, formatting accepted beside Wispr Flow |
-| **1. Dictation core** ([draft spec](../specs/25-dictation-core/spec.md)) | Use it instead of Wispr Flow for daily dictation | Tauri 2 menu-bar app; hold-to-talk hotkey; connection warmed on key-down; Speechmatics streaming behind the speech trait; Groq cleanup with fallback to the raw transcript; paste at the cursor; a minimal pill that shows state; keys in the keychain | A full week without opening Wispr Flow (the earlier Phase 2 gate). Idle memory and CPU measured against the budgets |
-| **2. Wispr-level quality and first release** | Match Wispr Flow on formatting, then let others install it | Gold set and zero-edit rate; prompt tuning; personal dictionary; cleanup levels (none, light, medium); tone per app; clean text in pieces while the user speaks; a second speech provider as fallback; signed and notarised build | Zero-edit rate on the owner's samples at or above Wispr Flow's on the same samples. Then the first public release: "open-source dictation for your Mac, as fast as Wispr Flow" ([RESEARCH.md](RESEARCH.md) section 3). Licence decided: MIT OR Apache-2.0 |
+| **0. Speed test** (done: the owner approved Phase 1 on 26 November 2026, PRD Q-2) | Prove Wispr Flow speed on the owner's voice | All 50 samples; full benchmark on Speechmatics EU; Wispr Flow timed on the same samples ([#4](https://github.com/AndresHG/hyperme/issues/4), [#5](https://github.com/AndresHG/hyperme/issues/5), [#15](https://github.com/AndresHG/hyperme/issues/15)) | Median at or under 800 ms, p90 at or under 1200 ms, language right on 50 of 50, formatting accepted beside Wispr Flow |
+| **1. Dictation core** (now: code merged, gate under way; [spec](../specs/25-dictation-core/spec.md)) | Use it instead of Wispr Flow for daily dictation | Tauri 2 menu-bar app; hold-to-talk hotkey; connection warmed on key-down; Speechmatics streaming behind the speech trait; Groq cleanup with fallback to the raw transcript; paste at the cursor; a minimal pill that shows state; keys in the keychain | A full week without opening Wispr Flow (the earlier Phase 2 gate). Idle memory and CPU measured against the budgets |
+| **2. Wispr-level quality and first release** | Match Wispr Flow on formatting, then let others install it | Gold set and zero-edit rate; prompt tuning; personal dictionary; cleanup levels (none, light, medium); tone per app; clean text in pieces while the user speaks; a second speech provider as fallback; signed and notarised build **Proposed, for the owner to approve (#75):** on the owner's 50 samples, edits per 100 characters at or below Wispr Flow's 11.6 with the shipped app's own pipeline, every internal name in the owner's dictionary right, and a week of daily use with cleanup levels and the dictionary on. (The old rule, a zero-edit rate at or above Wispr Flow's, is already met on paper, 5 of 50 against 4 of 50, so it no longer separates good from not.) Then the first public release: "open-source dictation for your Mac, as fast as Wispr Flow" ([RESEARCH.md](RESEARCH.md) section 3). Licence decided: MIT OR Apache-2.0 |
 | **3. Smart routing and actions** | One key for everything you say | The same key routes to dictation, a question or an action; command mode sends the transcript to a tool-calling model; one MCP client (`rmcp`); the first tracker connector; "speak, preview card, Enter" in under a second; short spoken questions answered in a card; memory: "Hyper, remember …", approved facts in a Markdown folder ([PRD](PRD.md) 7.5) | Owner uses commands every day for two weeks. Covers items 1 and 2 of "what nobody ships" ([RESEARCH.md](RESEARCH.md) section 1.2) |
 | **4. Daily tasks and email** | The copilot for the workday | Calendar connector, Google first; HyperMe's own task list with voice capture ("Hyper, remind me to …"); a morning card and "meeting now" nudges; new items pulled into the task list from calendar, mail and tracker; scheduled jobs, each with a tool allowlist; email triage and replies, draft-only | Owner relies on it for a week of daily planning and mail drafts |
 | **5. Meetings** | Meetings become tasks | Note-taker with live gray transcript and batch cleanup to white ([#20](https://github.com/AndresHG/hyperme/issues/20)), local-first: see [meetings on device](#meetings-on-device) below; proposed tickets with owner and quote | Tickets from a real meeting accepted with few edits |
