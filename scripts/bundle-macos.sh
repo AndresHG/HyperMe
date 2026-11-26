@@ -2,19 +2,25 @@
 # Builds HyperMe.app from the release binary and installs it in ~/Applications, so HyperMe has
 # its own rows in System Settings > Privacy & Security instead of borrowing the terminal's.
 #
-#   scripts/bundle-macos.sh [--dest DIR] [--no-build]
+#   scripts/bundle-macos.sh [--dest DIR] [--no-build] [--identity NAME]
 #
 # Signs with "HyperMe Local Signing" when scripts/create-signing-identity.sh has made it, so
 # permission grants survive rebuilds. Without it, the app gets an ad-hoc signature and macOS
 # asks for the permissions again after every rebuild. Local use only: not notarised.
+#
+# --identity signs with that identity instead, with the hardened runtime, a secure timestamp
+# and app/src-tauri/entitlements.plist, as notarisation needs. scripts/release-macos.sh passes
+# the Developer ID Application identity here (docs/RELEASING.md).
 set -eu
 
 dest="$HOME/Applications"
 build=1
+release_identity=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --dest) dest="$2"; shift 2 ;;
     --no-build) build=0; shift ;;
+    --identity) release_identity="$2"; shift 2 ;;
     *) echo "unknown option: $1" >&2; exit 2 ;;
   esac
 done
@@ -69,14 +75,18 @@ cat > "$bundle/Contents/Info.plist" <<PLIST
 PLIST
 
 identity="HyperMe Local Signing"
-if security find-identity -v -p codesigning | grep -q "\"$identity\""; then
+if [ -n "$release_identity" ]; then
+  codesign --force --sign "$release_identity" --identifier org.hyperme.HyperMe \
+    --options runtime --timestamp --entitlements app/src-tauri/entitlements.plist "$bundle"
+  signed="with \"$release_identity\" (hardened runtime)"
+elif security find-identity -v -p codesigning | grep -q "\"$identity\""; then
   codesign --force --sign "$identity" --identifier org.hyperme.HyperMe "$bundle"
   signed="with \"$identity\" (grants survive rebuilds)"
 else
   codesign --force --sign - --identifier org.hyperme.HyperMe "$bundle"
   signed="ad-hoc (run scripts/create-signing-identity.sh once so grants survive rebuilds)"
 fi
-codesign --verify "$bundle"
+codesign --verify --strict "$bundle"
 
 mkdir -p "$dest"
 if pgrep -f "$app/Contents/MacOS/hyperme" >/dev/null; then
