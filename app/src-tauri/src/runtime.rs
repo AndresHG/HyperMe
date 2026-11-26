@@ -252,9 +252,7 @@ fn show(app: &AppHandle, view: View) {
         let _ = window.set_position(Position::Logical(LogicalPosition::new(x, y)));
     }
     let _ = app.emit_to(PILL, "pill", &view);
-    if let Ok(panel) = app.get_webview_panel(PILL) {
-        panel.show();
-    }
+    on_panel(app, |panel| panel.show());
     if let Some(ms) = view.hide_after_ms {
         let app = app.clone();
         tauri::async_runtime::spawn(async move {
@@ -274,9 +272,19 @@ fn hide(app: &AppHandle) {
     }
     // The page stops drawing the voice, so nothing runs while the pill is hidden.
     let _ = app.emit_to(PILL, "pill-hidden", ());
-    if let Ok(panel) = app.get_webview_panel(PILL) {
-        panel.hide();
-    }
+    on_panel(app, |panel| panel.hide());
+}
+
+/// Runs `action` on the pill panel on the main thread. AppKit windows may only be ordered in or
+/// out there: showing the pill from the status task, a tokio worker, crashed the app on the first
+/// dictation (EXC_BREAKPOINT, "Must only be used from the main thread", 26 November 2026).
+fn on_panel(app: &AppHandle, action: fn(&dyn tauri_nspanel::Panel)) {
+    let handle = app.clone();
+    let _ = app.run_on_main_thread(move || {
+        if let Ok(panel) = handle.get_webview_panel(PILL) {
+            action(panel.as_ref());
+        }
+    });
 }
 
 /// A click on the pill: Retry when it offers Retry (R-31), otherwise it goes away.
