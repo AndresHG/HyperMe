@@ -9,7 +9,10 @@ use core_graphics::event_source::{CGEventSource, CGEventSourceStateID};
 use hyperme_core::traits::{Error, ErrorKind, FocusInfo};
 use objc2::rc::Retained;
 use objc2::runtime::ProtocolObject;
-use objc2_app_kit::{NSPasteboard, NSPasteboardItem, NSPasteboardWriting, NSWorkspace};
+use objc2_app_kit::{
+    NSApplicationActivationOptions, NSPasteboard, NSPasteboardItem, NSPasteboardWriting,
+    NSRunningApplication, NSWorkspace,
+};
 use objc2_foundation::{NSArray, NSData, NSString};
 
 use super::{Item, Keystrokes, Pasteboard};
@@ -149,4 +152,23 @@ impl FocusInfo for MacFocus {
     fn secure_input(&self) -> bool {
         carbon::IsSecureEventInputEnabled() != 0
     }
+}
+
+/// The frontmost app's process id and name, for Home's Paste again (spec 98, R-15).
+pub fn frontmost() -> Option<(i32, String)> {
+    let app = NSWorkspace::sharedWorkspace().frontmostApplication()?;
+    let name = app
+        .localizedName()
+        .map(|n| n.to_string())
+        .unwrap_or_default();
+    Some((app.processIdentifier(), name))
+}
+
+/// Asks the app with process id `pid` to come to the front. False when no such app runs.
+/// macOS lets an app hand the front to another only while it is in front itself, as Home is
+/// when the user asks to paste again.
+pub fn activate(pid: i32) -> bool {
+    NSRunningApplication::runningApplicationWithProcessIdentifier(pid).is_some_and(|app| {
+        app.activateWithOptions(NSApplicationActivationOptions::ActivateAllWindows)
+    })
 }
