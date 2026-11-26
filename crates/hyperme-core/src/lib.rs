@@ -4,6 +4,7 @@
 pub mod audio;
 pub mod brief;
 pub mod config;
+pub mod connectors;
 pub mod cost;
 pub mod dictation;
 pub mod schedule;
