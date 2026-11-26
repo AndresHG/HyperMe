@@ -25,6 +25,9 @@ itself; a later version may hand a task to Claude Code ([docs/PRD.md](docs/PRD.m
 - `docs/plans/2026-11-26-phases-1-2.md`: phases 1 and 2 cut into chunks for parallel threads
 - `docs/PITCH.md`: pitch, positioning against Wispr Flow, and the ledger of claims still to earn
 - `specs/25-dictation-core/`: draft Phase 1 spec, design and slices (not yet approved)
+- `specs/92-daily-tasks/`: draft phase 4 spec for the task list with dependencies, the morning card
+  and the scheduler (core slices 1 to 6 approved to start, 26 November 2026)
+- `docs/RELEASING.md`: how a release is built, signed, notarised and published, and how updates work
 - `docs/FIELD.md`: existing projects and what to borrow from each
 - `docs/UX.md`: UX and UI by phase (one shape at the bottom centre: dot, pill, card and quick sheet; the Home window; settings and menus), with mockups in `docs/ux/` (draft)
 - `docs/RESEARCH.md`: verdict, product focus, pitch and field map from the research of
@@ -71,6 +74,8 @@ passes, update this section and record the evidence in `docs/results/`.
   telemetry. Audio stays on the Mac: dictation history (audio and text) is on by default,
   kept 30 days or unlimited, under a size limit the user sets, so a dropped connection never
   loses a dictation (owner, 26 November 2026; this replaces "no audio kept on disk").
+  Calendar and mail content from a connected account may go to the user's own language-model
+  provider, only when a briefing, summary, triage or question needs it (owner, 26 November 2026).
 - Memory starts with commands in phase 3: "Hyper, remember …", proposed facts approved by the
   user, kept in a folder of Markdown files on the user's Mac (owner, 26 November 2026; replaces
   "not in a first version"). See `docs/PRD.md` section 7.5.

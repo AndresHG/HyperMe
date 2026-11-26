@@ -227,7 +227,7 @@ once its feature exists: no "coming soon" pages.
 | Everyday | **General** | Launch at login; pill position and whether it shows while idle; sounds (start and stop: soft, off); pause media while dictating; theme follows the system | 1 |
 | | **Shortcuts** | Dictation (hold), hands-free, cancel (Esc), paste last dictation, open Home; later command and meeting. One list, with conflicts flagged | 1 |
 | Setup | **Providers** | The recommended pair by default: each row shows provider, key status, a Test button and which features use it ("Used by: dictation"). "Show advanced" opens the table of roles, one provider and model each ([Models and keys](#models-and-keys-in-onboarding)), never a tab per feature | 1 |
-| | **Connectors** | MCP servers (GitHub first). Each has its tools, a switch per tool, and "ask before" on for anything that writes (`CLAUDE.md`) | 3 |
+| | **Connectors** | MCP servers (GitHub first, then Google: Calendar and Gmail). Each has its accounts, its tools, a switch per tool, and "ask before" on for anything that writes (`CLAUDE.md`). Layout and the Google setup sheet: [specs/97-google-connectors](../specs/97-google-connectors/design.md#settings--connectors) (draft) | 3 |
 | | **Automations** | Scheduled jobs: a prompt, a schedule and a tool allowlist each (SPEC section 4), with last run and next run | 4 |
 | | **Meetings** | Calendar, capture (mic and system audio), cleanup **Cloud, Local or Off**, what happens after the meeting | 5 |
 | | **Privacy** | In plain words, what leaves the Mac and to whom; dictation history (on by default; 30 days or unlimited; size limit, default 1 GB); timing log; audio never leaves the Mac except to the speech provider | 1 |
@@ -441,6 +441,11 @@ focus and stays in one place. Each kind maps to a roadmap job:
 | Waiting for you | "Reply draft ready" | ↵ Review · ⌘K More |
 | Agent done | "Claude Code finished: pull request ready" | ↵ Review |
 | Job failed | "Morning plan could not reach your calendar" | ↵ Fix (opens the setting) |
+| Morning card | "Good morning · Friday 27": meetings, top tasks, what waits | ↵ Open Today · Esc |
+
+The morning card is drafted in [spec 92](../specs/92-daily-tasks/spec.md), with a mockup in
+[ux/daily-cards.svg](ux/daily-cards.svg). The evening card in the same mockup is deferred (owner,
+26 November 2026).
 
 An unanswered alert shrinks back into the dot as its ring and stays in Today. "Pause Hyper for 1
 hour" in the menu holds all alerts; meeting capture indicators are never held. Notion Calendar shows upcoming events in the menu bar

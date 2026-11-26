@@ -38,6 +38,8 @@ struct Shared {
     generation: u64,
     history: Arc<Mutex<HistoryInner>>,
     menu: TrayMenu,
+    /// The bead at rest instead of nothing (U-13, brought forward by the owner).
+    show_while_idle: bool,
     /// Hotkey listening must live as long as the app.
     _hotkey: Option<HotkeyListener>,
 }
@@ -95,8 +97,11 @@ pub fn start(app: &AppHandle, menu: TrayMenu) {
         generation: 0,
         history: history.clone(),
         menu,
+        show_while_idle: Config::load_or_create(&data_dir(app).join("config.toml"))
+            .map_or(true, |config| config.dictation.show_while_idle),
         _hotkey: None,
     }));
+    settle(app);
     match wire(app, history) {
         Ok(()) => set_status(app, "Ready"),
         Err(why) => set_status(app, &why),
@@ -221,7 +226,7 @@ async fn show_statuses(app: AppHandle, mut statuses: mpsc::UnboundedReceiver<Sta
         }
         match pill::change_for(&status) {
             Change::Show(view) => show(&app, view),
-            Change::Hide => hide(&app),
+            Change::Hide => settle(&app),
             Change::Keep => {}
         }
     }
@@ -236,13 +241,44 @@ fn set_status(app: &AppHandle, text: &str) {
 }
 
 fn show(app: &AppHandle, view: View) {
-    let generation = {
+    let (generation, was_pill) = {
         let mut shared = lock(app);
         shared.generation += 1;
+        let was_pill = shared.view.as_ref().is_some_and(|v| v.kind != "idle");
         shared.view = Some(view.clone());
-        shared.generation
+        (shared.generation, was_pill)
     };
     let width = pill::width_for(&view);
+    if view.kind == "idle" && was_pill {
+        // The page shrinks the capsule into the bead (the 180 ms spring); the panel follows once
+        // it is done, so the animation is not cut off.
+        let _ = app.emit_to(PILL, "pill", &view);
+        let app = app.clone();
+        tauri::async_runtime::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(200)).await;
+            if lock(&app).generation == generation {
+                place(&app, width);
+            }
+        });
+    } else {
+        // Growing: the panel takes the pill's size first, then the page grows the capsule.
+        place(app, width);
+        let _ = app.emit_to(PILL, "pill", &view);
+    }
+    on_panel(app, |panel| panel.show());
+    if let Some(ms) = view.hide_after_ms {
+        let app = app.clone();
+        tauri::async_runtime::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(ms)).await;
+            if lock(&app).generation == generation {
+                settle(&app);
+            }
+        });
+    }
+}
+
+/// Sizes the panel for `width` and puts it at the bottom centre.
+fn place(app: &AppHandle, width: f64) {
     if let Some(window) = app.get_webview_window(PILL) {
         let (x, y) = pill_origin(app, width);
         let _ = window.set_size(Size::Logical(LogicalSize::new(
@@ -251,16 +287,14 @@ fn show(app: &AppHandle, view: View) {
         )));
         let _ = window.set_position(Position::Logical(LogicalPosition::new(x, y)));
     }
-    let _ = app.emit_to(PILL, "pill", &view);
-    on_panel(app, |panel| panel.show());
-    if let Some(ms) = view.hide_after_ms {
-        let app = app.clone();
-        tauri::async_runtime::spawn(async move {
-            tokio::time::sleep(Duration::from_millis(ms)).await;
-            if lock(&app).generation == generation {
-                hide(&app);
-            }
-        });
+}
+
+/// After a state: the bead when "Show while idle" is on, otherwise hidden.
+fn settle(app: &AppHandle) {
+    let show_while_idle = lock(app).show_while_idle;
+    match pill::rest(show_while_idle) {
+        Change::Show(view) => show(app, view),
+        _ => hide(app),
     }
 }
 
@@ -287,17 +321,31 @@ fn on_panel(app: &AppHandle, action: fn(&dyn tauri_nspanel::Panel)) {
     });
 }
 
-/// A click on the pill: Retry when it offers Retry (R-31), otherwise it goes away.
+/// The pill's current view, for the page once it has loaded: an event sent before its listeners
+/// exist is lost, and the bead is sent at launch (26 November 2026, the bead showed the hidden
+/// recording bars instead).
+#[tauri::command]
+pub fn pill_view(app: AppHandle) -> Option<View> {
+    lock(&app).view.clone()
+}
+
+/// A click on the pill: Retry when it offers Retry (R-31); on the bead, Settings for now;
+/// otherwise the state goes away.
 #[tauri::command]
 pub fn pill_clicked(app: AppHandle) {
-    let (retry, events) = {
+    let (retry, idle, events) = {
         let shared = lock(&app);
         (
             shared.view.as_ref().is_some_and(|v| v.retry),
+            shared.view.as_ref().is_some_and(|v| v.kind == "idle"),
             shared.events.clone(),
         )
     };
-    hide(&app);
+    if idle {
+        crate::settings::open(&app, "general");
+        return;
+    }
+    settle(&app);
     if retry && let Some(events) = events {
         let _ = events.try_send(Event::Retry);
     }
