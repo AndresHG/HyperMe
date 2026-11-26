@@ -23,6 +23,10 @@ root=$(cd "$(dirname "$0")/.." && pwd)
 cd "$root"
 [ "$build" = 1 ] && cargo build --release -p hyperme-app
 version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+# The commit the app is built from, with "-dirty" when the tree has changes, so the installed app
+# can always be traced: defaults read ~/Applications/HyperMe.app/Contents/Info HyperMeGitCommit
+commit=$(git rev-parse --short HEAD 2>/dev/null || echo unknown)
+[ -n "$(git status --porcelain --untracked-files=no 2>/dev/null)" ] && commit="$commit-dirty"
 
 app="$dest/HyperMe.app"
 stage=$(mktemp -d)
@@ -54,6 +58,7 @@ cat > "$bundle/Contents/Info.plist" <<PLIST
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>$version</string>
   <key>CFBundleVersion</key><string>$version</string>
+  <key>HyperMeGitCommit</key><string>$commit</string>
   <key>LSMinimumSystemVersion</key><string>13.0</string>
   <!-- A menu-bar app: no Dock icon (spec R-22). -->
   <key>LSUIElement</key><true/>
@@ -80,5 +85,5 @@ if pgrep -f "$app/Contents/MacOS/hyperme" >/dev/null; then
 fi
 rm -rf "$app"
 mv "$bundle" "$app"
-echo "Installed $app, signed $signed."
+echo "Installed $app (commit $commit), signed $signed."
 echo "Start it with: open \"$app\""
