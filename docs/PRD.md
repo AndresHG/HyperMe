@@ -189,7 +189,9 @@ few options.
 | Feature | Phase | Priority | Notes |
 | --- | --- | --- | --- |
 | "Hyper, remind me to …" adds to HyperMe's task list, with an optional day or date; the list on the Home page; roll-over | 4 | P0 | Owner, D-1 and D-3 |
-| Morning card at a time you set; nudges only before meetings and for due tasks | 4 | P0 | Owner, D-2 |
+| Morning card at a time you set; nudges only before meetings and for due tasks | 4 | P0 | Owner, D-2. *Proposed* in [spec 92](../specs/92-daily-tasks/spec.md): shown the first time you sit down after the morning time, from local data in under 150 ms |
+| Tasks blocked by other tasks ("after the insurance call", "first …, then …"); blocked tasks wait under "Waiting on" and return to Today when unblocked | 4 | P0 | Owner, 26 November 2026. [Spec 92](../specs/92-daily-tasks/spec.md) |
+| Evening summary at a time you set (default 18:30): done, still open with one-key choices, close the day | 4 | P0 | Owner, 26 November 2026 ("6 or 7 PM"). [Spec 92](../specs/92-daily-tasks/spec.md) |
 | Pull new items from tracker, calendar and mail into the list, on a schedule | 4 | P0 | Owner, D-1 |
 | One profile with several accounts per service; you say which ("in my personal calendar") | 4 | P0 | Owner, Q-12. Separate profiles only if people ask |
 | Calendar connector, "meeting now" nudges | 4 | P0 | Google first, Microsoft 365 later (owner, Q-7) |
