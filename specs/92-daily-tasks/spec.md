@@ -154,13 +154,17 @@ EARS form. "The app" is HyperMe on macOS.
   roll-over, the two daily cards, nudges, and sync jobs. No launchd agent, no cron daemon, no
   agent framework (PRD principle 7).
 - R-31. Each job shall have a name, a kind, a schedule, an enabled switch, the last and next
-  run, the last result, and a catch-up rule. Prompt jobs (Settings → Automations) shall also have
-  a tool allowlist (SPEC section 4).
+  run, the last result, and a catch-up rule. Every job that calls tools shall have a tool
+  allowlist (SPEC section 4): sync jobs get read tools only, prompt jobs (Settings → Automations)
+  the tools the user picked.
 - R-32. Schedules shall be "at a time on chosen weekdays", "every n minutes while present", or
   "on presence after a time", in the Mac's current local time zone. When the time zone changes,
   the app shall compute every next run again.
 - R-33. While no job is due, the scheduler shall wait on one timer for the nearest next run and
   wake for nothing else, so idle CPU stays near 0%.
+- R-33a. While the Mac runs on battery under 20% or in Low Power Mode, the scheduler shall skip
+  "every n minutes" jobs and run each once when power is back or on the next wake. Roll-over and
+  the daily cards still run.
 - R-34. When the Mac wakes from sleep, the clock changes or the time zone changes, the scheduler
   shall compute the nearest next run again, because a sleeping Mac does not advance timers.
 - R-35. If a job's time passed while the Mac slept or HyperMe was not running, the scheduler

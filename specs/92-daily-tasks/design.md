@@ -181,6 +181,7 @@ module turns a handful of system notifications into events:
 | `Unlocked`, `Locked` | Distributed notifications `com.apple.screenIsUnlocked` and `com.apple.screenIsLocked` |
 | `ClockChanged`, `ZoneChanged` | `NSSystemClockDidChangeNotification`, `NSSystemTimeZoneDidChangeNotification` |
 | `Launched` | HyperMe itself, once at start |
+| `PowerChanged { low }` | `NSProcessInfoPowerStateDidChangeNotification` (Low Power Mode) and the battery level from IOKit's power sources, read on that notification and on wake (R-33a) |
 
 "Present" is unlocked, awake, and input in the last 10 minutes
 (`CGEventSourceSecondsSinceLastEventType`, read only when a job asks, so it costs nothing at
@@ -259,6 +260,6 @@ spec wins where it differs.
 | Part | What this spec needs from it |
 | --- | --- |
 | Home window | Blocks above Recent, so Today and Waiting for you are two more entries; a `hyperme://home/today` link for the morning card's ↵; an event when Today has been seen, to clear "new"; re-render on a push from the core; `home_attention(bool)` for the violet dot |
-| Google calendar and mail | Sync as `sync:<connector>` jobs in this scheduler; today's meetings as title, start, end, account and link; items to act on upserted as mirrored tasks keyed by source, account and id; a count of mail to answer |
+| Google calendar and mail ([spec 97](../97-google-connectors/spec.md), PR #101) | Sync as `sync:google-calendar` and `sync:google-mail` jobs in this scheduler, with read tools only, skipped on low power and run once on wake; today's meetings as title, start, end, account and link; items to act on upserted as mirrored tasks keyed by source, account and id; a count of mail to answer |
 | Phase 3 command loop | Built-in tools beside MCP tools, and a done card with ⌘Z |
 | Phase 3 dot and cards | Alert cards from the dot for the morning and evening cards and nudges |
