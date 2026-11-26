@@ -567,3 +567,16 @@ fn stats_week_in_a_western_time_zone() {
     assert_eq!(stats.words_this_week, 40);
     assert_eq!(stats.seconds_saved, 60 - 20);
 }
+
+/// #98 AC-10 (R-16): a retry from Home cleans the text for the app it was dictated into.
+#[test]
+fn app_of_a_dictation() {
+    let dir = temp_dir("app-of");
+    let (mut store, _) = open_store(&dir, on(Retention::Days(30), 1024));
+    let id = dictate(&mut store, "In TextEdit.", 100);
+    let none = store.begin(None).unwrap();
+    store.failed(none, "dropped").unwrap();
+    assert_eq!(store.app(id).unwrap().as_deref(), Some("TextEdit"));
+    assert_eq!(store.app(none).unwrap(), None);
+    assert!(store.app(9999).is_err());
+}

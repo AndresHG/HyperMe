@@ -110,6 +110,17 @@ pub trait History {
     fn discard(&mut self, id: DictationId) -> Result<(), Error>;
     /// The saved audio of a dictation, for a retry.
     fn audio(&self, id: DictationId) -> Result<Vec<i16>, Error>;
+    /// The app a dictation was dictated into, for the cleanup prompt of a retry from Home
+    /// (#98 R-16).
+    fn app(&self, id: DictationId) -> Result<Option<String>, Error>;
+    /// A retry from Home succeeded: the dictation's text is replaced, its audio kept (#98
+    /// R-16). With history off, nothing is left behind, as with [`done`](Self::done).
+    fn replace_text(
+        &mut self,
+        id: DictationId,
+        text: &str,
+        language: Option<&str>,
+    ) -> Result<(), Error>;
 }
 
 /// The start and stop sounds (R-32).

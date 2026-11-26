@@ -460,30 +460,6 @@ impl SqliteHistory {
         self.delete(id)
     }
 
-    /// Replaces a dictation's text after a retry from Home (#98 R-16). The audio stays. With
-    /// history off, a successful retry leaves nothing behind, as [`History::done`] does
-    /// (Phase 1 R-28).
-    pub fn replace_text(
-        &mut self,
-        id: DictationId,
-        text: &str,
-        language: Option<&str>,
-    ) -> Result<(), Error> {
-        if !self.settings.enabled {
-            return self.delete(id);
-        }
-        let now = (self.now)();
-        let changed = Self::sql(self.db.execute(
-            "UPDATE dictations SET state = 'done', text = ?2, language = ?3, finished_ms = ?4,
-             message = NULL WHERE id = ?1 AND state != 'recording'",
-            params![id, text, language, now],
-        ))?;
-        if changed == 0 {
-            return Err(error(format!("no finished dictation {id}")));
-        }
-        Ok(())
-    }
-
     /// The failed dictations that still have their audio, newest first: all History lists
     /// while history is off (#98 R-19, AC-13).
     pub fn failed_with_audio(&self) -> Result<Vec<Item>, Error> {
@@ -566,5 +542,41 @@ impl History for SqliteHistory {
             .iter()
             .map(|b| i16::from_le_bytes(*b))
             .collect())
+    }
+
+    fn app(&self, id: DictationId) -> Result<Option<String>, Error> {
+        Self::sql(
+            self.db
+                .query_row(
+                    "SELECT app FROM dictations WHERE id = ?1",
+                    params![id],
+                    |r| r.get::<_, Option<String>>(0),
+                )
+                .optional(),
+        )?
+        .ok_or_else(|| error(format!("no dictation {id}")))
+    }
+
+    /// #98 R-16: the audio stays. With history off, a successful retry leaves nothing behind,
+    /// as `done` does (Phase 1 R-28). An unknown or still-recording id is an error.
+    fn replace_text(
+        &mut self,
+        id: DictationId,
+        text: &str,
+        language: Option<&str>,
+    ) -> Result<(), Error> {
+        if !self.settings.enabled {
+            return self.delete(id);
+        }
+        let now = (self.now)();
+        let changed = Self::sql(self.db.execute(
+            "UPDATE dictations SET state = 'done', text = ?2, language = ?3, finished_ms = ?4,
+             message = NULL WHERE id = ?1 AND state != 'recording'",
+            params![id, text, language, now],
+        ))?;
+        if changed == 0 {
+            return Err(error(format!("no finished dictation {id}")));
+        }
+        Ok(())
     }
 }

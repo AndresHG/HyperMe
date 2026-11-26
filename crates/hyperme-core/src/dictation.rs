@@ -63,8 +63,11 @@ pub enum Event {
     Esc,
     /// One captured frame of mono PCM16 at the speech provider's rate.
     Audio(Vec<i16>),
-    /// Retry the last failed dictation from its saved audio (R-31), from the pill or the menu.
-    Retry,
+    /// Retry a dictation from its saved audio. `None`: the last failed dictation, from the
+    /// pill or the menu (R-31); pasted if its app is still in front, else copied. `Some(id)`:
+    /// that dictation, whatever its state, from Home (#98 R-16); always copied, since Home has
+    /// focus, and its text replaced.
+    Retry(Option<DictationId>),
 }
 
 /// What the pill shows.
@@ -202,7 +205,8 @@ where
         while let Some(event) = events.recv().await {
             let flow = match event {
                 Event::KeyDown => self.dictate(&mut events).await,
-                Event::Retry => self.retry(&mut events).await,
+                Event::Retry(None) => self.retry(&mut events).await,
+                Event::Retry(Some(id)) => self.retry_by_id(id, &mut events).await,
                 Event::KeyUp | Event::Esc | Event::Audio(_) => continue,
             };
             let _ = self.status.send(Status::Idle);
@@ -342,7 +346,7 @@ where
                         emit(Status::Cancelled);
                         return Flow::Ended;
                     }
-                    Some(Event::KeyDown | Event::Retry) => {}
+                    Some(Event::KeyDown | Event::Retry(_)) => {}
                 },
                 result = &mut open, if opening => {
                     opening = false;
@@ -559,6 +563,103 @@ where
     }
 }
 
+impl<M, S, C, I, F, H, N, T> Engine<M, S, C, I, F, H, N, T>
+where
+    M: Microphone + Send,
+    S: SpeechProvider + Sync,
+    C: CleanupProvider + Sync,
+    I: Inserter + Send,
+    F: FocusInfo + Send,
+    H: History + Send,
+    N: Sounds + Send,
+    T: TimingLog + Send,
+{
+    /// #98 R-16: sends one dictation's saved audio again, copies the new text and replaces the
+    /// item's text. On any failure the old text stays. The last failed dictation, which the
+    /// pill and menu retry, is left alone, unless this was that dictation and it succeeded.
+    async fn retry_by_id(&mut self, id: DictationId, events: &mut mpsc::Receiver<Event>) -> Flow {
+        let Engine {
+            parts,
+            settings,
+            status,
+            failed: slot,
+        } = self;
+        let emit = |s: Status| {
+            let _ = status.send(s);
+        };
+        let Parts {
+            speech,
+            cleanup,
+            inserter,
+            history,
+            ..
+        } = parts;
+        // The pill and menu keep offering Retry for the last failed dictation, if any.
+        let fail = |message: String| {
+            emit(Status::Failed {
+                message,
+                retry: slot.is_some(),
+            });
+        };
+        let (audio, app) = match history.audio(id).and_then(|a| Ok((a, history.app(id)?))) {
+            Ok(found) => found,
+            Err(error) => {
+                fail(format!("Retry: {error}"));
+                return Flow::Ended;
+            }
+        };
+        emit(Status::Transcribing);
+        let mut warm = pin!(std::future::ready(()));
+        let mut warming = false;
+        let open = pin!(speech.open());
+        let live = match wait(open, events, warm.as_mut(), &mut warming, &emit).await {
+            Waited::Done(Ok(live)) => live,
+            Waited::Done(Err(error)) => {
+                fail(format!("Speech: {error}"));
+                return Flow::Ended;
+            }
+            Waited::Cancelled => {
+                emit(Status::Cancelled);
+                return Flow::Ended;
+            }
+            Waited::Closed => return Flow::Closed,
+        };
+        let text = transcribe_and_clean(
+            live,
+            &audio,
+            cleanup,
+            settings,
+            app.as_deref(),
+            events,
+            warm.as_mut(),
+            &mut warming,
+            &emit,
+        )
+        .await;
+        let text = match text {
+            Ok(text) => text,
+            Err(NoText::Speech(error)) => {
+                fail(format!("Speech: {error}"));
+                return Flow::Ended;
+            }
+            // Nothing heard on a retry keeps the item as it was: it is not discarded.
+            Err(NoText::Cancelled | NoText::NothingHeard) => return Flow::Ended,
+            Err(NoText::Closed) => return Flow::Closed,
+        };
+        emit(Status::Pasting);
+        if let Err(error) = inserter.copy(&text.text).await {
+            fail(format!("Copy: {error}"));
+            return Flow::Ended;
+        }
+        let _ = history.replace_text(id, &text.text, text.language.as_deref());
+        if slot.as_ref().is_some_and(|f| f.id == id) {
+            *slot = None;
+        }
+        emit(Status::Copied { raw: text.raw });
+        Flow::Ended
+    }
+}
+
 /// From an open session to the text to insert: sends the audio not yet sent, finalizes
 /// (R-9, AC-6), and cleans the transcript within the deadline (R-11 to R-14, R-20).
 #[allow(clippy::too_many_arguments)]
@@ -668,7 +769,7 @@ async fn wait<T>(
                 None => return Waited::Closed,
                 Some(Event::Esc) => return Waited::Cancelled,
                 Some(Event::KeyDown) => emit(Status::StillWorking),
-                Some(Event::KeyUp | Event::Audio(_) | Event::Retry) => {}
+                Some(Event::KeyUp | Event::Audio(_) | Event::Retry(_)) => {}
             },
         }
     }

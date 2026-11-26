@@ -339,7 +339,7 @@ pub fn pill_clicked(app: AppHandle) {
     }
     settle(&app);
     if retry && let Some(events) = events {
-        let _ = events.try_send(Event::Retry);
+        let _ = events.try_send(Event::Retry(None));
     }
 }
 
@@ -375,7 +375,7 @@ pub fn menu_action(app: &AppHandle, id: &str) {
         "settings" => crate::settings::open(app, "setup"),
         "retry" => {
             if let Some(events) = lock(app).events.clone() {
-                let _ = events.try_send(Event::Retry);
+                let _ = events.try_send(Event::Retry(None));
             }
         }
         _ => {}
@@ -444,5 +444,23 @@ impl History for SharedHistory {
             message: "history is not available".to_owned(),
         })?;
         store.audio(id)
+    }
+
+    fn app(&self, id: DictationId) -> Result<Option<String>, Error> {
+        let inner = self.inner();
+        let store = inner.store.as_ref().ok_or_else(|| Error {
+            kind: ErrorKind::Device,
+            message: "history is not available".to_owned(),
+        })?;
+        store.app(id)
+    }
+
+    fn replace_text(
+        &mut self,
+        id: DictationId,
+        text: &str,
+        language: Option<&str>,
+    ) -> Result<(), Error> {
+        self.inner().store()?.replace_text(id, text, language)
     }
 }

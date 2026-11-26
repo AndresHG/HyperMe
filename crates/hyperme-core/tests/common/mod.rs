@@ -246,6 +246,8 @@ impl Inserter for FakeInserter {
 pub struct FakeHistory {
     pub log: Log,
     pub audio: Arc<Mutex<BTreeMap<DictationId, Vec<i16>>>>,
+    /// The app each dictation was dictated into.
+    apps: Arc<Mutex<BTreeMap<DictationId, Option<String>>>>,
     next: Arc<Mutex<DictationId>>,
 }
 
@@ -254,6 +256,7 @@ impl FakeHistory {
         FakeHistory {
             log: log.clone(),
             audio: Arc::default(),
+            apps: Arc::default(),
             next: Arc::default(),
         }
     }
@@ -268,6 +271,10 @@ impl History for FakeHistory {
         let mut next = self.next.lock().unwrap();
         *next += 1;
         self.audio.lock().unwrap().insert(*next, Vec::new());
+        self.apps
+            .lock()
+            .unwrap()
+            .insert(*next, app.map(str::to_owned));
         self.log
             .push(format!("history begin {} [{}]", *next, app.unwrap_or("-")));
         Ok(*next)
@@ -309,6 +316,28 @@ impl History for FakeHistory {
             .get(&id)
             .cloned()
             .ok_or_else(|| err(ErrorKind::Other, "no such dictation"))
+    }
+
+    fn app(&self, id: DictationId) -> Result<Option<String>, Error> {
+        self.apps
+            .lock()
+            .unwrap()
+            .get(&id)
+            .cloned()
+            .ok_or_else(|| err(ErrorKind::Other, "no such dictation"))
+    }
+
+    fn replace_text(
+        &mut self,
+        id: DictationId,
+        text: &str,
+        language: Option<&str>,
+    ) -> Result<(), Error> {
+        self.log.push(format!(
+            "history replace {id}: {text} ({})",
+            language.unwrap_or("-")
+        ));
+        Ok(())
     }
 }
 
