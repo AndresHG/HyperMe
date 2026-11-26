@@ -181,6 +181,9 @@ spreads the choice over per-feature tabs, while HyperMe keeps one table of roles
 Each provider needs only one key, shared by every role that uses it. Choosing a provider shows
 its own cost line, worked out the same way as in the wizard.
 
+The full behaviour (catalogue, models from the key, Test, hints, local cleanup and fallbacks) is
+in the draft spec [specs/96-provider-settings](../specs/96-provider-settings/spec.md).
+
 ### Settings window
 
 Phase 1 shows the first seven sections of the settings plan below: General, Shortcuts, Providers,
