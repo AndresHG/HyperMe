@@ -119,10 +119,10 @@ and recorded in `docs/results/`.
 
 - AC-1 *(live)*: Open HyperMe brings up Home with the Home page; opening it again while open
   raises the same window, never a second one. (R-1)
-- AC-2 *(live)*: Total footprint of all the app's processes, measured with `footprint`: with Home
-  open on 1,000 history items, under 100 MB; 30 seconds after Home closes, within 5 MB of the
-  figure before it opened, and the web view's WebContent process for Home is gone. Five open and
-  close cycles do not grow it by more than 5 MB. (R-2, budget)
+- AC-2 *(live)*: Total footprint of all the app's processes, measured with `footprint`: 30 seconds
+  after Home closes, under the 100 MB idle budget and Home's WebContent process gone; five more
+  open and close cycles do not grow it by more than 5 MB; with Home open on 1,000 history items,
+  under 130 MB on any page. (R-2, budget; owner, 26 November 2026, after the first measurement)
 - AC-3 *(live)*: The Dock icon shows while Home is open and goes away after it closes; the pill
   still never takes focus while Home is open. (R-3, Phase 1 R-23)
 - AC-4 *(fake)*: The section list holds only sections whose feature exists; with no dictionary,
@@ -194,4 +194,5 @@ and recorded in `docs/results/`.
 | Paste again | Go back to the app that was in front, paste, leave Home open behind | Copy only: one more step for the user every time | This spec; owner to confirm |
 | Retry of a done dictation | Replace the text, copy the new text | Keep both versions: more UI for a rare case | This spec |
 | Correction type | The dictionary thread's `Correction` and `Added` (R-20) | A plain heard/wanted pair: it could not carry the common-word warning | Agreed with #93 |
+| Memory target | The 100 MB budget applies at idle, after Home closes; Home open may reach 130 MB | Under 100 MB while open: WebKit costs about 23 MB for any window, even an empty one, and the open window measured 108 to 125 MB after fixes | Owner, 26 November 2026 |
 | Home page numbers | Words this week and time saved | Median latency: needs the timing log, off by default | This spec |
