@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>HyperMe pill</title>
+<style>
+  /* Tokens and states from docs/UX.md, "Visual language" and "The pill". */
+  :root {
+    --surface: #111113;
+    --text: #ffffff;
+    --muted: #a1a1aa;
+    --recording: #ff4d4f;
+    --done: #22c55e;
+    --raw: #f59e0b;
+  }
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: transparent;
+    overflow: hidden;
+    -webkit-user-select: none;
+    user-select: none;
+    cursor: default;
+  }
+  .pill {
+    box-sizing: border-box;
+    height: 100%;
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 0 14px;
+    font: 500 13px ui-rounded, -apple-system, system-ui, sans-serif;
+    white-space: nowrap;
+  }
+  .pill.error, .pill.retry { box-shadow: inset 0 0 0 1.5px var(--recording); cursor: pointer; }
+  .icon { flex: none; display: flex; align-items: center; gap: 3px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; }
+  .bars { display: none; align-items: center; gap: 3px; height: 18px; }
+  .bars span { width: 3px; border-radius: 2px; background: var(--text); height: 3px; transition: height 33ms linear; }
+  .working span { width: 5px; height: 5px; border-radius: 50%; background: var(--muted); animation: pulse 1s infinite ease-in-out; }
+  .working span:nth-child(2) { animation-delay: 0.15s; }
+  .working span:nth-child(3) { animation-delay: 0.3s; }
+  @keyframes pulse { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) { .working span { animation: none; opacity: 0.7; } }
+  .label { overflow: hidden; text-overflow: ellipsis; }
+  .muted { color: var(--muted); }
+</style>
+</head>
+<body>
+  <div id="pill" class="pill" role="status" aria-live="polite">
+    <span id="icon" class="icon"></span>
+    <span id="bars" class="bars" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></span>
+    <span id="label" class="label"></span>
+  </div>
+<script>
+  // Each state has an icon and a word, never colour alone (docs/UX.md).
+  const icons = {
+    recording: '<span class="dot" style="background:var(--recording)"></span>',
+    working: '<span class="working"><span></span><span></span><span></span></span>',
+    done: '<span style="color:var(--done)">✓</span>',
+    raw: '<span class="dot" style="background:var(--raw)"></span>',
+    quiet: '<span class="dot" style="background:var(--muted)"></span>',
+    notice: '<span class="muted">🔒</span>',
+    error: '<span style="color:var(--recording)">!</span>',
+    retry: '<span style="color:var(--recording)">↻</span>',
+  };
+  const pill = document.getElementById('pill');
+  const icon = document.getElementById('icon');
+  const bars = document.getElementById('bars');
+  const label = document.getElementById('label');
+  const shape = [0.5, 0.8, 1, 0.8, 0.5];
+
+  function render(view) {
+    pill.className = 'pill ' + view.kind;
+    icon.innerHTML = icons[view.kind] || '';
+    label.textContent = view.label;
+    label.className = 'label' + (view.kind === 'quiet' || view.kind === 'notice' ? ' muted' : '');
+    bars.style.display = view.kind === 'recording' ? 'flex' : 'none';
+  }
+
+  function level(value) {
+    bars.querySelectorAll('span').forEach((bar, i) => {
+      bar.style.height = Math.max(3, Math.round(18 * value * shape[i])) + 'px';
+    });
+  }
+
+  const tauri = window.__TAURI__;
+  if (tauri) {
+    tauri.event.listen('pill', (event) => render(event.payload));
+    tauri.event.listen('level', (event) => level(event.payload));
+    pill.addEventListener('click', () => tauri.core.invoke('pill_clicked'));
+  }
+  render({ kind: 'recording', label: '' });
+</script>
+</body>
+</html>

@@ -1,0 +1,21 @@
+[package]
+name = "hyperme-core"
+description = "HyperMe's core: config, the dictation state machine and the traits. No platform calls, no network."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+serde.workspace = true
+toml.workspace = true
+# The state machine is one async task: channels, timers and select! only, no runtime.
+tokio = { workspace = true, features = ["macros", "sync", "time"] }
+
+[dev-dependencies]
+# Tests run the state machine on a runtime with a paused, manually advanced clock.
+tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread", "test-util"] }
+
+[lints]
+workspace = true

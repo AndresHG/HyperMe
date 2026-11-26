@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Welcome to HyperMe</title>
+<style>
+  :root { color-scheme: light dark; --violet: #7c5cff; --ok: #22c55e; --bad: #ff4d4f; --line: color-mix(in srgb, CanvasText 12%, transparent); --muted: color-mix(in srgb, CanvasText 55%, transparent); }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 13px -apple-system, system-ui, sans-serif; background: Canvas; color: CanvasText; height: 100vh; display: flex; flex-direction: column; }
+  main { flex: 1; padding: 28px 32px 0; }
+  h1 { font: 600 18px ui-rounded, -apple-system, sans-serif; margin: 0 0 8px; }
+  p { margin: 0 0 14px; line-height: 1.45; }
+  .muted { color: var(--muted); }
+  .screen { display: none; }
+  .screen.on { display: block; }
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+  .ok { color: var(--ok); } .bad { color: var(--bad); }
+  button { padding: 6px 14px; border-radius: 7px; border: 1px solid var(--line); background: Canvas; color: inherit; font: inherit; cursor: pointer; }
+  button.main { background: var(--violet); color: white; border-color: var(--violet); }
+  button:disabled { opacity: 0.4; cursor: default; }
+  input[type=password] { padding: 5px 8px; border-radius: 6px; border: 1px solid var(--line); background: Canvas; color: inherit; font: inherit; width: 220px; }
+  textarea { width: 100%; height: 110px; padding: 8px; border-radius: 8px; border: 1px solid var(--line); background: Canvas; color: inherit; font: inherit; resize: none; }
+  .meter { height: 10px; border-radius: 5px; background: var(--line); overflow: hidden; margin: 12px 0; }
+  .meter div { height: 100%; width: 0; background: var(--ok); transition: width 50ms linear; }
+  footer { display: flex; align-items: center; justify-content: space-between; padding: 14px 32px; border-top: 1px solid var(--line); }
+  .dots span { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--line); margin-right: 5px; }
+  .dots span.on { background: var(--violet); }
+  main { overflow: auto; }
+  .card { padding: 10px 12px; border-radius: 10px; background: color-mix(in srgb, var(--violet) 10%, Canvas); margin-bottom: 6px; line-height: 1.4; }
+  .steps { margin: 2px 0 6px; font-size: 12px; }
+  .cost-q { margin: 14px 0 6px; font-weight: 600; }
+  .choices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .choices button { text-align: left; padding: 8px 10px; }
+  .choices button.on { border-color: var(--violet); box-shadow: inset 0 0 0 1px var(--violet); }
+  .choices small { display: block; color: var(--muted); font-size: 11px; }
+  .choices b { display: block; margin-top: 4px; }
+  a.quiet { color: var(--muted); font-size: 12px; }
+</style>
+</head>
+<body>
+<main>
+  <section class="screen on" data-step="welcome">
+    <h1>Welcome to HyperMe</h1>
+    <p>Hold a key, speak, and your words appear where you type.</p>
+    <p class="muted">Four quick checks and you are ready. Each one is tested before you go on.</p>
+  </section>
+
+  <section class="screen" data-step="microphone">
+    <h1>Microphone</h1>
+    <p>Say something. macOS may ask whether HyperMe can use the microphone: allow it.</p>
+    <div class="meter"><div id="meter"></div></div>
+    <p id="mic-state" class="muted">Listening…</p>
+  </section>
+
+  <section class="screen" data-step="permissions">
+    <h1>Accessibility and Input Monitoring</h1>
+    <p>HyperMe needs Accessibility to paste your words, and Input Monitoring to see the dictation key. Each turns green by itself once allowed.</p>
+    <p class="muted" id="host-note">Click each button, then switch <b class="host-name">HyperMe</b> on in the list.</p>
+    <div class="row"><span>Accessibility</span><span><span id="ax-state"></span> <button data-request="accessibility">Allow</button></span></div>
+    <div class="row"><span>Input Monitoring</span><span><span id="im-state"></span> <button data-request="input-monitoring">Allow</button></span></div>
+  </section>
+
+  <section class="screen" data-step="keys">
+    <h1>Keys for the recommended setup</h1>
+    <div class="card"><span id="pair-line">Speechmatics hears you, Groq cleans up the text.</span> The fastest pair we measured: 0.43 s from key release to text.</div>
+    <div class="row"><span id="speech-name">Speechmatics</span><span><button data-get="speech">Get a key</button> <input type="password" id="speech-key" placeholder="Paste the key" autocomplete="off"> <button data-test="speech">Test</button></span></div>
+    <p class="muted steps">Sign up, create a key, paste it here. <span id="speech-state"></span></p>
+    <div class="row"><span id="cleanup-name">Groq</span><span><button data-get="cleanup">Get a key</button> <input type="password" id="cleanup-key" placeholder="Paste the key" autocomplete="off"> <button data-test="cleanup">Test</button></span></div>
+    <p class="muted steps">Sign up, create a key, paste it here. <span id="cleanup-state"></span></p>
+    <p class="cost-q">How much do you talk a day?</p>
+    <div class="choices" id="choices"></div>
+    <p class="muted" id="free-credit"></p>
+    <p><a href="#" id="other-providers" class="quiet">Use other providers</a></p>
+  </section>
+
+  <section class="screen" data-step="try">
+    <h1>Try it</h1>
+    <p>Click in the box, hold <b>Fn</b> and say anything.</p>
+    <textarea id="try-box" placeholder="Your words appear here"></textarea>
+    <p id="try-state" class="muted"></p>
+  </section>
+</main>
+<footer>
+  <div class="dots" id="dots"></div>
+  <button class="main" id="next" disabled>Next</button>
+</footer>
+<script>
+  const tauri = window.__TAURI__;
+  const invoke = tauri.core.invoke;
+  const $ = (id) => document.getElementById(id);
+  const steps = ['welcome', 'microphone', 'permissions', 'keys', 'try'];
+  // Set only from tests run in Rust; Rust decides whether Next lights up (onboarding.rs).
+  const checks = { microphone: false, accessibility: false, input_monitoring: false, speech_key: false, cleanup_key: false, tried: false };
+  let index = 0;
+  let poll = null;
+
+  $('dots').innerHTML = steps.map(() => '<span></span>').join('');
+
+  async function update() {
+    const ok = await invoke('onboarding_can_continue', { step: steps[index], checks });
+    $('next').disabled = !ok;
+    $('next').textContent = index === steps.length - 1 ? 'Done' : 'Next';
+  }
+
+  function mark(el, ok, yes, no) { el.textContent = ok ? yes : no; el.className = ok ? 'ok' : 'bad'; }
+
+  async function checkPermissions() {
+    const p = await invoke('onboarding_checks');
+    checks.accessibility = p.accessibility;
+    checks.input_monitoring = p.input_monitoring;
+    mark($('ax-state'), p.accessibility, '✓ Allowed', 'Not yet');
+    mark($('im-state'), p.input_monitoring, '✓ Allowed', 'Not yet');
+    // Run from a terminal (cargo run), macOS gives the permissions to that terminal, which must
+    // be quit and reopened before they take effect.
+    if (p.host_app) {
+      $('host-note').innerHTML = 'HyperMe is running from <b></b>, so macOS lists <b></b>, not HyperMe. Click each button, switch <b></b> on in the list, then quit <b></b> (⌘Q), open it again and start HyperMe again.';
+      $('host-note').querySelectorAll('b').forEach((b) => { b.textContent = p.host_app; });
+    }
+    if (p.speech_provider) $('speech-name').textContent = p.speech_provider;
+    if (p.cleanup_provider) $('cleanup-name').textContent = p.cleanup_provider;
+    update();
+  }
+
+  async function enter(step) {
+    clearInterval(poll);
+    if (step !== 'microphone') invoke('onboarding_mic', { on: false });
+    if (step === 'microphone') {
+      try { await invoke('onboarding_mic', { on: true }); } catch (e) { mark($('mic-state'), false, '', String(e)); }
+    }
+    if (step === 'permissions') { checkPermissions(); poll = setInterval(checkPermissions, 1000); }
+    if (step === 'keys') { checkPermissions(); keysScreen(); }
+    if (step === 'try') {
+      try { await invoke('onboarding_try'); $('try-box').focus(); }
+      catch (e) { mark($('try-state'), false, '', String(e)); }
+    }
+  }
+
+  function show() {
+    document.querySelectorAll('.screen').forEach((s) => s.classList.toggle('on', s.dataset.step === steps[index]));
+    document.querySelectorAll('#dots span').forEach((d, i) => d.classList.toggle('on', i <= index));
+    enter(steps[index]);
+    update();
+  }
+
+  tauri.event.listen('onboarding-level', (event) => {
+    const [level, heard] = event.payload;
+    $('meter').style.width = Math.round(level * 100) + '%';
+    if (heard && !checks.microphone) {
+      checks.microphone = true;
+      mark($('mic-state'), true, '✓ Working', '');
+      update();
+    }
+  });
+
+  tauri.event.listen('dictation-pasted', (event) => {
+    checks.tried = true;
+    mark($('try-state'), true, 'Pasted in ' + (event.payload / 1000).toFixed(2) + ' s', '');
+    update();
+  });
+
+  document.querySelectorAll('[data-request]').forEach((b) => b.addEventListener('click', () => invoke('onboarding_request', { what: b.dataset.request })));
+
+  // The recommended pair and what it costs, worked out in Rust from the config (U-11).
+  async function keysScreen() {
+    try {
+      const k = await invoke('onboarding_keys_screen');
+      $('pair-line').textContent = k.speech + ' hears you, ' + k.cleanup + ' cleans up the text.';
+      $('speech-name').textContent = k.speech;
+      $('cleanup-name').textContent = k.cleanup;
+      $('free-credit').textContent = k.free_credit || '';
+      $('choices').innerHTML = '';
+      k.choices.forEach((c, i) => {
+        const b = document.createElement('button');
+        b.innerHTML = '<span></span><small></small><b></b>';
+        b.children[0].textContent = c.label;
+        b.children[1].textContent = c.detail;
+        b.children[2].textContent = c.shown_as;
+        b.title = k.speech + ' about $' + c.speech_usd.toFixed(2) + ', ' + k.cleanup + ' about $' + c.cleanup_usd.toFixed(2);
+        b.addEventListener('click', () => document.querySelectorAll('#choices button').forEach((x) => x.classList.toggle('on', x === b)));
+        if (i === 1) b.classList.add('on');
+        $('choices').appendChild(b);
+      });
+    } catch (e) { $('free-credit').textContent = String(e); }
+  }
+
+  async function testKey(role) {
+    const state = $(role + '-state');
+    const flag = role === 'speech' ? 'speech_key' : 'cleanup_key';
+    state.textContent = 'Testing…'; state.className = 'muted';
+    try {
+      const ms = await invoke('key_test', { role });
+      checks[flag] = true;
+      mark(state, true, '✓ Works, ' + ms + ' ms', '');
+    } catch (e) {
+      checks[flag] = false;
+      mark(state, false, '', String(e));
+    }
+    update();
+  }
+
+  document.querySelectorAll('[data-get]').forEach((b) => b.addEventListener('click', () => invoke('onboarding_get_key', { role: b.dataset.get })));
+  $('other-providers').addEventListener('click', (e) => { e.preventDefault(); invoke('onboarding_other_providers'); });
+  // U-12: while the wizard waits, a provider or key saved in Settings is tested again here.
+  tauri.event.listen('providers-changed', () => { keysScreen(); testKey('speech'); testKey('cleanup'); });
+
+  document.querySelectorAll('[data-test]').forEach((b) => b.addEventListener('click', async () => {
+    const role = b.dataset.test;
+    const field = $(role + '-key');
+    if (!field.value.trim()) { testKey(role); return; }
+    try {
+      // Saving a key tells this window to test the providers again (providers-changed).
+      await invoke('key_set', { role, key: field.value });
+      field.value = '';
+    } catch (e) { mark($(role + '-state'), false, '', String(e)); }
+  }));
+
+  $('next').addEventListener('click', () => {
+    if (index === steps.length - 1) { invoke('onboarding_done'); return; }
+    index += 1;
+    show();
+  });
+
+  show();
+</script>
+</body>
+</html>

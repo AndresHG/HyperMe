@@ -23,7 +23,7 @@ or Devin and reports back.
 - `docs/PITCH.md`: pitch, positioning against Wispr Flow, and the ledger of claims still to earn
 - `specs/25-dictation-core/`: draft Phase 1 spec, design and slices (not yet approved)
 - `docs/FIELD.md`: existing projects and what to borrow from each
-- `docs/UX.md`: UX and UI by phase (the pill, its cards, Home, settings and menus), with mockups in `docs/ux/` (draft)
+- `docs/UX.md`: UX and UI by phase (one shape at the bottom centre: dot, pill, card and quick sheet; the Home window; settings and menus), with mockups in `docs/ux/` (draft)
 - `docs/RESEARCH.md`: verdict, product focus, pitch and field map from the research of
   24 November 2026
 - `KICKOFF.md`: the first two sessions, step by step
@@ -48,6 +48,9 @@ passes, update this section and record the evidence in `docs/results/`.
 - SQLite for storage. Secrets in the OS keychain, never in files, logs or commits.
 - Dependencies must be MIT, Apache-2.0 or BSD. Never copy GPL code (VoiceInk,
   FluidVoice): read it for ideas only.
+- MPL-2.0 is allowed only for the Tauri dependencies named in `deny.toml` (`option-ext`,
+  `cssparser`, `cssparser-macros`, `selectors`, `dtoa-short`), unmodified; Zlib (`foldhash`) and
+  ISC (`libloading`) likewise for those crates only (owner, 26 November 2026).
 - Anything that creates, sends or posts outside the app shows a preview and waits for
   confirmation. Email is draft-only.
 - Success means an open-source project other people install and use. What sets it apart

@@ -1,6 +1,7 @@
 # Phase 1: dictation core
 
-**Status:** draft, 25 November 2026. Needs the owner's approval before any production code, and
+**Status:** draft, 25 November 2026; all open questions answered by the owner on 26 November 2026.
+Needs the owner's approval before any production code, and
 starts only after the Phase 0 gate passes ([#24](https://github.com/AndresHG/hyperme/issues/24),
 [#15](https://github.com/AndresHG/hyperme/issues/15)).
 **Issue:** [#25](https://github.com/AndresHG/hyperme/issues/25). **Size:** L.
@@ -53,7 +54,7 @@ EARS form. "The app" is HyperMe running on macOS.
 - R-11. When the final transcript arrives, the app shall send it to the cleanup model with the
   cleanup prompt, the name of the frontmost app, and reasoning turned off or set to its lowest
   level.
-- R-12. If the cleaned text is not complete within the cleanup deadline (default 1000 ms after
+- R-12. If the cleaned text is not complete within the cleanup deadline (configurable, default 1500 ms after
   the final transcript), the app shall use the raw transcript instead.
 - R-13. If the transcript has fewer words than the short-dictation threshold (default 4), the app
   shall skip cleanup and use the transcript with only its first letter capitalised and a final
@@ -146,7 +147,8 @@ test servers; *(live)* ones are measured by hand on the owner's Mac and recorded
 - AC-9 *(fake)*: Transcripts under the short-dictation threshold skip cleanup and are formatted
   as R-13 says; an empty transcript pastes nothing. (R-13, R-14)
 - AC-10 *(live)*: Key release to text pasted, over 50 dictations of the owner's in the app,
-  wired and on Wi-Fi: median at or under 800 ms, 90th percentile at or under 1200 ms.
+  on a wired network: median at or under 800 ms, 90th percentile at or under 1200 ms. The same
+  run on Wi-Fi is measured and recorded for reference, but is not part of the gate.
 - AC-11 *(fake)*: The pipeline's own overhead, measured with zero-latency fakes from release to
   paste sent, is under 20 ms at the 90th percentile.
 - AC-12 *(live)*: Paste works, and the clipboard is restored, in each app of the paste matrix in
@@ -224,5 +226,6 @@ test servers; *(live)* ones are measured by hand on the owner's Mac and recorded
 
 1. ~~Default hotkey~~: decided 26 November 2026, hold Fn (Globe), with Right Option and chords
    offered.
-2. Cleanup deadline: 1000 ms after the final transcript (proposed) or Phase 0's 1500 ms.
-3. Whether the Phase 1 gate also needs AC-10 on Wi-Fi, or wired only.
+2. ~~Cleanup deadline~~: decided 26 November 2026, configurable, default 1500 ms; after it the
+   raw transcript is pasted.
+3. ~~Wi-Fi in the gate~~: decided 26 November 2026, wired only; Wi-Fi is measured for reference.
