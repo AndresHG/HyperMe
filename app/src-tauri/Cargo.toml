@@ -5,8 +5,7 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 publish.workspace = true
-# Tauri 2.12 needs Rust 1.90.
-rust-version = "1.90"
+rust-version.workspace = true
 
 [[bin]]
 name = "hyperme"

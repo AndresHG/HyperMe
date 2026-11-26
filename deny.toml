@@ -19,6 +19,23 @@ allow = [
   "Unicode-3.0",
 ]
 confidence-threshold = 0.9
+# Named exceptions, each for one crate that Tauri 2 brings in (owner, 26 November 2026: allow these
+# named crates only, unmodified). We never change their files, so MPL-2.0's file-level copyleft
+# asks nothing of HyperMe's own code.
+exceptions = [
+  # Through `dirs`, which Tauri uses for app folders; part of the app binary.
+  { allow = ["MPL-2.0"], crate = "option-ext" },
+  # Through `tauri-utils`' HTML handling, inside Tauri's build script and macros: build time
+  # only, not part of the app binary.
+  { allow = ["MPL-2.0"], crate = "cssparser" },
+  { allow = ["MPL-2.0"], crate = "cssparser-macros" },
+  { allow = ["MPL-2.0"], crate = "selectors" },
+  { allow = ["MPL-2.0"], crate = "dtoa-short" },
+  # Permissive (Zlib); through `tauri-utils`' HTML handling at build time.
+  { allow = ["Zlib"], crate = "foldhash" },
+  # Permissive (ISC); the tray icon's library loader on Linux only.
+  { allow = ["ISC"], crate = "libloading" },
+]
 
 [licenses.private]
 # Our own crates are `publish = false`; their licence is MIT OR Apache-2.0.
@@ -32,6 +49,8 @@ ignore = []
 [bans]
 multiple-versions = "allow"
 wildcards = "deny"
+# Our own crates depend on each other by path, without a version; they are never published.
+allow-wildcard-paths = true
 
 [sources]
 unknown-registry = "deny"

@@ -128,11 +128,11 @@ impl Microphone for CpalMicrophone {
 
     fn stop(&mut self) {
         // Up to 20 ms of audio still in the framer is dropped by the next start's reset.
-        if let Some(built) = &self.stream {
-            if built.stream.pause().is_err() {
-                // A stream that cannot pause would keep the microphone in use: release it.
-                self.stream = None;
-            }
+        // A stream that cannot pause would keep the microphone in use: release it.
+        if let Some(built) = &self.stream
+            && built.stream.pause().is_err()
+        {
+            self.stream = None;
         }
     }
 }
