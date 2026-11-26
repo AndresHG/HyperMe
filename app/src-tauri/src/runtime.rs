@@ -342,6 +342,14 @@ fn on_panel(app: &AppHandle, action: fn(&dyn tauri_nspanel::Panel)) {
     });
 }
 
+/// The pill's current view, for the page once it has loaded: an event sent before its listeners
+/// exist is lost, and the bead is sent at launch (26 November 2026, the bead showed the hidden
+/// recording bars instead).
+#[tauri::command]
+pub fn pill_view(app: AppHandle) -> Option<View> {
+    lock(&app).view.clone()
+}
+
 /// A click on the pill: Retry when it offers Retry (R-31); on the bead, Settings for now;
 /// otherwise the state goes away.
 #[tauri::command]

@@ -159,6 +159,8 @@ to the next release; **P2** is nice to have. The phase is from [ROADMAP.md](ROAD
 | Second speech provider as fallback | 2 | P1 | |
 | Clean in pieces while speaking | 2 | P2 | Only if long dictations miss the budget |
 | Snippets (a spoken shortcut expands to saved text) | 2 | P2 | *Proposed* |
+| Import dictionary and snippets from Wispr Flow and Superwhisper, where their exports allow | 2 | P1 | Owner, 26 November 2026, from the [competitor research](research/2026-11-26-competitors-and-plan-sign-in.md). Raycast does this to win switchers |
+| Microphone handling: pause or lower playing media while recording, a microphone priority list, keep the input warm | 2 | P1 | Owner, 26 November 2026, from the [competitor research](research/2026-11-26-competitors-and-plan-sign-in.md) |
 
 ### 7.2 Questions and commands (J-2, J-3)
 
@@ -169,7 +171,10 @@ to the next release; **P2** is nice to have. The phase is from [ROADMAP.md](ROAD
 | Switch the model from the answer card and regenerate the last answer | 3 | P1 | Owner, Q-11 |
 | Preview card for actions, Enter to confirm, Esc to drop | 3 | P0 | Under one second from release to card. Default for every tool; a tool can be switched to fire at once in Settings later; email stays draft-only (owner, Q-8) |
 | One MCP client; GitHub as the first connector | 3 | P0 | Owner, 25 November 2026 |
+| Voice edit of selected text ("Hyper, make this shorter", "translate this"): the edit replaces the selection | 3 | P0 | Owner, 26 November 2026. The most common feature after dictation (Wispr Flow Command Mode, Raycast, OpenWhispr). Uses the cleanup path, no tool call, so it can ship before MCP actions ([competitor research](research/2026-11-26-competitors-and-plan-sign-in.md)) |
 | Context of the frontmost app and selected text | 3 | P1 | Within the privacy boundary (section 9) |
+| "Continue with ChatGPT" as a provider for the answers model: a Plus or Pro user connects their plan instead of a key, through OpenAI's official Sign in with ChatGPT for open-source apps | 3 | P1 | Owner, 26 November 2026. Text only, so speech still needs its key; cleanup stays on its own model. Measure latency first. No Claude equivalent: Anthropic forbids third-party Claude.ai login ([competitor research](research/2026-11-26-competitors-and-plan-sign-in.md)). See Q-17 |
+| HyperMe as an MCP server: tasks, dictation history, memory and later meeting notes, readable from Claude, ChatGPT, Claude Code and Cursor | 3 or 4 | P1 | Owner, 26 November 2026. The allowed way for a Claude subscriber to use their plan with HyperMe's data ([competitor research](research/2026-11-26-competitors-and-plan-sign-in.md)). Read-only first; any write goes through the preview |
 | Dot at the bottom centre with a quick sheet (Ask, Now, top 3 waiting, last dictation); cards for answers and previews | 3 | P0 | Owner, U-8 and U-10 |
 | Linear connector, after GitHub Projects | 3+ | P1 | Owner, Q-4. Any MCP server the user adds works without code |
 
@@ -189,7 +194,9 @@ few options.
 | Feature | Phase | Priority | Notes |
 | --- | --- | --- | --- |
 | "Hyper, remind me to …" adds to HyperMe's task list, with an optional day or date; the list on the Home page; roll-over | 4 | P0 | Owner, D-1 and D-3 |
-| Morning card at a time you set; nudges only before meetings and for due tasks | 4 | P0 | Owner, D-2 |
+| Morning card at a time you set; nudges only before meetings and for due tasks | 4 | P0 | Owner, D-2. *Proposed* in [spec 92](../specs/92-daily-tasks/spec.md): shown the first time you sit down after the morning time, from local data in under 150 ms |
+| Tasks blocked by other tasks ("after the insurance call", "first …, then …"); blocked tasks wait under "Waiting on" and return to Today when unblocked | 4 | P0 | Owner, 26 November 2026. [Spec 92](../specs/92-daily-tasks/spec.md) |
+| Evening summary at a time you set (default 18:30): done, still open with one-key choices, close the day | Later | P2 | Asked for by the owner, then deferred the same day, 26 November 2026. Designed in [spec 92](../specs/92-daily-tasks/spec.md) |
 | Pull new items from tracker, calendar and mail into the list, on a schedule | 4 | P0 | Owner, D-1 |
 | One profile with several accounts per service; you say which ("in my personal calendar") | 4 | P0 | Owner, Q-12. Separate profiles only if people ask |
 | Calendar connector, "meeting now" nudges | 4 | P0 | Google first, Microsoft 365 later (owner, Q-7) |
@@ -325,8 +332,12 @@ Asked in the interview of 26 November 2026. Recommendations first.
 | D-1 to D-3 | Daily tasks: whose list, how the day arrives, when | | Decided 26 November 2026: see 7.3 |
 | Q-15 | Quick notes ("Hyper, note that …"): a note in the memory folder, an item on the task list, or both | Into the task list when it has an action, into the memory folder otherwise | Open; decide with the phase 3 spec |
 | Q-16 | How self-learning memory works | A design proposal comparing how other assistants build memory | Open; research before the memory spec |
+| G-1 | Whose Google sign-in client | Bring your own Google Cloud client now; a shared one later if non-developers ask | Decided 26 November 2026: as recommended ([spec](../specs/97-google-connectors/spec.md)) |
+| G-2 | Gmail access in the first version | Read plus drafts, never send | Decided 26 November 2026: as recommended |
+| G-3 | Mail and calendar content to the model | To the user's own model provider, only when a job or question needs it | Decided 26 November 2026: as recommended. Also: Google must never sign the user out in normal use |
 | Q-12 | Work and personal profiles ([SPEC.md](SPEC.md) section 4) | Drop from version 1; one profile | Decided 26 November 2026: one profile, several accounts |
 | Q-13 | Adopt the trial and baseline checks as gates ([RESEARCH.md](RESEARCH.md) section 1.3) | Drop as gates; the Wispr comparison covers the baseline | Decided 26 November 2026: drop both; read how Handy, Omi and OpenWhispr are built for ideas only |
+| Q-17 | Does onboarding offer "Continue with ChatGPT" for answers beside the recommended keys, or only in Settings | Offer it in onboarding as an option once latency is measured; keep the recommended keys as the default | Open; decide with the phase 3 spec ([competitor research](research/2026-11-26-competitors-and-plan-sign-in.md)) |
 
 ## 13. Contradictions found in the existing documents
 

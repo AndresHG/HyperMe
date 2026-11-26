@@ -7,9 +7,9 @@
 use core_graphics::event::{CGEvent, CGEventFlags, CGEventTapLocation};
 use core_graphics::event_source::{CGEventSource, CGEventSourceStateID};
 use hyperme_core::traits::{Error, ErrorKind, FocusInfo};
+use objc2::MainThreadMarker;
 use objc2::rc::Retained;
 use objc2::runtime::ProtocolObject;
-use objc2::MainThreadMarker;
 use objc2_app_kit::{
     NSApplication, NSApplicationActivationOptions, NSEvent, NSEventModifierFlags, NSEventType,
     NSPasteboard, NSPasteboardItem, NSPasteboardWriting, NSRunningApplication, NSWorkspace,

@@ -6,8 +6,24 @@ All notable changes to HyperMe are recorded here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- The pill at rest showed a dark square with a row of white dots instead of the bead: the bead's
+  view was sent at launch before the page had loaded and was lost, so the page kept its warm-up
+  recording bars. The page now draws nothing until a view arrives and asks for the current view
+  (`pill_view`) once its listeners exist.
+
 ### Added
 
+- `crates/hyperme-quality`, the quality harness (issue 99): replays a set of saved dictations
+  through the app's own state machine and providers and scores the pasted text against the
+  owner's corrected texts (zero-edit, edits per 100 characters, internal names), with flowbench's
+  definitions. `import` copies done dictations from the history into a set. Audio and texts stay
+  in the set folder; the results file holds numbers only.
+- Releases made on the owner's Mac (`scripts/release-macos.sh`, `docs/RELEASING.md`): Developer ID
+  signing with the hardened runtime, notarisation, a DMG, and a signed update with its
+  `latest.json`; `--unsigned` for a trial run without an Apple account. **Check for updates…** in
+  the menu-bar menu checks and installs signed updates with Tauri's updater, only when clicked.
 - A Cargo workspace at the root and `crates/hyperme-core`, starting with the config file:
   `config.toml` with the owner's defaults, written on first launch, with errors that name the
   file and line or the key, and a refusal of any key-like field (keys live in the keychain).

@@ -18,6 +18,10 @@ mod pill;
 mod runtime;
 #[cfg(target_os = "macos")]
 mod settings;
+#[cfg(any(target_os = "macos", test))]
+mod update;
+#[cfg(target_os = "macos")]
+mod updater;
 #[cfg(target_os = "macos")]
 mod walkthrough;
 
@@ -35,6 +39,8 @@ fn main() {
     #[cfg(target_os = "macos")]
     let builder = builder
         .plugin(tauri_nspanel::init())
+        // Checks and installs signed updates when the user asks (docs/RELEASING.md).
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             runtime::pill_clicked,
             home::home_sections,
@@ -53,6 +59,7 @@ fn main() {
             home::home_retry,
             home::home_delete,
             home::home_fix_word,
+            runtime::pill_view,
             settings::settings_view,
             settings::settings_set,
             settings::key_set,
@@ -115,7 +122,8 @@ pub(crate) struct TrayMenu {
 }
 
 /// The menu-bar icon and its menu (docs/UX.md, "Menu-bar icon"): status, Paste last and Copy
-/// last dictation (R-18), Open HyperMe (spec 98, R-1), Retry (R-31), Settings, Quit.
+/// last dictation (R-18), Open HyperMe (spec 98, R-1), Retry (R-31), Settings, Check for
+/// updates, Quit.
 fn tray(app: &AppHandle) -> tauri::Result<Tray> {
     let status = MenuItem::with_id(app, "status", "Starting…", false, None::<&str>)?;
     let paste_last = MenuItem::with_id(
@@ -129,6 +137,13 @@ fn tray(app: &AppHandle) -> tauri::Result<Tray> {
     let copy_last = MenuItem::with_id(app, "copy-last", "Copy last dictation", true, None::<&str>)?;
     let retry = MenuItem::with_id(app, "retry", "Retry last dictation", false, None::<&str>)?;
     let settings = MenuItem::with_id(app, "settings", "Settings…", true, Some("CmdOrCtrl+,"))?;
+    #[cfg(target_os = "macos")]
+    let update = {
+        let line = update::line(&update::State::Idle);
+        let item = MenuItem::with_id(app, updater::MENU_ID, line.text, line.enabled, None::<&str>)?;
+        updater::manage(app, item.clone());
+        item
+    };
     let quit = MenuItem::with_id(app, "quit", "Quit HyperMe", true, Some("CmdOrCtrl+Q"))?;
     let separator = || PredefinedMenuItem::separator(app);
     let menu = Menu::with_items(
@@ -142,6 +157,8 @@ fn tray(app: &AppHandle) -> tauri::Result<Tray> {
             &retry,
             &separator()?,
             &settings,
+            #[cfg(target_os = "macos")]
+            &update,
             &quit,
         ],
     )?;
@@ -152,6 +169,8 @@ fn tray(app: &AppHandle) -> tauri::Result<Tray> {
         .menu(&menu)
         .on_menu_event(|app, event| match event.id().as_ref() {
             "quit" => app.exit(0),
+            #[cfg(target_os = "macos")]
+            updater::MENU_ID => updater::clicked(app),
             #[cfg(target_os = "macos")]
             id => runtime::menu_action(app, id),
             #[cfg(not(target_os = "macos"))]
