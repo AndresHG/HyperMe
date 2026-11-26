@@ -5,8 +5,8 @@ looks like and feels like. Mockups are in [ux/](ux/).
 
 ## The idea in one paragraph
 
-HyperMe is voice first, so **the pill is the product**. In Phase 1 it shows only while you
-dictate, with a menu-bar icon and a settings window around it. In Phase 3 the pill also answers:
+HyperMe is voice first, so **the pill is the product**. In Phase 1 it rests as a small glass bead at the bottom centre and
+grows into the pill while you dictate, with a menu-bar icon and a settings window around it. In Phase 3 the pill also answers:
 it grows upward into a card with the answer or a preview that waits for ↵. Work that outlives a
 card lives in **Home**, one plain window with a few views taken from the roadmap: History, Today
 and Meetings. The rule that holds it together: **quick things happen at the pill, lasting things
@@ -20,8 +20,9 @@ patterns are borrowed from the best Mac apps, not from any single app.
 2. **Never take focus.** The pill and its cards are non-activating panels (spec R-23). Typing
    goes on in the app you were in. Only Home, a normal window, takes focus, and only when you
    open it.
-3. **Quiet until needed.** Nothing on screen while idle in Phase 1. Later, a small dot on the
-   bottom edge, with a ring only when something waits.
+3. **Quiet until needed.** At rest, only a still glass bead on the bottom edge, with no animation
+   (from Phase 1, owner, 26 November 2026); it can be hidden in General. Later, a halo on the bead
+   only when something waits.
 4. **Say what happened, in a few words.** Every state has one short label ("Raw text",
    "Nothing heard"). Errors name the provider and point to the fix (R-21), never show a key.
 5. **Preview before anything leaves the app.** Any action that creates, sends or posts shows a
@@ -61,7 +62,7 @@ hold hotkey ──► pill appears, recording, live level ──► release ─�
      │                                                                  │
      ├─ released in under 250 ms: nothing happens (R-5)                 ▼
      └─ Esc at any point: "Cancelled", nothing pasted (R-6)   text pasted at the cursor,
-                                                              pill flashes "done" and hides
+                                                              pill flashes "done", back to the bead
 ```
 
 - **Hold to talk** is the only mode in Phase 1. Hands-free comes in Phase 2 (owner, U-3).
@@ -354,7 +355,7 @@ grows out of the same point and goes back into it, so there is only one place to
 
 | Size | When | Looks like |
 | --- | --- | --- |
-| **Dot** | At rest, from Phase 3 | A small round dot, 12 pt, on the bottom edge. A ring of the accent colour when something waits for a yes, a slow sweep while an agent or job runs, red while a meeting is recorded (safety rule) |
+| **Dot** | At rest, from Phase 1 (the bead; halo and ring from Phase 3) | A small glass bead, 14 pt (U-13), on the bottom edge. A ring of the accent colour when something waits for a yes, a slow sweep while an agent or job runs, red while a meeting is recorded (safety rule) |
 | **Pill** | While you talk, from Phase 1 | The dictation pill: level meter, then the route ("Dictation", "Question", "Action") |
 | **Card** | When Hyper answers, previews or alerts, from Phase 3 | Rises from the pill, up to 360 pt wide. ↵, Esc, ⌘K |
 | **Quick sheet** | When you click the dot, from Phase 3 | Rises from the dot, about 380 by 440 pt. Only what matters right now (below). Esc or a click outside sinks it back |
@@ -489,7 +490,7 @@ an earlier OpenWhispr slow and dislikes its UI (FIELD.md).
 | --- | --- | --- | --- |
 | Default hotkey | Fn hold to talk; Fn + Space hands-free | Globe (Fn), via a bundled listener; tap by default, hold optional | Fn hold (owner, U-2); Right Option offered |
 | Hands-free | Separate shortcut or double-tap; second press within 0.5 s cancels | Tap mode is the default | Phase 2, double-tap (owner, U-3) |
-| On-screen bar | Flow Bar shown by default; click to start, stop button | Floating panel, bottom right by default, auto-hide off | Pill only while dictating in Phase 1; from Phase 3 a dot at rest that grows into pill or card |
+| On-screen bar | Flow Bar shown by default; click to start, stop button | Floating panel, bottom right by default, auto-hide off | From Phase 1 a still bead at rest that grows into the pill; from Phase 3 also into a card |
 | Paste failure | "Select a textbox first", Paste last transcript | Pasted without cleanup is announced | Raw text label, Paste last dictation |
 | Cleanup off or failed | Not documented here | "Pasted without AI cleanup" note; cleanup has its own model | Raw text label (R-20) |
 | Commands | Command Mode on its own shortcut, off by default | Four hotkeys, plus the agent's name in dictation | One key, routed, with the route shown (Phase 3) |
@@ -553,7 +554,7 @@ How the bars behave (the owner chose them over the ribbon, 26 November 2026):
 | Detail | Proposed | Why |
 | --- | --- | --- |
 | Pill and card colour | Always dark, whatever the system theme (owner, U-16) | It must stand out on any window behind it, and the owner likes Wispr Flow's dark capsule. Home and Settings follow the system |
-| The dot by default | Shown, once Phase 3 brings it; it can be hidden in General | The owner likes the bubble |
+| The dot by default | Shown from Phase 1; it can be hidden in General ("Show while idle") | The owner likes the bubble, and pulled it forward to Phase 1 (26 November 2026) |
 | Sounds | Soft start and stop sounds, already decided (U-5) | |
 
 ## Decisions
@@ -562,7 +563,7 @@ Answered by the owner on 26 November 2026.
 
 | # | Question | Decided |
 | --- | --- | --- |
-| U-1 | When does the always-visible bubble appear? | Phase 3. Phase 1 shows the pill only while dictating. The bubble became the dot at the bottom centre (U-8) |
+| U-1 | When does the always-visible bubble appear? | Phase 1: the owner pulled the still glass bead forward on 26 November 2026 (it was Phase 3). The halo, quick sheet and dragging stay in Phase 3. The bubble became the dot at the bottom centre (U-8) |
 | U-2 | Default dictation hotkey | Hold Fn (Globe); Right Option and chords offered |
 | U-3 | Hands-free (double-tap to lock) | Phase 2 |
 | U-4 | Dictation history | On by default, kept 30 days or unlimited, under a total size limit the user sets (default 1 GB, our pick). Above all, a dropped connection must never lose a dictation: the audio is kept and the pill and menu offer **Retry**, even with history off (spec R-18, R-31). Searchable in Home → History from Phase 2 |
