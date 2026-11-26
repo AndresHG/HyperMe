@@ -10,8 +10,11 @@ apart. Numbers only; no audio was kept.
 
 | Mode | Median | 90th percentile | Max |
 | --- | --- | --- | --- |
-| Open the input stream on every start, close on stop (what slice 6 ships) | 113.2 ms | 120.2 ms | 297.6 ms |
-| Build the stream once, then `play` on start and `pause` on stop (experiment, not shipped) | 68.2 ms | 72.7 ms | 222.5 ms |
+| Open the input stream on every start, close on stop (slice 6, replaced) | 113.2 ms | 120.2 ms | 297.6 ms |
+| Build the stream once, then `play` on start and `pause` on stop (experiment) | 68.2 ms | 72.7 ms | 222.5 ms |
+| The same, as shipped after the owner chose option B (second run, same day) | 67.9 ms | 79.5 ms | 224.8 ms |
+
+The max is the first start of each run, which builds the stream.
 
 The target in AC-2 is under 50 ms at the median and under 80 ms at the 90th percentile, from
 key-down. Neither mode meets the median; the measurement also excludes the hotkey's own delay.
@@ -19,4 +22,14 @@ Each figure includes up to 20 ms to fill the first frame and one device buffer.
 
 Speech in the first 70 to 120 ms after key-down is not captured in either mode. Meeting AC-2
 needs the input stream running before key-down, which keeps the microphone in use (and the
-macOS indicator lit) while HyperMe runs. That is a product decision for the owner.
+macOS indicator lit) while HyperMe runs.
+
+The owner chose option B, play and pause, on 26 November 2026. With it the median misses AC-2's
+50 ms and the 90th percentile is just under its 80 ms. Whether to change AC-2 is for the spec's
+owner.
+
+While paused, Core Audio reports the input device as not running
+(`kAudioDevicePropertyDeviceIsRunningSomewhere` is 0; it is 1 while recording), checked twice
+in a row with a small probe. The menu-bar indicator is expected to follow device use; that is not
+verified here, and the indicator was not checked by
+eye, because screen capture was not available to the session.
