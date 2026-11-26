@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="940" height="600" viewBox="0 0 940 600" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Rounded', 'SF Pro Text', 'Helvetica Neue', Arial, sans-serif">
+  <title>HyperMe Home window with sidebar, Home page (Phase 4)</title>
+  <rect width="940" height="600" fill="#2A2D34"/>
+  <rect x="20" y="20" width="900" height="560" rx="12" fill="#FBFAF8"/>
+  <!-- sidebar -->
+  <path d="M32 20 h168 v560 h-168 a12 12 0 0 1 -12 -12 v-536 a12 12 0 0 1 12 -12z" fill="#F2F0EC"/>
+  <circle cx="40" cy="38" r="6" fill="#FF5F57"/><circle cx="60" cy="38" r="6" fill="#FEBC2E"/><circle cx="80" cy="38" r="6" fill="#28C840"/>
+  <circle cx="44" cy="76" r="8" fill="#111113" stroke="#7C5CFF" stroke-width="2"/>
+  <text x="60" y="81" fill="#18181B" font-size="15" font-weight="700">HyperMe</text>
+  <g font-size="13">
+    <rect x="30" y="100" width="160" height="28" rx="7" fill="#E7E3FF"/>
+    <text x="44" y="119" fill="#2E1F8F" font-weight="700">Home</text><circle cx="176" cy="114" r="4" fill="#7C5CFF"/>
+    <text x="44" y="151" fill="#52525B">History</text>
+    <text x="44" y="181" fill="#52525B">Dictionary</text>
+    <text x="44" y="211" fill="#52525B">Style</text>
+    <text x="44" y="241" fill="#52525B">Meetings</text>
+    <line x1="36" y1="500" x2="184" y2="500" stroke="#E4E1DA"/>
+    <text x="44" y="528" fill="#71717A">Settings</text><text x="44" y="556" fill="#71717A">Help</text>
+  </g>
+  <!-- main -->
+  <text x="232" y="74" fill="#18181B" font-size="24" font-weight="700">Good morning</text>
+  <text x="232" y="98" fill="#71717A" font-size="13">Thursday 26 · Hold Fn to talk</text>
+  <g font-size="12">
+    <rect x="600" y="52" width="94" height="52" rx="10" fill="#FFFFFF" stroke="#ECE9E3"/>
+    <text x="612" y="74" fill="#18181B" font-size="17" font-weight="700">4,210</text><text x="612" y="92" fill="#71717A" font-size="11">words this week</text>
+    <rect x="702" y="52" width="94" height="52" rx="10" fill="#FFFFFF" stroke="#ECE9E3"/>
+    <text x="714" y="74" fill="#18181B" font-size="17" font-weight="700">1 h 12 m</text><text x="714" y="92" fill="#71717A" font-size="11">saved</text>
+    <rect x="804" y="52" width="94" height="52" rx="10" fill="#FFFFFF" stroke="#ECE9E3"/>
+    <text x="816" y="74" fill="#18181B" font-size="17" font-weight="700">0.43 s</text><text x="816" y="92" fill="#71717A" font-size="11">median to text</text>
+  </g>
+
+  <text x="232" y="140" fill="#7C5CFF" font-size="11" font-weight="700" letter-spacing="0.6">WAITING FOR YOU · 2</text>
+  <g font-size="13">
+    <g transform="translate(232,150)">
+      <rect width="400" height="40" rx="9" fill="#FFFFFF" stroke="#ECE9E3"/>
+      <circle cx="20" cy="20" r="9" fill="#EDE9FF"/><text x="15" y="25" fill="#7C5CFF" font-size="11" font-weight="700">M</text>
+      <text x="38" y="25" fill="#18181B" font-weight="600">Reply draft: demo moves to Friday</text>
+      <rect x="322" y="10" width="66" height="20" rx="5" fill="#F4F2EE" stroke="#E4E1DA"/><text x="331" y="24" fill="#18181B" font-size="11" font-weight="600">↵ Review</text>
+    </g>
+    <g transform="translate(232,196)">
+      <rect width="400" height="40" rx="9" fill="#FFFFFF" stroke="#ECE9E3"/>
+      <circle cx="20" cy="20" r="9" fill="#EDE9FF"/><text x="15" y="25" fill="#7C5CFF" font-size="11" font-weight="700">A</text>
+      <text x="38" y="25" fill="#18181B" font-weight="600">Agent done: terminal paste fix</text>
+      <rect x="322" y="10" width="66" height="20" rx="5" fill="#F4F2EE" stroke="#E4E1DA"/><text x="331" y="24" fill="#18181B" font-size="11" font-weight="600">↵ Review</text>
+    </g>
+  </g>
+
+  <!-- today -->
+  <text x="660" y="140" fill="#71717A" font-size="11" font-weight="700" letter-spacing="0.6">TODAY</text>
+  <rect x="818" y="128" width="80" height="18" rx="5" fill="#ECE9E3"/><rect x="820" y="130" width="38" height="14" rx="4" fill="#FFFFFF"/>
+  <text x="828" y="141" fill="#18181B" font-size="10" font-weight="700">Day</text><text x="864" y="141" fill="#71717A" font-size="10">Week</text>
+  <g font-size="12">
+    <rect x="660" y="150" width="238" height="26" rx="6" fill="#FFFFFF" stroke="#ECE9E3"/><text x="670" y="167" fill="#71717A">09:00  Morning plan · job</text>
+    <rect x="660" y="182" width="238" height="40" rx="6" fill="#D9D3FF"/>
+    <text x="670" y="199" fill="#2E1F8F" font-weight="700">10:30  Weekly planning</text><text x="670" y="214" fill="#4B3BB5" font-size="11">in 12 min · ↵ Join and take notes</text>
+    <rect x="660" y="228" width="238" height="26" rx="6" fill="#FFFFFF" stroke="#ECE9E3"/><text x="670" y="245" fill="#18181B">14:00  Design review</text>
+  </g>
+
+  <!-- recent -->
+  <text x="232" y="290" fill="#71717A" font-size="11" font-weight="700" letter-spacing="0.6">RECENT</text>
+  <line x1="232" y1="300" x2="898" y2="300" stroke="#ECE9E3"/>
+  <text x="232" y="322" fill="#18181B" font-size="12" font-weight="700">Today</text>
+  <g font-size="13">
+    <text x="232" y="350" fill="#71717A" font-size="12">09:41</text><text x="290" y="350" fill="#18181B">Sounds good, let's ship it after lunch and keep the flag off.</text>
+    <text x="232" y="380" fill="#71717A" font-size="12">09:32</text><text x="290" y="380" fill="#18181B">Can you check whether the paste fallback works in Ghostty?</text>
+    <rect x="226" y="394" width="672" height="30" rx="7" fill="#F4F2EE"/>
+    <text x="232" y="414" fill="#71717A" font-size="12">09:20</text><text x="290" y="414" fill="#18181B">Ahora mismo estoy con la revisión, te escribo en un rato.</text>
+    <text x="760" y="414" fill="#71717A" font-size="11">⌘C copy · ↵ paste</text>
+    <text x="232" y="446" fill="#71717A" font-size="12">09:05</text><text x="290" y="446" fill="#B45309">Connection lost · audio saved</text>
+    <rect x="812" y="432" width="74" height="20" rx="5" fill="#EDE9FF"/><text x="822" y="446" fill="#2E1F8F" font-size="11" font-weight="700">↵ Retry</text>
+  </g>
+  <text x="232" y="484" fill="#18181B" font-size="12" font-weight="700">Yesterday</text>
+  <text x="232" y="512" fill="#71717A" font-size="12">18:12</text><text x="290" y="512" fill="#18181B" font-size="13">Remind me to send the dictionary import notes tomorrow.</text>
+  <text x="232" y="560" fill="#A1A1AA" font-size="11">Example content only. Waiting for you and Today appear in Phase 4; the Home page starts in Phase 2 with numbers and Recent.</text>
+</svg>
