@@ -159,6 +159,8 @@ to the next release; **P2** is nice to have. The phase is from [ROADMAP.md](ROAD
 | Second speech provider as fallback | 2 | P1 | |
 | Clean in pieces while speaking | 2 | P2 | Only if long dictations miss the budget |
 | Snippets (a spoken shortcut expands to saved text) | 2 | P2 | *Proposed* |
+| Import dictionary and snippets from Wispr Flow and Superwhisper, where their exports allow | 2 | P1 | Owner, 26 November 2026, from the [competitor research](research/2026-11-26-competitors-and-plan-sign-in.md). Raycast does this to win switchers |
+| Microphone handling: pause or lower playing media while recording, a microphone priority list, keep the input warm | 2 | P1 | Owner, 26 November 2026, from the [competitor research](research/2026-11-26-competitors-and-plan-sign-in.md) |
 
 ### 7.2 Questions and commands (J-2, J-3)
 
@@ -169,7 +171,10 @@ to the next release; **P2** is nice to have. The phase is from [ROADMAP.md](ROAD
 | Switch the model from the answer card and regenerate the last answer | 3 | P1 | Owner, Q-11 |
 | Preview card for actions, Enter to confirm, Esc to drop | 3 | P0 | Under one second from release to card. Default for every tool; a tool can be switched to fire at once in Settings later; email stays draft-only (owner, Q-8) |
 | One MCP client; GitHub as the first connector | 3 | P0 | Owner, 25 November 2026 |
+| Voice edit of selected text ("Hyper, make this shorter", "translate this"): the edit replaces the selection | 3 | P0 | Owner, 26 November 2026. The most common feature after dictation (Wispr Flow Command Mode, Raycast, OpenWhispr). Uses the cleanup path, no tool call, so it can ship before MCP actions ([competitor research](research/2026-11-26-competitors-and-plan-sign-in.md)) |
 | Context of the frontmost app and selected text | 3 | P1 | Within the privacy boundary (section 9) |
+| "Continue with ChatGPT" as a provider for the answers model: a Plus or Pro user connects their plan instead of a key, through OpenAI's official Sign in with ChatGPT for open-source apps | 3 | P1 | Owner, 26 November 2026. Text only, so speech still needs its key; cleanup stays on its own model. Measure latency first. No Claude equivalent: Anthropic forbids third-party Claude.ai login ([competitor research](research/2026-11-26-competitors-and-plan-sign-in.md)). See Q-17 |
+| HyperMe as an MCP server: tasks, dictation history, memory and later meeting notes, readable from Claude, ChatGPT, Claude Code and Cursor | 3 or 4 | P1 | Owner, 26 November 2026. The allowed way for a Claude subscriber to use their plan with HyperMe's data ([competitor research](research/2026-11-26-competitors-and-plan-sign-in.md)). Read-only first; any write goes through the preview |
 | Dot at the bottom centre with a quick sheet (Ask, Now, top 3 waiting, last dictation); cards for answers and previews | 3 | P0 | Owner, U-8 and U-10 |
 | Linear connector, after GitHub Projects | 3+ | P1 | Owner, Q-4. Any MCP server the user adds works without code |
 
@@ -327,6 +332,7 @@ Asked in the interview of 26 November 2026. Recommendations first.
 | Q-16 | How self-learning memory works | A design proposal comparing how other assistants build memory | Open; research before the memory spec |
 | Q-12 | Work and personal profiles ([SPEC.md](SPEC.md) section 4) | Drop from version 1; one profile | Decided 26 November 2026: one profile, several accounts |
 | Q-13 | Adopt the trial and baseline checks as gates ([RESEARCH.md](RESEARCH.md) section 1.3) | Drop as gates; the Wispr comparison covers the baseline | Decided 26 November 2026: drop both; read how Handy, Omi and OpenWhispr are built for ideas only |
+| Q-17 | Does onboarding offer "Continue with ChatGPT" for answers beside the recommended keys, or only in Settings | Offer it in onboarding as an option once latency is measured; keep the recommended keys as the default | Open; decide with the phase 3 spec ([competitor research](research/2026-11-26-competitors-and-plan-sign-in.md)) |
 
 ## 13. Contradictions found in the existing documents
 
