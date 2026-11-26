@@ -499,6 +499,59 @@ Sources: [Wispr hands-free](https://docs.wisprflow.ai/articles/6391241694-use-fl
 [OpenWhispr cleanup](https://docs.openwhispr.com/help/dictation/cleanup.md). Wispr Flow's Fn
 default for hold to talk is from common knowledge of the app, not re-checked here.
 
+## Design details: the dot and the voice
+
+Owner's ask, 26 November 2026: design the bubble, and the motion that flows like the voice while
+you talk. The logo is a separate piece of work. Options are animated in
+[ux/motion-options.svg](ux/motion-options.svg); open it in a browser to see them move.
+
+![Options for the dot and the voice motion](ux/motion-options.svg)
+
+### The dot at rest
+
+| Option | Looks like | Waiting for you | Cost at idle |
+| --- | --- | --- | --- |
+| A. Ring | A still dark dot, 12 pt, with a white centre | A violet ring appears | None: no motion |
+| **B. Glass that breathes** (proposed) | A small dark glass bead, 14 pt, with a soft highlight | A violet halo breathes three times (3.2 s each), then stays as a still ring | None at rest; a few seconds of compositor-only animation when something new arrives |
+| C. Sleeping voice | A tiny capsule with three resting bars, the same bars that wake up as you talk | The bars stir faintly | A little: the stir runs while something waits |
+
+B is proposed because it keeps the bubble the owner likes, reads as an object rather than an icon,
+and stays still, so idle CPU stays near zero (budget). A running agent shows as a slow violet
+sweep around the bead; a meeting being recorded turns the halo red and keeps it on (safety rule).
+
+### The voice while you talk
+
+| Option | Looks like | Trade-off |
+| --- | --- | --- |
+| 1. Level bars | The familiar row of white bars | Clear, but it is what Wispr Flow and most dictation apps show, so it does not feel like HyperMe |
+| **2. Voice ribbon** (proposed) | Two soft lines inside the pill, white over violet, that swell with your voice and flow sideways; they taper at the ends and go calm when you pause | Ours and fluid; it carries straight into the working state and into the dot |
+| 3. Rolling trace | Your voice scrolls past as thin bars, pauses as gaps | Shows the rhythm of what you said, but it is busier to look at |
+
+How the ribbon behaves:
+
+- **Input:** the microphone level the app already measures for the pill (spec R-4), smoothed over
+  about 80 ms so it flows instead of twitching. Louder voice makes taller waves; the sideways
+  flow speed stays constant, so it never looks frantic.
+- **Drawing:** one small canvas, 30 frames a second, only while the pill is visible. Nothing runs
+  when the pill is hidden.
+- **Start:** the bead stretches sideways into the pill (the one 180 ms spring), and the ribbon
+  rises from a flat line within the first frames, inside the 50 ms budget to recording.
+- **Working, after you let go:** the ribbon flattens into a thin line and a small light runs
+  along it until the text is pasted, usually less than half a second. The alternative is three
+  soft dots.
+- **Done:** the line turns green for a moment, "Pasted" appears, and the pill shrinks back into
+  the bead.
+- **Reduce motion:** a still line whose thickness follows your voice; no sideways flow.
+
+### Other details
+
+| Detail | Proposed | Why |
+| --- | --- | --- |
+| Pill and card colour | Always dark, whatever the system theme | It must stand out on any window behind it, and the owner likes Wispr Flow's dark capsule. Home and Settings follow the system |
+| Language | After a dictation, "Pasted · ES" or "Pasted · EN" for a moment | Language is detected on its own (`CLAUDE.md`), so the user sees which one was heard |
+| The dot by default | Shown, once Phase 3 brings it; it can be hidden in General | The owner likes the bubble |
+| Sounds | Soft start and stop sounds, already decided (U-5) | |
+
 ## Decisions
 
 Answered by the owner on 26 November 2026.
@@ -527,6 +580,15 @@ Onboarding models and keys, accepted by the owner on 26 November 2026 ("looks go
 | --- | --- | --- |
 | U-11 | How the wizard asks for usage to estimate cost | Three choices by talking time a day (10 min, 30 min, 1 hour) with the monthly cost under each, rather than an hours-a-week slider (owner) |
 | U-12 | Where "Use other providers" leads | Settings → Providers with Advanced showing, while the wizard waits for every role to pass its test, rather than a custom step inside the wizard (owner) |
+
+Design details, open for the owner (26 November 2026):
+
+| # | Question | Proposed |
+| --- | --- | --- |
+| U-13 | The dot at rest | B, glass that breathes: still, with a violet halo that breathes three times when something new waits |
+| U-14 | The motion while you talk | 2, the voice ribbon |
+| U-15 | The pill while working | The ribbon goes flat and a light runs along it |
+| U-16 | Pill and card colour; language on the pill | Always dark; "Pasted · ES" or "Pasted · EN" for a moment |
 
 ## Not decided here
 
