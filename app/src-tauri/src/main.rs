@@ -5,11 +5,14 @@
 
 mod geometry;
 mod icon;
+mod onboarding;
 mod pill;
 #[cfg(target_os = "macos")]
 mod runtime;
 #[cfg(target_os = "macos")]
 mod settings;
+#[cfg(target_os = "macos")]
+mod walkthrough;
 
 use tauri::AppHandle;
 use tauri::image::Image;
@@ -32,6 +35,12 @@ fn main() {
             settings::key_test,
             settings::settings_open,
             settings::app_restart,
+            walkthrough::onboarding_checks,
+            walkthrough::onboarding_mic,
+            walkthrough::onboarding_request,
+            walkthrough::onboarding_try,
+            walkthrough::onboarding_can_continue,
+            walkthrough::onboarding_done,
         ]);
     builder
         .setup(|app| {
@@ -42,6 +51,8 @@ fn main() {
             pill(app.handle())?;
             #[cfg(target_os = "macos")]
             runtime::start(app.handle(), menu);
+            #[cfg(target_os = "macos")]
+            walkthrough::open_if_needed(app.handle());
             #[cfg(not(target_os = "macos"))]
             let _ = menu;
             Ok(())
