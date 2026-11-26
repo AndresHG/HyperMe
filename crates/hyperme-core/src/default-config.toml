@@ -82,3 +82,14 @@ stale_after = 3
 morning_from = "06:00"
 # or at this time if you are already there. Later than morning_from.
 morning_latest = "09:30"
+
+# Your own MCP servers, by URL or by command (Settings → Connectors adds them for you). A bearer
+# token or OAuth client secret is entered in Settings and kept in the keychain, never here.
+# Tools ask before running unless you list them under read; list destructive ones under off.
+#
+# [[connectors.custom]]
+# id = "wiki"
+# name = "Team wiki"
+# url = "https://wiki.example.com/mcp"
+# auth = "bearer"            # or "oauth" (with auth_url, token_url, scopes) or "none"
+# tools = { read = ["search_*", "get_*"], off = ["delete_*"] }
