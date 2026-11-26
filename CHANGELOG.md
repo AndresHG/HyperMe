@@ -21,6 +21,8 @@ All notable changes to HyperMe are recorded here. The format follows
   text, prompt v4, the frontmost app's name, and the raw transcript at the deadline or on error.
 - `crates/hyperme-platform` with microphone capture (`cpal`): mono, resampled to 24 kHz, 20 ms
   frames to the state machine. Start latency measured in `docs/results/`.
+- The dictation hotkey: hold Fn (default), Right Option or a chord, and Esc to cancel, through a
+  listen-only macOS event tap.
 - `spikes/flowbench`, a command-line speed test for dictation: upload against streaming,
   several speech and cleanup providers, stage timings, a quality score against gold texts.
 - Phase 0 results in `docs/results/`: Speechmatics (EU) with Groq cleanup reaches a median of
