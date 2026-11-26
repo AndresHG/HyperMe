@@ -69,11 +69,13 @@ agents. Every phase gate is first a gate on the owner's own use ([ROADMAP.md](RO
 
 ### First outside users
 
-*Proposed (interview question 4):* developers on a Mac who dictate all day into coding agents
-and chat apps, and want a tool that is open, light and under their own keys. In the one thread
+Decided by the owner on 26 November 2026 (Q-4): people who work in technology companies, on a
+Mac. Developers first, because they dictate all day into coding agents and chat, already use
+GitHub and can get their own API keys. Product owners, product managers and people who work with
+data should feel just as at home: their day is tickets, meetings, mail and quick questions, and
+the trackers they use (GitHub Projects, then Linear) are the first connectors. In the one thread
 with usage reports, commenters described thousands of dictated prompts, mostly into coding
-agents ([RESEARCH.md](RESEARCH.md) section 2). They can also get their own API keys, which
-matters while HyperMe is bring-your-own-key only (section 9).
+agents ([RESEARCH.md](RESEARCH.md) section 2).
 
 ### Not for, at first
 
@@ -162,7 +164,7 @@ to the next release; **P2** is nice to have. The phase is from [ROADMAP.md](ROAD
 | One MCP client; GitHub as the first connector | 3 | P0 | Owner, 25 November 2026 |
 | Context of the frontmost app and selected text | 3 | P1 | Within the privacy boundary (section 9) |
 | Dot at the bottom centre with a quick sheet (Ask, Now, top 3 waiting, last dictation); cards for answers and previews | 3 | P0 | Owner, U-8 and U-10 |
-| Linear and Jira connectors | 3+ | P2 | Any MCP server the user adds works without code |
+| Linear connector, after GitHub Projects | 3+ | P1 | Owner, Q-4. Any MCP server the user adds works without code |
 
 ### 7.3 Daily tasks and email (J-4, J-5)
 
@@ -188,7 +190,8 @@ to the next release; **P2** is nice to have. The phase is from [ROADMAP.md](ROAD
 ### 7.5 Later
 
 Memory and learning beyond the dictionary ("knows you better every day", plain files the user
-owns); local speech models for dictation; Linux and Windows; a wake word.
+owns); local speech models for dictation; Linux and Windows; a wake word. Jira is not on the roadmap; it may come later, and an MCP server the user
+adds already works (owner, 26 November 2026).
 
 ## 8. Non-goals
 
@@ -262,7 +265,7 @@ Asked in the interview of 26 November 2026. Recommendations first.
 | Q-1 | Product identity | "Voice to done"; Wispr Flow as the bar for dictation only | Decided 26 November 2026: voice to done |
 | Q-2 | Phase 0 gate | Declare passed on the Wispr comparison and approve the Phase 1 spec | Decided 26 November 2026: Phase 1 approved to start, with the spec's open questions answered (hotkey Fn, cleanup deadline 1.5 s, speed gate wired only) |
 | Q-3 | One key or two | One key; "Hyper, …" routes to commands; optional command key | Decided 26 November 2026: one key, "Hyper" prefix |
-| Q-4 | First outside user | Developers who dictate into coding agents and chat | Asked |
+| Q-4 | First outside user | Developers who dictate into coding agents and chat | Decided 26 November 2026: people in tech companies, developers first, product owners and data people too |
 | Q-5 | Keys model for outside users | Bring your own keys only in version 1 | Open |
 | Q-6 | Email (phase 4) before meetings (phase 5) | Keep email first | Open |
 | Q-7 | Mail and calendar provider | Google first | Open |
