@@ -272,7 +272,7 @@ It is three months later and this failed. Why?
 
 | # | Question | Recommendation | Status |
 | --- | --- | --- | --- |
-| T-1 | What triggers the morning card | The first time you are at the Mac after 06:00 on a workday, with 09:30 as the latest | Open, for the owner |
+| T-1 | What triggers the morning card | The first time you are at the Mac after 06:00 on a workday, with 09:30 as the latest | Decided by the owner, 26 November 2026: as recommended |
 | T-2 | Evening time | 18:30 on workdays, a setting | Our pick, inside the owner's "6 or 7 PM" |
 | T-3 | Voice-captured tasks: save at once or wait for Enter | Save at once with ⌘Z for 5 s, since nothing leaves the Mac | Open, for the owner |
 | T-4 | Evening summary: local list or a recap by the model | Local list by default; model recap as a switch, off | Open, for the owner |
