@@ -1,22 +1,24 @@
 # HyperMe
 
 HyperMe is a lightweight, open-source copilot for your daily work on the desktop. One
-always-on-top overlay that takes voice in and gets work done: quick commands ("create a ticket for
-this in Linear"), crons, dictation, meeting notes, and starting and following tasks in
-coding agents. Mac first; Linux and Windows later.
+always-on-top overlay that takes voice in and gets work done ("voice to done"): dictation, quick
+commands ("create a ticket for this in GitHub"), short answers, a daily task list, email drafts
+and meeting notes. Mac first; Linux and Windows later.
 
-This is a personal agent, not a coding assistant. It hands coding work to Claude Code
-or Devin and reports back.
+This is a personal agent for daily work, not a coding assistant. It never does coding work
+itself; a later version may hand a task to Claude Code ([docs/PRD.md](docs/PRD.md)).
 
 ## Names
 
 - The program is **HyperMe**. Folder, repository and package names are lowercase: `hyperme`.
-- The assistant is addressed as **"Hyper"** ("Hyper, create a ticket for this in Linear").
+- The assistant is addressed as **"Hyper"** ("Hyper, create a ticket for this in GitHub").
   Use that in UI copy, examples and any future wake word.
 - Always write the full name HyperMe in public text; plain "Hyper" is used by many other apps.
 
 ## Read first
 
+- `docs/PRD.md`: what HyperMe is, why and for whom; users, features and priority, non-goals,
+  success, and the single list of open questions. The source of truth for scope
 - `docs/SPEC.md`: requirements, architecture, budgets and safety rules
 - `docs/SPEED_TEST.md`: Phase 0, the first thing to build
 - `docs/ROADMAP.md`: the phases and their gates, and the gap to Wispr Flow (adopted 25 November 2026)
@@ -40,7 +42,8 @@ passes, update this section and record the evidence in `docs/results/`.
 ## Decisions already made
 
 - Rust core inside Tauri 2, with a thin web UI. The overlay is an NSPanel on macOS.
-- Cloud speech and language-model APIs first. No local models in version 1.
+- Cloud speech and language-model APIs first. No local models for dictation in version 1;
+  meetings on device (below) are the decided exception.
 - Every provider sits behind a trait. Model names live in config, never in code.
 - Connectors go through MCP (one client, `rmcp`). No integration code per service.
 - No agent framework runtime (OpenClaw, Hermes and similar). A small in-process
@@ -65,8 +68,9 @@ passes, update this section and record the evidence in `docs/results/`.
   telemetry. Audio stays on the Mac: dictation history (audio and text) is on by default,
   kept 30 days or unlimited, under a size limit the user sets, so a dropped connection never
   loses a dictation (owner, 26 November 2026; this replaces "no audio kept on disk").
-- Memory and learning ("knows you better every day") is part of the vision, not of a
-  first version.
+- Memory starts with commands in phase 3: "Hyper, remember …", proposed facts approved by the
+  user, kept in a folder of Markdown files on the user's Mac (owner, 26 November 2026; replaces
+  "not in a first version"). See `docs/PRD.md` section 7.5.
 - This project's own tickets live in GitHub Projects.
 - After dictation comes smart routing and actions; the first tracker connector is GitHub,
   not Linear (owner, 25 November 2026). See `docs/ROADMAP.md`.
@@ -97,10 +101,10 @@ passes, update this section and record the evidence in `docs/results/`.
 
 ## Open decisions: ask the owner, do not assume
 
-- Mail and calendar provider: Google or Microsoft 365?
-- Ticket creation: wait for Enter (default) or fire at once?
-- Whether email (phase 4) comes before meetings (phase 5), and who the first outside user is.
-- Whether to adopt the two extra checks in `docs/RESEARCH.md` section 1.3 as gates.
+The single list is `docs/PRD.md` section 12. The interview of 26 November 2026 settled the
+earlier ones here: Google first for mail and calendar, actions wait for Enter, daily tasks and
+email before meetings, first users are people in tech companies (developers first), and the
+research checks are dropped.
 
 ## Spec first, test first
 

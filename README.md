@@ -4,7 +4,7 @@
 
 One small pill for everything you say at work. Hold a key and your words land as clean text in
 any app; say "Hyper, open a ticket for this" and it previews the action; your day and your mail,
-your meetings turned into tasks, your coding agents taking orders. All on your own keys, light
+your meetings turned into tasks. All on your own keys, light
 enough to forget it is running. Rust core, Tauri 2 shell, Mac first.
 
 It starts with dictation that aims to be as fast as Wispr Flow: hold a key, speak in English or
@@ -40,7 +40,7 @@ on speed and quality to be worth switching to.
 | Key release to text | Under 700 ms, vendor budget ([source](https://wisprflow.ai/post/technical-challenges)) | 429 ms median, 595 ms p90, CLI on 50 samples ([results](docs/results/2026-11-25-full-benchmark.md)) |
 | Formatting quality | 79.3% zero-edit, US English ([Voice Arena](https://voicearena.com/dictation-bench)) | Behind: 3 of 50 exact on a stricter measure ([results](docs/results/2026-11-25-full-benchmark.md)) |
 | Languages | 21 | English and Spanish, detected per dictation |
-| Beyond dictation | Notetaker, drafts, MCP server | Planned: commands with previews, meetings to tickets, coding agents by voice |
+| Beyond dictation | Notetaker, drafts, MCP server | Planned: commands with previews, a daily task list, meetings to tickets |
 
 The speed numbers are not yet like for like: Wispr Flow has not been timed on the same clips.
 More in [docs/PITCH.md](docs/PITCH.md).
@@ -54,7 +54,7 @@ More in [docs/PITCH.md](docs/PITCH.md).
 | 2. Quality and first release | Match Wispr Flow on formatting; signed build | Planned |
 | 3. Smart routing and actions | One key for dictation, questions and actions | Planned |
 | 4. Daily tasks and email | Calendar, nudges, draft-only email | Planned |
-| 5. Meetings and coding agents | Meetings to tickets; agents by voice | Planned |
+| 5. Meetings | Meetings to notes and tickets | Planned |
 
 Each phase starts only after the gate of the one before it passes. Full plan:
 [docs/ROADMAP.md](docs/ROADMAP.md).
