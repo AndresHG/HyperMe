@@ -194,7 +194,8 @@ commands (owner, Q-6). Meetings follow daily tasks and email, or run in parallel
 Memory and learning beyond the dictionary ("knows you better every day", plain files the user
 owns); a free local mode with speech and cleanup models you download in the app, so no key is
 needed (owner, Q-5); handing a task to Claude Code by voice ("Hyper, create this and send it to
-Claude Code"), a trigger and nothing more, through MCP or the agent's own interface (owner, Q-6); Linux and Windows; a wake word. Jira is not on the roadmap; it may come later, and an MCP server the user
+Claude Code"), a trigger and nothing more, through MCP or the agent's own interface (owner, Q-6); Linux and Windows; a wake word; spoken answers (text-to-speech), not for now, maybe in the future
+(owner, Q-14). Jira is not on the roadmap; it may come later, and an MCP server the user
 adds already works (owner, 26 November 2026).
 
 ## 8. Non-goals
@@ -279,6 +280,7 @@ Asked in the interview of 26 November 2026. Recommendations first.
 | Q-9 | Adoption measure | Downloads, stars, 10 outside weekly users in three months | Decided 26 November 2026: as recommended |
 | Q-10 | Languages at public release | English and Spanish only | Decided 26 November 2026: Spanish and English tested; others work, labelled untested |
 | Q-11 | What answers questions | A fast model, web search when needed | Decided 26 November 2026: its own model setting, cheap and fast by default, switchable from the card with regenerate |
+| Q-14 | Spoken answers (text-to-speech) | Text first, an optional voice later | Decided 26 November 2026: not for now, maybe later |
 | Q-12 | Work and personal profiles ([SPEC.md](SPEC.md) section 4) | Drop from version 1; one profile | Open |
 | Q-13 | Adopt the trial and baseline checks as gates ([RESEARCH.md](RESEARCH.md) section 1.3) | Drop as gates; the Wispr comparison covers the baseline | Open |
 
