@@ -1,0 +1,19 @@
+[package]
+name = "hyperme-platform"
+description = "HyperMe's platform code behind hyperme-core's traits: microphone, hotkey, paste, focus, keychain."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+hyperme-core.workspace = true
+cpal.workspace = true
+tokio = { workspace = true, features = ["sync"] }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["sync"] }
+
+[lints]
+workspace = true

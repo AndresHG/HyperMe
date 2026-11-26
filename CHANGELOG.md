@@ -19,6 +19,8 @@ All notable changes to HyperMe are recorded here. The format follows
   and never the key.
 - OpenAI-compatible cleanup in `hyperme-providers` (Groq first): warm-up on key-down, streamed
   text, prompt v4, the frontmost app's name, and the raw transcript at the deadline or on error.
+- `crates/hyperme-platform` with microphone capture (`cpal`): mono, resampled to 24 kHz, 20 ms
+  frames to the state machine. Start latency measured in `docs/results/`.
 - `spikes/flowbench`, a command-line speed test for dictation: upload against streaming,
   several speech and cleanup providers, stage timings, a quality score against gold texts.
 - Phase 0 results in `docs/results/`: Speechmatics (EU) with Groq cleanup reaches a median of
