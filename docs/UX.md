@@ -1,6 +1,6 @@
 # HyperMe UX and UI
 
-**Status:** draft, 26 November 2026. The owner answered decisions U-1 to U-5 the same day. Nothing here changes a phase gate in [ROADMAP.md](ROADMAP.md); it says what each phase
+**Status:** draft, 26 November 2026. The owner decided U-1 to U-10 the same day. Nothing here changes a phase gate in [ROADMAP.md](ROADMAP.md); it says what each phase
 looks like and feels like. Mockups are in [ux/](ux/).
 
 ## The idea in one paragraph
@@ -453,13 +453,13 @@ Answered by the owner on 26 November 2026.
 | U-4 | Dictation history | On by default, kept 30 days or unlimited, under a total size limit the user sets (default 1 GB, our pick). Above all, a dropped connection must never lose a dictation: the audio is kept and the pill and menu offer **Retry**, even with history off (spec R-18, R-31). Searchable in Home → History from Phase 2 |
 | U-5 | Start and stop sounds | On, soft, with a switch |
 
-Open, after the owner asked on 26 November 2026 for a design of our own, with views from the roadmap:
+After the owner asked on 26 November 2026 for a design of our own, with views from the roadmap. U-6 to U-8 were accepted by the owner the same day ("looks good, yes"):
 
-| # | Question | Proposed |
+| # | Question | Decided |
 | --- | --- | --- |
-| U-6 | Quick answers and previews as cards from the pill, and lasting work in Home (History, Today, Meetings), instead of a tabbed panel? | Yes; views come from the roadmap, not the reference |
-| U-7 | One "Waiting for you" queue in Today, or separate lists for things that need you and things to do? | One queue, since everything outbound waits for a yes anyway |
-| U-8 | One shape at the bottom centre (dot, pill, card) instead of a corner bubble with a panel above it, so nobody can recognise another product in it (owner, 26 November 2026: "I don't want anyone to be able to recognize the other product") | Yes: the dot, Hyper violet, keycaps instead of button rows |
+| U-6 | Quick answers and previews as cards from the pill, and lasting work in Home (History, Today, Meetings), instead of a tabbed panel? | Yes; views come from the roadmap, not the reference (owner) |
+| U-7 | One "Waiting for you" queue in Today, or separate lists for things that need you and things to do? | One queue, since everything outbound waits for a yes anyway (owner) |
+| U-8 | One shape at the bottom centre (dot, pill, card) instead of a corner bubble with a panel above it, so nobody can recognise another product in it (owner, 26 November 2026: "I don't want anyone to be able to recognize the other product") | Yes: the dot, Hyper violet, keycaps instead of button rows (owner) |
 | U-9 | Home's style | Decided by the owner, 26 November 2026: a window in Wispr Flow's style, with a Home page and sections from our roadmap |
 | U-10 | What does clicking the dot open? | Decided by the owner, 26 November 2026: a small quick sheet for in-the-moment things, with a switch to the full Home window |
 
