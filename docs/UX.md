@@ -443,6 +443,11 @@ focus and stays in one place. Each kind maps to a roadmap job:
 | Waiting for you | "Reply draft ready" | ↵ Review · ⌘K More |
 | Agent done | "Claude Code finished: pull request ready" | ↵ Review |
 | Job failed | "Morning plan could not reach your calendar" | ↵ Fix (opens the setting) |
+| Morning card | "Good morning · Friday 27": meetings, top tasks, what waits | ↵ Open Today · Esc |
+
+The morning card is drafted in [spec 92](../specs/92-daily-tasks/spec.md), with a mockup in
+[ux/daily-cards.svg](ux/daily-cards.svg). The evening card in the same mockup is deferred (owner,
+26 November 2026).
 
 An unanswered alert shrinks back into the dot as its ring and stays in Today. "Pause Hyper for 1
 hour" in the menu holds all alerts; meeting capture indicators are never held. Notion Calendar shows upcoming events in the menu bar
