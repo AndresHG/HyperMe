@@ -10,6 +10,10 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
+use time::{Time, Weekday};
+
+use crate::schedule::Schedule;
+use crate::tasks::{DayRules, WeekdaySet};
 
 /// The file written when there is none, and the source of every default.
 pub const DEFAULT_CONFIG: &str = include_str!("default-config.toml");
@@ -25,6 +29,9 @@ pub struct Config {
     pub cleanup: Cleanup,
     pub history: History,
     pub timing: Timing,
+    /// The task list and the morning card. Optional: an older file takes the defaults.
+    #[serde(default = "default_tasks")]
+    pub tasks: Tasks,
 }
 
 fn show_while_idle() -> bool {
@@ -162,6 +169,79 @@ pub struct History {
 pub struct Timing {
     /// R-30: one line of stage timings per dictation, numbers only.
     pub log: bool,
+}
+
+/// The task list's day, workdays and stale mark, and the morning card's times
+/// (specs/92-daily-tasks). Times are "HH:MM"; weekdays are `mon` to `sun`.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Tasks {
+    pub day_start: String,
+    pub workdays: Vec<String>,
+    pub stale_after: u32,
+    pub morning_from: String,
+    pub morning_latest: String,
+}
+
+fn default_tasks() -> Tasks {
+    defaults().tasks.clone()
+}
+
+/// "HH:MM", 00:00 to 23:59.
+fn clock_time(text: &str) -> Option<Time> {
+    let (h, m) = text.trim().split_once(':')?;
+    if h.len() != 2 || m.len() != 2 {
+        return None;
+    }
+    Time::from_hms(h.parse().ok()?, m.parse().ok()?, 0).ok()
+}
+
+fn weekday(name: &str) -> Option<Weekday> {
+    Some(match name.trim().to_lowercase().as_str() {
+        "mon" => Weekday::Monday,
+        "tue" => Weekday::Tuesday,
+        "wed" => Weekday::Wednesday,
+        "thu" => Weekday::Thursday,
+        "fri" => Weekday::Friday,
+        "sat" => Weekday::Saturday,
+        "sun" => Weekday::Sunday,
+        _ => return None,
+    })
+}
+
+impl Tasks {
+    /// The day start, workdays and stale threshold. A value the file got wrong (validation
+    /// refuses it, so only a hand-built config) falls back to the default.
+    pub fn day_rules(&self) -> DayRules {
+        let fallback = DayRules::default();
+        let mut workdays = WeekdaySet::EMPTY;
+        for name in &self.workdays {
+            if let Some(day) = weekday(name) {
+                workdays.insert(day);
+            }
+        }
+        DayRules {
+            day_start: clock_time(&self.day_start).unwrap_or(fallback.day_start),
+            workdays: if workdays.is_empty() {
+                fallback.workdays
+            } else {
+                workdays
+            },
+            stale_after: self.stale_after,
+        }
+    }
+
+    /// The morning card's schedule (R-15, R-16).
+    pub fn morning(&self) -> Schedule {
+        let at = |text: &str, h, m| {
+            clock_time(text).unwrap_or(Time::from_hms(h, m, 0).expect("a valid time"))
+        };
+        Schedule::OnPresenceAfter {
+            from: at(&self.morning_from, 6, 0),
+            latest: at(&self.morning_latest, 9, 30),
+            weekdays: self.day_rules().workdays,
+        }
+    }
 }
 
 /// How long history keeps a dictation (R-18).
@@ -493,6 +573,43 @@ impl Config {
             range("history.retention_days", days.into(), 1, 3650)?;
         }
         range("history.size_limit_mb", h.size_limit_mb, 10, 1_000_000)?;
+
+        let t = &self.tasks;
+        let time_of = |key, value: &str| match clock_time(value) {
+            Some(time) => Ok(time),
+            None => invalid(
+                key,
+                format!("is {value:?}: write a time as \"HH:MM\", such as \"04:00\""),
+            )
+            .map(|()| Time::MIDNIGHT),
+        };
+        time_of("tasks.day_start", &t.day_start)?;
+        let from = time_of("tasks.morning_from", &t.morning_from)?;
+        let latest = time_of("tasks.morning_latest", &t.morning_latest)?;
+        if latest <= from {
+            invalid(
+                "tasks.morning_latest",
+                format!(
+                    "is {:?}: it must be later than tasks.morning_from ({:?})",
+                    t.morning_latest, t.morning_from
+                ),
+            )?;
+        }
+        if t.workdays.is_empty() {
+            invalid(
+                "tasks.workdays",
+                "is empty: name at least one day".to_owned(),
+            )?;
+        }
+        for name in &t.workdays {
+            if weekday(name).is_none() {
+                invalid(
+                    "tasks.workdays",
+                    format!("has {name:?}: write mon, tue, wed, thu, fri, sat or sun"),
+                )?;
+            }
+        }
+        range("tasks.stale_after", t.stale_after.into(), 1, 30)?;
         Ok(())
     }
 }
