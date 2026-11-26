@@ -40,6 +40,7 @@ fn main() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             runtime::pill_clicked,
+            runtime::pill_view,
             settings::settings_view,
             settings::settings_set,
             settings::key_set,
