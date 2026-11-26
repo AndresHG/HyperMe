@@ -102,6 +102,11 @@ pub fn start(app: &AppHandle, menu: TrayMenu) {
         _hotkey: None,
     }));
     settle(app);
+    // Home shows the history even before the keys are in, or when one cannot be read.
+    let dir = data_dir(app);
+    if let Ok(config) = Config::load_or_create(&dir.join("config.toml")) {
+        open_history(&history, &dir, &config);
+    }
     match wire(app, history) {
         Ok(()) => set_status(app, "Ready"),
         Err(why) => set_status(app, &why),
@@ -122,6 +127,19 @@ pub fn ensure_running(app: &AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+/// Opens the history store if it is not open yet. A history that cannot open leaves dictation
+/// working, without history or retry.
+fn open_history(history: &Mutex<HistoryInner>, dir: &std::path::Path, config: &Config) {
+    let mut inner = history.lock().unwrap_or_else(PoisonError::into_inner);
+    if inner.store.is_none() {
+        inner.store = SqliteHistory::open(
+            &dir.join("history"),
+            HistorySettings::from_config(&config.history),
+        )
+        .ok();
+    }
+}
+
 fn wire(app: &AppHandle, history: Arc<Mutex<HistoryInner>>) -> Result<(), String> {
     let dir = data_dir(app);
     let config =
@@ -135,15 +153,7 @@ fn wire(app: &AppHandle, history: Arc<Mutex<HistoryInner>>) -> Result<(), String
     let speech = Speechmatics::new(&config.speech, key(&config.speech.provider)?);
     let cleanup = ChatCleanup::new(&config.cleanup, &key(&config.cleanup.provider)?)
         .map_err(|e| e.message)?;
-    {
-        let mut inner = history.lock().unwrap_or_else(PoisonError::into_inner);
-        // A history that cannot open leaves dictation working, without history or retry.
-        inner.store = SqliteHistory::open(
-            &dir.join("history"),
-            HistorySettings::from_config(&config.history),
-        )
-        .ok();
-    }
+    open_history(&history, &dir, &config);
 
     let (events, events_rx) = mpsc::channel(1024);
     // The microphone's frames pass through a task that feeds the level meter.
@@ -343,6 +353,21 @@ pub fn pill_clicked(app: AppHandle) {
     }
 }
 
+/// Runs `read` on the history store, for Home's commands. An error when the history is not
+/// open (no keys yet, or it could not open).
+pub fn with_history<T>(
+    app: &AppHandle,
+    read: impl FnOnce(&SqliteHistory) -> Result<T, Error>,
+) -> Result<T, String> {
+    let history = lock(app).history.clone();
+    let inner = history.lock().unwrap_or_else(PoisonError::into_inner);
+    let store = inner
+        .store
+        .as_ref()
+        .ok_or_else(|| "History is not available yet".to_owned())?;
+    read(store).map_err(|e| e.message)
+}
+
 /// The menu's actions.
 pub fn menu_action(app: &AppHandle, id: &str) {
     match id {
@@ -373,6 +398,7 @@ pub fn menu_action(app: &AppHandle, id: &str) {
             });
         }
         "settings" => crate::settings::open(app, "setup"),
+        "open-home" => crate::home::open(app, "home"),
         "retry" => {
             if let Some(events) = lock(app).events.clone() {
                 let _ = events.try_send(Event::Retry(None));
