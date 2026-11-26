@@ -272,6 +272,8 @@ fn hide(app: &AppHandle) {
         shared.generation += 1;
         shared.view = None;
     }
+    // The page stops drawing the voice, so nothing runs while the pill is hidden.
+    let _ = app.emit_to(PILL, "pill-hidden", ());
     if let Ok(panel) = app.get_webview_panel(PILL) {
         panel.hide();
     }

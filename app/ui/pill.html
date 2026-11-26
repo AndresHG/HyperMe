@@ -4,9 +4,11 @@
 <meta charset="utf-8">
 <title>HyperMe pill</title>
 <style>
-  /* Tokens and states from docs/UX.md, "Visual language" and "The pill". */
+  /* Tokens and states from docs/UX.md, "Visual language", "The pill" and "The voice while you
+     talk" (U-14, U-15). The pill is always dark, whatever the system theme (U-16). */
   :root {
     --surface: #111113;
+    --edge: #2a2a30;
     --text: #ffffff;
     --muted: #a1a1aa;
     --recording: #ff4d4f;
@@ -27,6 +29,7 @@
     height: 100%;
     border-radius: 999px;
     background: var(--surface);
+    box-shadow: inset 0 0 0 1px var(--edge);
     color: var(--text);
     display: flex;
     align-items: center;
@@ -37,64 +40,191 @@
     white-space: nowrap;
   }
   .pill.error, .pill.retry { box-shadow: inset 0 0 0 1.5px var(--recording); cursor: pointer; }
-  .icon { flex: none; display: flex; align-items: center; gap: 3px; }
-  .dot { width: 8px; height: 8px; border-radius: 50%; }
-  .bars { display: none; align-items: center; gap: 3px; height: 18px; }
-  .bars span { width: 3px; border-radius: 2px; background: var(--text); height: 3px; transition: height 33ms linear; }
-  .working span { width: 5px; height: 5px; border-radius: 50%; background: var(--muted); animation: pulse 1s infinite ease-in-out; }
-  .working span:nth-child(2) { animation-delay: 0.15s; }
-  .working span:nth-child(3) { animation-delay: 0.3s; }
-  @keyframes pulse { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
-  @media (prefers-reduced-motion: reduce) { .working span { animation: none; opacity: 0.7; } }
+  .icon { flex: none; display: flex; align-items: center; }
+  .icon:empty { display: none; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; }
+  /* The line the bars settled into, now in the state's colour. */
+  .line { width: 14px; height: 3px; border-radius: 2px; }
+  canvas { flex: none; display: none; }
   .label { overflow: hidden; text-overflow: ellipsis; }
+  .label:empty { display: none; }
   .muted { color: var(--muted); }
 </style>
 </head>
 <body>
   <div id="pill" class="pill" role="status" aria-live="polite">
     <span id="icon" class="icon"></span>
-    <span id="bars" class="bars" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></span>
+    <canvas id="voice" aria-hidden="true"></canvas>
     <span id="label" class="label"></span>
   </div>
 <script>
   // Each state has an icon and a word, never colour alone (docs/UX.md).
   const icons = {
     recording: '<span class="dot" style="background:var(--recording)"></span>',
-    working: '<span class="working"><span></span><span></span><span></span></span>',
-    done: '<span style="color:var(--done)">✓</span>',
-    raw: '<span class="dot" style="background:var(--raw)"></span>',
-    quiet: '<span class="dot" style="background:var(--muted)"></span>',
+    done: '<span class="line" style="background:var(--done)"></span>',
+    raw: '<span class="line" style="background:var(--raw)"></span>',
+    quiet: '<span class="line" style="background:var(--muted)"></span>',
     notice: '<span class="muted">🔒</span>',
     error: '<span style="color:var(--recording)">!</span>',
     retry: '<span style="color:var(--recording)">↻</span>',
   };
   const pill = document.getElementById('pill');
   const icon = document.getElementById('icon');
-  const bars = document.getElementById('bars');
   const label = document.getElementById('label');
-  const shape = [0.5, 0.8, 1, 0.8, 0.5];
+  const canvas = document.getElementById('voice');
+  const ctx = canvas.getContext('2d');
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+  // The voice: a row of white bars that ripple out from the centre with the input level (U-14).
+  const BARS = 11, BAR_W = 3, GAP = 3, HEIGHT = 20, MIN = 3;
+  const WIDTH = BARS * BAR_W + (BARS - 1) * GAP;
+  const CENTRE = (BARS - 1) / 2;
+  const FRAME_MS = 1000 / 30;                   // 30 frames a second, only while visible
+  const SMOOTH = 1 - Math.exp(-FRAME_MS / 80);  // about 80 ms of smoothing
+  const SETTLE_MS = 160;                        // bars to line after release (U-15)
+  const LIGHT_MS = 1400;                        // one run of the light, there and back
+  const TRACK = '#3a3a44', LIGHT = '160,140,255';
+  // Taller in the middle, so the row reads as a voice.
+  const shape = Array.from({ length: BARS }, (_, i) =>
+    0.55 + 0.45 * Math.cos(((i - CENTRE) / (CENTRE + 1)) * Math.PI / 2));
+
+  let kind = 'hidden';
+  let target = 0;   // the last level from the microphone, 0 to 1
+  let smooth = 0;
+  const history = new Array(CENTRE + 1).fill(0); // [0] now, [d] d frames ago
+  const heights = new Array(BARS).fill(MIN);
+  let since = 0;    // when the current state began
+  let raf = 0, lastFrame = 0;
+  let frames = 0;   // frames drawn, for the headless check that nothing runs while hidden
+
+  const ratio = window.devicePixelRatio || 1;
+  canvas.width = Math.round(WIDTH * ratio);
+  canvas.height = Math.round(HEIGHT * ratio);
+  canvas.style.width = WIDTH + 'px';
+  canvas.style.height = HEIGHT + 'px';
+  ctx.scale(ratio, ratio);
+
+  function step(now) {
+    smooth += (target - smooth) * SMOOTH;
+    history.pop();
+    history.unshift(smooth);
+    for (let i = 0; i < BARS; i++) {
+      // Each bar takes the level a frame after its neighbour nearer the centre. With Reduce
+      // motion they all take the level now, without the ripple or the idle stir.
+      const value = reduce.matches ? smooth : history[Math.round(Math.abs(i - CENTRE))];
+      // Silence keeps the bars low but never flat, so the pill still looks alive.
+      const alive = reduce.matches ? 0 : 0.6 * (1 + Math.sin(now / 260 + i * 0.9));
+      heights[i] = Math.min(HEIGHT, MIN + alive + (HEIGHT - MIN) * value * shape[i]);
+    }
+  }
+
+  function drawBars(heightOf) {
+    ctx.fillStyle = '#ffffff';
+    for (let i = 0; i < BARS; i++) {
+      const h = heightOf(i);
+      ctx.beginPath();
+      ctx.roundRect(i * (BAR_W + GAP), (HEIGHT - h) / 2, BAR_W, h, BAR_W / 2);
+      ctx.fill();
+    }
+  }
+
+  function drawWorking(now) {
+    const t = now - since;
+    if (t < SETTLE_MS && !reduce.matches) {
+      const k = 1 - Math.pow(1 - t / SETTLE_MS, 3);
+      drawBars((i) => heights[i] + (2 - heights[i]) * k);
+      return;
+    }
+    const y = HEIGHT / 2 - 1;
+    ctx.fillStyle = TRACK;
+    ctx.beginPath();
+    ctx.roundRect(0, y, WIDTH, 2, 1);
+    ctx.fill();
+    // A small violet light runs along the line until the text lands. With Reduce motion it
+    // stays still in the middle.
+    const light = 24;
+    const phase = reduce.matches ? 0.5
+      : (1 - Math.cos(((t - SETTLE_MS) / LIGHT_MS) * 2 * Math.PI)) / 2;
+    const x = phase * (WIDTH - light);
+    const glow = ctx.createLinearGradient(x, 0, x + light, 0);
+    glow.addColorStop(0, `rgba(${LIGHT},0)`);
+    glow.addColorStop(0.5, `rgba(${LIGHT},1)`);
+    glow.addColorStop(1, `rgba(${LIGHT},0)`);
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.roundRect(x, y - 0.5, light, 3, 1.5);
+    ctx.fill();
+  }
+
+  function frame(now) {
+    raf = 0;
+    if (kind !== 'recording' && kind !== 'working') return;
+    if (now - lastFrame >= FRAME_MS - 2) {
+      lastFrame = now;
+      frames++;
+      ctx.clearRect(0, 0, WIDTH, HEIGHT);
+      if (kind === 'recording') {
+        step(now);
+        drawBars((i) => heights[i]);
+      } else {
+        drawWorking(now);
+      }
+    }
+    if (!document.hidden) raf = requestAnimationFrame(frame);
+  }
+
+  function animate() {
+    if (!raf && (kind === 'recording' || kind === 'working')) raf = requestAnimationFrame(frame);
+  }
+
+  function stop() {
+    if (raf) cancelAnimationFrame(raf);
+    raf = 0;
+  }
 
   function render(view) {
-    pill.className = 'pill ' + view.kind;
-    icon.innerHTML = icons[view.kind] || '';
+    const was = kind;
+    kind = view.kind;
+    since = performance.now();
+    pill.className = 'pill ' + kind;
+    icon.innerHTML = icons[kind] || '';
     label.textContent = view.label;
-    label.className = 'label' + (view.kind === 'quiet' || view.kind === 'notice' ? ' muted' : '');
-    bars.style.display = view.kind === 'recording' ? 'flex' : 'none';
+    label.className = 'label' + (kind === 'quiet' || kind === 'notice' ? ' muted' : '');
+    const moving = kind === 'recording' || kind === 'working';
+    canvas.style.display = moving ? 'block' : 'none';
+    if (kind === 'recording' && was !== 'recording') {
+      // The bars rise from a flat line; the first frame is drawn now, inside the 50 ms budget.
+      target = smooth = 0;
+      history.fill(0);
+      heights.fill(MIN);
+      lastFrame = since;
+      ctx.clearRect(0, 0, WIDTH, HEIGHT);
+      drawBars(() => MIN);
+    }
+    if (moving) animate(); else stop();
   }
 
-  function level(value) {
-    bars.querySelectorAll('span').forEach((bar, i) => {
-      bar.style.height = Math.max(3, Math.round(18 * value * shape[i])) + 'px';
-    });
+  // Nothing runs while the pill is hidden.
+  function hidden() {
+    kind = 'hidden';
+    stop();
   }
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) stop(); else animate();
+  });
+
+  // Ready for the next key-down before its event arrives, but still.
+  render({ kind: 'recording', label: '' });
+  hidden();
 
   const tauri = window.__TAURI__;
   if (tauri) {
     tauri.event.listen('pill', (event) => render(event.payload));
-    tauri.event.listen('level', (event) => level(event.payload));
+    tauri.event.listen('pill-hidden', hidden);
+    tauri.event.listen('level', (event) => { target = event.payload; });
     pill.addEventListener('click', () => tauri.core.invoke('pill_clicked'));
   }
-  render({ kind: 'recording', label: '' });
 </script>
 </body>
 </html>

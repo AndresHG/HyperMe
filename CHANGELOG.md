@@ -63,3 +63,8 @@ All notable changes to HyperMe are recorded here. The format follows
 - Licence: MIT OR Apache-2.0.
 - `spikes/localmeet` and its results: local speech and language models for meeting notes on
   the owner's Mac, with a proposed on-device design for phase 5 in `docs/ROADMAP.md`.
+- The pill's new look (U-14 to U-16): while you talk, white level bars on the dark capsule ripple
+  out from the centre with your voice; after you let go they settle into a line with a violet
+  light running along it until the text lands. Done, raw text and nothing heard show the line in
+  their colour. Reduce motion drops the ripple and the running light, and nothing is drawn while
+  the pill is hidden.
