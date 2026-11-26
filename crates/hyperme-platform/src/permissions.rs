@@ -13,8 +13,8 @@ mod ffi {
         pub safe fn AXIsProcessTrusted() -> u8;
         /// As above; with the prompt option set, shows macOS's prompt and adds the row.
         pub fn AXIsProcessTrustedWithOptions(options: CFDictionaryRef) -> u8;
-        /// The accessibility object for the whole system.
-        pub fn AXUIElementCreateSystemWide() -> *const std::ffi::c_void;
+        /// The accessibility object for an app, by process id.
+        pub fn AXUIElementCreateApplication(pid: i32) -> *const std::ffi::c_void;
         /// Reads one attribute; fails with `kAXErrorAPIDisabled` when access is not allowed.
         pub fn AXUIElementCopyAttributeValue(
             element: *const std::ffi::c_void,
@@ -38,14 +38,14 @@ mod ffi {
 }
 
 /// `kAXErrorSuccess` and `kAXErrorNoValue`: the call went through, so access is allowed.
-/// Without access the call fails, with `kAXErrorCannotComplete` (-25204, seen on macOS 26) or
-/// `kAXErrorAPIDisabled` (-25211).
+/// Without access, asking the Dock fails with `kAXErrorAPIDisabled` (-25211, measured on
+/// macOS 26.6.2).
 const AX_ALLOWED: [i32; 2] = [0, -25212];
 
 /// Whether HyperMe may send the paste shortcut. `AXIsProcessTrusted` can keep answering no in a
 /// process that was running when the user switched it on, so a real Accessibility call is
-/// tried as well: reading the focused app from the system-wide element works once access is
-/// allowed and fails until then.
+/// tried as well: reading the Dock's role works once access is allowed and fails with
+/// `kAXErrorAPIDisabled` until then.
 pub fn accessibility() -> bool {
     ffi::AXIsProcessTrusted() != 0 || accessibility_call_allowed()
 }
@@ -58,25 +58,40 @@ fn accessibility_call_allowed() -> bool {
 fn accessibility_call_error() -> i32 {
     use core_foundation::base::TCFType;
     use core_foundation::string::CFString;
+    use objc2_app_kit::NSRunningApplication;
+    use objc2_foundation::NSString;
 
-    // The value of `kAXFocusedApplicationAttribute`.
-    let attribute = CFString::from_static_string("AXFocusedApplication");
+    // The Dock always runs and answers at once. Asking the system-wide element for the focused
+    // app instead asks HyperMe itself whenever its own window has focus, which fails with
+    // kAXErrorCannotComplete even when access is allowed (seen on 26 November 2026).
+    let docks = NSRunningApplication::runningApplicationsWithBundleIdentifier(&NSString::from_str(
+        "com.apple.dock",
+    ));
+    let Some(dock) = docks.iter().next() else {
+        // kAXErrorFailure: nothing to ask.
+        return -25200;
+    };
+    let pid = dock.processIdentifier();
+    // The value of `kAXRoleAttribute`.
+    let attribute = CFString::from_static_string("AXRole");
     let mut value: *const std::ffi::c_void = std::ptr::null();
-    // SAFETY: the system-wide element and any returned value are owned here and released once;
+    // SAFETY: the application element and any returned value are owned here and released once;
     // the attribute string outlives the call.
     #[allow(unsafe_code)]
     let error = unsafe {
-        let system = ffi::AXUIElementCreateSystemWide();
-        if system.is_null() {
-            // kAXErrorFailure.
+        let element = ffi::AXUIElementCreateApplication(pid);
+        if element.is_null() {
             return -25200;
         }
-        let error =
-            ffi::AXUIElementCopyAttributeValue(system, attribute.as_concrete_TypeRef(), &mut value);
+        let error = ffi::AXUIElementCopyAttributeValue(
+            element,
+            attribute.as_concrete_TypeRef(),
+            &mut value,
+        );
         if !value.is_null() {
             ffi::CFRelease(value);
         }
-        ffi::CFRelease(system);
+        ffi::CFRelease(element);
         error
     };
     error
