@@ -6,10 +6,12 @@
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use hyperme_core::dictation::{Engine, Event, Settings, Status};
+use std::collections::BTreeMap;
+
+use hyperme_core::dictation::{Engine, Event, Parts, Settings, Status};
 use hyperme_core::traits::{
-    CleanupProvider, Error, ErrorKind, FocusInfo, Inserter, LiveSession, Microphone,
-    SpeechProvider, Transcript,
+    CleanupProvider, DictationId, Error, ErrorKind, FocusInfo, History, Inserter, LiveSession,
+    Microphone, Sound, Sounds, SpeechProvider, Transcript,
 };
 use tokio::sync::mpsc;
 use tokio::time::{Instant, sleep};
@@ -100,7 +102,8 @@ pub struct FakeSpeech {
     pub open_delay: Duration,
     pub open_error: Option<Error>,
     pub finish_delay: Duration,
-    pub finish_error: Option<Error>,
+    /// Shared by every session, so a test can make the next attempt succeed.
+    pub finish_error: Arc<Mutex<Option<Error>>>,
     pub transcript: String,
     pub language: Option<String>,
 }
@@ -112,7 +115,7 @@ impl FakeSpeech {
             open_delay: Duration::ZERO,
             open_error: None,
             finish_delay: Duration::ZERO,
-            finish_error: None,
+            finish_error: Arc::default(),
             transcript: transcript.to_owned(),
             language: Some("en".to_owned()),
         }
@@ -157,7 +160,7 @@ impl LiveSession for FakeSession {
         if !self.speech.finish_delay.is_zero() {
             sleep(self.speech.finish_delay).await;
         }
-        if let Some(error) = self.speech.finish_error.clone() {
+        if let Some(error) = self.speech.finish_error.lock().unwrap().clone() {
             return Err(error);
         }
         log.push("final transcript");
@@ -231,16 +234,113 @@ impl Inserter for FakeInserter {
         self.log.push(format!("paste: {text}"));
         Ok(())
     }
+
+    async fn copy(&mut self, text: &str) -> Result<(), Error> {
+        self.log.push(format!("copy: {text}"));
+        Ok(())
+    }
+}
+
+/// A history in memory. Logs each call; keeps each dictation's audio.
+#[derive(Clone)]
+pub struct FakeHistory {
+    pub log: Log,
+    pub audio: Arc<Mutex<BTreeMap<DictationId, Vec<i16>>>>,
+    next: Arc<Mutex<DictationId>>,
+}
+
+impl FakeHistory {
+    pub fn new(log: &Log) -> Self {
+        FakeHistory {
+            log: log.clone(),
+            audio: Arc::default(),
+            next: Arc::default(),
+        }
+    }
+
+    pub fn samples(&self, id: DictationId) -> usize {
+        self.audio.lock().unwrap().get(&id).map_or(0, Vec::len)
+    }
+}
+
+impl History for FakeHistory {
+    fn begin(&mut self, app: Option<&str>) -> Result<DictationId, Error> {
+        let mut next = self.next.lock().unwrap();
+        *next += 1;
+        self.audio.lock().unwrap().insert(*next, Vec::new());
+        self.log
+            .push(format!("history begin {} [{}]", *next, app.unwrap_or("-")));
+        Ok(*next)
+    }
+
+    fn append(&mut self, id: DictationId, pcm: &[i16]) -> Result<(), Error> {
+        self.audio
+            .lock()
+            .unwrap()
+            .get_mut(&id)
+            .unwrap()
+            .extend_from_slice(pcm);
+        Ok(())
+    }
+
+    fn done(&mut self, id: DictationId, text: &str, language: Option<&str>) -> Result<(), Error> {
+        self.log.push(format!(
+            "history done {id}: {text} ({})",
+            language.unwrap_or("-")
+        ));
+        Ok(())
+    }
+
+    fn failed(&mut self, id: DictationId, _message: &str) -> Result<(), Error> {
+        self.log.push(format!("history failed {id}"));
+        Ok(())
+    }
+
+    fn discard(&mut self, id: DictationId) -> Result<(), Error> {
+        self.audio.lock().unwrap().remove(&id);
+        self.log.push(format!("history discard {id}"));
+        Ok(())
+    }
+
+    fn audio(&self, id: DictationId) -> Result<Vec<i16>, Error> {
+        self.audio
+            .lock()
+            .unwrap()
+            .get(&id)
+            .cloned()
+            .ok_or_else(|| err(ErrorKind::Other, "no such dictation"))
+    }
+}
+
+pub struct FakeSounds {
+    pub log: Log,
+}
+
+impl Sounds for FakeSounds {
+    fn play(&self, sound: Sound) {
+        self.log.push(format!("sound {sound:?}"));
+    }
 }
 
 pub struct FakeFocus {
     /// Whether a password field has focus (secure input on).
     pub secure: bool,
+    /// The frontmost app; changeable while the engine runs.
+    pub app: Arc<Mutex<String>>,
+}
+
+impl FakeFocus {
+    pub fn textedit() -> Self {
+        FakeFocus {
+            secure: false,
+            app: Arc::new(Mutex::new("TextEdit".to_owned())),
+        }
+    }
 }
 
 impl FocusInfo for FakeFocus {
     fn frontmost_app(&self) -> Option<String> {
-        Some("TextEdit".to_owned())
+        Some(self.app.lock().unwrap().clone())
     }
 
     fn secure_input(&self) -> bool {
@@ -261,7 +361,7 @@ pub struct Harness {
 
 impl Harness {
     pub fn start(log: &Log, speech: FakeSpeech, cleanup: FakeCleanup, settings: Settings) -> Self {
-        Self::start_with(log, speech, cleanup, settings, FakeFocus { secure: false })
+        Self::start_with(log, speech, cleanup, settings, FakeFocus::textedit())
     }
 
     pub fn start_with(
@@ -271,17 +371,29 @@ impl Harness {
         settings: Settings,
         focus: FakeFocus,
     ) -> Self {
+        Self::start_full(log, speech, cleanup, settings, focus, FakeHistory::new(log))
+    }
+
+    pub fn start_full(
+        log: &Log,
+        speech: FakeSpeech,
+        cleanup: FakeCleanup,
+        settings: Settings,
+        focus: FakeFocus,
+        history: FakeHistory,
+    ) -> Self {
         let (events, events_rx) = mpsc::channel(256);
         let (status_tx, status) = mpsc::unbounded_channel();
-        let engine = Engine::new(
-            FakeMic { log: log.clone() },
+        let parts = Parts {
+            mic: FakeMic { log: log.clone() },
             speech,
             cleanup,
-            FakeInserter { log: log.clone() },
+            inserter: FakeInserter { log: log.clone() },
             focus,
-            settings,
-            status_tx,
-        );
+            history,
+            sounds: FakeSounds { log: log.clone() },
+        };
+        let engine = Engine::new(parts, settings, status_tx);
         // Spawned on the runtime, which proves the engine's future is Send.
         tokio::spawn(engine.run(events_rx));
         Harness {

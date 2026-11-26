@@ -85,6 +85,43 @@ pub trait Microphone {
 /// Puts text at the cursor of the frontmost app (R-15).
 pub trait Inserter {
     fn paste(&mut self, text: &str) -> impl Future<Output = Result<(), Error>> + Send;
+
+    /// Leaves `text` on the clipboard without pasting, for a retry whose app is no longer in
+    /// front (R-31).
+    fn copy(&mut self, text: &str) -> impl Future<Output = Result<(), Error>> + Send;
+}
+
+/// Identifies one dictation in the history.
+pub type DictationId = i64;
+
+/// The dictation history on disk (R-18, R-28, R-31): each dictation's audio, written while it
+/// is captured, and its text. What is kept depends on the history setting: with history off,
+/// a successful dictation leaves nothing behind, and a failed one keeps its audio for a retry.
+pub trait History {
+    /// A dictation starts recording, with the frontmost app's name.
+    fn begin(&mut self, app: Option<&str>) -> Result<DictationId, Error>;
+    /// Appends captured audio: mono PCM16 at the speech provider's rate.
+    fn append(&mut self, id: DictationId, pcm: &[i16]) -> Result<(), Error>;
+    /// The text was pasted or copied.
+    fn done(&mut self, id: DictationId, text: &str, language: Option<&str>) -> Result<(), Error>;
+    /// The dictation failed; its audio stays for a retry.
+    fn failed(&mut self, id: DictationId, message: &str) -> Result<(), Error>;
+    /// Cancelled, or nothing was heard: the dictation and its audio are deleted.
+    fn discard(&mut self, id: DictationId) -> Result<(), Error>;
+    /// The saved audio of a dictation, for a retry.
+    fn audio(&self, id: DictationId) -> Result<Vec<i16>, Error>;
+}
+
+/// The start and stop sounds (R-32).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Sound {
+    Start,
+    Stop,
+}
+
+/// Plays a sound without blocking.
+pub trait Sounds {
+    fn play(&self, sound: Sound);
 }
 
 /// What the user is typing into.
