@@ -51,6 +51,24 @@ async fn key_down_records_before_connections_complete() {
     assert_eq!(log.pasted(), ["Hello there, my friend. How are you?"]);
 }
 
+/// AC-2, R-2: capture starts at key-down, before the history entry is created, so the SQLite
+/// insert and the audio file do not add to key-down latency.
+#[tokio::test(start_paused = true)]
+async fn mic_starts_before_the_history_entry() {
+    let log = Log::new();
+    let speech = FakeSpeech::new(&log, "hello there my friend, how are you");
+    let cleanup = FakeCleanup::new(&log, "Hello there, my friend. How are you?");
+    let mut h = Harness::start(&log, speech, cleanup, settings());
+    h.send(Event::KeyDown).await;
+    h.until(&Status::Recording).await;
+    let begin = log
+        .entries()
+        .iter()
+        .position(|e| e.starts_with("history begin"))
+        .unwrap_or_else(|| panic!("no history begin in {:?}", log.entries()));
+    assert!(log.index("mic start") < begin, "{:?}", log.entries());
+}
+
 /// AC-4: a hold shorter than the minimum ends in `Idle` with nothing pasted and the session
 /// closed.
 #[tokio::test(start_paused = true)]

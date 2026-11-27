@@ -335,6 +335,22 @@ where
         if let Some(line) = dictionary_line.as_deref() {
             cleanup.set_dictionary(line);
         }
+        // R-1, R-2: capture, the speech session and the cleanup warm-up start together; the
+        // state is Recording before either connection completes (AC-1). Capture starts before
+        // the app lookup and the history entry, so neither adds to key-down latency (AC-2);
+        // frames wait in the event channel until the loop below appends them.
+        if let Err(error) = mic.start() {
+            emit(Status::Failed {
+                message: format!("Microphone: {error}"),
+                retry: false,
+            });
+            return Flow::Ended;
+        }
+        // R-32.
+        if settings.sounds {
+            sounds.play(Sound::Start);
+        }
+        emit(Status::Recording);
         // R-11: the app the user is dictating into.
         let app = focus.frontmost_app();
         // R-18, R-31: audio goes to disk as it is captured. A history that cannot be written
@@ -370,22 +386,6 @@ where
                 let _ = history.discard(id);
             }
         };
-
-        // R-1, R-2: capture, the speech session and the cleanup warm-up start together; the
-        // state is Recording before either connection completes (AC-1).
-        if let Err(error) = mic.start() {
-            discard(history);
-            emit(Status::Failed {
-                message: format!("Microphone: {error}"),
-                retry: false,
-            });
-            return Flow::Ended;
-        }
-        // R-32.
-        if settings.sounds {
-            sounds.play(Sound::Start);
-        }
-        emit(Status::Recording);
         let mut open = pin!(speech.open());
         let mut opening = true;
         let mut warm = pin!(async {
