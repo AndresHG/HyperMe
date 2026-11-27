@@ -28,6 +28,12 @@ talking_minutes_per_day = 30
 # Up to this many dictionary words, the cleanup prompt carries them all; above it, only the ones
 # that look relevant to each dictation. 10 to 1000.
 dictionary_prompt_cap = 150
+# Mute the Mac's sound while you dictate, so music or a video is not recorded with your voice.
+# It comes back as it was when you stop.
+mute_while_dictating = true
+# Preferred microphones by name, first first. Each dictation uses the first one connected, else
+# the system default. Settings writes this list; empty is the system default.
+microphones = []
 
 [speech]
 # Streaming speech-to-text: a provider from the catalogue and one of its models. The catalogue

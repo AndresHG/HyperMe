@@ -183,6 +183,7 @@ struct ConfigView {
     short_dictation_words: u32,
     sounds: bool,
     show_while_idle: bool,
+    mute_while_dictating: bool,
     speech_provider: String,
     speech_model: String,
     speech_endpoint: String,
@@ -235,6 +236,7 @@ fn config_view(config: &Config) -> ConfigView {
         short_dictation_words: config.dictation.short_dictation_words,
         sounds: config.dictation.sounds,
         show_while_idle: config.dictation.show_while_idle,
+        mute_while_dictating: config.dictation.mute_while_dictating,
         speech_provider: config.speech.provider.clone(),
         speech_model: config.speech.model.clone(),
         speech_endpoint: config.speech.endpoint.clone(),
@@ -391,10 +393,82 @@ pub fn settings_set(
     if section == "speech" || section == "cleanup" {
         use_new_providers(&app);
     }
+    if section == "dictation" && key == "mute_while_dictating" {
+        // Reaches the next dictation without a restart (#221).
+        crate::runtime::set_mute(&app, value == "true");
+    }
     if section == "history" {
         // Turning traces off, or a new retention, applies now (spec 182, R-9a).
         crate::runtime::refresh_traces(&app);
     }
+    Ok(())
+}
+
+/// One microphone in Settings: connected now or only remembered from the user's order.
+#[derive(Debug, Serialize, PartialEq)]
+pub struct MicrophoneView {
+    name: String,
+    connected: bool,
+    /// The system's default input now.
+    default: bool,
+}
+
+/// The user's order first, then the other connected microphones (#221, AC-2, AC-3). `ordered`
+/// says whether the user has set an order; without one the system default is used.
+#[derive(Debug, Serialize)]
+pub struct MicrophonesView {
+    ordered: bool,
+    microphones: Vec<MicrophoneView>,
+}
+
+fn microphones_view(
+    preferred: &[String],
+    connected: &[String],
+    default: Option<&str>,
+) -> MicrophonesView {
+    let mut names: Vec<&String> = preferred.iter().collect();
+    names.extend(connected.iter().filter(|c| !preferred.contains(c)));
+    names.dedup();
+    if preferred.is_empty() {
+        // With no order the system default is the one in use: it leads.
+        names.sort_by_key(|n| Some(n.as_str()) != default);
+    }
+    MicrophonesView {
+        ordered: !preferred.is_empty(),
+        microphones: names
+            .into_iter()
+            .map(|name| MicrophoneView {
+                name: name.clone(),
+                connected: connected.contains(name),
+                default: Some(name.as_str()) == default,
+            })
+            .collect(),
+    }
+}
+
+/// The microphones for Settings, read when the page asks: nothing watches devices meanwhile.
+#[tauri::command]
+pub fn microphones_list(app: AppHandle) -> MicrophonesView {
+    let preferred = Config::load_or_create(&config_path(&app))
+        .map(|c| c.dictation.microphones)
+        .unwrap_or_default();
+    let (connected, default) = hyperme_platform::microphone::microphones();
+    microphones_view(&preferred, &connected, default.as_deref())
+}
+
+/// Saves the user's order of microphones; an empty list is the system default (#221, AC-2).
+/// The next dictation uses it, without a restart.
+#[tauri::command]
+pub fn microphones_set(app: AppHandle, names: Vec<String>) -> Result<(), String> {
+    let list = names
+        .iter()
+        .map(|n| toml_string(n))
+        .collect::<Vec<_>>()
+        .join(", ");
+    rewrite_config(&app, |text| {
+        config::set_value(text, "dictation", "microphones", &format!("[{list}]"))
+    })?;
+    crate::runtime::set_microphones(&app, names);
     Ok(())
 }
 
@@ -833,6 +907,39 @@ pub fn app_restart(app: AppHandle) {
 
 #[cfg(test)]
 mod tests {
+
+    /// #221, AC-2, AC-3: the user's order comes first, a remembered microphone that is not
+    /// connected stays in it, and the other connected ones follow; no order is the default.
+    #[test]
+    fn settings_lists_the_order_then_the_other_microphones() {
+        let names = |l: &[&str]| l.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        let view = super::microphones_view(
+            &names(&["Shure MV7", "MacBook Pro Microphone"]),
+            &names(&["MacBook Pro Microphone", "AirPods Pro"]),
+            Some("AirPods Pro"),
+        );
+        assert!(view.ordered);
+        let shown: Vec<(&str, bool, bool)> = view
+            .microphones
+            .iter()
+            .map(|m| (m.name.as_str(), m.connected, m.default))
+            .collect();
+        assert_eq!(
+            shown,
+            [
+                ("Shure MV7", false, false),
+                ("MacBook Pro Microphone", true, false),
+                ("AirPods Pro", true, true),
+            ]
+        );
+        let unordered = super::microphones_view(
+            &[],
+            &names(&["MacBook Pro Microphone", "AirPods Pro"]),
+            Some("AirPods Pro"),
+        );
+        assert!(!unordered.ordered);
+        assert_eq!(unordered.microphones[0].name, "AirPods Pro");
+    }
 
     /// Regression (owner, 27 November 2026, "corners are wrong"): the sheet window has no
     /// native shadow, which macOS draws square, and its page leaves the transparent room the

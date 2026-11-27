@@ -552,3 +552,31 @@ fn level_none_sends_every_dictation_down_the_short_path() {
     let light = Config::default();
     assert_eq!(Settings::from_config(&light).short_words, 4);
 }
+
+/// #221: a file written before microphone handling loads with the system default and muting on,
+/// and Settings can still save both, adding the line to its section.
+#[test]
+fn microphone_settings_load_from_an_older_file_and_save_into_it() {
+    use hyperme_core::config::set_value;
+    let older: String = DEFAULT_CONFIG
+        .lines()
+        .filter(|l| !l.starts_with("microphones") && !l.starts_with("mute_while_dictating"))
+        .map(|l| format!("{l}\n"))
+        .collect();
+    let config = parse(&older).unwrap();
+    assert!(config.dictation.microphones.is_empty());
+    assert!(config.dictation.mute_while_dictating);
+
+    let text = set_value(
+        &older,
+        "dictation",
+        "microphones",
+        r#"["Shure MV7", "AirPods Pro"]"#,
+    )
+    .unwrap();
+    let text = set_value(&text, "dictation", "mute_while_dictating", "false").unwrap();
+    let config = parse(&text).unwrap();
+    assert_eq!(config.dictation.microphones, ["Shure MV7", "AirPods Pro"]);
+    assert!(!config.dictation.mute_while_dictating);
+    assert_eq!(config.speech, parse(DEFAULT_CONFIG).unwrap().speech);
+}
