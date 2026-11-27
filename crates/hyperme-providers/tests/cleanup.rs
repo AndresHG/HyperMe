@@ -7,6 +7,7 @@ use std::time::{Duration, Instant};
 
 use hyperme_core::config;
 use hyperme_core::dictation::{Engine, Event, Parts, Settings, Status, fixed};
+use hyperme_core::tone::AppStyle;
 use hyperme_core::traits::{
     CleanupProvider, DictationId, Error, ErrorKind, FocusInfo, History, Inserter, LiveSession,
     Microphone, Sound, Sounds, SpeechProvider, Transcript,
@@ -67,11 +68,12 @@ async fn warms_up_then_streams_the_cleaned_text() {
     assert_eq!(body["model"], "openai/gpt-oss-20b");
     assert_eq!(body["reasoning_effort"], "low");
     assert_eq!(body["messages"][1]["content"], "eh hola equipo mañana");
+    // Issue 219: the app line is last and carries the app's style.
     assert!(
         body["messages"][0]["content"]
             .as_str()
             .unwrap()
-            .ends_with("pasted into Slack.")
+            .ends_with(&AppStyle::for_app(Some("Slack")).prompt_line("Slack"))
     );
 }
 
