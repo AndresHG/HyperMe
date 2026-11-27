@@ -14,7 +14,7 @@ use std::sync::{Mutex, MutexGuard};
 use hyperme_core::connectors::{AccountData, RequestLog, Usage};
 use hyperme_core::schedule::Schedule;
 use hyperme_core::scheduler::{Job, JobKind, JobStatus, JobStore};
-use hyperme_core::sync::{Event, EventStore};
+use hyperme_core::sync::{Event, EventStore, MailMeta, MailStore};
 use hyperme_core::tasks::{
     Due, Finish, NewTask, Source, Status, Task, TaskError, TaskId, TaskStore, TaskUpdate,
     WeekdaySet,
@@ -97,6 +97,19 @@ const MIGRATIONS: &[&str] = &[
         PRIMARY KEY (account, id)
     ) WITHOUT ROWID;
     CREATE INDEX events_start ON events (starts_at);",
+    // 5: inbox metadata (specs/97-google-connectors, design.md, "Storage"): never a body
+    // (R-18). Labels are one per line; received_at is Unix seconds, UTC.
+    "CREATE TABLE mail_meta (
+        account     TEXT    NOT NULL,
+        id          TEXT    NOT NULL,
+        subject     TEXT    NOT NULL,
+        sender      TEXT    NOT NULL,
+        snippet     TEXT    NOT NULL,
+        received_at INTEGER NOT NULL,
+        labels      TEXT    NOT NULL,
+        to_answer   INTEGER NOT NULL,
+        PRIMARY KEY (account, id)
+    ) WITHOUT ROWID;",
 ];
 
 const TASK_COLUMNS: &str = "id, title, notes, status, day, due_date, due_time, source, \
@@ -933,12 +946,11 @@ impl RequestLog for SqliteTaskStore {
     }
 }
 
-/// Disconnect deletes every row kept from the account (R-12, AC-6). The mail table joins this
-/// with the mail pull (slice 8).
+/// Disconnect deletes every row kept from the account (R-12, AC-6).
 impl AccountData for SqliteTaskStore {
     fn delete_account(&self, account: &str) -> Result<(), String> {
         let db = self.db();
-        for table in ["connector_requests", "events"] {
+        for table in ["connector_requests", "events", "mail_meta"] {
             db.execute(
                 &format!("DELETE FROM {table} WHERE account = ?1"),
                 params![account],
@@ -1045,5 +1057,73 @@ impl EventStore for SqliteTaskStore {
                 ],
             )
             .map_err(events_error)
+    }
+}
+
+fn mail_error(error: rusqlite::Error) -> String {
+    format!("mail: {error}")
+}
+
+/// The inbox metadata cache (specs/97-google-connectors, R-18, R-19).
+impl MailStore for SqliteTaskStore {
+    fn upsert(&self, threads: &[MailMeta]) -> Result<(), String> {
+        let mut db = self.db();
+        let tx = db.transaction().map_err(mail_error)?;
+        for t in threads {
+            tx.execute(
+                "INSERT OR REPLACE INTO mail_meta
+                 (account, id, subject, sender, snippet, received_at, labels, to_answer)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                params![
+                    t.account,
+                    t.id,
+                    t.subject,
+                    t.sender,
+                    t.snippet,
+                    unix(t.received_at),
+                    t.labels.join("\n"),
+                    t.to_answer
+                ],
+            )
+            .map_err(mail_error)?;
+        }
+        tx.commit().map_err(mail_error)
+    }
+
+    fn all(&self, account: Option<&str>) -> Result<Vec<MailMeta>, String> {
+        let db = self.db();
+        let mut statement = db
+            .prepare(
+                "SELECT account, id, subject, sender, snippet, received_at, labels, to_answer
+                 FROM mail_meta WHERE (?1 IS NULL OR account = ?1)
+                 ORDER BY received_at DESC, id",
+            )
+            .map_err(mail_error)?;
+        let rows = statement
+            .query_map(params![account], |row| {
+                let labels: String = row.get(6)?;
+                Ok(MailMeta {
+                    account: row.get(0)?,
+                    id: row.get(1)?,
+                    subject: row.get(2)?,
+                    sender: row.get(3)?,
+                    snippet: row.get(4)?,
+                    received_at: from_unix(row.get(5)?)?,
+                    labels: labels.lines().map(str::to_owned).collect(),
+                    to_answer: row.get(7)?,
+                })
+            })
+            .map_err(mail_error)?;
+        rows.collect::<rusqlite::Result<Vec<_>>>()
+            .map_err(mail_error)
+    }
+
+    fn retain(&self, now: UtcDateTime) -> Result<usize, String> {
+        self.db()
+            .execute(
+                "DELETE FROM mail_meta WHERE received_at < ?1",
+                params![unix(now - hyperme_core::sync::KEEP_MAIL)],
+            )
+            .map_err(mail_error)
     }
 }

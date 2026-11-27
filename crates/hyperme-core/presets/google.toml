@@ -63,3 +63,23 @@ keep = ["id", "summary", "start", "end", "hangoutLink", "htmlLink", "status", "o
 list = "items"
 fields = { id = "id", title = "summary", start = "start.dateTime|start.date", end = "end.dateTime|end.date", url = "hangoutLink|htmlLink", status = "status", calendar = "organizer.email" }
 into = "events"
+
+# The inbox of the last 7 days outside Gmail's four categories (R-26). Threads to answer are
+# those whose last message is not SENT by the account; each is mirrored as a task (R-27). Bodies
+# are fetched only on demand, never stored (R-18). Shapes UNVERIFIED until slice 1.
+[[pull]]
+server = "gmail"
+tool = "search_threads"
+args = { query = "in:inbox newer_than:7d -category:promotions -category:social -category:updates -category:forums" }
+keep = ["id", "subject", "from", "snippet", "date", "labels", "lastMessage.labels"]
+list = "threads"
+fields = { id = "id", subject = "subject", sender = "from", snippet = "snippet", date = "date", labels = "labels", last_labels = "lastMessage.labels" }
+exclude_labels = ["CATEGORY_PROMOTIONS", "CATEGORY_SOCIAL", "CATEGORY_UPDATES", "CATEGORY_FORUMS"]
+done_label = "SENT"
+link = "https://mail.google.com/mail/#all/{id}"
+body_tool = "get_thread"
+body_arg = "thread_id"
+body_path = "messages.-1.body"
+mirror = true
+into = "mail"
+

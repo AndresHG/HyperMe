@@ -101,8 +101,9 @@ fn sync_jobs_come_from_the_presets_with_accounts() {
     .connectors;
     let registry = cs::registry(None, &connectors).unwrap();
     let jobs = sync::sync_jobs(&registry, &connectors);
-    assert_eq!(jobs.len(), 1);
-    assert_eq!(jobs[0].name, "sync:google-calendar");
+    let names: Vec<&str> = jobs.iter().map(|j| j.name.as_str()).collect();
+    assert_eq!(names, ["sync:google-calendar", "sync:google-gmail"]);
+    assert_eq!(jobs[1].allowlist, ["search_threads"]);
     assert_eq!(jobs[0].kind, JobKind::Sync("google-calendar".to_owned()));
     assert_eq!(
         jobs[0].schedule,

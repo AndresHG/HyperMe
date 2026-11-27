@@ -120,6 +120,18 @@ pub struct Pull {
     /// Also mirror each item as a task (R-27).
     #[serde(default)]
     pub mirror: bool,
+    /// Mail: items with any of these labels are not counted or mirrored (R-26).
+    #[serde(default)]
+    pub exclude_labels: Vec<String>,
+    /// Mail: the label on the last message that means the account wrote last (R-26, R-27).
+    pub done_label: Option<String>,
+    /// A link back to the item, with `{id}` filled in, when the answer has none.
+    pub link: Option<String>,
+    /// Mail: the read tool that fetches a body on demand, its id argument and the path of the
+    /// text in its answer (R-18).
+    pub body_tool: Option<String>,
+    pub body_arg: Option<String>,
+    pub body_path: Option<String>,
     pub into: String,
 }
 
@@ -550,6 +562,18 @@ fn parse_preset(text: &str, source: &str, builtin: bool) -> Result<Connector, Re
                 "a pull names server {:?}, which it has not",
                 pull.server
             )));
+        }
+        if let Some(tool) = &pull.body_tool
+            && file.tools.access(tool) != ToolAccess::Read
+        {
+            return Err(fail(format!("body_tool {tool} is not a read tool")));
+        }
+        if pull.into == "mail" {
+            for field in ["id", "labels"] {
+                if !pull.fields.contains_key(field) {
+                    return Err(fail(format!("a pull into mail needs fields.{field}")));
+                }
+            }
         }
         if pull.into == "events" {
             for field in ["id", "title", "start", "end"] {

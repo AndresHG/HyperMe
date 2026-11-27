@@ -27,6 +27,8 @@ objc2-foundation = { version = "0.3.2", default-features = false, features = ["s
 objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "libc", "NSPasteboard", "NSPasteboardItem", "NSRunningApplication", "NSSound", "NSWorkspace"] }
 
 [dev-dependencies]
+# The mail pull test's synthetic tool answers. Already in the workspace.
+serde_json.workspace = true
 tokio = { workspace = true, features = ["macros", "rt", "sync", "time"] }
 
 [lints]

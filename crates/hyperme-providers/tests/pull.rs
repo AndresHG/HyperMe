@@ -147,6 +147,12 @@ async fn the_calendar_pull_runs_through_the_mcp_client() {
         .map(|(k, v)| (k.to_owned(), v.to_owned()))
         .collect(),
         mirror: false,
+        exclude_labels: Vec::new(),
+        done_label: None,
+        link: None,
+        body_tool: None,
+        body_arg: None,
+        body_path: None,
         into: "events".to_owned(),
     };
     let events = MemoryEvents::default();

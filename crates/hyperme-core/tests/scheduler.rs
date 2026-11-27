@@ -557,7 +557,8 @@ fn google_sync_job() -> Job {
         .connectors;
     let registry = hyperme_core::connector_settings::registry(None, &connectors).unwrap();
     hyperme_core::sync::sync_jobs(&registry, &connectors)
-        .pop()
+        .into_iter()
+        .find(|job| job.name == "sync:google-calendar")
         .unwrap()
 }
 

@@ -1642,6 +1642,7 @@ dependencies = [
  "objc2-foundation",
  "rusqlite",
  "security-framework",
+ "serde_json",
  "time",
  "tokio",
 ]
