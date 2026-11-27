@@ -1303,4 +1303,39 @@ mod tests {
         assert_eq!(parse_day("2026-02-30"), None);
         assert_eq!(parse_day("monday"), None);
     }
+
+    /// AC-9, R-18 (the part before the screen): the Morning job, from a store of 10 000 tasks
+    /// on disk to the card's words, in under 150 ms. Release builds only; run with
+    /// `cargo test --release -p hyperme-app morning_from_10_000 -- --nocapture` on the Mac and
+    /// record the numbers in docs/results/.
+    #[test]
+    #[cfg_attr(debug_assertions, ignore)]
+    fn morning_from_10_000_tasks_on_disk_is_well_under_150_ms() {
+        let store = store("morning_10k");
+        for i in 0..10_000u32 {
+            // A spread like a long-used list: most planned on other days, some for today.
+            let planned = match i % 10 {
+                0 => day(FRI),
+                1 => day(THU),
+                _ => Date::from_calendar_date(2026, Month::December, 1 + (i % 28) as u8).unwrap(),
+            };
+            block_on(store.add(task(&format!("Task {i}"), planned, day(THU)))).unwrap();
+        }
+        let mut runs = Vec::new();
+        for _ in 0..21 {
+            let mut s = setup(store.clone(), local(FRI, 7, 40), calendar_feeds(), false);
+            let started = std::time::Instant::now();
+            block_on(s.runner.run(&job("morning", JobKind::Morning))).unwrap();
+            let card = s.ui.cards.lock().unwrap()[0].0.clone();
+            let view = crate::pill::morning_view(&card);
+            runs.push(started.elapsed().as_secs_f64() * 1000.0);
+            assert_eq!(view.tasks.len(), 5);
+        }
+        runs.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        let (median, max) = (runs[runs.len() / 2], runs[runs.len() - 1]);
+        println!(
+            "Morning job, 10000 tasks on disk, 21 runs: median {median:.2} ms, max {max:.2} ms"
+        );
+        assert!(max < 150.0, "the morning job took {max:.2} ms");
+    }
 }
