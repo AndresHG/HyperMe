@@ -15,6 +15,13 @@ All notable changes to HyperMe are recorded here. The format follows
 
 ### Added
 
+- A provider catalogue (issue 123, slice 1 of `specs/96-provider-settings`): what each provider
+  is (protocol, endpoint, key page, roles, models with dated prices and measured latency) lives
+  in `default-providers.toml`, built into the app, and `[speech]` and `[cleanup]` name only a
+  provider and a model. `config.toml` may add a provider or replace a built-in one with a
+  `[providers.<name>]` section; an unknown protocol is an error naming the file, line and the
+  protocols that exist. Files written before keep working unchanged, their endpoints and prices
+  overriding the catalogue's. The cost estimate reads catalogue models.
 - `crates/hyperme-quality`, the quality harness (issue 99): replays a set of saved dictations
   through the app's own state machine and providers and scores the pasted text against the
   owner's corrected texts (zero-edit, edits per 100 characters, internal names), with flowbench's

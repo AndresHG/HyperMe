@@ -4,6 +4,8 @@
 //! apps (R-23). The dictation runs in `hyperme-core`'s state machine; this file wires the real
 //! providers and devices to it and shows its states in the pill and the menu.
 
+#[cfg(target_os = "macos")]
+mod connectors;
 // Pure and tested everywhere; only the macOS app uses them until Linux and Windows follow.
 #[cfg(any(target_os = "macos", test))]
 mod geometry;
@@ -66,6 +68,17 @@ fn main() {
             settings::key_test,
             settings::settings_open,
             settings::app_restart,
+            connectors::connectors_view,
+            connectors::connectors_set_tool,
+            connectors::connectors_set_enabled,
+            connectors::connectors_add_custom,
+            connectors::connectors_set_token,
+            connectors::connectors_open_link,
+            connectors::connectors_save_client,
+            connectors::connectors_sign_in,
+            connectors::connectors_cancel_sign_in,
+            connectors::connectors_disconnect,
+            connectors::connectors_open_url,
             walkthrough::onboarding_checks,
             walkthrough::onboarding_mic,
             walkthrough::onboarding_request,

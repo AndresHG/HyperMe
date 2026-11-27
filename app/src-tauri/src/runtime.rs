@@ -8,6 +8,7 @@ use std::time::{Duration, Instant};
 
 use hyperme_core::config::Config;
 use hyperme_core::dictation::{Engine, Event, Parts, Settings, Status};
+use hyperme_core::dictionary::Dictionary;
 use hyperme_core::secrets::SecretStore;
 use hyperme_core::traits::{DictationId, Error, ErrorKind, History, Inserter};
 use hyperme_platform::history::{HistorySettings, SqliteHistory};
@@ -161,8 +162,10 @@ fn wire(app: &AppHandle, history: Arc<Mutex<HistoryInner>>) -> Result<(), String
         Err(e) => Err(e.to_string()),
     };
     let speech = Speechmatics::new(&config.speech, key(&config.speech.provider)?);
+    let dictionary = load_dictionary(config.dictation.dictionary.as_deref());
     let cleanup = ChatCleanup::new(&config.cleanup, &key(&config.cleanup.provider)?)
-        .map_err(|e| e.message)?;
+        .map_err(|e| e.message)?
+        .with_dictionary(&dictionary.prompt_line());
     open_history(&history, &dir, &config);
 
     let (events, events_rx) = mpsc::channel(1024);
@@ -189,7 +192,11 @@ fn wire(app: &AppHandle, history: Arc<Mutex<HistoryInner>>) -> Result<(), String
         ),
     };
     let (status_tx, status_rx) = mpsc::unbounded_channel();
-    let engine = Engine::new(parts, Settings::from_config(&config), status_tx);
+    let settings = Settings {
+        dictionary,
+        ..Settings::from_config(&config)
+    };
+    let engine = Engine::new(parts, settings, status_tx);
     tauri::async_runtime::spawn(engine.run(events_rx));
     tauri::async_runtime::spawn(forward_audio(app.clone(), mic_rx, events.clone()));
     tauri::async_runtime::spawn(show_statuses(app.clone(), status_rx));
@@ -197,6 +204,21 @@ fn wire(app: &AppHandle, history: Arc<Mutex<HistoryInner>>) -> Result<(), String
     shared.events = Some(events);
     shared._hotkey = Some(hotkey);
     Ok(())
+}
+
+/// The dictionary file named in the config (spec 93). A missing or unreadable file leaves
+/// dictation working with no dictionary.
+fn load_dictionary(path: Option<&std::path::Path>) -> Dictionary {
+    let Some(path) = path else {
+        return Dictionary::default();
+    };
+    match std::fs::read_to_string(path) {
+        Ok(text) => Dictionary::parse(&text),
+        Err(e) => {
+            eprintln!("HyperMe: dictionary {} not read: {e}", path.display());
+            Dictionary::default()
+        }
+    }
 }
 
 /// Passes each frame on to the state machine and sends the level to the pill (R-4).

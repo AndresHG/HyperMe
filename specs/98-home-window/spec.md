@@ -1,6 +1,6 @@
 # Home window and History
 
-**Status:** draft, 26 November 2026. Needs the owner's approval before any production code.
+**Status:** approved by the owner, 27 November 2026.
 **Issue:** [#98](https://github.com/AndresHG/hyperme/issues/98). **Size:** L.
 **Plan:** chunk P2-5 in `docs/plans/2026-11-26-phases-1-2.md` (#94).
 **UX:** [docs/UX.md](../../docs/UX.md), "Home", "Home sections" and "Where each thing lives"; mockup

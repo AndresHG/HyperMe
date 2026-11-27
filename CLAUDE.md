@@ -24,8 +24,10 @@ itself; a later version may hand a task to Claude Code ([docs/PRD.md](docs/PRD.m
 - `docs/ROADMAP.md`: the phases and their gates, and the gap to Wispr Flow (adopted 25 November 2026)
 - `docs/PITCH.md`: pitch, positioning against Wispr Flow, and the ledger of claims still to earn
 - `specs/25-dictation-core/`: draft Phase 1 spec, design and slices (not yet approved)
+- `specs/96-provider-settings/`: draft spec for choosing the speech and cleanup provider in Settings
 - `specs/92-daily-tasks/`: draft phase 4 spec for the task list with dependencies, the morning card
   and the scheduler (core slices 1 to 6 approved to start, 26 November 2026)
+- `specs/93-personal-dictionary/`: Phase 2 spec for the personal dictionary (approved 27 November 2026)
 - `docs/RELEASING.md`: how a release is built, signed, notarised and published, and how updates work
 - `docs/FIELD.md`: existing projects and what to borrow from each
 - `docs/UX.md`: UX and UI by phase (one shape at the bottom centre: dot, pill, card and quick sheet; the Home window; settings and menus), with mockups in `docs/ux/` (draft)

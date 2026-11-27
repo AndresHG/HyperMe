@@ -894,3 +894,61 @@ async fn retry_by_id_during_a_dictation_is_ignored() {
             .any(|e| e.starts_with("copy: ") || e.starts_with("history replace"))
     );
 }
+
+/// Settings with a small dictionary (spec 93).
+fn with_dictionary() -> hyperme_core::dictation::Settings {
+    hyperme_core::dictation::Settings {
+        dictionary: hyperme_core::dictionary::Dictionary::parse("Zentrix: zen trix, sun trix"),
+        ..settings()
+    }
+}
+
+/// Spec 93, AC-2: the cleanup gets the transcript with the dictionary applied.
+#[tokio::test(start_paused = true)]
+async fn the_cleanup_gets_the_dictionary_words() {
+    let log = Log::new();
+    let speech = FakeSpeech::new(&log, "send the sun trix report today");
+    let cleanup = FakeCleanup::new(&log, "Send the Zentrix report today.");
+    let mut h = Harness::start(&log, speech, cleanup, with_dictionary());
+
+    h.send(Event::KeyDown).await;
+    tokio::time::sleep(ms(1000)).await;
+    h.send(Event::KeyUp).await;
+    h.until(&Status::Done { raw: false }).await;
+    assert!(
+        log.has("clean: send the Zentrix report today [TextEdit]"),
+        "{:?}",
+        log.entries()
+    );
+}
+
+/// Spec 93, AC-2: a short dictation, which skips the cleanup, still gets the dictionary.
+#[tokio::test(start_paused = true)]
+async fn a_short_dictation_gets_the_dictionary_words() {
+    let log = Log::new();
+    let speech = FakeSpeech::new(&log, "zen trix");
+    let cleanup = FakeCleanup::new(&log, "never used");
+    let mut h = Harness::start(&log, speech, cleanup, with_dictionary());
+
+    h.send(Event::KeyDown).await;
+    tokio::time::sleep(ms(600)).await;
+    h.send(Event::KeyUp).await;
+    h.until(&Status::Done { raw: false }).await;
+    assert_eq!(log.pasted(), ["Zentrix."]);
+}
+
+/// Spec 93, AC-2: the raw fallback after a cleanup failure still gets the dictionary.
+#[tokio::test(start_paused = true)]
+async fn the_raw_fallback_gets_the_dictionary_words() {
+    let log = Log::new();
+    let speech = FakeSpeech::new(&log, "the sun trix host is down");
+    let mut cleanup = FakeCleanup::new(&log, "");
+    cleanup.reply = Err(err(ErrorKind::Network, "connection refused"));
+    let mut h = Harness::start(&log, speech, cleanup, with_dictionary());
+
+    h.send(Event::KeyDown).await;
+    tokio::time::sleep(ms(1000)).await;
+    h.send(Event::KeyUp).await;
+    h.until(&Status::Done { raw: true }).await;
+    assert_eq!(log.pasted(), ["the Zentrix host is down"]);
+}
