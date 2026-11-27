@@ -88,3 +88,38 @@ Milliseconds, median / 90th percentile.
   per set.
 - **Fallbacks count as raw text** in the quality rows, so runs with more fallbacks score closer
   to the raw transcripts.
+
+## Second rule
+
+The same setup at about 00:10 CET on 28 November, after the rule was tightened (numbered steps
+get `1.`, items capitalised with even endings, a colon after the lead-in, the mail greeting on
+its own line, no full stop after a sign-off name or at the end of terminal text) and the
+terminal sample's corrected text was changed to accept `-m`. `v4` was run again just after the
+first `v5` run, as a control for the network at that hour.
+
+| Set | Row | es | en | All | Unchanged | Fallbacks |
+| --- | --- | --- | --- | --- | --- | --- |
+| Formatting | `v5` | 4/5, 0.5 | 5/7, 0.3 | 9/12, 0.4 | 0 | 0 |
+| Formatting | `v5` again | 5/5, 0.0 | 5/7, 0.3 | 10/12, **0.2** | 0 | 0 |
+| 50 samples | `v5` | 4/25, 9.4 | 3/25, 8.2 | 7/50, **8.8** | 12 | 4 |
+| 50 samples | `v4` (control) | - | - | 7/50, 8.9 | 8 | 1 |
+| 50 samples | `v5` again | 3/25, 9.3 | 3/25, 8.8 | 6/50, 9.0 | 12 | 2 |
+
+| Set | Row | n | `first_ms` | `total_ms` | Fallbacks |
+| --- | --- | --- | --- | --- | --- |
+| Formatting | `v5` | 12 | 592 / 830 | 785 / 996 | 0 |
+| Formatting | `v5` again | 12 | 601 / 837 | 775 / 1005 | 0 |
+| 50 samples | `v5` | 50 | 754 / 941 | 915 / 1263 | 4 |
+| 50 samples | `v4` (control) | 50 | 601 / 727 | 774 / 978 | 1 |
+| 50 samples | `v5` again | 50 | 735 / 920 | 919 / 1071 | 2 |
+
+- **Formatting.** 10 and 9 of 12 texts now match their corrected text exactly. Two remain in
+  both runs (a colon in place of a comma in a chat message; a mail kept as one middle paragraph
+  where the corrected text has two). In one run, Spanish steps that are short phrases had no
+  final full stops where the corrected text has them, which the rule allows.
+- **50 samples.** No output has a list or an empty line. `v5` scores 8.8 and 9.0 against 8.9
+  for `v4` at the same hour: equal within noise. The first `v4` run (9.6, above) shows that this
+  model's noise on the set is about 0.7.
+- **Speed.** At the same hour `v5` is about 140 ms slower than `v4` at both the first token and
+  the median total, in two runs (first rule: about 20 ms). The second rule and the longer app
+  lines make the prompt longer; the cost is on the time to the first token, not on the output.
