@@ -45,7 +45,8 @@ itself; a later version may hand a task to Claude Code ([docs/PRD.md](docs/PRD.m
 code is merged and its gate (a week without Wispr Flow, idle budgets) is under way. On the same
 day the owner asked to start phase 2 work, and the design of the Google connector and daily tasks,
 in parallel: `docs/plans/2026-11-26-phases-1-2.md` cuts that work into chunks. The first public
-release still waits for the phase 1 and phase 2 gates.
+release still waits for the phase 1 and phase 2 gates. A week of daily use in a gate is an
+important check, but development does not stop to wait for it (owner, 27 November 2026).
 Otherwise, do not start a phase before the gate of the previous one has passed. When a gate
 passes, update this section and record the evidence in `docs/results/`.
 
