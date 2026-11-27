@@ -116,25 +116,26 @@ impl DictionaryStore {
         Ok(Self { db })
     }
 
-    /// The whole list, in its order.
+    /// The whole list, in its order, with each entry's use count (R-5).
     pub fn dictionary(&self) -> Result<Dictionary, String> {
         let mut entries = sql(self
             .db
-            .prepare("SELECT id, written FROM entry ORDER BY position"))?;
+            .prepare("SELECT id, written, uses FROM entry ORDER BY position"))?;
         let mut heard = sql(self
             .db
             .prepare("SELECT heard FROM heard WHERE entry_id = ?1 ORDER BY position"))?;
-        let rows: Vec<(i64, String)> =
-            sql(sql(entries.query_map([], |r| Ok((r.get(0)?, r.get(1)?))))?.collect())?;
+        let rows: Vec<(i64, String, u32)> =
+            sql(sql(entries.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?))))?.collect())?;
         let mut terms = Vec::with_capacity(rows.len());
-        for (id, written) in rows {
+        let uses = rows.iter().map(|r| r.2).collect();
+        for (id, written, _) in rows {
             let forms: Vec<String> = sql(sql(heard.query_map([id], |r| r.get(0)))?.collect())?;
             terms.push(Term {
                 written,
                 heard: forms,
             });
         }
-        Ok(Dictionary::new(terms))
+        Ok(Dictionary::new(terms).with_uses(uses))
     }
 
     /// Replaces the list with `terms` (R-11, R-15): checked first, then written in one

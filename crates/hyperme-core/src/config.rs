@@ -283,6 +283,10 @@ pub struct Dictation {
     pub talking_minutes_per_day: u32,
     /// The user's terms, one per line.
     pub dictionary: Option<PathBuf>,
+    /// Spec 93, R-5: up to this many entries the cleanup prompt carries them all; above it, only
+    /// the ones relevant to the dictation. Optional: an older file takes the default.
+    #[serde(default = "default_prompt_cap")]
+    pub dictionary_prompt_cap: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -451,6 +455,10 @@ fn default_cleanup_level() -> CleanupLevel {
 
 fn default_talking_minutes() -> u32 {
     defaults().dictation.talking_minutes_per_day
+}
+
+fn default_prompt_cap() -> u32 {
+    defaults().dictation.dictionary_prompt_cap
 }
 
 fn default_tasks() -> Tasks {
@@ -884,6 +892,12 @@ impl Config {
             d.short_dictation_words.into(),
             0,
             50,
+        )?;
+        range(
+            "dictation.dictionary_prompt_cap",
+            d.dictionary_prompt_cap.into(),
+            10,
+            1000,
         )?;
         range(
             "dictation.talking_minutes_per_day",

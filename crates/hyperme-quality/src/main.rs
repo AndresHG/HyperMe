@@ -244,7 +244,7 @@ fn run(o: &Options) -> Result<(), String> {
     };
     let cleanup = ChatCleanup::new(&config.cleanup, &key(&config.cleanup.provider)?)
         .map_err(|e| e.message)?
-        .with_dictionary(&dictionary.prompt_line());
+        .with_dictionary(&dictionary.prompt_line(config.dictation.dictionary_prompt_cap as usize));
     let settings = Settings {
         dictionary: dictionary.clone(),
         ..Settings::from_config(&config)

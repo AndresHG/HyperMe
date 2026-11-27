@@ -105,7 +105,11 @@ The text will be pasted into Slack.
 - **Above the cap**, the line carries only entries that look relevant: entries whose heard form
   fired in this transcript, then entries with a character-trigram overlap with any 1 to 3 word
   window of the transcript above a threshold, most used first, up to 50. This changes the prefix
-  per dictation, which is why it applies only above the cap. The results showed the prompt rule
+  per dictation, which is why it applies only above the cap. Above the cap the warm-up sends the
+  prompt with no dictionary line, and the line is set once the transcript is in. A form counts
+  as close when half of its distinct trigrams (words padded with a space at both ends) fall in
+  one window; the index of trigrams is built when the dictionary changes, so a dictation makes
+  one pass over its words (slice D3). The results showed the prompt rule
   adds little on top of substitution (row d against b in the
   [results](../../docs/results/2026-11-26-dictionary.md)), so a small, relevant list loses
   nothing.
