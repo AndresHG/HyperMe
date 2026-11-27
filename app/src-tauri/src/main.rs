@@ -36,10 +36,19 @@ use tauri::tray::TrayIconBuilder;
 #[cfg(target_os = "macos")]
 const PILL: &str = "pill";
 
+/// Whether HyperMe brings itself to the front when it launches: no, so a launch at login or from
+/// a script never takes focus from the app the user is typing in (#130). Windows that should
+/// come forward (the walkthrough, Home, Settings) activate the app themselves.
+#[cfg(any(target_os = "macos", test))]
+fn activate_at_launch() -> bool {
+    false
+}
+
 fn main() {
     let builder = tauri::Builder::default();
     #[cfg(target_os = "macos")]
     let builder = builder
+        .activate_ignoring_other_apps(activate_at_launch())
         .plugin(tauri_nspanel::init())
         // Checks and installs signed updates when the user asks (docs/RELEASING.md).
         .plugin(tauri_plugin_updater::Builder::new().build())
@@ -121,8 +130,12 @@ fn main() {
             // walkthrough until it is done, then Home (spec 98, R-1), so a menu-bar app with no
             // window is never invisible.
             #[cfg(target_os = "macos")]
-            if let tauri::RunEvent::Reopen { .. } = _event {
-                walkthrough::reopen(_app);
+            match _event {
+                tauri::RunEvent::Reopen { .. } => walkthrough::reopen(_app),
+                // The walkthrough opens during setup, before launch has finished; once it has,
+                // bring it to the front explicitly, as the app no longer activates itself (#130).
+                tauri::RunEvent::Ready => walkthrough::bring_to_front(_app),
+                _ => {}
             }
         });
 }
@@ -269,4 +282,15 @@ fn pill(app: &AppHandle) -> tauri::Result<()> {
 fn pill(_app: &AppHandle) -> tauri::Result<()> {
     // Linux and Windows follow macOS (CLAUDE.md); their pill is not built yet.
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    /// #130: launching HyperMe must not take focus from the app in front. Tauri activates the
+    /// app at launch unless told not to; windows that should come forward (the walkthrough,
+    /// Home, Settings) activate it themselves.
+    #[test]
+    fn launch_does_not_take_focus() {
+        assert!(!super::activate_at_launch());
+    }
 }
