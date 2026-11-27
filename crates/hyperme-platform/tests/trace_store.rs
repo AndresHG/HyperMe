@@ -217,3 +217,111 @@ fn a_store_that_cannot_write_drops_traces_quietly() {
     assert!(started.elapsed() < std::time::Duration::from_secs(1));
     assert!(store.count().is_err());
 }
+
+/// One failed dictation that ended after speech, its kind recorded on the root.
+fn failed(store: &Arc<TraceStore>, kind: &'static str) {
+    let sink: Arc<dyn TraceSink> = store.clone();
+    tracing::dispatcher::with_default(&subscriber(vec![sink]), || {
+        let mut trace = DictationTrace::dictation();
+        trace.first_audio();
+        trace.released();
+        trace.fail(kind);
+    });
+    store.flush();
+}
+
+/// Spec 200 AC-1 (R-2 to R-4): `traces_since` gives the traces of a window newest first, up to
+/// a limit, as rows Diagnostics computes from; `outcome_counts` counts every trace of the
+/// window, past the limit. A fallback's provider is the one a row names.
+#[test]
+fn diagnostics_reads_the_traces_of_a_window() {
+    let dir = temp_dir("diagnostics");
+    let (store, clock) = open(&dir, settings(false));
+    dictation(&store, None, Outcome::Pasted);
+    clock.store(105 * DAY_MS, Ordering::SeqCst);
+    for _ in 0..3 {
+        dictation(&store, None, Outcome::Pasted);
+    }
+    {
+        let sink: Arc<dyn TraceSink> = store.clone();
+        tracing::dispatcher::with_default(&subscriber(vec![sink]), || {
+            let mut trace = DictationTrace::dictation();
+            trace.first_audio();
+            trace.released();
+            trace.transcript(Some("es"));
+            trace.speech_via("backup", "backup-model");
+            trace.cleanup_started();
+            trace.ready(true);
+            trace.inserted();
+            trace.end(Outcome::Copied);
+        });
+        store.flush();
+    }
+    failed(&store, "speech_timeout");
+
+    let since = 101 * DAY_MS;
+    let traces = store.traces_since(since, 100).unwrap();
+    assert_eq!(
+        traces.len(),
+        5,
+        "the trace of day 100 is outside the window"
+    );
+    assert_eq!(traces[0].outcome, "failed", "newest first");
+    assert_eq!(store.traces_since(since, 2).unwrap().len(), 2);
+
+    let rows: Vec<_> = traces.iter().map(|t| t.row()).collect();
+    assert_eq!(rows[0].error_kind.as_deref(), Some("speech_timeout"));
+    assert_eq!(rows[0].release_to_text_us, None);
+    let copied = &rows[1];
+    assert_eq!(copied.outcome, "copied");
+    assert_eq!(
+        copied.speech,
+        Some(("backup".to_string(), "backup-model".to_string()))
+    );
+    assert_eq!(
+        copied.cleanup,
+        Some(("groq".to_string(), "fast-model".to_string()))
+    );
+    assert!(copied.release_to_text_us.is_some());
+    let pasted = &rows[2];
+    assert_eq!(
+        pasted.speech,
+        Some(("speechmatics".to_string(), "enhanced".to_string()))
+    );
+    let names: Vec<&str> = pasted.stages.iter().map(|s| s.name.as_str()).collect();
+    assert_eq!(
+        names,
+        [
+            "mic_start",
+            "capture",
+            "speech",
+            "dictionary",
+            "cleanup",
+            "insert"
+        ]
+    );
+    let after_capture: u64 = pasted
+        .stages
+        .iter()
+        .filter(|s| !["mic_start", "capture"].contains(&s.name.as_str()))
+        .map(|s| s.duration_us)
+        .sum();
+    assert!(pasted.release_to_text_us.unwrap() >= after_capture);
+
+    let view = hyperme_core::diagnostics::compute(&rows, 105 * DAY_MS);
+    assert_eq!(view.failures, vec![("speech_timeout".to_string(), 1)]);
+
+    let counts = store.outcome_counts(since).unwrap();
+    assert_eq!(
+        counts,
+        vec![
+            ("copied".to_string(), 1),
+            ("failed".to_string(), 1),
+            ("pasted".to_string(), 3)
+        ]
+    );
+    assert_eq!(
+        store.outcome_counts(0).unwrap()[2],
+        ("pasted".to_string(), 4)
+    );
+}
