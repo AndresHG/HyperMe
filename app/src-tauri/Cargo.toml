@@ -38,6 +38,8 @@ time = { workspace = true, features = ["std"] }
 # The pure modules (pill, onboarding, geometry) are tested on every platform.
 hyperme-core.workspace = true
 serde.workspace = true
+# The morning card tests in pill.rs build dates; time is macOS-only above.
+time = { workspace = true, features = ["std"] }
 # tauri's own mock runtime, to test that commands send their events. Not a new crate.
 tauri = { version = "2.12.7", features = ["macos-private-api", "tray-icon", "test"] }
 

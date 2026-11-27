@@ -27,3 +27,31 @@ day log, the card model) and the card's words, without the panel.
 The part left out is the pill panel being resized and the card drawn in its web view. That needs
 the installed app; it is to be added here with the idle and Home memory once the build from
 master is installed.
+
+## In the installed app (build 6bcc4b5, master with #156 to #160)
+
+Installed with `scripts/bundle-macos.sh` and started in the background (`open -g`) at 11:40:36
+local time, with the scheduler running, no connector account connected and no dictation.
+Footprint (`footprint -p`) of `hyperme` and the three WebKit processes that started with it,
+20 to 60 s after launch; CPU from `top -l 7 -s 2`.
+
+| Process | Footprint | CPU |
+| --- | --- | --- |
+| `hyperme` | 33 MB | 0.20% |
+| WebKit GPU | 15 MB | 0.00% |
+| WebKit Networking | 6.4 MB | 0.00% |
+| Pill WebContent (after drawing the morning card) | 18 MB | 0.15% |
+| **All** | **72.4 MB** | **0.35%** |
+
+Against the idle budget of 100 MB: passes. The CPU figure is the average of seven samples taken
+in the first minute; the first sample of `top` counts from launch, so it overstates idle.
+
+The morning card ran at launch: the day log's `morning_at` and the roll-over's catch-up carry
+the same millisecond (11:40:47.173 and .172), so the card's job ran at once when the scheduler
+started. The scheduler started 11 s after the process, because it starts after the dictation is
+wired in setup; that delay is outside the presence-to-card path but is a delay before the card
+at launch. Drawing time in the panel was not measured.
+
+Not measured: Home open on Today (spec 98, AC-2). Opening Home brings the window to the front,
+which would have taken focus from the owner's work. The app was no longer running by about
+11:43 (no crash report written); idle CPU over 10 minutes was not measured either.

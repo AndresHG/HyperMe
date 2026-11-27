@@ -98,6 +98,10 @@ passes, update this section and record the evidence in `docs/results/`.
 - Public positioning leads with the full copilot ("the open-source voice copilot for your
   workday"), and says plainly that it starts with dictation. The name HyperMe stays for the
   public launch (owner, 25 November 2026). See `docs/PITCH.md`.
+- Notes and contexts (owner, 27 November 2026): when a call is detected HyperMe asks "Transcribe?"
+  every time and never records without a yes; tags are two-level contexts (Customers > Amazon),
+  each a file in the memory folder; facts and to-dos link to meetings only through contexts. See
+  `docs/ROADMAP.md`, "Notes, memory and contexts".
 - Meetings run on device first: Apple's on-device recognizer for the live transcript, and a
   cleanup setting of cloud (Groq, default), local model, or off (owner, 26 November 2026). See
   `docs/ROADMAP.md`, "Meetings on device". Dictation stays on cloud speech.
