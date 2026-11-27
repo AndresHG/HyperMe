@@ -76,7 +76,8 @@ async fn short_hold_cancels() {
 async fn short_hold_while_opening_cancels() {
     let log = Log::new();
     let mut speech = FakeSpeech::new(&log, "should never be pasted");
-    speech.open_delay = ms(500);
+    // Past the tap at 100 ms and the double-tap window after it (#167 AC-2).
+    speech.open_delay = ms(1000);
     let mut h = Harness::start(&log, speech, FakeCleanup::new(&log, "x"), settings());
 
     h.send(Event::KeyDown).await;
@@ -84,7 +85,7 @@ async fn short_hold_while_opening_cancels() {
     tokio::time::sleep(ms(100)).await;
     h.send(Event::KeyUp).await;
     h.until(&Status::Idle).await;
-    tokio::time::sleep(ms(1000)).await;
+    tokio::time::sleep(ms(2000)).await;
     assert!(
         !log.has("speech opened"),
         "the open attempt went on: {:?}",
@@ -982,4 +983,152 @@ async fn a_saved_dictionary_applies_from_the_next_dictation() {
         log.entries()
     );
     assert!(log.has("dictionary:\n\nThe speaker's dictionary: Zentrix."));
+}
+
+// ---- Hands-free (#167): double-tap to lock, tap again to stop ----
+
+/// Taps the hotkey, then presses it again `gap` after the release.
+async fn double_tap(h: &mut Harness, gap: u64) {
+    h.send(Event::KeyDown).await;
+    h.until(&Status::Recording).await;
+    tokio::time::sleep(ms(100)).await;
+    h.send(Event::KeyUp).await;
+    tokio::time::sleep(ms(gap)).await;
+    h.send(Event::KeyDown).await;
+}
+
+/// #167 AC-1, AC-3: a tap and a second key-down within the window lock recording; the same
+/// capture and session go on, the key-ups are ignored, and the next key-down stops and pastes.
+#[tokio::test(start_paused = true)]
+async fn double_tap_locks_and_a_tap_stops() {
+    let log = Log::new();
+    let speech = FakeSpeech::new(&log, "hands free works like this");
+    let cleanup = FakeCleanup::new(&log, "Hands-free works like this.");
+    let mut h = Harness::start(&log, speech, cleanup, settings());
+
+    double_tap(&mut h, 300).await;
+    h.until(&Status::Locked).await;
+    h.send(Event::KeyUp).await;
+    h.frames(0, 3).await;
+    tokio::time::sleep(ms(5000)).await;
+    assert!(
+        !log.has("finalize"),
+        "a key-up stopped it: {:?}",
+        log.entries()
+    );
+    assert!(!log.has("sound Stop"), "the stop sound played between taps");
+    h.send(Event::KeyDown).await;
+    h.until(&Status::Transcribing).await;
+    assert_eq!(log.at("finalize"), Some(5400));
+    h.send(Event::KeyUp).await;
+    h.until(&Status::Done { raw: false }).await;
+    h.until(&Status::Idle).await;
+    h.settle().await;
+    assert_eq!(log.pasted(), ["Hands-free works like this."]);
+    assert_eq!(count(&log, "mic start"), 1);
+    assert_eq!(count(&log, "speech open start"), 1);
+    assert!(log.has("audio 480 from 2"), "{:?}", log.entries());
+}
+
+/// #167 AC-2: a tap with no second key-down is cancelled when the window ends; a key-down
+/// after it starts a new dictation.
+#[tokio::test(start_paused = true)]
+async fn a_lone_tap_is_cancelled_after_the_window() {
+    let log = Log::new();
+    let speech = FakeSpeech::new(&log, "should never be pasted");
+    let mut h = Harness::start(&log, speech, FakeCleanup::new(&log, "x"), settings());
+
+    h.send(Event::KeyDown).await;
+    h.until(&Status::Recording).await;
+    tokio::time::sleep(ms(100)).await;
+    h.send(Event::KeyUp).await;
+    let seen = h.until(&Status::Idle).await;
+    assert!(seen.contains(&Status::Cancelled), "{seen:?}");
+    assert!(!seen.contains(&Status::Locked), "{seen:?}");
+    assert_eq!(log.at("mic stop"), Some(500));
+    assert!(log.has("session closed"));
+    assert!(log.pasted().is_empty());
+
+    // Too late for a double tap: an ordinary dictation.
+    h.send(Event::KeyDown).await;
+    tokio::time::sleep(ms(600)).await;
+    h.send(Event::KeyUp).await;
+    let seen = h.until(&Status::Idle).await;
+    assert!(!seen.contains(&Status::Locked), "{seen:?}");
+    assert_eq!(log.pasted().len(), 1);
+}
+
+/// #167 AC-4: the pill's stop button stops and pastes a locked dictation; Esc (and the pill's
+/// ✕, which sends it) cancels one.
+#[tokio::test(start_paused = true)]
+async fn the_pill_stops_or_cancels_a_locked_dictation() {
+    let log = Log::new();
+    let speech = FakeSpeech::new(&log, "stopped from the pill");
+    let cleanup = FakeCleanup::new(&log, "Stopped from the pill.");
+    let mut h = Harness::start(&log, speech, cleanup, settings());
+    double_tap(&mut h, 200).await;
+    h.until(&Status::Locked).await;
+    tokio::time::sleep(ms(1000)).await;
+    h.send(Event::Stop).await;
+    h.until(&Status::Done { raw: false }).await;
+    h.until(&Status::Idle).await;
+    assert_eq!(log.pasted(), ["Stopped from the pill."]);
+
+    let log = Log::new();
+    let speech = FakeSpeech::new(&log, "never pasted");
+    let mut h = Harness::start(&log, speech, FakeCleanup::new(&log, "x"), settings());
+    double_tap(&mut h, 200).await;
+    h.until(&Status::Locked).await;
+    tokio::time::sleep(ms(1000)).await;
+    h.send(Event::Esc).await;
+    let seen = h.until(&Status::Idle).await;
+    assert!(seen.contains(&Status::Cancelled), "{seen:?}");
+    tokio::time::sleep(ms(1000)).await;
+    h.settle().await;
+    assert!(log.pasted().is_empty());
+    assert!(log.has("session closed"));
+}
+
+/// #167 AC-5: the maximum length ends a locked dictation and processes it.
+#[tokio::test(start_paused = true)]
+async fn the_maximum_length_ends_a_locked_dictation() {
+    let log = Log::new();
+    let speech = FakeSpeech::new(&log, "a long hands free dictation");
+    let cleanup = FakeCleanup::new(&log, "A long hands-free dictation.");
+    let mut h = Harness::start(&log, speech, cleanup, settings());
+    double_tap(&mut h, 200).await;
+    h.until(&Status::Locked).await;
+    h.until(&Status::Transcribing).await;
+    assert_eq!(log.at("finalize"), Some(120_000));
+    h.until(&Status::Idle).await;
+    h.settle().await;
+    assert_eq!(log.pasted(), ["A long hands-free dictation."]);
+}
+
+/// #167 AC-7: a hold behaves as before, and a stop from the pill outside hands-free is
+/// ignored, while recording and while idle.
+#[tokio::test(start_paused = true)]
+async fn stop_outside_hands_free_is_ignored() {
+    let log = Log::new();
+    let speech = FakeSpeech::new(&log, "held the usual way");
+    let cleanup = FakeCleanup::new(&log, "Held the usual way.");
+    let mut h = Harness::start(&log, speech, cleanup, settings());
+
+    h.send(Event::Stop).await;
+    h.send(Event::KeyDown).await;
+    h.until(&Status::Recording).await;
+    tokio::time::sleep(ms(400)).await;
+    h.send(Event::Stop).await;
+    tokio::time::sleep(ms(400)).await;
+    assert!(!log.has("finalize"), "Stop ended a held dictation");
+    h.send(Event::KeyUp).await;
+    let seen = h.until(&Status::Idle).await;
+    assert!(!seen.contains(&Status::Locked), "{seen:?}");
+    assert_eq!(log.at("finalize"), Some(800));
+    h.settle().await;
+    assert_eq!(log.pasted(), ["Held the usual way."]);
+}
+
+fn count(log: &Log, entry: &str) -> usize {
+    log.entries().iter().filter(|e| *e == entry).count()
 }

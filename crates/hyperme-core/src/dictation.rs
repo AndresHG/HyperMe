@@ -4,6 +4,9 @@
 //! Idle -key down-> Recording -key up (held >= min) or max length-> Transcribing -final->
 //!   Cleaning (skipped for short transcripts) -text or deadline-> Pasting -> Done -> Idle
 //! Short hold or Esc before paste -> Cancelled -> Idle;  speech failure -> Failed -> Idle
+//!
+//! Hands-free (#167): Recording -tap, then key down within the double-tap window-> Locked
+//!   -key down, Stop or max length-> Transcribing ...;  a tap with no second key down -> Cancelled
 //! ```
 //!
 //! One async task owns all state. Platform callbacks send it [`Event`]s over a channel; it
@@ -31,6 +34,8 @@ pub struct Settings {
     pub min_hold: Duration,
     /// R-7: recording stops here and is processed.
     pub max_length: Duration,
+    /// #167 AC-1: a key-down this soon after a tap locks recording (hands-free).
+    pub double_tap: Duration,
     /// R-13: transcripts with fewer words skip cleanup.
     pub short_words: usize,
     /// R-12: after this, the raw transcript is used.
@@ -49,6 +54,7 @@ impl Settings {
         Settings {
             min_hold: Duration::from_millis(config.dictation.min_hold_ms),
             max_length: Duration::from_secs(config.dictation.max_length_s),
+            double_tap: Duration::from_millis(config.dictation.double_tap_ms),
             short_words: config.dictation.short_dictation_words as usize,
             cleanup_deadline: Duration::from_millis(config.cleanup.deadline_ms),
             sounds: config.dictation.sounds,
@@ -58,6 +64,17 @@ impl Settings {
     }
 }
 
+/// How the key is holding a recording (#167).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Hold {
+    /// The key is down: its release stops recording, or is a tap.
+    Held,
+    /// A tap: a key-down before this moment locks recording.
+    Tapped(Instant),
+    /// Hands-free: the next key-down stops recording.
+    Locked,
+}
+
 /// What the platform glue tells the state machine.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Event {
@@ -65,8 +82,11 @@ pub enum Event {
     KeyDown,
     /// The dictation hotkey went up.
     KeyUp,
-    /// Esc: cancel (R-6).
+    /// Esc, or the pill's ✕: cancel (R-6).
     Esc,
+    /// The pill's stop button: stop a locked dictation and process it (#167 AC-4). Ignored
+    /// otherwise.
+    Stop,
     /// One captured frame of mono PCM16 at the speech provider's rate.
     Audio(Vec<i16>),
     /// Retry a dictation from its saved audio. `None`: the last failed dictation, from the
@@ -81,6 +101,9 @@ pub enum Event {
 pub enum Status {
     Idle,
     Recording,
+    /// Hands-free: recording goes on without the key held, until a key-down, the pill's stop
+    /// button or the maximum length (#167).
+    Locked,
     Transcribing,
     Cleaning,
     Pasting,
@@ -269,7 +292,7 @@ where
                 Event::KeyDown => self.dictate(&mut events).await,
                 Event::Retry(None) => self.retry(&mut events).await,
                 Event::Retry(Some(id)) => self.retry_by_id(id, &mut events).await,
-                Event::KeyUp | Event::Esc | Event::Audio(_) => continue,
+                Event::KeyUp | Event::Esc | Event::Stop | Event::Audio(_) => continue,
             };
             let _ = self.status.send(Status::Idle);
             if flow == Flow::Closed {
@@ -375,8 +398,13 @@ where
         let mut buffer: Vec<i16> = Vec::new();
         let mut max_length = pin!(sleep_until(start + settings.max_length));
         let mut first_audio: Option<Instant> = None;
+        let mut hold = Hold::Held;
 
         loop {
+            let tapped = match hold {
+                Hold::Tapped(until) => Some(until),
+                _ => None,
+            };
             tokio::select! {
                 event = events.recv() => match event {
                     None => {
@@ -400,14 +428,27 @@ where
                             None => buffer.extend_from_slice(&pcm),
                         }
                     }
-                    // R-5: a tap is cancelled, and dropping the session closes it (AC-4).
-                    Some(Event::KeyUp) if start.elapsed() < settings.min_hold => {
-                        stop_mic(mic);
-                        discard(history);
-                        emit(Status::Cancelled);
-                        return Flow::Ended;
-                    }
-                    Some(Event::KeyUp) => break,
+                    // R-5: a tap waits for a second key-down that locks recording (#167
+                    // AC-1); without one it is cancelled when the window ends (AC-2).
+                    Some(Event::KeyUp) => match hold {
+                        Hold::Held if start.elapsed() < settings.min_hold => {
+                            hold = Hold::Tapped(Instant::now() + settings.double_tap);
+                        }
+                        Hold::Held => break,
+                        // AC-3: the key is not held in hands-free.
+                        Hold::Tapped(_) | Hold::Locked => {}
+                    },
+                    Some(Event::KeyDown) => match hold {
+                        Hold::Tapped(_) => {
+                            hold = Hold::Locked;
+                            emit(Status::Locked);
+                        }
+                        // AC-3: the next key-down stops a locked dictation.
+                        Hold::Locked => break,
+                        Hold::Held => {}
+                    },
+                    // AC-4, AC-7.
+                    Some(Event::Stop) if hold == Hold::Locked => break,
                     // R-6.
                     Some(Event::Esc) => {
                         stop_mic(mic);
@@ -415,8 +456,15 @@ where
                         emit(Status::Cancelled);
                         return Flow::Ended;
                     }
-                    Some(Event::KeyDown | Event::Retry(_)) => {}
+                    Some(Event::Stop | Event::Retry(_)) => {}
                 },
+                // R-5, AC-2: no second key-down; dropping the session closes it (AC-4).
+                () = sleep_until(tapped.unwrap_or(start)), if tapped.is_some() => {
+                    stop_mic(mic);
+                    discard(history);
+                    emit(Status::Cancelled);
+                    return Flow::Ended;
+                }
                 result = &mut open, if opening => {
                     opening = false;
                     match result {
@@ -855,7 +903,7 @@ async fn wait<T>(
                 None => return Waited::Closed,
                 Some(Event::Esc) => return Waited::Cancelled,
                 Some(Event::KeyDown) => emit(Status::StillWorking),
-                Some(Event::KeyUp | Event::Audio(_) | Event::Retry(_)) => {}
+                Some(Event::KeyUp | Event::Stop | Event::Audio(_) | Event::Retry(_)) => {}
             },
         }
     }

@@ -10,6 +10,9 @@
 hotkey = "fn"
 # A shorter hold is a tap: nothing is pasted. 50 to 2000.
 min_hold_ms = 250
+# Hands-free: tap, then press again within this many ms to keep recording without holding the
+# key; press once more to stop. 100 to 1000.
+double_tap_ms = 400
 # Recording stops and is processed at this length. 5 to 600.
 max_length_s = 120
 # Dictations with fewer words skip the cleanup model. 0 to 50; 0 always cleans.

@@ -40,6 +40,8 @@ fn defaults_are_the_owner_decisions() {
     assert_eq!(d.hotkey, Hotkey::Fn);
     assert_eq!(d.min_hold_ms, 250);
     assert_eq!(d.max_length_s, 120);
+    // #167 AC-8.
+    assert_eq!(d.double_tap_ms, 400);
     assert_eq!(d.short_dictation_words, 4);
     assert!(d.sounds);
     assert_eq!(d.dictionary, None);
@@ -130,6 +132,13 @@ fn unknown_section_names_the_file_and_line() {
     assert!(err.contains("ui"), "{err}");
 }
 
+/// #167 AC-8: a file written before hands-free existed still loads, with the default window.
+#[test]
+fn an_older_file_without_double_tap_loads() {
+    let text = default_with("double_tap_ms = 400\n", "");
+    assert_eq!(parse(&text).unwrap().dictation.double_tap_ms, 400);
+}
+
 #[test]
 fn missing_key_is_named() {
     let text = default_with("deadline_ms = 1500\n", "");
@@ -160,6 +169,12 @@ fn out_of_range_values_name_the_key() {
             "max_length_s = 120",
             "max_length_s = 0",
             "dictation.max_length_s",
+        ),
+        // #167 AC-8.
+        (
+            "double_tap_ms = 400",
+            "double_tap_ms = 1001",
+            "dictation.double_tap_ms",
         ),
         (
             "short_dictation_words = 4",
