@@ -122,6 +122,8 @@ use hyperme_core::tasks::Group;
 /// Width of a card from the pill (docs/UX.md: up to 360 pt).
 pub const CARD_WIDTH: f64 = 360.0;
 /// An unanswered card shrinks back into the dot after this long (docs/UX.md, "Alerts").
+/// Read by the macOS runtime only.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub const CARD_LINGER_MS: u64 = 60_000;
 
 /// One task on the morning card.
