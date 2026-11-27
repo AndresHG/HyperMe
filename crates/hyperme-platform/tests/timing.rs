@@ -33,6 +33,7 @@ fn line(total: u64, fallback: bool) -> TimingLine {
         language: Some("es".into()),
         words: 12,
         fallback,
+        speech_via: None,
         cleanup_via: None,
     }
 }
@@ -136,8 +137,17 @@ fn a_fallback_provider_is_named_on_its_line() {
     let mut log = FileTimingLog::with_clock(path.clone(), names(), || 1);
     let mut via = line(600, false);
     via.cleanup_via = Some(("openai".into(), "gpt-6-luna".into()));
+    via.speech_via = Some(("openai-speech".into(), "gpt-live-transcribe".into()));
     log.record(&via);
     let text = std::fs::read_to_string(&path).unwrap();
     let cols: Vec<&str> = text.lines().nth(1).unwrap().split('\t').collect();
-    assert_eq!(&cols[12..], ["openai", "gpt-6-luna"]);
+    assert_eq!(
+        &cols[10..],
+        [
+            "openai-speech",
+            "gpt-live-transcribe",
+            "openai",
+            "gpt-6-luna"
+        ]
+    );
 }

@@ -39,6 +39,12 @@ now, beside Phase 1; Part B waits for Phase 2 (owner, 26 November 2026, P-1 in [
   goes to the fallback inside the engine's deadline. The pill says "Pasted · via <name>"; the
   trace root records `cleanup_via` and the timing line names the fallback. A fallback with no
   key is not built and shows red in the Setup check.
+- Slice 10: `[speech] fallback`, the same Settings row. `Fallback<Arc<AnySpeech>>` opens the
+  fallback when the main session cannot open (the engine's open buffer replays into it), and on
+  a drop mid-dictation keeps every frame and sends it to the fallback on release. The frames
+  are held only while a fallback is set. `Transcript.via` carries the name to the pill and the
+  timing line. `FallbackStreak` in the app shows one alert card after three in a row, linking
+  to `hyperme://settings/providers/<role>`.
 
 ## Later, one pull request each
 

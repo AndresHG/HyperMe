@@ -412,6 +412,7 @@ impl Collector {
         Step::Done(Transcript {
             text: self.text.trim().to_owned(),
             language: self.language.take(),
+            via: None,
         })
     }
 }
@@ -440,6 +441,7 @@ mod tests {
             Step::Done(Transcript {
                 text: "Ok, creo que está grabando. ¿Sí?".to_owned(),
                 language: Some("es".to_owned()),
+                via: None,
             })
         );
     }

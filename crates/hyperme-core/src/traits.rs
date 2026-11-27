@@ -40,6 +40,8 @@ pub struct Transcript {
     pub text: String,
     /// The language the provider detected, when it says (R-10).
     pub language: Option<String>,
+    /// The fallback speech provider that transcribed it, when one did (specs/96, R-27).
+    pub via: Option<Via>,
 }
 
 /// A streaming speech-to-text provider. It is never told which language to expect (R-10).
@@ -64,7 +66,7 @@ pub trait LiveSession {
 /// the pill's "via" and the timing line.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Via {
-    /// The catalogue id, for the timing line.
+    /// The catalogue id, for the timing line and the trace.
     pub provider: String,
     pub model: String,
     /// As people write it, for the pill: "OpenAI".
@@ -222,6 +224,8 @@ pub struct TimingLine {
     pub words: usize,
     /// The raw transcript was used (deadline or cleanup error).
     pub fallback: bool,
+    /// The fallback speech provider and model that answered, when one did (specs/96, R-27).
+    pub speech_via: Option<(String, String)>,
     /// The fallback cleanup provider and model that answered, when one did (specs/96, R-27).
     pub cleanup_via: Option<(String, String)>,
 }

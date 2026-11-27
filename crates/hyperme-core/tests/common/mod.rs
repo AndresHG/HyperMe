@@ -113,6 +113,8 @@ pub struct FakeSpeech {
     pub finish_error: Arc<Mutex<Option<Error>>>,
     pub transcript: String,
     pub language: Option<String>,
+    /// The fallback named on the transcript, as a fallback session would.
+    pub via: Option<hyperme_core::traits::Via>,
 }
 
 impl FakeSpeech {
@@ -125,6 +127,7 @@ impl FakeSpeech {
             finish_error: Arc::default(),
             transcript: transcript.to_owned(),
             language: Some("en".to_owned()),
+            via: None,
         }
     }
 }
@@ -174,6 +177,7 @@ impl LiveSession for FakeSession {
         Ok(Transcript {
             text: self.speech.transcript.clone(),
             language: self.speech.language.clone(),
+            via: self.speech.via.clone(),
         })
     }
 }

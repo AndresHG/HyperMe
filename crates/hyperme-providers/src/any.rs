@@ -6,6 +6,8 @@
 //! [`resolve`] builds the providers a config names. The app uses it at launch, after each
 //! change in Settings, and for Test, so Test and dictation cannot disagree.
 
+use std::sync::Arc;
+
 use hyperme_core::config::{self, Config, Protocol, Role};
 use hyperme_core::dictation::Providers;
 use hyperme_core::fallback::Fallback;
@@ -107,6 +109,10 @@ impl AnyCleanup {
     }
 }
 
+/// The speech the engine uses: the role's provider, with its fallback when one is set and
+/// ready (R-25, R-26, R-24a). Shared, so a session can open the fallback on release.
+pub type Speech = Fallback<Arc<AnySpeech>>;
+
 /// The cleanup the engine uses: the role's provider, with its fallback when one is set and
 /// ready (R-24, R-24a).
 pub type Cleanup = Fallback<AnyCleanup>;
@@ -140,7 +146,45 @@ pub fn key_ready(config: &Config, provider: &str, keys: &dyn SecretStore) -> boo
 
 /// The speech provider the config names, with its key.
 pub fn speech(config: &Config, keys: &dyn SecretStore) -> Result<AnySpeech, Error> {
-    let s = &config.speech;
+    speech_for(config, &config.speech, keys)
+}
+
+/// The speech fallback the config names, alone, for its Test (R-24a). Fails when none is set.
+pub fn speech_fallback(config: &Config, keys: &dyn SecretStore) -> Result<AnySpeech, Error> {
+    let s = config.speech_fallback().ok_or_else(|| Error {
+        kind: ErrorKind::Other,
+        message: "no speech fallback is set".to_owned(),
+    })?;
+    speech_for(config, &s, keys)
+}
+
+/// The role's speech with its fallback. A fallback that cannot be built, its key missing for
+/// example, is skipped (R-24a).
+pub fn speech_with_fallback(config: &Config, keys: &dyn SecretStore) -> Result<Speech, Error> {
+    let main = Arc::new(speech(config, keys)?);
+    let fallback = config.speech_fallback().and_then(|s| {
+        let built = speech_for(config, &s, keys).ok()?;
+        Some((Arc::new(built), via(config, s.provider, s.model)))
+    });
+    Ok(Fallback::new(main, fallback))
+}
+
+fn via(config: &Config, provider: String, model: String) -> Via {
+    let name = config
+        .provider(&provider)
+        .map_or_else(|| provider.clone(), |p| p.name.clone());
+    Via {
+        provider,
+        model,
+        name,
+    }
+}
+
+fn speech_for(
+    config: &Config,
+    s: &config::Speech,
+    keys: &dyn SecretStore,
+) -> Result<AnySpeech, Error> {
     let key = key_for(config, &s.provider, keys)?;
     match protocol(config, &s.provider)? {
         Protocol::SpeechmaticsRt => Ok(AnySpeech::Speechmatics(Speechmatics::new(s, key))),
@@ -168,7 +212,7 @@ pub fn cleanup_fallback(config: &Config, keys: &dyn SecretStore) -> Result<AnyCl
 pub fn fallback_ready(config: &Config, role: Role, keys: &dyn SecretStore) -> Option<bool> {
     let provider = match role {
         Role::Cleanup => &config.cleanup.fallback.as_ref()?.provider,
-        Role::Speech => return None,
+        Role::Speech => &config.speech.fallback.as_ref()?.provider,
     };
     Some(key_ready(config, provider, keys))
 }
@@ -179,17 +223,7 @@ pub fn cleanup_with_fallback(config: &Config, keys: &dyn SecretStore) -> Result<
     let main = cleanup(config, keys)?;
     let fallback = config.cleanup_fallback().and_then(|c| {
         let built = cleanup_for(config, &c, keys).ok()?;
-        let name = config
-            .provider(&c.provider)
-            .map_or_else(|| c.provider.clone(), |p| p.name.clone());
-        Some((
-            built,
-            Via {
-                provider: c.provider,
-                model: c.model,
-                name,
-            },
-        ))
+        Some((built, via(config, c.provider, c.model)))
     });
     Ok(Fallback::new(main, fallback))
 }
@@ -211,9 +245,9 @@ fn cleanup_for(
 pub fn resolve(
     config: &Config,
     keys: &dyn SecretStore,
-) -> Result<Providers<AnySpeech, Cleanup>, Error> {
+) -> Result<Providers<Speech, Cleanup>, Error> {
     Ok(Providers {
-        speech: speech(config, keys)?,
+        speech: speech_with_fallback(config, keys)?,
         cleanup: cleanup_with_fallback(config, keys)?,
     })
 }

@@ -177,6 +177,7 @@ impl LiveSession for FixedSession {
         Ok(Transcript {
             text: self.transcript.to_owned(),
             language: Some("en".to_owned()),
+            via: None,
         })
     }
 }
