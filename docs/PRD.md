@@ -351,6 +351,7 @@ Asked in the interview of 26 November 2026. Recommendations first.
 | Q-12 | Work and personal profiles ([SPEC.md](SPEC.md) section 4) | Drop from version 1; one profile | Decided 26 November 2026: one profile, several accounts |
 | Q-13 | Adopt the trial and baseline checks as gates ([RESEARCH.md](RESEARCH.md) section 1.3) | Drop as gates; the Wispr comparison covers the baseline | Decided 26 November 2026: drop both; read how Handy, Omi and OpenWhispr are built for ideas only |
 | Q-17 | Does onboarding offer "Continue with ChatGPT" for answers beside the recommended keys, or only in Settings | Offer it in onboarding as an option once latency is measured; keep the recommended keys as the default | Open; decide with the phase 3 spec ([competitor research](research/2026-11-26-competitors-and-plan-sign-in.md)) |
+| Q-18 | What other people's copies of HyperMe may send about their use (telemetry, crash reports, diagnostics) | No telemetry in version 1: traces stay on the Mac, a Diagnostics view, and a **Report a problem** bundle the user previews and attaches to an issue; opt-in signals reconsidered after the first release | Decided 27 November 2026: as recommended ([research](research/2026-11-27-telemetry-and-tracing.md)) |
 
 ## 13. Contradictions found in the existing documents
 
