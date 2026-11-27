@@ -1,0 +1,14 @@
+{
+  "name": "hyperme-ui-tests",
+  "private": true,
+  "description": "Page screenshot checks for app/ui in WebKit (docs/DESIGN.md, \"Checks\").",
+  "license": "MIT OR Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "test": "playwright test",
+    "update": "playwright test --update-snapshots"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.59.1"
+  }
+}

@@ -167,3 +167,15 @@ Read on 27 November 2026.
   for `border-radius`, `padding`, `margin`, `gap`, `font-size`, `font-family`, `font`, colours and
   shadows; only `0`, `auto` and CSS-wide keywords pass raw. A page joins the list when it moves to
   the tokens, so the check only ever grows.
+- `cd app/ui-tests && npm install && npm test` (about 10 s): every page in WebKit (the engine of
+  macOS's web view) at a fixed size, light and dark, with fixture data from `mock-tauri.js` in place
+  of Tauri's API, compared with the approved images in `app/ui-tests/approved/`. Home, History,
+  Dictionary, the Settings sheet, the walkthrough and the pill (its card and a state): twelve images.
+  Each page also gets a layout check: no text runs past its box unless an ellipsis cuts it, and no
+  two pieces of text overlap.
+- After a change you mean to make: `npm run update`, look at every changed image in
+  `app/ui-tests/approved/` (git shows them side by side), and commit them with the change. Make
+  them on a Mac: the system font is part of the picture, so images from another system differ.
+- A page that needs new data adds it to `mock-tauri.js`: synthetic data only, never a real
+  dictation.
+
