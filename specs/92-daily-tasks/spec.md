@@ -251,8 +251,9 @@ Each is checked by a test with fakes, unless it says it is measured.
 - Time-blocking or auto-scheduling tasks into the calendar, as Motion does. It needs estimates
   for every task, rewrites the calendar under the user, and is heavy to run.
 - Time estimates and a workload meter (Sunsama). Maybe later, if the owner asks.
-- Projects, areas, tags, priorities and sub-tasks. A task list for things that come up, not a
-  tracker; the tracker stays GitHub (and Linear later).
+- Projects, areas, priorities and sub-tasks. A task list for things that come up, not a
+  tracker; the tracker stays GitHub (and Linear later). Contexts (two-level tags shared with
+  memory) come later in phase 4, as a slice after the gate (owner, 27 November 2026, ROADMAP).
 - Recurring tasks. Kept out of the first version; a candidate for the slice after the gate.
 - Sync of HyperMe's own list to another device or service (Google Keep was rejected, PRD 7.3).
 - macOS notifications. Cards from the dot only (UX.md, "Alerts").
