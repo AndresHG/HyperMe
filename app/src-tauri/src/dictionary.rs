@@ -1,11 +1,12 @@
 //! Settings → Dictionary (spec 93, slice D1b): the user's words, edited in the Settings window
 //! and saved to the dictionary text file. A save applies from the next dictation, with no
-//! restart (R-10a).
+//! restart (R-10a). Fix a word in Home's History adds to the same file (D5, R-12).
 
 use std::path::{Path, PathBuf};
 
 use hyperme_core::config::Config;
-use hyperme_core::dictionary::{Dictionary, Term};
+use hyperme_core::dictionary::{Corrected, Dictionary, Term};
+use hyperme_core::traits::{self, Added, Correction, Error, ErrorKind, Refusal};
 use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
 
@@ -88,13 +89,60 @@ fn save(path: &Path, entries: Vec<Entry>) -> Result<Dictionary, String> {
     let terms = terms(entries);
     Dictionary::check(&terms)?;
     let dictionary = Dictionary::new(terms);
+    write(path, &dictionary)?;
+    Ok(dictionary)
+}
+
+fn write(path: &Path, dictionary: &Dictionary) -> Result<(), String> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| format!("{}: {e}", parent.display()))?;
     }
     let temp = path.with_extension("txt.new");
     std::fs::write(&temp, dictionary.to_text()).map_err(|e| format!("{}: {e}", temp.display()))?;
-    std::fs::rename(&temp, path).map_err(|e| format!("{}: {e}", path.display()))?;
-    Ok(dictionary)
+    std::fs::rename(&temp, path).map_err(|e| format!("{}: {e}", path.display()))
+}
+
+/// Applies a fix to the file (R-12, R-17, AC-12): read fresh, so an edit in Settings is never
+/// lost; written only when the fix is added. Returns the new dictionary when it changed.
+fn correct(path: &Path, c: &Correction) -> Result<Option<Dictionary>, String> {
+    let (dictionary, error) = read(path);
+    if let Some(error) = error {
+        return Err(error);
+    }
+    match dictionary.corrected(&c.heard, &c.wanted, c.confirmed_common)? {
+        Corrected::Common => Ok(None),
+        Corrected::Added(fixed) => {
+            write(path, &fixed)?;
+            Ok(Some(fixed))
+        }
+    }
+}
+
+/// The dictionary as Home's Fix a word sees it (spec 98, R-20).
+pub struct Fixer {
+    app: AppHandle,
+}
+
+impl Fixer {
+    pub fn new(app: AppHandle) -> Self {
+        Self { app }
+    }
+}
+
+impl traits::Dictionary for Fixer {
+    fn add_correction(&mut self, c: Correction) -> Result<Added, Error> {
+        let fixed = correct(&path_for(&self.app), &c).map_err(|message| Error {
+            kind: ErrorKind::Other,
+            message,
+        })?;
+        Ok(match fixed {
+            None => Added::NeedsConfirm(Refusal::CommonWord),
+            Some(dictionary) => {
+                crate::runtime::update_dictionary(&self.app, dictionary);
+                Added::Added
+            }
+        })
+    }
 }
 
 #[tauri::command]
@@ -175,6 +223,56 @@ mod tests {
         let refused = save(&path, vec![entry("Zentrix", &[]), entry("zentrix", &[])]);
         assert!(refused.unwrap_err().contains("twice"));
         assert_eq!(read(&path).0, saved);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    fn fix(heard: &str, wanted: &str, confirmed_common: bool) -> Correction {
+        Correction {
+            heard: heard.to_owned(),
+            wanted: wanted.to_owned(),
+            dictation: None,
+            language: None,
+            confirmed_common,
+        }
+    }
+
+    /// Spec 93, AC-12 (R-12, R-17): a fix is written to the file at once and keeps what was
+    /// there; a common heard form writes nothing until confirmed; a refusal leaves the file.
+    #[test]
+    fn a_fix_is_written_to_the_file() {
+        let dir = temp_dir("fix");
+        let path = dir.join("dictionary.txt");
+        save(&path, vec![entry("Zentrix", &["zen trix"])]).unwrap();
+
+        let fixed = correct(&path, &fix("cloud", "Claude", false))
+            .unwrap()
+            .unwrap();
+        assert_eq!(read(&path).0, fixed);
+        assert_eq!(
+            view(&path, &fixed, None).entries,
+            vec![entry("Zentrix", &["zen trix"]), entry("Claude", &["cloud"])]
+        );
+
+        assert_eq!(correct(&path, &fix("mesa", "Mesa", false)), Ok(None));
+        assert_eq!(read(&path).0, fixed);
+        assert!(
+            correct(&path, &fix("mesa", "Mesa", true))
+                .unwrap()
+                .is_some()
+        );
+
+        let before = read(&path).0;
+        assert!(correct(&path, &fix("x", "a:b", false)).is_err());
+        assert_eq!(read(&path).0, before);
+
+        // A missing file is an empty dictionary: the first fix makes it.
+        let fresh = dir.join("new.txt");
+        assert!(
+            correct(&fresh, &fix("lang chain", "LangChain", false))
+                .unwrap()
+                .is_some()
+        );
+        assert_eq!(read(&fresh).0.terms().len(), 1);
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

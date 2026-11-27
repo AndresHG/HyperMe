@@ -119,6 +119,12 @@ fn main() {
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
             #[cfg(target_os = "macos")]
             home::init(app.handle());
+            // Fix a word in History adds to the dictionary file (spec 93, D5).
+            #[cfg(target_os = "macos")]
+            home::set_dictionary(
+                app.handle(),
+                Box::new(dictionary::Fixer::new(app.handle().clone())),
+            );
             #[cfg(target_os = "macos")]
             let menu = tray(app.handle())?;
             #[cfg(not(target_os = "macos"))]

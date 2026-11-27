@@ -56,6 +56,15 @@ pub struct Term {
     pub heard: Vec<String>,
 }
 
+/// What a fix from History made of the dictionary (R-12, R-17).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Corrected {
+    /// The dictionary with the fix, to save and use from the next dictation.
+    Added(Dictionary),
+    /// The heard form is a common word: ask, then send it again confirmed.
+    Common,
+}
+
 /// The dictionary, compiled once when it is loaded so a dictation only scans (R-6, R-8).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Dictionary {
@@ -214,6 +223,52 @@ impl Dictionary {
             }
         }
         Ok(())
+    }
+
+    /// A fix from History (R-12, AC-12): `heard` should have been `wanted`. The heard form joins
+    /// the entry for `wanted`, made if there is none, and leaves any other entry that had it, so
+    /// the fix made last wins. A heard form the entry already covers adds nothing. A common heard
+    /// form needs `confirmed_common` (R-17). A result that breaks the limits is the check's
+    /// message (R-15).
+    pub fn corrected(
+        &self,
+        heard: &str,
+        wanted: &str,
+        confirmed_common: bool,
+    ) -> Result<Corrected, String> {
+        let (heard, wanted) = (heard.trim(), wanted.trim());
+        if heard.is_empty() || wanted.is_empty() {
+            return Err("Select a word and type what it should be.".to_owned());
+        }
+        if is_common(heard) && !confirmed_common {
+            return Ok(Corrected::Common);
+        }
+        let key = folded(heard);
+        let wanted_key = folded(wanted);
+        let mut terms = self.terms.clone();
+        let at = match terms.iter().position(|t| folded(&t.written) == wanted_key) {
+            Some(at) => at,
+            None => {
+                terms.push(Term {
+                    written: wanted.to_owned(),
+                    heard: Vec::new(),
+                });
+                terms.len() - 1
+            }
+        };
+        // The entry in any case is already an implicit form, unless the entry is common.
+        let implicit = key == wanted_key && !is_common(wanted);
+        for (i, term) in terms.iter_mut().enumerate() {
+            if i != at {
+                term.heard.retain(|h| folded(h) != key);
+            }
+        }
+        let term = &mut terms[at];
+        if !implicit && !term.heard.iter().any(|h| folded(h) == key) {
+            term.heard.push(heard.to_owned());
+        }
+        Self::check(&terms)?;
+        Ok(Corrected::Added(Dictionary::new(terms)))
     }
 
     /// The text format, as [`Dictionary::parse`] reads it, for saving.
@@ -446,6 +501,56 @@ mod tests {
         let again = Dictionary::parse(&d.to_text());
         assert_eq!(again, d);
         assert!(d.to_text().starts_with("# HyperMe dictionary"));
+    }
+
+    /// AC-12 (R-12, R-17): a fix from History adds the heard form at once, to the entry it names
+    /// or to a new one, and the next dictation gets the entry. A common heard form waits for a
+    /// yes; a heard form moves to the entry fixed last; a fix the entry already covers adds
+    /// nothing.
+    #[test]
+    fn a_fix_adds_the_heard_form_at_once() {
+        let d = Dictionary::parse("Zentrix: zen trix\n");
+        let added = |c: Corrected| match c {
+            Corrected::Added(d) => d,
+            Corrected::Common => panic!("asked about a common word"),
+        };
+
+        let d = added(d.corrected("sun trix", "Zentrix", false).unwrap());
+        assert_eq!(d.terms()[0].heard, ["zen trix", "sun trix"]);
+        assert_eq!(d.apply("I use sun trix daily").0, "I use Zentrix daily");
+
+        let d = added(d.corrected("cloud", "Claude", false).unwrap());
+        assert_eq!(d.terms().len(), 2);
+        assert_eq!(d.apply("Ask cloud.").0, "Ask Claude.");
+
+        // Already covered: the same heard form again, or only the entry's own case.
+        assert_eq!(added(d.corrected("Cloud", "claude", false).unwrap()), d);
+        let d = added(d.corrected("langchain", "LangChain", false).unwrap());
+        assert_eq!(d.terms()[2].heard, Vec::<String>::new());
+
+        // R-17: a common heard form is asked about, then added once confirmed.
+        assert_eq!(d.corrected("mesa", "Mesa", false), Ok(Corrected::Common));
+        assert_eq!(
+            d.corrected("Sun", "Zentrix", false)
+                .map(|c| c != Corrected::Common),
+            Ok(true)
+        );
+        assert_eq!(d.corrected("the", "Thé", false), Ok(Corrected::Common));
+        let d = added(d.corrected("the", "Thé", true).unwrap());
+        assert_eq!(d.apply("the cup").0, "Thé cup");
+
+        // A heard form fixed to another entry moves there.
+        let d = added(d.corrected("sun trix", "Suntrix", false).unwrap());
+        assert_eq!(d.terms()[0].heard, ["zen trix"]);
+        assert_eq!(d.apply("sun trix").0, "Suntrix");
+
+        // Hard refusals are the check's messages.
+        assert!(d.corrected(" ", "Zentrix", false).is_err());
+        assert!(
+            d.corrected("zen", "Zen: trix", false)
+                .unwrap_err()
+                .contains("colon")
+        );
     }
 
     /// AC-6 (rough bound; release-mode timing is slice D3): 1,000 entries over a long

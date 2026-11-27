@@ -138,11 +138,19 @@
   const PAGE = 50;
   const DAY_MS = 24 * 60 * 60 * 1000;
   let sections = [];
+  let shown = null;
 
   // ---- Sidebar and routing (R-5, R-6) ----
   function route() {
     const [section, block] = location.hash.replace(/^#/, '').split('/');
+    // Until the Dictionary page comes to Home (spec 93, D4), its section opens Settings there.
+    if (section === 'dictionary') {
+      openSettings('dictionary');
+      history.replaceState(null, '', shown ? '#' + shown : '#home');
+      return route();
+    }
     const id = sections.some((s) => s.id === section) ? section : 'home';
+    shown = id;
     document.querySelectorAll('main > section').forEach((s) => s.classList.toggle('on', s.id === id));
     document.querySelectorAll('#sections a').forEach((a) => a.classList.toggle('on', a.dataset.id === id));
     if (id === 'home') {
