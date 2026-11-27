@@ -80,6 +80,7 @@ It is hidden while idle.
 | State | Look | Copy | How long |
 | --- | --- | --- | --- |
 | Recording | Red dot, live level bars | none | While held |
+| Hands-free (phase 2) | Live level bars, ✕ at the left, a red stop square at the right; 140 pt wide | none | Until a key press, the stop square, ✕ or Esc (#167) |
 | Working | The bars settle into a thin line and a violet light runs along it (U-15) | none | Until text or deadline |
 | Done | Green check | "Pasted" | 600 ms, then fades |
 | Raw text | Amber dot | "Raw text" | 2 s; click shows why (cleanup slow or failed, R-20) |
@@ -302,8 +303,12 @@ What changes on screen:
 - **Dictionary** and **Style** sections in Home ([Home](#home)).
 - **Cleanup level** and **style per app**, shown as the app's name on the pill while working, so
   the user sees which style ran.
-- **Hands-free** (owner, U-3): double-tap the hotkey to lock recording, tap again
-  to stop, with a stop button on the pill (Wispr Flow's pattern).
+- **Hands-free** (owner, U-3; #167): double-tap the hotkey to lock recording, tap again
+  to stop, with a stop button on the pill (Wispr Flow's pattern). A tap starts recording at once;
+  a second press within 400 ms of the release (`dictation.double_tap_ms`) locks it, and the same
+  recording goes on, so nothing said between the taps is lost. A lone tap is cancelled when the
+  window ends, as in phase 1. While locked the pill shows ✕ (cancel, like Esc) and a red stop
+  square (stop and paste); a click on either never takes focus. The maximum length still applies.
 - **Home → History:** dictation history is on from Phase 1 (U-4), so Phase 2 gives it a place to
   search, copy, re-paste, retry and fix words. Phase 1 has only Recent in the menu.
 

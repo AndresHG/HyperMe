@@ -515,18 +515,33 @@ pub fn pill_view(app: AppHandle) -> Option<View> {
     lock(&app).view.clone()
 }
 
+/// The hands-free pill's buttons (#167 AC-4): `stop` stops and pastes, otherwise ✕ cancels.
+/// The panel never takes focus, so the app being dictated into keeps it (AC-6).
+#[tauri::command]
+pub fn pill_hands_free(app: AppHandle, stop: bool) {
+    if let Some(events) = lock(&app).events.clone() {
+        let _ = events.try_send(if stop { Event::Stop } else { Event::Esc });
+    }
+}
+
 /// A click on the pill: Retry when it offers Retry (R-31); on the bead, Settings for now;
-/// otherwise the state goes away.
+/// nothing while hands-free, whose buttons have their own command; otherwise the state goes
+/// away.
 #[tauri::command]
 pub fn pill_clicked(app: AppHandle) {
-    let (retry, idle, events) = {
+    let (retry, idle, locked, events) = {
         let shared = lock(&app);
+        let kind = shared.view.as_ref().map(|v| v.kind);
         (
             shared.view.as_ref().is_some_and(|v| v.retry),
-            shared.view.as_ref().is_some_and(|v| v.kind == "idle"),
+            kind == Some("idle"),
+            kind == Some("locked"),
             shared.events.clone(),
         )
     };
+    if locked {
+        return;
+    }
     if idle {
         crate::settings::open(&app, "general");
         return;
