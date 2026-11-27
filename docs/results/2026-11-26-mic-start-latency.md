@@ -38,3 +38,36 @@ While paused, Core Audio reports the input device as not running
 in a row with a small probe. The menu-bar indicator is expected to follow device use; that is not
 verified here, and the indicator was not checked by
 eye, because screen capture was not available to the session.
+
+## 27 November 2026: where the start time goes, and AC-2 at the first sample
+
+- Machine: MacBook Pro (MacBookPro18,3), Apple M1 Pro, macOS 26.6.2
+- Input: the built-in microphone, 48 kHz, 1 channel, default buffer (first callback 512 frames)
+- Network: not involved
+
+**Phase breakdown** (a probe, 30 play and pause starts per buffer size, milliseconds from the
+device lookup, median / p90). `play()` returning takes about 45 ms: that is the macOS device
+start. Smaller buffers do not help.
+
+| Buffer | `play()` returns | First callback | 20 ms of audio |
+| --- | --- | --- | --- |
+| Default (512 frames) | 44.6 / 53.4 | 54.7 / 63.3 | 65.4 / 74.0 |
+| 256 frames | 52.8 / 63.2 | 57.3 / 67.5 | 73.2 / 83.3 |
+| 128 frames | 47.5 / 60.2 | 49.5 / 61.9 | 68.0 / 80.4 |
+
+**#173**, starting the microphone before the app lookup and the history entry, took this off
+the key-down path (50 runs): median 0.8 ms, p90 5.7 ms, max 27.5 ms.
+
+**AC-2 at the first captured sample**, the measure the owner chose on 27 November 2026:
+`crates/hyperme-platform/examples/mic_first_sample.rs` (release build), 50 starts of one built
+stream, 150 ms apart, default buffer. The first sample is the first callback's arrival minus its
+length.
+
+| Run | `play()` returns (median / p90 / max) | First callback (median / p90 / max) | First captured sample (median / p90 / max) |
+| --- | --- | --- | --- |
+| 1 | 45.5 / 57.1 / 81.2 | 55.6 / 63.5 / 84.6 | 44.9 / 52.9 / 74.0 |
+| 2 | 44.5 / 68.8 / 110.2 | 54.0 / 74.4 / 119.3 | 43.3 / 63.8 / 108.6 |
+| 3 | 44.2 / 50.7 / 121.5 | 54.5 / 60.7 / 124.3 | 43.8 / 50.0 / 113.6 |
+
+Verdict: **pass** in all three runs (median under 50 ms, p90 under 80 ms). The margin on the
+median is about 5 ms. The figure excludes the hotkey's own delay.

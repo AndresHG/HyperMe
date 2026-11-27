@@ -130,8 +130,11 @@ test servers; *(live)* ones are measured by hand on the owner's Mac and recorded
 - AC-1 *(fake)*: Pressing the hotkey starts capture and opens a speech session and a cleanup
   warm-up in parallel; the state machine reaches `Recording` before either connection completes.
   (R-1, R-2)
-- AC-2 *(live)*: Key-down to first captured audio frame is under 50 ms at the median and under
-  80 ms at the 90th percentile over 50 presses.
+- AC-2 *(live)*: Key-down to the first captured audio sample (the first callback's arrival minus
+  its buffer length) is under 50 ms at the median and under 80 ms at the 90th percentile over 50
+  presses. The owner chose this measure on 27 November 2026: timing to a full 20 ms frame adds
+  20 ms of audio that was already captured to the clock. The microphone stays off when idle
+  (option B, play and pause, is kept). Measured by `examples/mic_first_sample.rs`.
 - AC-3 *(fake)*: Audio reaches the fake speech server in chunks of 100 ms or less while the key
   is held. (R-3)
 - AC-4 *(fake)*: A hold shorter than the minimum hold time, and Esc at any point before paste,
