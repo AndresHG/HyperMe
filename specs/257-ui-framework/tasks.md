@@ -1,0 +1,17 @@
+# Slices
+
+Each slice is one pull request, checked on the owner's Mac (cargo fmt, clippy, tests, `npm run
+check`, the screenshot checks) and measured where it touches a page.
+
+1. **Tooling and the pill.** `app/web/` with Vite, Svelte 5, TypeScript, ESLint and svelte-check;
+   `build.rs` builds it; unmigrated pages copied as they are; the pill as Svelte components; the
+   screenshot checks served from the build; the token lint reads `.svelte` styles. AC-1, AC-2,
+   AC-3, AC-6, AC-7.
+2. **Bindings.** tauri-specta on every command and event; generated `bindings.ts`, checked in, and
+   the staleness test; the pill uses them. AC-4.
+3. **Shared controls.** `lib/ui/`: Button, Switch, Field, Segmented, Card, Row, Menu, Sheet, from
+   `components.css`. AC-3.
+4. **Walkthrough.** onboarding as components. AC-6, AC-7.
+5. **Home.** sidebar, Today, History (with its virtual list) and Dictionary. AC-6, AC-7.
+6. **Settings in Home.** Settings as an on-demand component inside Home, no iframe. AC-5, AC-6.
+7. **Clean-up.** `app/ui` removed, docs (DESIGN.md, CONTRIBUTING.md, README) updated. AC-1.

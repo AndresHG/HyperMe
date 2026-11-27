@@ -9,6 +9,11 @@
 //! ```
 //!
 //! `spikes/flowbench/samples/` has this layout already.
+//!
+//! A text set has no audio: made-up transcripts in `raw.json`, the texts they should become in
+//! `gold.json`, the app each goes into in `apps.json`, and a `SYNTHETIC` file that says the texts
+//! are invented. It replays cleanup only, and may live in the repository, as
+//! `crates/hyperme-quality/sets/formatting/` does.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -65,6 +70,17 @@ pub struct Set {
     pub gold: BTreeMap<String, String>,
     /// Internal names to score. May be empty.
     pub names: Vec<String>,
+    /// The app in front for each sample (`apps.json`), for tone per app. May be empty.
+    pub apps: BTreeMap<String, String>,
+    /// A text set: no audio, its transcripts in `raw.json` (see the module comment).
+    pub text_only: bool,
+}
+
+/// The marker of a text set of invented texts, which may live in the repository.
+pub const SYNTHETIC: &str = "SYNTHETIC";
+
+fn is_text_set(dir: &Path) -> bool {
+    dir.join(SYNTHETIC).is_file() && dir.join("raw.json").is_file()
 }
 
 /// A WAV file of mono PCM16 at 24 kHz, like the history's.
@@ -203,6 +219,17 @@ pub fn load(dir: &Path, only: &[String], names: Option<&Path>) -> Result<Set, St
         let pcm = read_wav(&bytes).map_err(|e| format!("{}: {e}", path.display()))?;
         samples.push(Sample { name, pcm });
     }
+    let text_only = samples.is_empty() && is_text_set(dir);
+    if text_only {
+        samples = read_raw(&dir.join("raw.json"))?
+            .into_keys()
+            .filter(|name| only.is_empty() || only.contains(name))
+            .map(|name| Sample {
+                name,
+                pcm: Vec::new(),
+            })
+            .collect();
+    }
     if samples.is_empty() {
         return Err(format!("no samples (.wav files) in {}", dir.display()));
     }
@@ -217,6 +244,8 @@ pub fn load(dir: &Path, only: &[String], names: Option<&Path>) -> Result<Set, St
         samples,
         gold: read_texts(&dir.join("gold.json"))?,
         names,
+        apps: read_texts(&dir.join("apps.json"))?,
+        text_only,
     })
 }
 
@@ -236,8 +265,15 @@ pub fn check_location_with(
     let dir = dir
         .canonicalize()
         .map_err(|e| format!("the set {}: {e}", dir.display()))?;
+    let has_audio = std::fs::read_dir(&dir).is_ok_and(|entries| {
+        entries
+            .filter_map(Result::ok)
+            .any(|e| e.path().extension().is_some_and(|x| x == "wav"))
+    });
     match repo_root(&dir) {
         None => Ok(()),
+        // A text set of invented texts, with no audio, may be committed.
+        Some(_) if !has_audio && is_text_set(&dir) => Ok(()),
         Some(root) if ignored(&root, &dir) => Ok(()),
         Some(root) => Err(format!(
             "the set {} is inside the git repository {} and is not git-ignored. Its audio and \

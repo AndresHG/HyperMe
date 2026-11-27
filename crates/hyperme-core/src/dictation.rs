@@ -22,6 +22,7 @@ use tokio::time::{Instant, sleep_until, timeout};
 
 use crate::config::{CleanupLevel, Config};
 use crate::dictionary::Dictionary;
+use crate::tone::AppStyle;
 use crate::trace::{DictationTrace, Outcome};
 use crate::traits::{
     CleanupProvider, DictationId, Error, FocusInfo, History, Inserter, LiveSession, Microphone,
@@ -912,6 +913,8 @@ async fn transcribe_and_clean<L: LiveSession, C: CleanupProvider>(
         .collect();
     let words = raw.split_whitespace().count();
     trace.words(words);
+    // Issue 219: the app in front shapes the text after the model too.
+    let style = AppStyle::for_app(app);
     // R-14.
     if words == 0 {
         trace.end(Outcome::NothingHeard);
@@ -920,7 +923,7 @@ async fn transcribe_and_clean<L: LiveSession, C: CleanupProvider>(
     }
     if words < settings.short_words {
         // R-13: no cleanup for short dictations.
-        let text = format_short(raw);
+        let text = style.finish(&format_short(raw));
         trace.ready(false);
         return Ok(Text {
             text,
@@ -965,7 +968,7 @@ async fn transcribe_and_clean<L: LiveSession, C: CleanupProvider>(
             }
             trace.ready(false);
             Ok(Text {
-                text: cleaned.trim().to_owned(),
+                text: style.finish(&cleaned),
                 raw: false,
                 language,
                 transcript: raw.to_owned(),
@@ -977,7 +980,7 @@ async fn transcribe_and_clean<L: LiveSession, C: CleanupProvider>(
         Waited::Done(_) => {
             trace.ready(true);
             Ok(Text {
-                text: raw.to_owned(),
+                text: style.finish(raw),
                 raw: true,
                 language,
                 transcript: raw.to_owned(),

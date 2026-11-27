@@ -87,6 +87,19 @@ struct MuteState<O> {
     muted: bool,
 }
 
+/// Runs a job after a delay. The app uses a short-lived thread; tests run the job by hand, so no
+/// test depends on how fast a machine is.
+type Timer = Arc<dyn Fn(Duration, Box<dyn FnOnce() + Send>) + Send + Sync>;
+
+fn thread_timer() -> Timer {
+    Arc::new(|delay, job| {
+        thread::spawn(move || {
+            thread::sleep(delay);
+            job();
+        });
+    })
+}
+
 /// A microphone that mutes the output while it records (AC-7). The engine sees a plain
 /// `Microphone`, so the dictation state machine does not change.
 pub struct Muting<M, O: OutputMute> {
@@ -94,6 +107,7 @@ pub struct Muting<M, O: OutputMute> {
     settings: MuteSettings,
     /// How long the start sound plays; the mute waits for it. Zero mutes at once.
     delay: Duration,
+    timer: Timer,
     state: Arc<Mutex<MuteState<O>>>,
 }
 
@@ -112,12 +126,19 @@ impl<M, O: OutputMute> Muting<M, O> {
             mic,
             settings,
             delay,
+            timer: thread_timer(),
             state: Arc::new(Mutex::new(MuteState {
                 output,
                 generation: 0,
                 muted: false,
             })),
         }
+    }
+
+    #[cfg(test)]
+    fn with_timer(mut self, timer: Timer) -> Self {
+        self.timer = timer;
+        self
     }
 
     fn lock(state: &Mutex<MuteState<O>>) -> std::sync::MutexGuard<'_, MuteState<O>> {
@@ -154,13 +175,9 @@ impl<M: Microphone, O: OutputMute> Microphone for Muting<M, O> {
         if self.delay.is_zero() {
             mute(&self.state);
         } else {
-            // A short-lived thread, so key-down never waits for the start sound.
+            // Key-down never waits for the start sound.
             let state = Arc::clone(&self.state);
-            let delay = self.delay;
-            thread::spawn(move || {
-                thread::sleep(delay);
-                mute(&state);
-            });
+            (self.timer)(self.delay, Box::new(move || mute(&state)));
         }
         Ok(())
     }
@@ -289,17 +306,34 @@ mod tests {
     /// mutes, so a late mute cannot leave the Mac silent.
     #[test]
     fn a_tap_shorter_than_the_delay_never_mutes() {
-        let (mut mic, muted) = muting(true, Duration::from_millis(30));
+        // The delayed jobs wait here until the test runs them: no real sleeps (regression: the
+        // sleeping version failed on a slow CI runner, PR 254).
+        type Jobs = Arc<Mutex<Vec<(Duration, Box<dyn FnOnce() + Send>)>>>;
+        let jobs: Jobs = Arc::default();
+        let queue = jobs.clone();
+        let (mic, muted) = muting(true, Duration::from_millis(250));
+        let mut mic = mic.with_timer(Arc::new(move |delay, job| {
+            queue.lock().unwrap().push((delay, job));
+        }));
+        let run_due = || {
+            let due: Vec<_> = jobs.lock().unwrap().drain(..).collect();
+            for (delay, job) in due {
+                assert_eq!(delay, Duration::from_millis(250));
+                job();
+            }
+        };
+
         mic.start().unwrap();
         assert!(
             !muted.load(Ordering::SeqCst),
             "muted before the start sound ended"
         );
         mic.stop();
-        thread::sleep(Duration::from_millis(80));
-        assert!(!muted.load(Ordering::SeqCst));
+        run_due();
+        assert!(!muted.load(Ordering::SeqCst), "a late mute after a tap");
+
         mic.start().unwrap();
-        thread::sleep(Duration::from_millis(80));
+        run_due();
         assert!(muted.load(Ordering::SeqCst));
         mic.stop();
         assert!(!muted.load(Ordering::SeqCst));
