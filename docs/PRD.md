@@ -360,20 +360,20 @@ Found while consolidating, 26 November 2026. Each is fixed in the document named
 confirms, unless marked "fixed here".
 
 Fixed in the pull request that adopted this PRD: C-1, C-3, C-4, C-5, C-10, C-12 (the identity
-line), C-13, C-14, C-15, C-16. Left for the Phase 1 spec owner: C-2 and C-9. Still open: C-7
+line), C-13, C-14, C-15, C-16. Fixed later in the Phase 1 spec: C-2 and C-9 (#76). Still open: C-7
 and C-8 (the roadmap's "where we stand" table and the phase 2 gate). C-6 and C-11 need no change.
 
 | # | Where | Contradiction | Resolution |
 | --- | --- | --- | --- |
 | C-1 | [PITCH.md](PITCH.md) (elevator pitch, positioning table, claims ledger), [RESEARCH.md](RESEARCH.md) section 2 | Say "keeps nothing on disk" and "no audio kept on disk"; the owner chose dictation history on disk on 26 November 2026 | Follow the newer decision; reword PITCH to "keeps your data on your Mac" |
-| C-2 | Phase 1 spec R-18 | Ends with "It shall not write it to disk", against the history it describes | Delete that sentence |
+| C-2 | Phase 1 spec R-18 | Ends with "It shall not write it to disk", against the history it describes | Delete that sentence (fixed, #76) |
 | C-3 | [SPEC.md](SPEC.md) section 2 vs [ROADMAP.md](ROADMAP.md) phase 3 and [UX.md](UX.md) | Command mode on a second hotkey vs one key that routes | Q-3 decided: one key; fix SPEC section 2 |
 | C-4 | `CLAUDE.md` introduction and examples | "Create a ticket for this in Linear"; GitHub is the first connector | Change the examples to GitHub |
 | C-5 | `CLAUDE.md` "No local models in version 1" vs meetings on device | Meetings use Apple's on-device recognizer and an optional local cleanup model | Reword: no local models for dictation in version 1; meetings on device are the decided exception |
 | C-6 | [RESEARCH.md](RESEARCH.md) section 5 "consume instead of building: meeting capture, scheduling" vs ROADMAP phases 4 and 5 | Research advised not to build capture or a scheduler; the roadmap builds both | The owner's later decisions win (meetings on device, 26 November). RESEARCH stays as history |
 | C-7 | [ROADMAP.md](ROADMAP.md) "Where we stand" | Says formatting quality is "not measured"; the Wispr comparison measured 7.6 against 11.6 edits per 100 characters | Update the table |
 | C-8 | ROADMAP phase 2 gate | "Zero-edit rate at or above Wispr Flow's": already met on paper (5 of 50 against 4 of 50), so it no longer separates good from not | Gate on edits per 100 characters and on internal names, and on the owner's week of use |
-| C-9 | Phase 1 spec decisions | Cleanup prompt `v1`, deadline 1000 ms; the pipeline now uses dictionary substitution and prompt `v4`, deadline 1500 ms | Being fixed in the spec by the UX thread (owner, 26 November 2026) |
+| C-9 | Phase 1 spec decisions | Cleanup prompt `v1`, deadline 1000 ms; the pipeline now uses dictionary substitution and prompt `v4`, deadline 1500 ms | Spec decisions table updated (fixed, #76) |
 | C-10 | [SPEC.md](SPEC.md) section 4 | "Work and personal profiles keep separate connectors and storage"; no phase or spec has profiles, and work data is out of scope | Q-12 decided: one profile, several accounts; fix SPEC section 4 |
 | C-11 | Budgets in `CLAUDE.md` vs ROADMAP phase 0 gate | "Under 800 ms" vs "median ≤ 800, p90 ≤ 1200" | Both kept: the gate is the median rule; under 800 ms at p90 is the design target (section 10) |
 | C-12 | [PITCH.md](PITCH.md) and README | Positioning is framed entirely against Wispr Flow | Q-1 |
