@@ -9,9 +9,10 @@ use std::path::{Path, PathBuf};
 use std::sync::{Mutex, PoisonError};
 
 use hyperme_core::config::Config;
-use hyperme_core::dictionary::{Corrected, Dictionary, Term, is_common_word};
+use hyperme_core::dictation::Pasted;
+use hyperme_core::dictionary::{Corrected, Dictionary, Term, is_common_word, key};
 use hyperme_core::traits::{self, Added, Correction, Error, ErrorKind, Refusal};
-use hyperme_platform::dictionary_store::{DictionaryStore, Source};
+use hyperme_platform::dictionary_store::{DictionaryStore, Source, Suggestion};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
 
@@ -82,16 +83,71 @@ pub struct Entry {
     heard: Vec<String>,
 }
 
+/// A suggestion as the page shows it (R-18): `heard → written · fixed 2 times in Slack`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct Suggested {
+    written: String,
+    heard: String,
+    seen: u32,
+    app: Option<String>,
+}
+
+/// A learned row, for its mark and Undo: `heard` is empty for a learned word with no
+/// misspelling.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct Learned {
+    written: String,
+    heard: String,
+}
+
 /// What the page shows.
 #[derive(Debug, Serialize)]
 pub struct View {
     path: String,
     entries: Vec<Entry>,
     error: Option<String>,
+    /// Spec 93, D6: what learning found and the "Learn from my edits" switch.
+    suggestions: Vec<Suggested>,
+    learned: Vec<Learned>,
+    learning: bool,
+}
+
+/// The page's view of the store: the list, then what learning found.
+fn view_of(store: &DictionaryStore, path: &Path, dictionary: &Dictionary) -> View {
+    let mut shown = view(path, dictionary, None);
+    shown.suggestions = store
+        .suggestions()
+        .unwrap_or_default()
+        .into_iter()
+        .map(
+            |Suggestion {
+                 written,
+                 heard,
+                 seen,
+                 last_app,
+             }| Suggested {
+                written,
+                heard,
+                seen,
+                app: last_app,
+            },
+        )
+        .collect();
+    shown.learned = store
+        .learned()
+        .unwrap_or_default()
+        .into_iter()
+        .map(|(written, heard)| Learned { written, heard })
+        .collect();
+    shown.learning = store.learning().unwrap_or(true);
+    shown
 }
 
 fn view(path: &Path, dictionary: &Dictionary, error: Option<String>) -> View {
     View {
+        suggestions: Vec::new(),
+        learned: Vec::new(),
+        learning: true,
         path: path.display().to_string(),
         entries: dictionary
             .terms()
@@ -122,7 +178,7 @@ fn saved(
 ) -> Result<View, String> {
     let (dictionary, shown) = with_store(app, |store, path| {
         let dictionary = change(store)?;
-        let shown = view(path, &dictionary, None);
+        let shown = view_of(store, path, &dictionary);
         Ok((dictionary, shown))
     })?;
     crate::runtime::update_dictionary(app, dictionary);
@@ -135,7 +191,7 @@ pub fn dictionary_view(app: AppHandle) -> View {
     let state = shared.lock().unwrap_or_else(PoisonError::into_inner);
     match &state.store {
         Ok(store) => match store.dictionary() {
-            Ok(d) => view(&state.path, &d, None),
+            Ok(d) => view_of(store, &state.path, &d),
             Err(why) => view(&state.path, &Dictionary::default(), Some(why)),
         },
         Err(why) => view(&state.path, &Dictionary::default(), Some(why.clone())),
@@ -198,6 +254,100 @@ pub fn dictionary_export(app: AppHandle, format: String) -> Result<String, Strin
         .arg(&path)
         .spawn();
     Ok(path.display().to_string())
+}
+
+/// Adds or dismisses a suggestion from the page (R-18, R-19). An added one is marked learned,
+/// so deleting it later dismisses it for good.
+#[tauri::command]
+pub fn dictionary_suggestion(
+    app: AppHandle,
+    written: String,
+    heard: String,
+    add: bool,
+) -> Result<View, String> {
+    saved(&app, |store| {
+        if add {
+            let fixed = match store.dictionary()?.corrected(&heard, &written, true)? {
+                Corrected::Added(fixed) => fixed,
+                Corrected::Common => return Err("Confirm the common word first.".to_owned()),
+            };
+            store.drop_suggestion(&written, &heard)?;
+            store.save(fixed.terms().to_vec(), Source::Learned)
+        } else {
+            store.dismiss(&written, &heard)?;
+            store.dictionary()
+        }
+    })
+}
+
+/// The "Learn from my edits" switch (R-16): sets it when `on` is given; returns it.
+#[tauri::command]
+pub fn dictionary_learning(app: AppHandle, on: Option<bool>) -> Result<bool, String> {
+    with_store(&app, |store, _| {
+        if let Some(on) = on {
+            store.set_learning(on)?;
+        }
+        store.learning()
+    })
+}
+
+/// How many suggestions wait, for the Home page's line (R-22).
+#[tauri::command]
+pub fn dictionary_suggested(app: AppHandle) -> usize {
+    with_store(&app, |store, _| store.suggestions().map(|s| s.len())).unwrap_or(0)
+}
+
+/// A dictation was pasted (spec 93, D6): its entries count as used. Returns whether learning
+/// is on, so the caller watches the field for the user's fixes (slice D7).
+pub fn on_pasted(app: &AppHandle, pasted: &Pasted) -> bool {
+    with_store(app, |store, _| {
+        store.count_uses(&pasted.used)?;
+        store.learning()
+    })
+    .unwrap_or(false)
+}
+
+/// Dictations in the history whose text holds `words` as whole words (R-17).
+fn dictations_with(app: &AppHandle, words: &str) -> u32 {
+    let wanted: Vec<String> = words.split_whitespace().map(key).collect();
+    if wanted.is_empty() {
+        return 0;
+    }
+    let holds = |text: &str| {
+        let have: Vec<String> = text
+            .split(|c: char| !c.is_alphanumeric())
+            .filter(|w| !w.is_empty())
+            .map(key)
+            .collect();
+        have.windows(wanted.len()).any(|w| w == wanted.as_slice())
+    };
+    let hits =
+        crate::runtime::with_history(app, |h| h.search(words, None, 500)).unwrap_or_default();
+    let n = hits
+        .iter()
+        .filter(|item| item.text.as_deref().is_some_and(holds))
+        .count();
+    u32::try_from(n).unwrap_or(u32::MAX)
+}
+
+/// The watch of a pasted dictation ended with `edited` in its place (R-16 to R-19, slice D7):
+/// fixes of misheard words become suggestions or learned words; a learned word applies from the
+/// next dictation. The field text goes no further than this call (R-21).
+pub fn learn(app: &AppHandle, pasted: &Pasted, edited: &str) {
+    let learned = with_store(app, |store, _| {
+        store.learn(
+            &pasted.text,
+            &pasted.transcript,
+            edited,
+            pasted.app.as_deref(),
+            |words| dictations_with(app, words),
+        )
+    });
+    match learned {
+        Ok(Some(dictionary)) => crate::runtime::update_dictionary(app, dictionary),
+        Ok(None) => {}
+        Err(why) => tracing::warn!("dictionary learning: {why}"),
+    }
 }
 
 /// Applies a fix (R-12, R-17, AC-12): `None` when the heard form is common and needs a yes.

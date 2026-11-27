@@ -105,7 +105,11 @@ The text will be pasted into Slack.
 - **Above the cap**, the line carries only entries that look relevant: entries whose heard form
   fired in this transcript, then entries with a character-trigram overlap with any 1 to 3 word
   window of the transcript above a threshold, most used first, up to 50. This changes the prefix
-  per dictation, which is why it applies only above the cap. The results showed the prompt rule
+  per dictation, which is why it applies only above the cap. Above the cap the warm-up sends the
+  prompt with no dictionary line, and the line is set once the transcript is in. A form counts
+  as close when half of its distinct trigrams (words padded with a space at both ends) fall in
+  one window; the index of trigrams is built when the dictionary changes, so a dictation makes
+  one pass over its words (slice D3). The results showed the prompt rule
   adds little on top of substitution (row d against b in the
   [results](../../docs/results/2026-11-26-dictionary.md)), so a small, relevant list loses
   nothing.
@@ -147,6 +151,10 @@ watch ends. The core:
    in the pasted dictation, and either the folded letters are close (character-bigram
    similarity of at least 0.4, `sun trix` to `zentrix`) or the new text looks like a name (has
    a capital letter or a digit, or is not in the common-word list) and the old text is short.
+   As built (slice D6): "looks like a name" is a digit, or a capital where the old words had
+   none, with an old text of at most 2 words. "Not in the common-word list" was dropped,
+   because with a list of a few hundred words it let plain word swaps (`send` to `email`)
+   through as fixes; a capital at the start of a sentence does not count either.
    A case-only change (`zentrix` to `Zentrix`) is a spelling-only candidate.
 4. Maps the old text back to the raw transcript, since the cleanup may have changed it: the
    raw words at the same position (via the alignment of raw to cleaned text) become the heard
@@ -170,6 +178,10 @@ Decided by the owner on 26 November 2026 (twice, then on its own):
 | The heard form is a common word | Stays a suggestion, however often it is seen; adding it shows the warning |
 | The user dismisses a suggestion, or deletes a learned heard form | Remembered in `Dismissed`; never suggested again |
 | A Fix from History | Added at once: the user chose it |
+
+Use counts go up after each paste, for the entries the dictation used. The suggestions, the
+dismissals and the "Learn from my edits" switch live in `dictionary.sqlite`; the switch is on
+unless the user turns it off.
 
 Common words are the built-in list (a few hundred of the most frequent Spanish and English
 words, written by us, so no data licence is involved) plus any word seen in three or more of the

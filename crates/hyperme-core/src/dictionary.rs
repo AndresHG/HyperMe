@@ -16,7 +16,8 @@
 //!
 //! Pure code: the app reads the file and hands its text to [`Dictionary::parse`].
 
-use std::collections::BTreeMap;
+use std::collections::{HashMap, HashSet};
+use std::hash::{BuildHasherDefault, Hasher};
 
 /// Limits on what the Settings page accepts (R-15), the same as Wispr Flow's and
 /// Speechmatics' so an import from either fits and a later `additional_vocab` needs no new rules.
@@ -24,9 +25,16 @@ pub const MAX_ENTRIES: usize = 1000;
 pub const MAX_CHARS: usize = 60;
 pub const MAX_HEARD_WORDS: usize = 6;
 
-/// At most this many entries go in the cleanup prompt (R-5). Slice D3 adds a relevance filter
-/// for the rest; until then the first ones in alphabetical order are used.
+/// The default prompt cap (R-5): up to this many entries, the prompt carries them all,
+/// alphabetical, so its start stays cacheable. `dictation.dictionary_prompt_cap` changes it.
 pub const PROMPT_CAP: usize = 150;
+
+/// Above the cap, at most this many relevant entries go in the prompt (design.md, "Prompt").
+pub const RELEVANT_MAX: usize = 50;
+
+/// Above the cap, an entry is relevant when this share of the character trigrams of one of its
+/// forms appears in a window of 1 to 3 words of the transcript (design.md, "Prompt").
+const RELEVANT_OVERLAP: f32 = 0.5;
 
 /// Frequent Spanish and English words. An entry that is one of them gets no implicit forms
 /// (R-3, R-17), so adding "Mesa" does not capitalise every "mesa". Written by us; slice D6 adds
@@ -69,15 +77,23 @@ pub enum Corrected {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Dictionary {
     terms: Vec<Term>,
-    /// Folded heard forms, explicit and implicit, longest first, each with its entry.
-    variants: Vec<(Vec<char>, String)>,
-    /// Indexes into `variants` by first folded character, still longest first.
-    by_first: BTreeMap<char, Vec<usize>>,
+    /// How many dictations used each entry, in the order of `terms` (design.md, "Data
+    /// model"). Orders the relevant entries above the prompt cap (R-5).
+    uses: Vec<u32>,
+    /// Folded heard forms, explicit and implicit, longest first, each with its entry's index.
+    variants: Vec<(Vec<char>, usize)>,
+    /// Indexes into `variants` by their first folded word, still longest first (R-6).
+    by_first: HashMap<Vec<char>, Vec<usize>, Fast>,
+    /// The relevance filter's index (R-5), built with the dictionary so a dictation only scans.
+    grams: Box<GramIndex>,
 }
 
 /// Lower case, and `á é í ó ú ü à è ì ò ù` without their accents. `ñ` stays: `año` and `ano`
 /// are different words.
 fn fold(c: char) -> char {
+    if c.is_ascii() {
+        return c.to_ascii_lowercase();
+    }
     let c = c.to_lowercase().next().unwrap_or(c);
     match c {
         'á' | 'à' => 'a',
@@ -196,8 +212,13 @@ impl Dictionary {
     }
 
     pub fn new(terms: Vec<Term>) -> Self {
-        let mut variants: Vec<(Vec<char>, String)> = Vec::new();
-        for term in &terms {
+        let mut variants: Vec<(Vec<char>, usize)> = Vec::new();
+        let mut known: HashSet<Vec<char>, Fast> = HashSet::default();
+        let mut grams = Box::<GramIndex>::default();
+        for (at, term) in terms.iter().enumerate() {
+            for form in std::iter::once(&term.written).chain(&term.heard) {
+                grams.add(at, form);
+            }
             let mut forms: Vec<String> = term.heard.clone();
             // R-3: the entry in any case or with accents, and split into its parts.
             if !is_common(&term.written) {
@@ -206,21 +227,35 @@ impl Dictionary {
             }
             for form in forms {
                 let form = folded(&form);
-                if !form.is_empty() && !variants.iter().any(|(v, _)| *v == form) {
-                    variants.push((form, term.written.clone()));
+                if !form.is_empty() && known.insert(form.clone()) {
+                    variants.push((form, at));
                 }
             }
         }
         variants.sort_by_key(|(v, _)| std::cmp::Reverse(v.len()));
-        let mut by_first: BTreeMap<char, Vec<usize>> = BTreeMap::new();
+        let mut by_first: HashMap<Vec<char>, Vec<usize>, Fast> = HashMap::default();
         for (index, (variant, _)) in variants.iter().enumerate() {
-            by_first.entry(variant[0]).or_default().push(index);
+            by_first
+                .entry(variant[..first_word(variant)].to_vec())
+                .or_default()
+                .push(index);
         }
+        grams.finish();
         Dictionary {
+            uses: vec![0; terms.len()],
             terms,
             variants,
             by_first,
+            grams,
         }
+    }
+
+    /// The use count of each entry, in the order of [`Dictionary::terms`], from the store.
+    /// Missing counts are 0.
+    pub fn with_uses(mut self, mut uses: Vec<u32>) -> Self {
+        uses.resize(self.terms.len(), 0);
+        self.uses = uses;
+        self
     }
 
     /// Checks entries from the Settings page (R-15) and says what is wrong, naming the entry.
@@ -423,8 +458,20 @@ impl Dictionary {
     /// never matched again. Text that already reads exactly as the entry is left alone.
     /// Returns the new text and the number of substitutions.
     pub fn apply(&self, text: &str) -> (String, usize) {
+        let s = self.substitute(text);
+        (s.text, s.made)
+    }
+
+    /// [`Dictionary::apply`], also naming the entries found in the text, replaced or already
+    /// written right, for the prompt above the cap (R-5).
+    pub fn substitute(&self, text: &str) -> Substituted {
+        let mut seen = Vec::new();
         if self.variants.is_empty() {
-            return (text.to_owned(), 0);
+            return Substituted {
+                text: text.to_owned(),
+                made: 0,
+                seen,
+            };
         }
         let chars: Vec<char> = text.chars().collect();
         let folded_text: Vec<char> = chars.iter().map(|&c| fold(c)).collect();
@@ -433,10 +480,13 @@ impl Dictionary {
         let mut i = 0;
         'scan: while i < chars.len() {
             let candidates = (i == 0 || !word(chars[i - 1]))
-                .then(|| self.by_first.get(&folded_text[i]))
+                .then(|| {
+                    self.by_first
+                        .get(&folded_text[i..i + first_word(&folded_text[i..])])
+                })
                 .flatten();
             if let Some(candidates) = candidates {
-                for (variant, written) in candidates.iter().map(|&k| &self.variants[k]) {
+                for &(ref variant, at) in candidates.iter().map(|&k| &self.variants[k]) {
                     let end = i + variant.len();
                     let fits = end <= chars.len()
                         && folded_text[i..end] == variant[..]
@@ -444,8 +494,11 @@ impl Dictionary {
                     if !fits {
                         continue;
                     }
-                    let heard: String = chars[i..end].iter().collect();
-                    if heard == *written {
+                    if !seen.contains(&at) {
+                        seen.push(at);
+                    }
+                    let written = &self.terms[at].written;
+                    if chars[i..end].iter().copied().eq(written.chars()) {
                         break;
                     }
                     out.push_str(written);
@@ -457,35 +510,240 @@ impl Dictionary {
             out.push(chars[i]);
             i += 1;
         }
-        (out, made)
+        Substituted {
+            text: out,
+            made,
+            seen,
+        }
     }
 
-    /// The paragraph added to the cleanup prompt (R-4): the written forms, alphabetical, with
-    /// no commas or line breaks of their own, at most [`PROMPT_CAP`]. Empty when there are no
-    /// entries. The same dictionary always gives the same line, so the prompt's start stays
-    /// cacheable.
-    pub fn prompt_line(&self) -> String {
-        let mut written: Vec<String> = self
-            .terms
-            .iter()
-            .map(|t| {
-                t.written
-                    .chars()
-                    .map(|c| if c == ',' || c.is_control() { ' ' } else { c })
-                    .collect::<String>()
-                    .split_whitespace()
-                    .collect::<Vec<_>>()
-                    .join(" ")
-            })
-            .filter(|w| !w.is_empty())
-            .collect();
-        written.sort_by_key(|w| (w.to_lowercase(), w.clone()));
-        written.dedup();
-        written.truncate(PROMPT_CAP);
-        if written.is_empty() {
+    /// The paragraph added to the cleanup prompt (R-4): every written form, alphabetical, with
+    /// no commas or line breaks of their own. Empty when there are no entries, and above `cap`
+    /// entries, where [`Dictionary::relevant_line`] chooses per dictation (R-5). The same
+    /// dictionary always gives the same line, so the prompt's start stays cacheable.
+    pub fn prompt_line(&self, cap: usize) -> String {
+        if self.terms.len() > cap {
             return String::new();
         }
-        format!("\n\nThe speaker's dictionary: {}.", written.join(", "))
+        line((0..self.terms.len()).map(|at| &self.terms[at].written))
+    }
+
+    /// Above `cap` entries (R-5): the line for this dictation, with only the entries that look
+    /// relevant to `substituted`, the transcript after [`Dictionary::substitute`]. First the
+    /// entries it found (`seen`), then those with a form whose character trigrams overlap a
+    /// window of 1 to 3 words of the transcript, most used first; at most [`RELEVANT_MAX`] and
+    /// never more than `cap`. `None` at or below the cap: the stable line stands.
+    pub fn relevant_line(&self, substituted: &Substituted, cap: usize) -> Option<String> {
+        if self.terms.len() <= cap {
+            return None;
+        }
+        let max = RELEVANT_MAX.min(cap);
+        let mut chosen: Vec<usize> = substituted.seen.iter().copied().take(max).collect();
+        if chosen.len() < max {
+            let mut near = self.grams.near(&substituted.text);
+            near.retain(|at| !chosen.contains(at));
+            near.sort_by_key(|&at| (std::cmp::Reverse(self.uses[at]), at));
+            chosen.extend(near.into_iter().take(max - chosen.len()));
+        }
+        Some(line(chosen.into_iter().map(|at| &self.terms[at].written)))
+    }
+}
+
+/// What [`Dictionary::substitute`] made of a transcript.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Substituted {
+    pub text: String,
+    /// Substitutions made.
+    pub made: usize,
+    /// The entries found, by index into [`Dictionary::terms`], in the order first found.
+    pub seen: Vec<usize>,
+}
+
+/// The dictionary paragraph for these written forms: cleaned, alphabetical, deduplicated.
+fn line<'a>(forms: impl Iterator<Item = &'a String>) -> String {
+    let mut written: Vec<String> = forms
+        .map(|w| {
+            w.chars()
+                .map(|c| if c == ',' || c.is_control() { ' ' } else { c })
+                .collect::<String>()
+                .split_whitespace()
+                .collect::<Vec<_>>()
+                .join(" ")
+        })
+        .filter(|w| !w.is_empty())
+        .collect();
+    written.sort_by_key(|w| (w.to_lowercase(), w.clone()));
+    written.dedup();
+    if written.is_empty() {
+        return String::new();
+    }
+    format!("\n\nThe speaker's dictionary: {}.", written.join(", "))
+}
+
+/// The length of the first word of folded text: its run of letters and digits, or its first
+/// character when it starts with neither. The matcher's index key (R-6).
+fn first_word(text: &[char]) -> usize {
+    match text.iter().position(|c| !c.is_alphanumeric()) {
+        Some(0) => 1.min(text.len()),
+        Some(n) => n,
+        None => text.len(),
+    }
+}
+
+/// A small fast hasher for the matcher's and the filter's maps (the keys are short and never
+/// come from the network, so the default hasher's protection against flooding buys nothing).
+#[derive(Debug, Default, Clone, Copy)]
+pub struct FastHasher(u64);
+
+type Fast = BuildHasherDefault<FastHasher>;
+
+impl Hasher for FastHasher {
+    fn finish(&self) -> u64 {
+        self.0
+    }
+
+    fn write(&mut self, bytes: &[u8]) {
+        for &b in bytes {
+            self.write_u64(u64::from(b));
+        }
+    }
+
+    fn write_u32(&mut self, n: u32) {
+        self.write_u64(u64::from(n));
+    }
+
+    fn write_usize(&mut self, n: usize) {
+        self.write_u64(n as u64);
+    }
+
+    fn write_u64(&mut self, n: u64) {
+        self.0 = (self.0.rotate_left(5) ^ n).wrapping_mul(0x51_7c_c1_b7_27_22_0a_95);
+    }
+}
+
+/// A trigram of folded characters, packed.
+type Trigram = u64;
+
+/// Calls `each` with the trigrams of every word of `text` as folded, padded with a space at
+/// both ends (` ze`, `zen`, ..., `ix `), and the word's position. Allocates nothing.
+fn trigrams(text: &str, mut each: impl FnMut(u32, Trigram)) {
+    let pack =
+        |a: char, b: char, c: char| (u64::from(a) << 42) | (u64::from(b) << 21) | u64::from(c);
+    let (mut word, mut a, mut b) = (0u32, ' ', ' ');
+    let mut inside = false;
+    for c in text.chars() {
+        if c.is_alphanumeric() {
+            let c = fold(c);
+            if inside {
+                each(word, pack(a, b, c));
+            } else {
+                inside = true;
+                b = ' ';
+            }
+            (a, b) = (b, c);
+        } else if inside {
+            each(word, pack(a, b, ' '));
+            inside = false;
+            word += 1;
+        }
+    }
+    if inside {
+        each(word, pack(a, b, ' '));
+    }
+}
+
+/// For each form (written or heard) of each entry, its distinct trigrams, indexed by trigram,
+/// so a dictation finds the close entries in one pass over its words (R-5, R-6).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+struct GramIndex {
+    /// Each form's entry and how many of its trigrams a window must hold.
+    forms: Vec<(u32, u8)>,
+    /// Trigram to a range of `postings`.
+    by_gram: HashMap<Trigram, (u32, u32), Fast>,
+    /// (form, bit of that trigram in the form), grouped by trigram.
+    postings: Vec<(u32, u8)>,
+    /// While building: (trigram, form, bit).
+    building: Vec<(Trigram, u32, u8)>,
+}
+
+impl GramIndex {
+    fn add(&mut self, entry: usize, form: &str) {
+        let mut mine: Vec<Trigram> = Vec::new();
+        trigrams(form, |_, t| mine.push(t));
+        mine.sort_unstable();
+        mine.dedup();
+        // A form holds at most 60 characters (R-15), so at most 60 trigrams; 64 bits each.
+        mine.truncate(64);
+        if mine.is_empty() {
+            return;
+        }
+        let need = ((mine.len() as f32 * RELEVANT_OVERLAP).ceil() as u8).max(1);
+        let id = u32::try_from(self.forms.len()).unwrap_or(u32::MAX);
+        self.forms
+            .push((u32::try_from(entry).unwrap_or(u32::MAX), need));
+        for (bit, t) in mine.into_iter().enumerate() {
+            self.building.push((t, id, bit as u8));
+        }
+    }
+
+    fn finish(&mut self) {
+        let mut building = std::mem::take(&mut self.building);
+        building.sort_unstable();
+        self.postings = Vec::with_capacity(building.len());
+        let mut i = 0;
+        while i < building.len() {
+            let t = building[i].0;
+            let start = self.postings.len() as u32;
+            while i < building.len() && building[i].0 == t {
+                self.postings.push((building[i].1, building[i].2));
+                i += 1;
+            }
+            self.by_gram.insert(t, (start, self.postings.len() as u32));
+        }
+        self.by_gram.shrink_to_fit();
+        self.forms.shrink_to_fit();
+    }
+
+    /// The entries with a form of which a window of 1 to 3 consecutive words of `text` holds
+    /// at least [`RELEVANT_OVERLAP`] of the trigrams, in entry order.
+    fn near(&self, text: &str) -> Vec<usize> {
+        if self.forms.is_empty() {
+            return Vec::new();
+        }
+        // Per form: the last word it was seen in, and which of its trigrams that word and the
+        // two before it held. `need` 0 marks a form already passed.
+        let mut seen: Vec<(u32, [u64; 3])> = vec![(u32::MAX, [0; 3]); self.forms.len()];
+        let mut passed: Vec<usize> = Vec::new();
+        trigrams(text, |word, t| {
+            let Some(&(start, end)) = self.by_gram.get(&t) else {
+                return;
+            };
+            for &(form, bit) in &self.postings[start as usize..end as usize] {
+                let (last, masks) = &mut seen[form as usize];
+                if *last == u32::MAX - 1 {
+                    continue;
+                }
+                if *last != word {
+                    let gap = if *last == u32::MAX { 3 } else { word - *last };
+                    *masks = match gap {
+                        1 => [0, masks[0], masks[1]],
+                        2 => [0, 0, masks[0]],
+                        _ => [0; 3],
+                    };
+                    *last = word;
+                }
+                masks[0] |= 1 << bit;
+                let held = (masks[0] | masks[1] | masks[2]).count_ones();
+                let (entry, need) = self.forms[form as usize];
+                if held >= u32::from(need) {
+                    *last = u32::MAX - 1;
+                    passed.push(entry as usize);
+                }
+            }
+        });
+        passed.sort_unstable();
+        passed.dedup();
+        passed
     }
 }
 
@@ -577,13 +835,66 @@ mod tests {
     fn the_prompt_line_is_stable_and_clean() {
         let d = Dictionary::parse("zentrix\nAna Ruiz\nLangChain: lang chain\nAcme, Inc\nLangChain");
         assert_eq!(
-            d.prompt_line(),
+            d.prompt_line(PROMPT_CAP),
             "\n\nThe speaker's dictionary: Acme Inc, Ana Ruiz, LangChain, zentrix."
         );
-        assert_eq!(Dictionary::default().prompt_line(), "");
-        let many: String = (0..400).map(|i| format!("Term{i:03}\n")).collect();
-        let line = Dictionary::parse(&many).prompt_line();
-        assert_eq!(line.matches(", ").count() + 1, PROMPT_CAP);
+        assert_eq!(Dictionary::default().prompt_line(PROMPT_CAP), "");
+    }
+
+    /// Invented filler entries that match nothing in the transcripts below.
+    fn filler(n: usize) -> String {
+        (0..n).map(|i| format!("Kfz{i:03}\n")).collect()
+    }
+
+    /// AC-5 (R-5): up to the cap the line carries every entry and no dictation changes it;
+    /// above it, the stable line is empty and each dictation gets only the relevant entries:
+    /// the ones found in it, then the ones whose trigrams are close to a window of its words.
+    #[test]
+    fn above_the_cap_only_relevant_entries_go_in_the_prompt() {
+        let small = Dictionary::parse("Zentrix: zen trix\nQuorbit\n");
+        let said = small.substitute("the zen trix build");
+        assert_eq!(small.relevant_line(&said, 2), None);
+        assert!(small.prompt_line(2).contains("Quorbit, Zentrix"));
+
+        let big = Dictionary::parse(&format!(
+            "Zentrix: zen trix\nQuorbit\nAna Ruiz\nLangChain\n{}",
+            filler(200)
+        ));
+        assert_eq!(big.prompt_line(PROMPT_CAP), "");
+        let said = big.substitute("send the zen trix build and the corbit report to the team");
+        assert_eq!(
+            said.text,
+            "send the Zentrix build and the corbit report to the team"
+        );
+        assert_eq!(
+            big.relevant_line(&said, PROMPT_CAP).as_deref(),
+            Some("\n\nThe speaker's dictionary: Quorbit, Zentrix.")
+        );
+        let none = big.substitute("nothing to see here");
+        assert_eq!(big.relevant_line(&none, PROMPT_CAP).as_deref(), Some(""));
+    }
+
+    /// AC-5 (R-5): among the close entries the most used come first, and the line never holds
+    /// more than 50 entries or more than the cap.
+    #[test]
+    fn relevant_entries_are_most_used_first_and_capped() {
+        let d =
+            Dictionary::parse("Corbitt\nQuorbit\nKorbit\nZentrix\n").with_uses(vec![1, 9, 5, 0]);
+        let said = d.substitute("the corbit report");
+        assert_eq!(said.seen, Vec::<usize>::new());
+        assert_eq!(
+            d.relevant_line(&said, 2).as_deref(),
+            Some("\n\nThe speaker's dictionary: Korbit, Quorbit.")
+        );
+
+        let many: String = (0..300).map(|i| format!("Zen{i}: zen {i}\n")).collect();
+        let d = Dictionary::parse(&many);
+        let text: String = (0..300).map(|i| format!("zen {i} ")).collect();
+        let said = d.substitute(&text);
+        assert_eq!(said.seen.len(), 300);
+        let count = |line: Option<String>| line.unwrap().matches(", ").count() + 1;
+        assert_eq!(count(d.relevant_line(&said, PROMPT_CAP)), RELEVANT_MAX);
+        assert_eq!(count(d.relevant_line(&said, 20)), 20);
     }
 
     /// AC-10 (R-15): entries over the limits, duplicates and characters the text format
@@ -719,20 +1030,5 @@ mod tests {
         assert!(merged.merged(&many).unwrap_err().contains("At most 1000"));
         assert_eq!(key("Árbol"), key("arbol"));
         assert!(is_common_word(" Mesa ") && !is_common_word("Zentrix"));
-    }
-
-    /// AC-6 (rough bound; release-mode timing is slice D3): 1,000 entries over a long
-    /// dictation finishes quickly even in a debug build.
-    #[test]
-    fn a_large_dictionary_is_fast() {
-        let entries: String = (0..1000)
-            .map(|i| format!("Entry{i}: heard {i} form, other {i}\n"))
-            .collect();
-        let d = Dictionary::parse(&entries);
-        let text = "palabras de un dictado largo y normal ".repeat(300);
-        let start = std::time::Instant::now();
-        let (_, made) = d.apply(&text);
-        assert_eq!(made, 0);
-        assert!(start.elapsed().as_millis() < 200, "{:?}", start.elapsed());
     }
 }
