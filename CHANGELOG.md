@@ -13,6 +13,13 @@ All notable changes to HyperMe are recorded here. The format follows
   recording bars. The page now draws nothing until a view arrives and asks for the current view
   (`pill_view`) once its listeners exist.
 
+### Changed
+
+- `scripts/release-macos.sh --unsigned --publish` now uploads a draft release: with no Apple
+  Developer account for now (owner, 27 November 2026), releases are signed with the local identity
+  and not notarised. Publishing needs "HyperMe Local Signing", so grants survive updates, and a
+  clean tree; the draft's notes say how to open an app that is not notarised.
+
 ### Added
 
 - Local server for cleanup (issue 129, slice 7 of `specs/96-provider-settings`): any

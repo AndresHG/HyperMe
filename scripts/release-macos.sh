@@ -5,9 +5,11 @@
 #
 #   scripts/release-macos.sh [--unsigned] [--skip-checks] [--notes FILE] [--publish]
 #
-#   --unsigned     A trial run with no Apple account: signs with the local identity (or ad hoc),
-#                  skips notarisation, and still makes the DMG and the signed update. Never publish
-#                  its output: Gatekeeper blocks it on other Macs.
+#   --unsigned     No Apple Developer ID (the owner's choice for now, 27 November 2026): signs
+#                  with "HyperMe Local Signing" (or ad hoc for a trial), skips notarisation, and
+#                  still makes the DMG and the signed update. Gatekeeper warns on first open; the
+#                  README says how to open it. With --publish it needs the local identity, so
+#                  every version keeps one signature and permission grants survive updates.
 #   --skip-checks  Skip cargo fmt, clippy and test (they must have passed on this commit).
 #   --notes FILE   Release notes for latest.json and the GitHub release (default: a link to the
 #                  changelog).
@@ -35,10 +37,6 @@ while [ $# -gt 0 ]; do
     *) echo "unknown option: $1" >&2; exit 2 ;;
   esac
 done
-if [ "$unsigned" = 1 ] && [ "$publish" = 1 ]; then
-  echo "--unsigned builds are never published." >&2
-  exit 2
-fi
 
 root=$(cd "$(dirname "$0")/.." && pwd)
 cd "$root"
@@ -61,7 +59,7 @@ esac
 out="dist/$tag"
 
 # A published release must be traceable to one clean commit.
-if [ "$unsigned" = 0 ] && [ -n "$(git status --porcelain --untracked-files=no)" ]; then
+if { [ "$unsigned" = 0 ] || [ "$publish" = 1 ]; } && [ -n "$(git status --porcelain --untracked-files=no)" ]; then
   echo "Commit or stash your changes first: a release is built from a clean tree." >&2
   exit 1
 fi
@@ -87,6 +85,11 @@ if [ "$unsigned" = 0 ]; then
   need xcrun "Xcode"
   xcrun notarytool history --keychain-profile "$profile" >/dev/null 2>&1 \
     || { echo "notarytool profile \"$profile\" is not set up (docs/RELEASING.md)." >&2; exit 1; }
+elif [ "$publish" = 1 ]; then
+  # An ad-hoc signature changes with every build, and macOS would drop the user's grants on each
+  # update. The local identity keeps one signature across versions.
+  security find-identity -v -p codesigning | grep -q '"HyperMe Local Signing"' \
+    || { echo "Publishing an unsigned build needs \"HyperMe Local Signing\" (scripts/create-signing-identity.sh)." >&2; exit 1; }
 fi
 
 if [ "$checks" = 1 ]; then
@@ -171,12 +174,18 @@ ls -l "$out"
 if [ "$publish" = 1 ]; then
   need gh "https://cli.github.com"
   say "Draft GitHub release $tag"
-  gh release create "$tag" --draft --title "HyperMe $version" --notes "$notes" \
+  release_notes="$notes"
+  if [ "$unsigned" = 1 ]; then
+    release_notes="$notes
+
+This build is not notarised by Apple, so macOS blocks it the first time. Open it once from System Settings > Privacy & Security > Open Anyway, or run \`xattr -dr com.apple.quarantine /Applications/HyperMe.app\`. Updates from the app menu install without this step."
+  fi
+  gh release create "$tag" --draft --title "HyperMe $version" --notes "$release_notes" \
     --target "$(git rev-parse HEAD)" \
     "$dmg" "$out/$archive" "$out/$archive.sig" "$out/latest.json" "$out/SHA256SUMS"
   echo "Review the draft on GitHub, then publish it. The updater sees only published releases."
 elif [ "$unsigned" = 1 ]; then
-  echo "Trial build in $out. Not notarised: do not publish it."
+  echo "Unsigned build in $out (not notarised). Run again with --unsigned --publish --skip-checks to upload a draft."
 else
   echo "Release $version is in $out. Run again with --publish --skip-checks to upload a draft."
 fi
