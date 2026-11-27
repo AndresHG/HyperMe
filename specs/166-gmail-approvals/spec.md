@@ -1,6 +1,6 @@
 # Approvals for connector tools (MCP form elicitation), first for Gmail
 
-**Status:** draft, 27 November 2026. Waiting for the owner's approval and for answers to A-1 to A-3.
+**Status:** approved by the owner, 27 November 2026, with A-1 to A-3 answered as proposed the same day.
 **Issue:** [#166](https://github.com/AndresHG/hyperme/issues/166). **Size:** L. It needs more than
 one pull request, it changes the MCP client every connector shares, and it adds a card that answers
 a provider for the user.
@@ -159,7 +159,7 @@ that asks through form elicitation. Google is the first server, and the one test
   line: "Background updates need an *Always allow* choice."
 - R-15. When the user picks a choice whose value starts with `DENY`, the app shall mark the server
   "Not allowed" on the account page. That server's unattended pulls shall be skipped, and no alert
-  raised, until the time set by A-3.
+  raised, until the time set by A-3 (only Review or Ask again).
 - R-16. When a server's error result names `AdminPolicyBlock` in `_meta["google.com/error"]`, the
   app shall mark the server "Blocked by your admin", skip its unattended pulls and raise no alert,
   until the next sign-in or a Review that succeeds. An error result with no recognised reason is
@@ -282,8 +282,8 @@ It is three months later and this failed. Why?
 
 | ID | Decision | Chosen | Rejected and why | Who |
 | --- | --- | --- | --- | --- |
-| A-1 | What ↵ picks on the card | **Proposed:** for a read pull (setup check, Review), the broadest persistent choice offered (this tool, then these owners, then this resource). Otherwise, and for any other call, "Allow once". Never a deny | Always "Allow once": safest per call, but background pulls would keep asking. No default: breaks UX rule 8 (↵ does the main thing) | Owner, open |
-| A-2 | Endpoint for Gmail and Calendar | **Proposed:** Gmail moves to `/mcp/v1`, Google's recommended endpoint with full result sets. Calendar stays on `/mcp/v1self` until it needs approval | Gmail stays on `/mcp/v1self`: Google filters its list results to what needs no approval, so it may still leave threads out. Both on `/mcp/v1`: Calendar works today, and moving it may add prompts for no gain | Owner, open |
-| A-3 | After "Don't allow", when HyperMe asks again | **Proposed:** only when the user presses Review or Ask again on the account page | Next day: a daily nag about something the user already refused. Never: hides a state the user can fix; the account page still shows it | Owner, open |
+| A-1 | What ↵ picks on the card | For a read pull (setup check, Review), the broadest persistent choice offered (this tool, then these owners, then this resource). Otherwise, and for any other call, "Allow once". Never a deny | Always "Allow once": safest per call, but background pulls would keep asking. No default: breaks UX rule 8 (↵ does the main thing) | Owner, 27 November 2026 |
+| A-2 | Endpoint for Gmail and Calendar | Gmail moves to `/mcp/v1`, Google's recommended endpoint with full result sets. Calendar stays on `/mcp/v1self` until it needs approval | Gmail stays on `/mcp/v1self`: Google filters its list results to what needs no approval, so it may still leave threads out. Both on `/mcp/v1`: Calendar works today, and moving it may add prompts for no gain | Owner, 27 November 2026 |
+| A-3 | After "Don't allow", when HyperMe asks again | Only when the user presses Review or Ask again on the account page | Next day: a daily nag about something the user already refused. Never: hides a state the user can fix; the account page still shows it | Owner, 27 November 2026 |
 | A-4 | Drive the approval rounds ourselves or with rmcp's helper | Our own loop on `call_tool_once`, with an approver passed per call | `RunningService::call_tool`: it answers through the session's single `ClientHandler`, and that session is shared by sync jobs and the user's calls, so it cannot tell an unattended call from an interactive one | Proposed here |
 | A-5 | Where the Markdown is rendered | In Rust, into a small list of typed spans that the web view draws with `textContent` | A Markdown crate or a JS library: more code and more risk for five constructs, and harder to test | Proposed here |

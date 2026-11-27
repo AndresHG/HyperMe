@@ -1,6 +1,6 @@
 # Design: approvals for connector tools
 
-Companion to [spec.md](spec.md). Draft, 27 November 2026.
+Companion to [spec.md](spec.md). Approved with the spec, 27 November 2026.
 
 ## Where it fits
 
