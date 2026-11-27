@@ -236,6 +236,13 @@ designed: a design proposal will compare how other assistants build memory, befo
   Amazon" files a to-do or a fact in one place (owner, N-2 to N-4,
   [research](research/2026-11-27-notes-memory-tags.md)).
 - **The dictionary** learns from corrections and can be edited by hand.
+- **HyperMe is the brain; VFS is the archive** (owner, 27 November 2026). The knowledge graph,
+  facts learned over time, memory, notes and capture belong to HyperMe. VFS, the owner's other
+  project ([AndresHG/VFS](https://github.com/AndresHG/VFS)), only searches files, bookmarks and
+  chat exports the user already has and answers questions over them with citations; it does
+  not grow or learn knowledge. Later, and not planned: HyperMe may search the user's archive
+  through a read-only VFS MCP server, and VFS may query HyperMe's memory through HyperMe's MCP
+  server. Neither depends on the other's code.
 
 | Feature | Phase | Priority | Notes |
 | --- | --- | --- | --- |
@@ -262,6 +269,8 @@ adds already works (owner, 26 November 2026).
   or follows coding tasks itself; at most it hands one to a coding agent (owner, 26 November 2026).
 - Sending email, or posting anywhere, without a preview and a confirmation.
 - Integration code per service. If there is no MCP server, it waits or uses a generic one.
+- Indexing or searching the user's file archive, bookmarks or chat exports: that is VFS's job
+  (owner, 27 November 2026; see 7.5).
 - Telemetry, accounts or a cloud of our own in version 1.
 - Mixed-language sentences in one dictation.
 - Window text or screenshots by default (only behind a visible switch, off by default).
