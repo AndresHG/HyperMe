@@ -2,6 +2,8 @@
 //! works on one OS sits in a `cfg(target_os)` module.
 
 pub mod dictionary_store;
+#[cfg(target_os = "macos")]
+pub mod field_watcher;
 pub mod history;
 pub mod hotkey;
 #[cfg(target_os = "macos")]

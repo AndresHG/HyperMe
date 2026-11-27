@@ -182,6 +182,18 @@ pub trait Dictionary {
     fn add_correction(&mut self, c: Correction) -> Result<Added, Error>;
 }
 
+/// Watches the field HyperMe just pasted into, so the dictionary can learn from the user's
+/// fixes (spec 93, R-16, R-20, R-21). The rules are [`crate::field_watch::FieldWatch`]; an
+/// implementation reports what the OS shows and costs nothing between watches.
+pub trait FieldWatcher: Send + Sync {
+    /// Starts watching after `pasted` went into the focused field, ending any watch before it.
+    /// When the watch ends with the stretch changed, `done` gets the pasted text and what the
+    /// stretch holds. A field that must not or cannot be read is not watched.
+    fn watch(&self, pasted: String, done: Box<dyn FnOnce(String, String) + Send>);
+    /// Ends the watch now, because the next dictation started (R-20).
+    fn stop(&self);
+}
+
 /// The start and stop sounds (R-32).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Sound {
