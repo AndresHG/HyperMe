@@ -272,7 +272,7 @@ adds already works (owner, 26 November 2026).
 - Mobile apps.
 - A closed or paid edition.
 - Indexing or searching the user's files, documents or bookmarks, or answering questions over
-  them. A file-search or knowledge-base app that offers an MCP server can be added as a
+  them. A file-search or document-question app that offers an MCP server can be added as a
   connector like any other; HyperMe works fully without one and holds no code for any (owner,
   27 November 2026).
 - Chat apps (Telegram, WhatsApp and similar) as a source, an inbox or a gateway (owner,
