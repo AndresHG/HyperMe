@@ -40,6 +40,9 @@ itself; a later version may hand a task to Claude Code ([docs/PRD.md](docs/PRD.m
 - `specs/200-diagnostics/`: spec for the Diagnostics view in Settings, stage bars on History
   items, the Report a problem bundle the user previews and attaches to an issue, and local crash
   files (approved 27 November 2026)
+- `specs/257-ui-framework/`: draft spec for moving the UI to Svelte 5, TypeScript and Vite, with
+  typed command bindings and Settings inside Home (owner asked for state-of-the-art libraries,
+  27 November 2026)
 - `docs/RELEASING.md`: how a release is built, signed, notarised and published, and how updates work
 - `docs/FIELD.md`: existing projects and what to borrow from each
 - `docs/research/2026-11-27-telemetry-and-tracing.md`: local tracing, what other users' copies may
