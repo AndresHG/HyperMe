@@ -67,6 +67,9 @@ enabled = true
 retention_days = 30
 # The oldest items are deleted when history passes this size. 10 to 1000000.
 size_limit_mb = 1024
+# Keep each dictation's timing trace (stage times and provider names, never text), even with
+# history off: 30 days then, or as long as its history item otherwise.
+keep_traces = true
 
 [timing]
 # Write one line of stage timings per dictation, numbers only, never text.

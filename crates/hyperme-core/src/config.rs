@@ -399,6 +399,14 @@ pub struct History {
     pub enabled: bool,
     pub retention_days: Retention,
     pub size_limit_mb: u64,
+    /// Spec 182, R-9a (TS-1): keep each dictation's timing trace, numbers only, even with
+    /// history off. A file written before traces has no such key: on.
+    #[serde(default = "keep_traces_default")]
+    pub keep_traces: bool,
+}
+
+fn keep_traces_default() -> bool {
+    true
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
