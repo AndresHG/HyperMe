@@ -379,9 +379,24 @@
 
       body.append(el('tr', { id: 'role-' + r.role },
         el('td', {}, r.label), el('td', {}, providerMenu), modelCell, keyCell));
-      // The hint line: cost and measured speed (slice 6).
-      body.append(el('tr', {}, el('td', { className: 'hint', colSpan: 4, id: 'hint-' + r.role })));
+      // The hint line: cost, measured speed with its source, and the user's own median (R-18).
+      const hint = el('td', { className: 'hint', colSpan: 4, id: 'hint-' + r.role });
+      body.append(el('tr', {}, hint));
+      if (want.model) showHint(hint, r.role, chosen.id, want.model);
     }
+  }
+
+  async function showHint(cell, role, provider, model) {
+    try {
+      const h = await invoke('provider_hint', { role, provider, model });
+      cell.textContent = h.cost + ' · ' + h.speed;
+      if (h.source) {
+        const link = el('a', { className: 'link', textContent: ' (results)' });
+        link.addEventListener('click', () => invoke('result_open', { source: h.source }));
+        cell.append(link);
+      }
+      if (h.mine) cell.append(' · ' + h.mine);
+    } catch (e) { cell.textContent = ''; }
   }
 
   function showAdd(r, menu) {

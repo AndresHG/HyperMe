@@ -91,3 +91,39 @@ fn quantiles_match_flowbench() {
     let fifty: Vec<u64> = (1..=50).collect();
     assert_eq!(percentile(&fifty, 90), Some(45));
 }
+
+/// Provider settings R-20: the user's own median from key release to text over their last 50
+/// dictations on one provider, from the timing log's provider columns.
+#[test]
+fn own_median_counts_the_last_fifty_on_one_provider() {
+    use hyperme_platform::timing::own_median;
+    let mut text = format!("{HEADER}\n");
+    let row = |total: u64, cleanup: &str| {
+        format!(
+            "1\t10\t900\t300\t-\t{total}\t{total}\ten\t5\t0\tspeechmatics\tmelia-1\t{cleanup}\tm\n"
+        )
+    };
+    // 10 old lines at 2000 ms, then 50 at 400 ms, on groq; other lines on openai.
+    for _ in 0..10 {
+        text.push_str(&row(2000, "groq"));
+    }
+    for _ in 0..50 {
+        text.push_str(&row(400, "groq"));
+        text.push_str(&row(900, "openai"));
+    }
+    assert_eq!(
+        own_median(&text, "cleanup_provider", "groq", 50),
+        Some((400, 50))
+    );
+    assert_eq!(
+        own_median(&text, "cleanup_provider", "openai", 50),
+        Some((900, 50))
+    );
+    // The last 50 on Speechmatics are 25 of each: the median is the mean of the middle two.
+    assert_eq!(
+        own_median(&text, "speech_provider", "speechmatics", 50),
+        Some((650, 50))
+    );
+    assert_eq!(own_median(&text, "cleanup_provider", "anthropic", 50), None);
+    assert_eq!(own_median("", "cleanup_provider", "groq", 50), None);
+}

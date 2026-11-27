@@ -252,6 +252,10 @@ pub struct Dictation {
     /// so a config written before it existed still loads, with the bead on.
     #[serde(default = "show_while_idle")]
     pub show_while_idle: bool,
+    /// Minutes of talking a day, for the cost estimates (U-11). Onboarding saves the user's
+    /// choice here. Optional: an older file takes the default file's value.
+    #[serde(default = "default_talking_minutes")]
+    pub talking_minutes_per_day: u32,
     /// The user's terms, one per line.
     pub dictionary: Option<PathBuf>,
 }
@@ -382,6 +386,10 @@ pub struct Tasks {
     pub stale_after: u32,
     pub morning_from: String,
     pub morning_latest: String,
+}
+
+fn default_talking_minutes() -> u32 {
+    defaults().dictation.talking_minutes_per_day
 }
 
 fn default_tasks() -> Tasks {
@@ -807,6 +815,12 @@ impl Config {
             d.short_dictation_words.into(),
             0,
             50,
+        )?;
+        range(
+            "dictation.talking_minutes_per_day",
+            d.talking_minutes_per_day.into(),
+            1,
+            600,
         )?;
 
         let s = &self.speech;

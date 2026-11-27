@@ -185,3 +185,24 @@ pub fn summarise(text: &str) -> Summary {
         stt: quantiles(&stts),
     }
 }
+
+/// The user's median from key release to text (`total_ms`) over their last `last` dictations
+/// whose `column` (`speech_provider` or `cleanup_provider`) is `provider`, and how many that
+/// is (specs/96-provider-settings, R-20). `None` when there are none.
+pub fn own_median(text: &str, column: &str, provider: &str, last: usize) -> Option<(u64, usize)> {
+    let index = |name: &str| HEADER.split('\t').position(|c| c == name);
+    let (column, total) = (index(column)?, index("total_ms")?);
+    let mut totals: Vec<u64> = text
+        .lines()
+        .filter(|l| !l.starts_with("unix_ms"))
+        .filter_map(|line| {
+            let fields: Vec<&str> = line.split('\t').collect();
+            (fields.get(column) == Some(&provider))
+                .then(|| fields.get(total)?.parse::<u64>().ok())
+                .flatten()
+        })
+        .collect();
+    let keep = totals.len().saturating_sub(last);
+    totals.drain(..keep);
+    Some((median(&totals)?, totals.len()))
+}

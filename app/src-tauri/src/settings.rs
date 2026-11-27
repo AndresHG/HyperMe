@@ -402,6 +402,75 @@ pub async fn models_list(app: AppHandle, provider: String) -> Result<ModelMenuVi
     Ok(view)
 }
 
+/// The hint line under a role (R-18 to R-20).
+#[derive(Debug, Serialize)]
+pub struct HintView {
+    cost: String,
+    speed: String,
+    /// Under `docs/results/`, opened with `result_open`.
+    source: Option<String>,
+    mine: Option<String>,
+}
+
+/// The hint for `provider` and `model` in `role`: cost for the user's talking time, measured
+/// speed with its source, and, with the timing log on, the user's own median on that provider.
+#[tauri::command]
+pub fn provider_hint(
+    app: AppHandle,
+    role: String,
+    provider: String,
+    model: String,
+) -> Result<HintView, String> {
+    let role = role_named(&role)?;
+    let config = load(&config_path(&app))?;
+    let own = if config.timing.log {
+        let column = match role {
+            Role::Speech => "speech_provider",
+            Role::Cleanup => "cleanup_provider",
+        };
+        std::fs::read_to_string(crate::runtime::timing_path())
+            .ok()
+            .and_then(|text| hyperme_platform::timing::own_median(&text, column, &provider, 50))
+    } else {
+        None
+    };
+    let hint = hyperme_core::hints::hint(
+        &config,
+        role,
+        &provider,
+        &model,
+        config.dictation.talking_minutes_per_day,
+        own,
+    );
+    Ok(HintView {
+        cost: hint.cost,
+        speed: hint.speed,
+        source: hint.source,
+        mine: hint.mine,
+    })
+}
+
+/// Opens a measurement the hint line cites, from the project's published results.
+#[tauri::command]
+pub fn result_open(source: String) -> Result<(), String> {
+    let name = source
+        .strip_prefix("docs/results/")
+        .filter(|n| {
+            !n.is_empty()
+                && n.ends_with(".md")
+                && n.chars()
+                    .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
+        })
+        .ok_or_else(|| format!("{source} is not a result file"))?;
+    std::process::Command::new("open")
+        .arg(format!(
+            "https://github.com/AndresHG/hyperme/blob/master/docs/results/{name}"
+        ))
+        .status()
+        .map(|_| ())
+        .map_err(|e| e.to_string())
+}
+
 /// "Get a key" for any provider in the catalogue: opens its key page in the browser.
 #[tauri::command]
 pub fn provider_key_page(app: AppHandle, provider: String) -> Result<(), String> {

@@ -12,6 +12,7 @@ pub mod cost;
 pub mod dictation;
 pub mod dictionary;
 pub mod health;
+pub mod hints;
 pub mod registry;
 pub mod schedule;
 pub mod scheduler;
