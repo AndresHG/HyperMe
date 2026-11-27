@@ -3,7 +3,7 @@
   "en-f02": "Hey team, quick update, the release is moving to Thursday because QA found two bugs in the login flow",
   "en-f03": "Hi Laura,\n\nThanks for sending the contract. I read it over the weekend and it looks fine to me.\n\nThere is one thing I want to change in section four, the payment date. Could we move it to the end of the month?\n\nThanks,\nPeter",
   "en-f04": "Things to buy:\n- Milk\n- Eggs\n- Bread\n- Coffee\n- Tomatoes",
-  "en-f05": "git commit dash m fix the login bug",
+  "en-f05": "git commit -m fix the login bug",
   "en-f06": "Rename the function parse config to load config and update the tests.",
   "en-f07": "The meeting went well. We agreed on the budget for next year.\n\nOn hiring, we will open two roles in January.",
   "es-f01": "Para mañana tengo que hacer tres cosas:\n1. Llamar al banco.\n2. Enviar la factura a Marta.\n3. Reservar la mesa para la cena.",
