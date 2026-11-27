@@ -72,8 +72,8 @@
   .icon { position: absolute; left: 14px; top: 0; bottom: 0; display: flex; align-items: center; }
   .icon:empty { display: none; }
   .dot { width: 8px; height: 8px; border-radius: 50%; }
-  /* Hands-free (#167): ✕ cancels at the left, the red square stops at the right, after Wispr
-     Flow's bar. Shown only in the locked state. */
+  /* Hands-free (#167): ✕ cancels at the left, ✓ stops and pastes at the right. Shown only in
+     the locked state. */
   .hf {
     position: absolute; top: 0; bottom: 0; margin: auto 0; width: 20px; height: 20px;
     border: 0; padding: 0; border-radius: 50%; display: none; align-items: center;
@@ -82,9 +82,9 @@
   }
   .hf:hover { color: var(--text); background: #33333a; }
   .hf.cancel { left: 8px; }
-  .hf.stop { right: 8px; background: rgba(255, 77, 79, 0.18); }
-  .hf.stop::before { content: ''; width: 7px; height: 7px; border-radius: 1.5px; background: var(--recording); }
-  .hf.stop:hover { background: rgba(255, 77, 79, 0.3); }
+  /* Green check, not a red stop: it accepts the dictation and pastes it (owner, 27 November). */
+  .hf.stop { right: 8px; background: rgba(34, 197, 94, 0.2); color: var(--done); font-size: 12px; }
+  .hf.stop:hover { background: rgba(34, 197, 94, 0.32); color: var(--done); }
   .pill.locked .hf { display: flex; }
   canvas { flex: none; display: none; }
   @media (prefers-reduced-motion: reduce) {
@@ -125,7 +125,7 @@
     <canvas id="voice" aria-hidden="true"></canvas>
     <span id="label" class="label"></span>
     <button id="cancel" class="hf cancel" aria-label="Cancel dictation" title="Cancel (Esc)">✕</button>
-    <button id="stop" class="hf stop" aria-label="Stop and paste" title="Stop and paste"></button>
+    <button id="stop" class="hf stop" aria-label="Done, paste" title="Done, paste">✓</button>
   </div>
   <div id="card" class="card" role="dialog" aria-label="Morning card" hidden></div>
 <script>
