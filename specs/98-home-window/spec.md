@@ -1,6 +1,8 @@
 # Home window and History
 
-**Status:** approved by the owner, 27 November 2026.
+**Status:** approved by the owner, 27 November 2026. Amended the same day for the V0.1 redesign
+(owner approved the mockups, 27 November 2026): History moves into the Home page as in Wispr Flow,
+and the day gets its own Today section. R-5, R-6, R-8, R-9, R-10, AC-4, AC-5 and AC-7 changed.
 **Issue:** [#98](https://github.com/AndresHG/hyperme/issues/98). **Size:** L.
 **Plan:** chunk P2-5 in `docs/plans/2026-11-26-phases-1-2.md` (#94).
 **UX:** [docs/UX.md](../../docs/UX.md), "Home", "Home sections" and "Where each thing lives"; mockup
@@ -37,31 +39,31 @@ EARS form. "The app" is HyperMe on macOS. "Home" is the Home window.
   "while no window is open").
 - R-4. Home shall be a normal, activating window with a sidebar and a page. It shall follow the
   system's light or dark mode, and remember its size and position between openings.
-- R-5. The sidebar shall list only the sections whose feature exists, in this order: Home,
-  History, Dictionary, Style, Meetings, with Settings and Help at the bottom. In this change only
-  Home and History exist. ⌘1 to ⌘5 shall open the sections by position, and ⌘, shall open
-  Settings.
-- R-6. The app shall open Home at a target: a section id (`history`) or the id of a block on the
-  Home page (`today`), which opens the Home page scrolled to that block. Other parts of the app
-  call it with the target (the morning card's "Open Today" opens `today`). The `hyperme://home/…`
-  URL form of the same targets comes with the URL scheme (non-goals).
+- R-5. The sidebar shall list only the sections whose feature exists, in this order: Home, Today,
+  Dictionary, Style, Meetings, with Settings and Help at the bottom. ⌘1 to ⌘5 shall open the
+  sections by position, and ⌘, shall open Settings.
+- R-6. The app shall open Home at a target: a section id (`today`) or the id of a block on the
+  Home page, which opens the Home page scrolled to that block. Other parts of the app call it with
+  the target (the morning card's "Open Today" opens `today`). An unknown target, `history`
+  included, opens the Home page. The `hyperme://home/…` URL form of the same targets comes with
+  the URL scheme (non-goals).
 
 ### The Home page
 
 - R-7. The Home page shall show a greeting and two numbers from the history: words dictated this
   week (Monday to now, local time), and time saved against typing at 40 words a minute, net of the
   time spent speaking.
-- R-8. The Home page shall show **Recent**: the dictations of the last 7 days, grouped by day
-  (Today, Yesterday, then the weekday and date), newest first, with the same row and actions as
-  History.
-- R-9. The Home page shall have an ordered list of blocks above Recent, each with an id and a
-  test of whether it shows. This change ships none; the slots are for the tasks thread's
-  **Waiting for you** and **Today** (#92) and the dictionary's suggestion line (#93).
+- R-8. The Home page shall show the user's dictations as in Wispr Flow: a search field, then
+  every dictation grouped by day (Today, Yesterday, then the weekday and date), newest first
+  (R-10 to R-19 describe the list). Above the list, one **Up next** line shall show the next
+  meeting and what is left in Today, and open the Today section.
+- R-9. The Home page shall have an ordered list of blocks between Up next and the list, each with
+  an id and a test of whether it shows. None ships now; the day lives in the Today section (#92).
 
 ### History
 
-- R-10. The History section shall list every dictation in the history, newest first, grouped by
-  day, loading 50 at a time as the user scrolls.
+- R-10. The Home page's list shall hold every dictation in the history, newest first, grouped by
+  day, loading 50 at a time as the user scrolls. ("History" below means this list.)
 - R-11. Each row shall show the time, the app it was dictated into, and the text on one line,
   or for a failed dictation the reason it failed. The full text shows when the row is selected.
 - R-12. When the user types in the search field, History shall show only the dictations whose
@@ -125,13 +127,13 @@ and recorded in `docs/results/`.
   under 130 MB on any page. (R-2, budget; owner, 26 November 2026, after the first measurement)
 - AC-3 *(live)*: The Dock icon shows while Home is open and goes away after it closes; the pill
   still never takes focus while Home is open. (R-3, Phase 1 R-23)
-- AC-4 *(fake)*: The section list holds only sections whose feature exists; with no dictionary,
-  there is no Dictionary entry and no Fix a word. (R-5, R-21)
-- AC-5 *(fake)*: `history` resolves to the History section, `today` (once that block exists) to
-  the Home page at that block, and an unknown target to the Home page. (R-6)
+- AC-4 *(fake)*: The section list is Home, Today and, once a dictionary exists, Dictionary, with
+  ⌘1 to ⌘3; with no dictionary, there is no Dictionary entry and no Fix a word. (R-5, R-21)
+- AC-5 *(fake)*: `today` resolves to the Today section, and `history` or any unknown target to the
+  Home page. (R-6)
 - AC-6 *(fake)*: On a fixed clock and fixed history, words this week and time saved match a hand
   count, including a week that starts on a Monday at midnight local time. (R-7)
-- AC-7 *(fake)*: Recent and History group items by local day with the right labels, and page in
+- AC-7 *(fake)*: The Home page's list groups items by local day with the right labels, and page in
   fifties without repeating or skipping an item when a new dictation arrives between pages.
   (R-8, R-10)
 - AC-8 *(fake)*: Search for "cancion reunion" on a fixture of Spanish and English items finds
@@ -152,7 +154,7 @@ and recorded in `docs/results/`.
 - AC-14 *(fake)*: The page's commands never return a provider key or a file path to audio, and a
   test over the page source finds no `localStorage`, `sessionStorage` or `indexedDB`. (R-23, R-24)
 - AC-15 *(live)*: With Home open, a dictation into another app still pastes there, and the new
-  item appears at the top of Recent and History without reopening Home. (R-8, R-10, R-22)
+  item appears at the top of the Home page's list without reopening Home. (R-8, R-10, R-22)
 
 ## Non-goals
 

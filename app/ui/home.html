@@ -4,118 +4,158 @@
 <meta charset="utf-8">
 <title>HyperMe</title>
 <style>
-  /* docs/UX.md, "Home" and "Visual language": the system's light or dark colours, Hyper violet
-     for focus and the attention dot, 12 px radius, SF Pro. Dictation text arrives only through
-     commands and is never stored by the page (spec 98, R-24). */
+  /* docs/UX.md, "Home" and "Visual language", V0.1 redesign (owner approved the mockups,
+     27 November 2026): Wispr Flow's layout in HyperMe's look. The system's light or dark colours,
+     Hyper violet for focus and what waits, SF Pro. Dictation text arrives only through commands
+     and is never stored by the page (spec 98, R-24). */
   :root {
     color-scheme: light dark;
     --violet: #7c5cff;
-    --warn: #f59e0b;
-    --bad: #ff4d4f;
-    --line: color-mix(in srgb, CanvasText 10%, transparent);
-    --muted: color-mix(in srgb, CanvasText 55%, transparent);
-    --faint: color-mix(in srgb, CanvasText 38%, transparent);
-    --side: color-mix(in srgb, CanvasText 4%, Canvas);
-    --card: color-mix(in srgb, CanvasText 2%, Canvas);
-    --hover: color-mix(in srgb, CanvasText 5%, transparent);
-    --on: color-mix(in srgb, var(--violet) 16%, transparent);
+    --violet-text: #5b3fe0;
+    --warn: #b45309;
+    --bad: #e5484d;
+    --bg: #ffffff;
+    --side: #f5f5f7;
+    --line: rgba(0, 0, 0, .09);
+    --muted: #6b6b73;
+    --faint: #76767e;
+    --hover: rgba(0, 0, 0, .035);
+    --on: rgba(124, 92, 255, .14);
+    --soft: rgba(124, 92, 255, .08);
+    --tag: rgba(0, 0, 0, .05);
+    --warn-bg: rgba(245, 158, 11, .14);
+    --card: #fafafb;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --violet-text: #a994ff; --warn: #fbbf24; --bg: #1c1c1e; --side: #232326; --line: rgba(255, 255, 255, .10);
+      --muted: #a1a1aa; --faint: #8a8a93; --hover: rgba(255, 255, 255, .05); --on: rgba(124, 92, 255, .26);
+      --soft: rgba(124, 92, 255, .16); --tag: rgba(255, 255, 255, .08); --warn-bg: rgba(245, 158, 11, .16); --card: #26262a;
+    }
   }
   * { box-sizing: border-box; }
   html, body { height: 100%; }
-  body { margin: 0; font: 13px -apple-system, "SF Pro Text", system-ui, sans-serif; background: Canvas; color: CanvasText; display: grid; grid-template-columns: 200px 1fr; overflow: hidden; -webkit-user-select: none; user-select: none; }
+  body { margin: 0; font: 13px -apple-system, "SF Pro Text", system-ui, sans-serif; background: var(--bg); color: CanvasText; display: grid; grid-template-columns: 208px 1fr; overflow: hidden; -webkit-user-select: none; user-select: none; }
   :focus-visible { outline: 2px solid var(--violet); outline-offset: 1px; }
+  button { font: inherit; color: inherit; cursor: default; }
+  .rounded { font-family: ui-rounded, "SF Pro Rounded", -apple-system, sans-serif; }
   nav { background: var(--side); border-right: 1px solid var(--line); padding: 16px 10px 12px; display: flex; flex-direction: column; gap: 2px; }
-  .brand { display: flex; align-items: center; gap: 8px; padding: 0 8px 14px; font: 700 15px ui-rounded, "SF Pro Rounded", -apple-system, sans-serif; }
-  .brand i { width: 14px; height: 14px; border-radius: 999px; background: #111113; box-shadow: 0 0 0 2px var(--violet); }
-  nav a { display: flex; align-items: center; justify-content: space-between; padding: 6px 8px; border-radius: 7px; color: inherit; text-decoration: none; cursor: default; }
+  .brand { display: flex; align-items: center; gap: 8px; padding: 0 8px 16px; font: 700 15px ui-rounded, "SF Pro Rounded", -apple-system, sans-serif; }
+  .brand i { width: 22px; height: 12px; border-radius: 999px; background: #111113; box-shadow: 0 0 0 2px var(--violet); }
+  nav a { display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: 7px; color: inherit; text-decoration: none; cursor: default; }
+  nav a svg { flex: none; }
+  nav a span.label { flex: 1; }
   nav a:hover { background: var(--hover); }
   nav a.on { background: var(--on); font-weight: 600; }
-  nav a kbd { font: 11px -apple-system, sans-serif; color: var(--faint); }
-  nav a .dot { width: 7px; height: 7px; border-radius: 999px; background: var(--violet); margin-left: auto; margin-right: 6px; }
+  nav a kbd, nav a .count { font: 11px -apple-system, sans-serif; color: var(--faint); font-weight: 400; }
+  nav a .dot { width: 7px; height: 7px; border-radius: 999px; background: var(--violet); }
   nav .spacer { flex: 1; }
-  nav .bottom { border-top: 1px solid var(--line); padding-top: 8px; display: flex; flex-direction: column; gap: 2px; }
+  nav .hint { margin: 0 4px 10px; padding: 10px; border-radius: 10px; background: var(--card); border: 1px solid var(--line); font-size: 12px; color: var(--muted); line-height: 1.45; }
   nav .bottom a { color: var(--muted); }
-  main { overflow: auto; padding: 28px 36px 40px; }
-  section { display: none; max-width: 820px; }
+  kbd.key { display: inline-block; padding: 0 5px; border: 1px solid var(--line); border-radius: 4px; font: 11px -apple-system, sans-serif; color: CanvasText; }
+  main { overflow: auto; padding: 30px 40px 40px; }
+  section { display: none; max-width: 860px; }
   section.on { display: block; }
-  header { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; margin-bottom: 28px; }
+  header { display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; margin-bottom: 18px; }
   h1 { font: 700 24px ui-rounded, "SF Pro Rounded", -apple-system, sans-serif; margin: 0 0 4px; }
   .lead { color: var(--muted); margin: 0; }
+  .search { display: flex; align-items: center; gap: 8px; width: 240px; flex: none; padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--muted); }
+  .search:focus-within { border-color: var(--violet); box-shadow: 0 0 0 3px color-mix(in srgb, var(--violet) 22%, transparent); }
+  .search input { border: 0; outline: none; background: transparent; color: CanvasText; font: inherit; flex: 1; min-width: 0; }
+  /* Up next (R-8): one line that opens Today. */
+  #upnext { display: flex; align-items: center; gap: 14px; padding: 12px 14px; border-radius: 12px; background: var(--soft); color: inherit; text-decoration: none; margin-bottom: 18px; cursor: default; }
+  #upnext[hidden] { display: none; }
+  #upnext .when { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 10px; background: var(--violet); color: #fff; flex: none; line-height: 1.1; }
+  #upnext .when small { font-size: 10px; font-weight: 600; opacity: .85; }
+  #upnext .when b { font: 700 14px ui-rounded, -apple-system, sans-serif; }
+  #upnext .what { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  #upnext .what b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #upnext .what span { color: var(--muted); }
+  #upnext .go { color: var(--violet-text); font-weight: 600; white-space: nowrap; }
   .suggested-line { margin: 0 0 16px; color: var(--muted); }
-  .suggested-line a { color: var(--violet); }
-  .stats { display: flex; gap: 8px; }
-  .stat { min-width: 110px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); }
-  .stat b { display: block; font: 700 17px ui-rounded, "SF Pro Rounded", -apple-system, sans-serif; }
-  .stat span { font-size: 11px; color: var(--muted); }
-  h2 { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin: 0 0 8px; }
-  .day { font-size: 11px; font-weight: 600; color: var(--muted); margin: 18px 0 4px; }
-  /* Rows sit in a list that keeps only those near the viewport (AC-2): each is placed by its
-     offset, collapsed rows have a fixed height, and the first and last of a day round the group. */
+  .suggested-line a { color: var(--violet-text); }
+  h2 { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 0 0 6px; }
+  /* The dictations (R-8, R-10, R-11): rows sit in a list that keeps only those near the viewport
+     (AC-2). Each is placed by its offset; collapsed rows have a fixed height. */
   #list { position: relative; }
   #list > .row, #list > .day { position: absolute; left: 0; right: 0; }
-  .day { height: 40px; box-sizing: border-box; padding-top: 18px; margin: 0 !important; }
-  .row { display: grid; grid-template-columns: 52px 110px 1fr; gap: 10px; align-items: baseline; padding: 8px 12px; height: 36px; box-sizing: border-box; overflow: hidden; background: var(--card); border: 1px solid var(--line); border-top: 0; }
-  .row.first { border-top: 1px solid var(--line); border-radius: 12px 12px 0 0; }
-  .row.last { border-radius: 0 0 12px 12px; }
-  .row.first.last { border-radius: 12px; }
+  .day { height: 40px; padding: 18px 0 0; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .row { display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; column-gap: 12px; align-items: start; padding: 10px; height: 56px; overflow: hidden; border-radius: 8px; cursor: default; outline: none; }
   .row.open { height: auto; }
   .row:hover { background: var(--hover); }
-  .row time { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 12px; }
-  .row .app { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .row .text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; -webkit-user-select: text; user-select: text; }
+  .row time { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 12px; padding-top: 1px; }
+  .row .body { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+  .row .text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.45; -webkit-user-select: text; user-select: text; }
+  .row .app { font-size: 11px; color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .row.failed .text { color: var(--warn); }
-  .empty { color: var(--muted); padding: 18px 0; }
-  .error { color: var(--bad); padding: 18px 0; }
-  #blocks:empty { display: none; }
-  #blocks { margin-bottom: 24px; }
-  /* #92: Today leads Home: meetings, the day's tasks, "Waiting on", and one line to add. */
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; margin-bottom: 18px; }
-  .card > div { display: flex; align-items: center; gap: 10px; min-height: 36px; padding: 6px 12px; border-top: 1px solid var(--line); }
-  .card > div:first-child { border-top: 0; }
-  .card time { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 12px; min-width: 84px; }
-  .card .title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .meet.past { color: var(--faint); }
-  .meet .soon { color: var(--violet); font-size: 12px; font-weight: 600; }
-  .tag { font-size: 11px; padding: 1px 6px; border-radius: 999px; background: var(--hover); color: var(--muted); white-space: nowrap; }
-  .tag.new { background: var(--on); color: var(--violet); font-weight: 600; }
-  .tag.warn { color: var(--warn); }
-  .card button { font: inherit; font-size: 12px; padding: 3px 8px; border-radius: 6px; border: 1px solid var(--line); background: Canvas; color: inherit; cursor: default; }
-  .card button:hover { border-color: var(--violet); }
-  .task .check { width: 16px; height: 16px; padding: 0; border-radius: 999px; border: 1.5px solid var(--faint); flex: none; }
-  .task .check:hover { border-color: var(--violet); background: var(--on); }
-  .task .acts { display: none; gap: 4px; }
-  .task:hover .acts, .task:focus-within .acts { display: flex; }
-  .task.stale { flex-wrap: wrap; }
-  .task .ask { flex-basis: 100%; display: flex; align-items: center; gap: 6px; padding-left: 26px; font-size: 12px; color: var(--muted); }
-  .card input { font: inherit; padding: 4px 8px; border-radius: 6px; border: 1px solid var(--line); background: Canvas; color: inherit; }
-  .card input:focus { outline: none; border-color: var(--violet); }
-  .card input.add { flex: 1; border: 0; padding: 4px 0 4px 26px; background: transparent; }
-  .card input.name { flex: 1; }
-  .wait .title { color: var(--muted); }
-  .sub { font-size: 12px; color: var(--muted); margin: -10px 0 18px; }
-  .search { width: 100%; padding: 8px 12px; border-radius: 9px; border: 1px solid var(--line); background: Canvas; color: inherit; font: inherit; margin: 0 0 8px; }
-  .search:focus { outline: none; border-color: var(--violet); box-shadow: 0 0 0 3px color-mix(in srgb, var(--violet) 25%, transparent); }
-  .more { color: var(--faint); font-size: 12px; padding: 12px 0; text-align: center; }
-  /* Slice 4: a selected row shows its full text and its actions (R-11, R-13). */
-  .row { cursor: default; outline: none; }
-  .row.sel { background: color-mix(in srgb, var(--violet) 9%, var(--card)); box-shadow: inset 3px 0 0 var(--violet); }
+  .row .tools { display: flex; gap: 4px; visibility: hidden; }
+  .row:hover .tools, .row.sel .tools, .row.failed .tools { visibility: visible; }
+  .icon { width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); display: flex; align-items: center; justify-content: center; padding: 0; }
+  .icon:hover { border-color: var(--violet); }
+  .retry { padding: 4px 10px; border-radius: 6px; border: 1px solid #f59e0b; background: transparent; color: var(--warn); font-size: 12px; font-weight: 600; }
+  .row.sel { background: var(--soft); }
   .row.sel .text { white-space: pre-wrap; overflow: visible; }
-  .row .bar { grid-column: 1 / -1; display: none; align-items: center; gap: 6px; flex-wrap: wrap; padding-top: 6px; font-size: 12px; }
-  .row.sel .bar, .row.working .bar { display: flex; }
-  .bar button { font: inherit; font-size: 12px; padding: 3px 8px; border-radius: 6px; border: 1px solid var(--line); background: Canvas; color: inherit; cursor: default; }
+  .row .bar { grid-column: 2 / -1; display: none; align-items: center; gap: 6px; flex-wrap: wrap; padding-top: 8px; font-size: 12px; }
+  .row.open .bar:not(:empty) { display: flex; }
+  .bar button { font-size: 12px; padding: 3px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); }
   .bar button:hover { border-color: var(--violet); }
-  .bar button kbd { font: 11px -apple-system, sans-serif; color: var(--faint); margin-left: 4px; }
   .bar .say { color: var(--muted); }
   .bar .say.bad { color: var(--bad); }
   .bar .say.warn { color: var(--warn); }
   .bar .ask { color: CanvasText; }
-  .bar .ask kbd, .bar .say kbd { font: 11px -apple-system, sans-serif; color: var(--faint); padding: 0 2px; }
-  .bar input { font: inherit; font-size: 12px; padding: 3px 8px; border-radius: 6px; border: 1px solid var(--violet); background: Canvas; color: inherit; width: 200px; }
+  .bar kbd { font: 11px -apple-system, sans-serif; color: var(--faint); padding: 0 2px; }
+  .bar input { font: inherit; font-size: 12px; padding: 3px 8px; border-radius: 6px; border: 1px solid var(--violet); background: var(--bg); color: inherit; width: 200px; }
   .row.working .text { color: var(--muted); }
   mark { background: color-mix(in srgb, var(--violet) 28%, transparent); color: inherit; border-radius: 3px; padding: 0 1px; }
+  .empty { color: var(--muted); padding: 18px 0; }
+  .error { color: var(--bad); padding: 8px 0; }
+  .more { color: var(--faint); font-size: 12px; padding: 12px 0; text-align: center; }
   .off { padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); margin-bottom: 12px; color: var(--muted); }
-  .off a { color: var(--violet); text-decoration: none; }
-  #menu { position: fixed; display: none; min-width: 200px; padding: 4px; border-radius: 10px; border: 1px solid var(--line); background: Canvas; box-shadow: 0 8px 28px rgba(0,0,0,.18); z-index: 10; }
+  .off a { color: var(--violet-text); text-decoration: none; }
+  #blocks:empty { display: none; }
+  #blocks { margin-bottom: 18px; }
+  /* Today (#92): tasks on the left in Things' style, the schedule on the right. */
+  .today { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 28px; align-items: start; }
+  .tasks { display: flex; flex-direction: column; gap: 2px; }
+  .task { display: flex; align-items: center; gap: 12px; padding: 8px; border-radius: 8px; min-height: 38px; }
+  .task:hover { background: var(--hover); }
+  .task .check { width: 18px; height: 18px; padding: 0; border-radius: 999px; border: 1.5px solid var(--faint); background: transparent; flex: none; }
+  .task .check:hover { border-color: var(--violet); background: var(--on); }
+  .task .title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tag { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: var(--tag); color: var(--muted); white-space: nowrap; }
+  .tag.new { background: var(--on); color: var(--violet-text); }
+  .tag.warn { background: var(--warn-bg); color: var(--warn); }
+  .task .acts { display: none; gap: 4px; }
+  .task:hover .acts, .task:focus-within .acts { display: flex; }
+  .task .acts button, .stale button { font-size: 12px; padding: 3px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); }
+  .task .acts button:hover, .stale button:hover { border-color: var(--violet); }
+  .task input { font: inherit; padding: 4px 8px; border-radius: 6px; border: 1px solid var(--violet); background: var(--bg); color: inherit; flex: 1; outline: none; }
+  .task.adder { color: var(--faint); }
+  .task.adder span { width: 18px; text-align: center; font-size: 16px; line-height: 1; }
+  .task input.add { border: 0; padding: 4px 0; background: transparent; }
+  .stale { display: flex; align-items: center; gap: 8px; margin: 14px 8px 0; padding: 10px 12px; border-radius: 10px; border: 1px dashed var(--line); color: var(--muted); }
+  .stale .what { flex: 1; min-width: 0; }
+  .stale > button, .stale > input { flex: none; }
+  .stale b { color: CanvasText; }
+  .stale input { font: inherit; font-size: 12px; padding: 2px 6px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: inherit; }
+  .waiting { margin-top: 22px; }
+  .waiting h2 { margin-left: 8px; }
+  .wait { display: flex; align-items: center; gap: 12px; padding: 8px; color: var(--muted); }
+  .wait .title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .done-line { color: var(--muted); margin: 0; }
+  .meets { display: flex; flex-direction: column; gap: 6px; }
+  .meet { display: flex; gap: 10px; align-items: center; padding: 8px 10px; border-radius: 10px; }
+  .meet time { width: 42px; flex: none; font-variant-numeric: tabular-nums; color: var(--muted); }
+  .meet .title { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .meet .title b { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .meet .soon { font-size: 12px; color: var(--violet-text); font-weight: 600; }
+  .meet.past { color: var(--faint); }
+  .meet.past time { color: var(--faint); }
+  .meet.next { background: var(--soft); }
+  .meet.next time, .meet.next .title b { font-weight: 600; color: CanvasText; }
+  .meet button { padding: 5px 12px; border-radius: 6px; border: 0; background: var(--violet); color: #fff; font-size: 12px; font-weight: 600; }
+  .quiet { color: var(--muted); padding: 8px 10px; }
+  #menu { position: fixed; display: none; min-width: 200px; padding: 4px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); box-shadow: 0 8px 28px rgba(0,0,0,.18); z-index: 10; }
   #menu.on { display: block; }
   #menu div { display: flex; justify-content: space-between; gap: 18px; padding: 6px 8px; border-radius: 6px; }
   #menu div.on, #menu div:hover { background: var(--on); }
@@ -130,9 +170,10 @@
   <div class="brand"><i aria-hidden="true"></i>HyperMe</div>
   <div id="sections"></div>
   <div class="spacer"></div>
+  <p class="hint">Hold <kbd class="key">fn</kbd> to dictate. Say "Hyper, …" for a command.</p>
   <div class="bottom">
-    <a href="#" id="open-settings">Settings <kbd>⌘,</kbd></a>
-    <a href="#" id="open-help">Help</a>
+    <a href="#" id="open-settings"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="2.2"/><path d="M8 1.8v2M8 12.2v2M1.8 8h2M12.2 8h2M3.6 3.6l1.4 1.4M11 11l1.4 1.4M3.6 12.4 5 11M11 5l1.4-1.4"/></svg><span class="label">Settings</span><kbd>⌘,</kbd></a>
+    <a href="#" id="open-help"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="6"/><path d="M6.3 6.2a1.8 1.8 0 1 1 2.4 1.7c-.5.2-.7.6-.7 1.1M8 11.2v.1"/></svg><span class="label">Help</span></a>
   </div>
 </nav>
 <main id="main">
@@ -140,23 +181,30 @@
     <header>
       <div>
         <h1 id="greeting">Hello</h1>
-        <p class="lead" id="today"></p>
+        <p class="lead" id="stats">&nbsp;</p>
       </div>
-      <div class="stats">
-        <div class="stat"><b id="words">–</b><span>words this week</span></div>
-        <div class="stat"><b id="saved">–</b><span>saved vs typing</span></div>
-      </div>
+      <label class="search" id="search-box">
+        <svg aria-hidden="true" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3 3"/></svg>
+        <input id="search" type="search" placeholder="Search dictations" aria-label="Search dictations" autocomplete="off">
+      </label>
     </header>
+    <a href="#today" id="upnext" hidden></a>
     <p class="suggested-line" id="suggested-line" hidden><span id="suggested-count"></span> · <a href="#dictionary">Review</a></p>
     <div id="blocks"></div>
-  </section>
-
-  <section id="history" aria-label="History">
-    <header><div><h1>History</h1><p class="lead">Everything you dictated, newest first.</p></div></header>
     <div class="off" id="off" hidden>History is off · <a href="#" id="off-link">Settings → Privacy</a>. Only dictations waiting for a retry are listed.</div>
-    <input id="search" class="search" type="search" placeholder="Search your dictations" aria-label="Search your dictations" autocomplete="off">
     <div id="list"></div>
     <div class="more" id="more"></div>
+  </section>
+
+  <section id="today" aria-labelledby="today-title">
+    <header>
+      <div>
+        <h1 id="today-title">Today</h1>
+        <p class="lead" id="today-date"></p>
+      </div>
+      <p class="lead">Say "Hyper, add a task…"</p>
+    </header>
+    <div id="today-root"></div>
   </section>
 
   <section id="dictionary" aria-label="Dictionary">
@@ -183,14 +231,31 @@
     document.querySelectorAll('#sections a').forEach((a) => a.classList.toggle('on', a.dataset.id === id));
     if (id === 'home') {
       loadHome();
+      resetHistory();
       if (block) document.getElementById('block-' + block)?.scrollIntoView();
+    } else if (id === 'today') {
+      redrawToday();
+      // Today on screen clears what was new there (R-21, R-22).
+      emit('home://block-viewed', 'today');
     } else if (id === 'dictionary') {
       dictionary.reload();
-    } else if (id === 'history') {
-      resetHistory();
-
     }
   }
+
+  // Sidebar icons, drawn inline (no icon font, no request).
+  const ICONS = {
+    home: '<path d="M2.5 7 8 2.5 13.5 7v6.5h-11z"/>',
+    today: '<rect x="2.5" y="3" width="11" height="10.5" rx="2"/><path d="M2.5 6.5h11M5.5 1.8v2.4M10.5 1.8v2.4"/>',
+    dictionary: '<path d="M3 2.5h8.5a1.5 1.5 0 0 1 1.5 1.5v9.5H4.5A1.5 1.5 0 0 1 3 12z"/><path d="M3 12a1.5 1.5 0 0 1 1.5-1.5H13"/>',
+  };
+  const icon = (paths, size = 16) => {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('width', size); svg.setAttribute('height', size); svg.setAttribute('viewBox', '0 0 16 16');
+    svg.setAttribute('fill', 'none'); svg.setAttribute('stroke', 'currentColor'); svg.setAttribute('stroke-width', '1.4');
+    svg.setAttribute('aria-hidden', 'true');
+    svg.innerHTML = paths;
+    return svg;
+  };
 
   async function loadSections() {
     sections = await invoke('home_sections');
@@ -200,10 +265,11 @@
       a.href = '#' + s.id;
       a.dataset.id = s.id;
       const label = document.createElement('span');
+      label.className = 'label';
       label.textContent = s.title;
       const key = document.createElement('kbd');
       key.textContent = s.shortcut;
-      a.append(label, key);
+      a.append(icon(ICONS[s.id] || ''), label, key);
       return a;
     }));
     showAttention(await invoke('home_attention', { on: null }));
@@ -225,7 +291,7 @@
   $('open-settings').addEventListener('click', (e) => { e.preventDefault(); openSettings(settingsSection()); });
   $('open-help').addEventListener('click', (e) => { e.preventDefault(); openSettings('about'); });
   // ⌘, opens Settings at the section closest to where you are (docs/UX.md).
-  const settingsSection = () => (location.hash.startsWith('#history') ? 'privacy' : location.hash.startsWith('#dictionary') ? 'dictionary' : 'general');
+  const settingsSection = () => (location.hash.startsWith('#dictionary') ? 'dictionary' : location.hash.startsWith('#today') ? 'connectors' : 'general');
 
   document.addEventListener('keydown', (e) => {
     if (!e.metaKey || e.altKey || e.ctrlKey) return;
@@ -237,7 +303,7 @@
     }
   });
 
-  // ---- Rows, shared by Recent and History (R-8, R-11) ----
+  // ---- Rows of the dictation list (R-8, R-11) ----
   // The page's copy is English, so dates and numbers are too, until the app is translated.
   const LOCALE = 'en-GB';
   const timeFormat = new Intl.DateTimeFormat(LOCALE, { hour: '2-digit', minute: '2-digit' });
@@ -297,7 +363,7 @@
   // ---- A list that keeps only the rows near the viewport in the page (AC-2) ----
   // Collapsed rows and day headings have fixed heights; the selected row is measured. Item data
   // stays in memory (a few hundred bytes each); only elements come and go.
-  const ROW_H = 36;
+  const ROW_H = 56;
   const DAY_H = 40;
   const OVERSCAN = 600;
   const main = $('main');
@@ -387,7 +453,7 @@
     top(id) { const e = this.entries.find((x) => x.item && x.item.id === id); return e ? e.top : 0; }
   }
 
-  // Dictations live only in History; Home leads with the day (owner, 27 November 2026).
+  // The dictations are the Home page, as in Wispr Flow; the day has its own Today section (V0.1 redesign, owner, 27 November 2026).
   const historyList = new List($('list'), null);
   const lists = [historyList];
   const currentList = () => historyList;
@@ -409,29 +475,72 @@
     div.tabIndex = -1;
     const time = document.createElement('time');
     time.textContent = timeFormat.format(new Date(item.started_ms));
-    const app = document.createElement('span');
-    app.className = 'app';
-    app.textContent = item.app || '—';
+    const body = document.createElement('div');
+    body.className = 'body';
     const text = document.createElement('span');
     text.className = 'text';
     if (item.state === 'failed') text.textContent = item.message || 'Failed';
     else fillText(text, item.text || '', words);
-    div.append(time, app, text);
+    const app = document.createElement('span');
+    app.className = 'app';
+    app.textContent = item.app || '';
+    body.append(text, app);
+    div.append(time, body, tools(item));
     if (open) {
       const bar = document.createElement('div');
       bar.className = 'bar';
       drawBar(bar, item);
       div.append(bar);
     }
-    div.addEventListener('mousedown', (e) => { if (!e.target.closest('.bar')) select(item.id, false); });
+    div.addEventListener('mousedown', (e) => { if (!e.target.closest('.bar, .tools')) select(item.id, false); });
     text.addEventListener('mouseup', () => offerFix(item.id));
     text.addEventListener('dblclick', () => setTimeout(() => offerFix(item.id), 0));
     return div;
   }
 
+  // The row's tools on hover, as in Wispr Flow: Copy, Paste again and the rest under More (⌘K);
+  // a failed dictation shows Retry instead (R-13, R-16).
+  const TOOL_ICONS = {
+    copy: '<rect x="5" y="5" width="8.5" height="8.5" rx="1.5"/><path d="M11 5V3.5A1 1 0 0 0 10 2.5H3.5a1 1 0 0 0-1 1V10a1 1 0 0 0 1 1H5"/>',
+    paste: '<path d="M13 3.5v5.5a2 2 0 0 1-2 2H3.5M6 8 3.5 11 6 14"/>',
+    more: '<circle cx="3.5" cy="8" r=".6"/><circle cx="8" cy="8" r=".6"/><circle cx="12.5" cy="8" r=".6"/>',
+  };
+  function tools(item) {
+    const box = document.createElement('div');
+    box.className = 'tools';
+    if (item.state === 'failed') {
+      if ((item.actions || []).some((a) => a.id === 'retry')) {
+        const b = document.createElement('button');
+        b.className = 'retry';
+        b.textContent = 'Retry';
+        b.addEventListener('click', () => run(item.id, 'retry'));
+        box.append(b);
+      }
+    } else {
+      for (const [id, label] of [['copy', 'Copy'], ['paste', 'Paste again']]) {
+        if (!(item.actions || []).some((a) => a.id === id)) continue;
+        const b = document.createElement('button');
+        b.className = 'icon';
+        b.title = label;
+        b.setAttribute('aria-label', label);
+        b.append(icon(TOOL_ICONS[id], 14));
+        b.addEventListener('click', () => run(item.id, id));
+        box.append(b);
+      }
+    }
+    const more = document.createElement('button');
+    more.className = 'icon';
+    more.title = 'More';
+    more.setAttribute('aria-label', 'More actions');
+    more.append(icon(TOOL_ICONS.more, 14));
+    more.addEventListener('click', () => { select(item.id, false); openMenu(); });
+    box.append(more);
+    return box;
+  }
+
   main.addEventListener('scroll', () => {
     currentList().render();
-    if ($('history').classList.contains('on') && main.scrollTop + main.clientHeight > main.scrollHeight - 600) loadMoreHistory();
+    if ($('home').classList.contains('on') && main.scrollTop + main.clientHeight > main.scrollHeight - 600) loadMoreHistory();
   }, { passive: true });
   window.addEventListener('resize', () => currentList().render());
 
@@ -469,7 +578,7 @@
   }
 
   function move(step) {
-    if (!$('history').classList.contains('on')) return;
+    if (!$('home').classList.contains('on')) return;
     const list = currentList();
     const items = list.items;
     if (items.length === 0) return;
@@ -515,12 +624,6 @@
     if (state.working) {
       bar.append(span('say', 'Working…'));
       return;
-    }
-    for (const action of item.actions || []) {
-      const button = document.createElement('button');
-      button.append(action.label, key(action.key));
-      button.addEventListener('click', () => run(item.id, action.id));
-      bar.append(button);
     }
     if (state.say) bar.append(span('say' + (state.say.bad ? ' bad' : ''), state.say.text));
   }
@@ -688,7 +791,6 @@
   function greet() {
     const hour = new Date().getHours();
     $('greeting').textContent = hour < 5 ? 'Good evening' : hour < 12 ? 'Good morning' : hour < 19 ? 'Good afternoon' : 'Good evening';
-    $('today').textContent = dayFormat.format(new Date());
   }
 
   function duration(seconds) {
@@ -698,22 +800,43 @@
     return Math.floor(minutes / 60) + ' h ' + (minutes % 60) + ' min';
   }
 
+  // R-7: the two numbers, in one quiet line under the greeting.
   async function loadStats() {
     try {
       const stats = await invoke('home_stats', { utcOffsetMinutes: -new Date().getTimezoneOffset() });
-      $('words').textContent = stats.words_this_week.toLocaleString(LOCALE);
-      $('saved').textContent = duration(stats.seconds_saved);
+      $('stats').textContent = stats.words_this_week.toLocaleString(LOCALE) + ' words this week · ' + duration(stats.seconds_saved) + ' saved';
     } catch (_) {
-      $('words').textContent = '–';
-      $('saved').textContent = '–';
+      $('stats').textContent = dayFormat.format(new Date());
     }
   }
 
   async function loadHome() {
     greet();
     await loadStats();
+    await loadUpNext();
     await loadSuggested();
     await loadBlocks();
+  }
+
+  // R-8: Up next, the next meeting and what is left in Today, as one line that opens Today.
+  async function loadUpNext() {
+    const line = $('upnext');
+    let page;
+    try { page = await invoke('home_today'); } catch (_) { line.hidden = true; return; }
+    const next = page.meetings.find((m) => m.now) || page.meetings.find((m) => !m.past);
+    const left = [];
+    if (page.lines.length) left.push(page.lines.length === 1 ? '1 task left today' : page.lines.length + ' tasks left today');
+    if (page.waiting.length) left.push(page.waiting.length + ' waiting');
+    if (!next && !left.length) { line.hidden = true; return; }
+    const when = el('span', 'when');
+    if (next && next.now) when.append(el('b', null, 'Now'));
+    else if (next && next.starts_in_min != null && next.starts_in_min < 100) when.append(el('small', null, 'IN'), el('b', null, next.starts_in_min + 'm'));
+    else if (next) when.append(el('b', null, next.start));
+    else when.append(el('b', null, String(page.lines.length)));
+    const what = el('span', 'what');
+    what.append(el('b', null, next ? next.title + ' · ' + next.start : 'Today'), el('span', null, left.join(' · ') || 'Nothing else today'));
+    line.replaceChildren(when, what, el('span', 'go', 'Open Today ›'));
+    line.hidden = false;
   }
 
   // Spec 93, R-22: one line while dictionary suggestions wait; the pill shows nothing.
@@ -723,7 +846,7 @@
     $('suggested-count').textContent = n === 1 ? '1 suggested word' : n + ' suggested words';
   }
 
-  // The Home page's blocks come from other features: Today (#92) first.
+  // The Home page's blocks come from other features (R-9); none ships now.
   const seen = new IntersectionObserver((entries) => {
     for (const entry of entries) {
       if (entry.isIntersecting) {
@@ -742,13 +865,12 @@
       const title = document.createElement('h2');
       title.textContent = b.title;
       div.append(title);
-      if (b.id === 'today') renderToday(div);
       seen.observe(div);
       return div;
     }));
   }
 
-  // ---- Today (#92, slice 8): meetings, tasks, "Waiting on", add ----
+  // ---- Today (#92): tasks in Things' style, the schedule beside them ----
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
   const button = (label, onClick, aria) => { const b = el('button', null, label); if (aria) b.setAttribute('aria-label', aria); b.addEventListener('click', onClick); return b; };
 
@@ -758,85 +880,99 @@
   }
 
   function alertLine(text) {
-    const block = $('block-today');
-    block?.querySelector('.error')?.remove();
-    block?.append(el('p', 'error', text));
+    const root = $('today-root');
+    root.querySelector('.error')?.remove();
+    root.prepend(el('p', 'error', text));
   }
 
   function redrawToday() {
-    const block = $('block-today');
-    if (block) renderToday(block);
+    if ($('today').classList.contains('on')) renderToday($('today-root'));
+    if ($('home').classList.contains('on')) loadUpNext();
   }
 
-  async function renderToday(div) {
+  async function renderToday(root) {
     // Keep what is being typed in the add field across a redraw.
-    const typing = div.querySelector('input.add');
+    const typing = root.querySelector('input.add');
     const draft = typing ? typing.value : '';
     const focused = typing && document.activeElement === typing;
+    $('today-date').textContent = dayFormat.format(new Date());
     let page;
     try { page = await invoke('home_today'); } catch (e) {
-      div.replaceChildren(div.querySelector('h2'), el('p', 'error', String(e)));
+      root.replaceChildren(el('p', 'error', String(e)));
       return;
     }
-    const parts = [div.querySelector('h2')];
-    if (page.done_today) parts.push(el('p', 'sub', page.done_today + ' done today'));
+    const left = page.lines.length;
+    $('today-date').textContent = dayFormat.format(new Date()) + ' · ' + (page.done_today ? page.done_today + ' done, ' : '') + (left === 1 ? '1 to go' : left + ' to go');
 
-    if (page.meetings.length) {
-      const card = el('div', 'card');
-      for (const m of page.meetings) {
-        const row = el('div', 'meet' + (m.past ? ' past' : ''));
-        row.append(el('time', null, m.start + '–' + m.end), el('span', 'title', m.title));
-        if (m.now) row.append(el('span', 'soon', 'now'));
-        else if (m.starts_in_min != null) row.append(el('span', 'soon', 'in ' + duration(m.starts_in_min * 60)));
-        if (m.link && !m.past) row.append(button('Join', () => invoke('tasks_open_meeting', { url: m.link }).catch((e) => alertLine(String(e)))));
-        card.append(row);
-      }
-      parts.push(card);
+    const tasks = el('div', 'tasks');
+    const stale = [];
+    for (const line of page.lines) {
+      tasks.append(taskRow(line));
+      if (line.stale) stale.push(line);
     }
-
-    const tasks = el('div', 'card');
-    for (const line of page.lines) tasks.append(taskRow(line, page));
     const add = el('input', 'add');
-    add.placeholder = 'Add a task for today';
-    add.setAttribute('aria-label', 'Add a task for today');
+    add.placeholder = 'New task';
+    add.setAttribute('aria-label', 'New task for today');
     add.value = draft;
     add.addEventListener('keydown', async (e) => {
       if (e.key !== 'Enter' || !add.value.trim()) return;
       e.preventDefault();
       try { await invoke('tasks_add', { title: add.value }); add.value = ''; } catch (err) { alertLine(String(err)); }
-      await renderToday(div);
-      div.querySelector('input.add')?.focus();
+      await renderToday(root);
+      root.querySelector('input.add')?.focus();
     });
-    const addRow = el('div', 'task');
-    addRow.append(add);
+    const addRow = el('div', 'task adder');
+    addRow.append(el('span', null, '+'), add);
     tasks.append(addRow);
-    parts.push(tasks);
 
+    const column = el('div');
+    column.append(tasks);
+    // R-14: rolled over too often; ask once, below the list.
+    for (const line of stale) column.append(staleRow(line, page));
     if (page.waiting.length) {
-      parts.push(el('h2', null, 'Waiting on'));
-      const card = el('div', 'card');
+      const waiting = el('div', 'waiting');
+      waiting.append(el('h2', null, 'Waiting on · ' + page.waiting.length));
       for (const w of page.waiting) {
         const row = el('div', 'wait');
         row.append(el('span', 'title', w.title));
         if (w.new) row.append(el('span', 'tag new', 'new'));
         row.append(el('span', 'tag', 'after ' + w.on));
-        card.append(row);
+        waiting.append(row);
       }
-      parts.push(card);
+      column.append(waiting);
     }
-    div.replaceChildren(...parts);
+
+    const side = el('aside');
+    side.append(el('h2', null, 'Schedule'));
+    const meets = el('div', 'meets');
+    const next = page.meetings.find((m) => m.now) || page.meetings.find((m) => !m.past);
+    for (const m of page.meetings) {
+      const row = el('div', 'meet' + (m.past ? ' past' : '') + (m === next ? ' next' : ''));
+      const title = el('span', 'title');
+      title.append(el('b', null, m.title));
+      if (m.now) title.append(el('span', 'soon', 'now · until ' + m.end));
+      else if (m.starts_in_min != null) title.append(el('span', 'soon', 'in ' + duration(m.starts_in_min * 60)));
+      row.append(el('time', null, m.start), title);
+      if (m.link && !m.past) row.append(button('Join', () => invoke('tasks_open_meeting', { url: m.link }).catch((e) => alertLine(String(e)))));
+      meets.append(row);
+    }
+    if (!page.meetings.length) meets.append(el('p', 'quiet', 'No meetings today.'));
+    side.append(meets);
+
+    const grid = el('div', 'today');
+    grid.append(column, side);
+    root.replaceChildren(grid);
     if (focused) add.focus();
   }
 
-  function taskRow(line, page) {
-    const row = el('div', 'task' + (line.stale ? ' stale' : ''));
+  function taskRow(line) {
+    const row = el('div', 'task');
     row.append(button('', () => taskAct(line.id, 'done'), 'Done: ' + line.title));
     row.lastChild.className = 'check';
     const title = el('span', 'title', line.title);
     title.title = 'Double-click to rename';
     title.addEventListener('dblclick', () => rename(row, title, line));
     row.append(title);
-    for (const mark of line.marks) row.append(el('span', 'tag' + (mark === 'new' ? ' new' : mark === 'overdue' ? ' warn' : ''), mark));
     const acts = el('span', 'acts');
     acts.append(
       button('Tomorrow', () => taskAct(line.id, 'tomorrow')),
@@ -844,18 +980,21 @@
       button('Drop', () => taskAct(line.id, 'drop')),
     );
     row.append(acts);
-    if (line.stale) {
-      // R-14: rolled over too often; ask once.
-      const ask = el('span', 'ask', 'Rolled over ' + line.rolled + ' times:');
-      const day = el('input');
-      day.type = 'date';
-      day.min = page.tomorrow;
-      day.setAttribute('aria-label', 'Pick a day for ' + line.title);
-      day.addEventListener('change', () => { if (day.value) taskAct(line.id, 'move', day.value); });
-      ask.append(button('Keep', () => taskAct(line.id, 'keep')), el('span', null, 'or pick a day'), day, button('Drop', () => taskAct(line.id, 'drop')));
-      row.append(ask);
-    }
+    for (const mark of line.marks) row.append(el('span', 'tag' + (mark === 'new' ? ' new' : mark === 'overdue' || mark.startsWith('due') ? ' warn' : ''), mark));
     return row;
+  }
+
+  function staleRow(line, page) {
+    const box = el('div', 'stale');
+    const what = el('span', 'what');
+    what.append(el('b', null, line.title), ' has rolled over ' + line.rolled + ' times.');
+    const day = el('input');
+    day.type = 'date';
+    day.min = page.tomorrow;
+    day.setAttribute('aria-label', 'Pick a day for ' + line.title);
+    day.addEventListener('change', () => { if (day.value) taskAct(line.id, 'move', day.value); });
+    box.append(what, button('Keep', () => taskAct(line.id, 'keep')), day, button('Drop', () => taskAct(line.id, 'drop')));
+    return box;
   }
 
   function rename(row, title, line) {
@@ -892,7 +1031,7 @@
     historyToken += 1;
     if (selected && selected.list === historyList) selected = null;
     $('off').hidden = info.history;
-    $('search').hidden = !info.history;
+    $('search-box').hidden = !info.history;
     historyList.set([], queryWords());
     $('more').textContent = '';
     loadMoreHistory();
@@ -936,15 +1075,15 @@
   // Typing anywhere in History goes to the search field. It is not focused on entry: a focused
   // field kept about 20 MB of graphics memory alive (AC-2).
   document.addEventListener('keydown', (e) => {
-    if (!$('history').classList.contains('on') || e.metaKey || e.ctrlKey || e.altKey) return;
-    if (e.target instanceof HTMLInputElement || e.key.length !== 1 || $('search').hidden) return;
+    if (!$('home').classList.contains('on') || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.target instanceof HTMLInputElement || e.key.length !== 1 || $('search-box').hidden) return;
     if (selected && stateOf(selected.id).mode) return;
     $('search').focus();
   });
 
   $('off-link').addEventListener('click', (e) => { e.preventDefault(); openSettings('privacy'); });
 
-  // A dictation made while Home is open goes on top of Recent and History (AC-15).
+  // A dictation made while Home is open goes on top of the list (AC-15).
   async function showNew() {
     try {
       const page = info.history ? await invoke('home_page', { before: null, limit: PAGE }) : await invoke('home_failed');
