@@ -59,7 +59,8 @@ EARS form. "The app" is HyperMe on macOS.
   event), `insert` (text ready to paste sent) and `history_write`. A retry (spec 25 R-31) is its
   own `dictation` root with `retry_of` set.
 - R-3. The `dictation` span shall carry: the history id when history is on, the outcome
-  (`pasted`, `copied`, `failed`, `cancelled`, `too_short`), the error kind on failure, the
+  (`pasted`, `copied`, `failed`, `cancelled`, `nothing_heard`; a hold too short to record ends
+  as `cancelled`), the error kind on failure, the
   language code, the word count, the fallback flag, the speech and cleanup provider and model
   names, and the cleanup level.
 - R-4. Child spans shall carry only what explains their time: bytes of audio sent and attempts
