@@ -1,6 +1,7 @@
 # Paid Claude and ChatGPT accounts, and launching agent tasks
 
-Research of 27 November 2026, at the owner's request. Two separate questions, kept apart:
+Research of 27 November 2026, at the owner's request. **The owner approved both recommendations on 27 November 2026**; they
+are now in the PRD, the roadmap and `CLAUDE.md`. Two separate questions, kept apart:
 
 1. **Paid accounts (near term).** Many users already pay for Claude or ChatGPT. Can they connect
    that account to HyperMe, click and sign in like the Google connector, instead of pasting API
