@@ -411,13 +411,15 @@ sections. Sections are added by phase:
 | --- | --- | --- |
 | **Home** | 2 | The page you land on. A greeting and three numbers: words this week, time saved against typing, median time from key release to text. Then **Recent**: your dictations grouped by day, each one copied, pasted again or retried on hover. From Phase 4 two blocks go on top: **Waiting for you**, every proposal that needs a yes (mail drafts, proposed tickets, agent results), one queue; and **Today**, the day's calendar with a Day and Week toggle and what is running |
 | **History** | 2 | Everything you said, searchable and filtered by kind: dictations, questions, actions. Fix a word into the dictionary from here |
-| **Dictionary** | 2 | Your words and sound-alike replacements, with import and export |
+| **Dictionary** | 2 | Your words and sound-alike replacements, suggestions learned from your edits, with import and export ([spec](../specs/93-personal-dictionary/spec.md), [mockup](ux/dictionary.svg)) |
 | **Style** | 2 | Cleanup level and a style per kind of app (personal chat, work chat, email, other) |
 | **Meetings** | 5 | Past and upcoming meetings, each with notes, action points and proposed tickets |
 | Settings, Help | 1 | At the bottom of the sidebar. Settings opens the Settings window (⌘,) |
 
 Dictionary and Style move out of Settings into Home, as in Wispr Flow: you tune them while you use
-the app, so they are not setup. Settings keeps only setup and rarely changed preferences.
+the app, so they are not setup. The Dictionary also keeps a section in Settings, at the owner's
+request (26 November 2026), and ships there first, before Home exists
+([spec](../specs/93-personal-dictionary/spec.md)). Settings keeps only setup and rarely changed preferences.
 
 Rows in every section are single lines with a source glyph, the text, and the main key on the
 right ("↵ Review"). ⌘K on a row shows its other actions.

@@ -60,6 +60,12 @@ impl LiveSession for AnySession {
 }
 
 impl CleanupProvider for AnyCleanup {
+    fn set_dictionary(&self, line: &str) {
+        match self {
+            AnyCleanup::Chat(p) => p.set_dictionary(line),
+        }
+    }
+
     async fn warm(&self) -> Result<(), Error> {
         match self {
             AnyCleanup::Chat(p) => p.warm().await,
@@ -84,6 +90,13 @@ impl AnyCleanup {
         match self {
             AnyCleanup::Chat(p) => p.check().await,
         }
+    }
+
+    /// Adds the user's dictionary to the prompt (spec 93, R-4): `line` is
+    /// `Dictionary::prompt_line()`.
+    pub fn with_dictionary(self, line: &str) -> Self {
+        self.set_dictionary(line);
+        self
     }
 }
 

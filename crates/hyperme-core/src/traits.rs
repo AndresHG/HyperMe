@@ -62,6 +62,10 @@ pub trait LiveSession {
 
 /// A language model that rewrites a raw transcript into clean text.
 pub trait CleanupProvider {
+    /// Replaces the dictionary line the cleanup prompt carries (spec 93, R-4, R-10a). The line
+    /// is `Dictionary::prompt_line()`. Providers that build no prompt ignore it.
+    fn set_dictionary(&self, _line: &str) {}
+
     /// Opens the connection ahead of time, on key-down (R-2).
     fn warm(&self) -> impl Future<Output = Result<(), Error>> + Send;
 
@@ -110,6 +114,53 @@ pub trait History {
     fn discard(&mut self, id: DictationId) -> Result<(), Error>;
     /// The saved audio of a dictation, for a retry.
     fn audio(&self, id: DictationId) -> Result<Vec<i16>, Error>;
+    /// The app a dictation was dictated into, for the cleanup prompt of a retry from Home
+    /// (#98 R-16).
+    fn app(&self, id: DictationId) -> Result<Option<String>, Error>;
+    /// A retry from Home succeeded: the dictation's text is replaced, its audio kept (#98
+    /// R-16). With history off, nothing is left behind, as with [`done`](Self::done).
+    fn replace_text(
+        &mut self,
+        id: DictationId,
+        text: &str,
+        language: Option<&str>,
+    ) -> Result<(), Error>;
+}
+
+/// A correction for the personal dictionary, from Home's "Fix a word" (#98 R-17, R-20): the
+/// word or phrase the speech model heard, and what it should be. The hand-off agreed with the
+/// dictionary (#93), which owns the implementation and storage.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Correction {
+    pub heard: String,
+    pub wanted: String,
+    /// The dictation it was fixed in, if any.
+    pub dictation: Option<DictationId>,
+    /// That dictation's language, if known.
+    pub language: Option<String>,
+    /// The user confirmed a [`Refusal::CommonWord`] warning.
+    pub confirmed_common: bool,
+}
+
+/// What became of a correction that was not refused outright.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Added {
+    Added,
+    /// Not added yet: send it again with `confirmed_common` if the user confirms.
+    NeedsConfirm(Refusal),
+}
+
+/// Why a correction needs the user's confirmation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Refusal {
+    /// The heard word is common and would be replaced everywhere.
+    CommonWord,
+}
+
+/// The personal dictionary, as Home sees it (#98 R-20). Hard refusals (too long, duplicate,
+/// list full) are an `Err` with a message to show.
+pub trait Dictionary {
+    fn add_correction(&mut self, c: Correction) -> Result<Added, Error>;
 }
 
 /// The start and stop sounds (R-32).

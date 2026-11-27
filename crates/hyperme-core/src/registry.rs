@@ -79,7 +79,7 @@ impl ToolLists {
 }
 
 /// `*` matches any run of characters, including none; everything else matches itself.
-fn glob(pattern: &str, name: &str) -> bool {
+pub(crate) fn glob(pattern: &str, name: &str) -> bool {
     let mut parts = pattern.split('*');
     let first = parts.next().unwrap_or_default();
     let Some(mut rest) = name.strip_prefix(first) else {
@@ -105,9 +105,33 @@ fn glob(pattern: &str, name: &str) -> bool {
 pub struct Pull {
     pub server: String,
     pub tool: String,
+    /// Arguments; `{today_start}`, `{today_plus_7}` and `{now}` are filled in at run time.
     #[serde(default)]
     pub args: BTreeMap<String, String>,
+    /// Paths of the fields kept from each item, for documentation and review.
+    #[serde(default)]
     pub keep: Vec<String>,
+    /// Where the items are in the tool's answer (`items`); empty when it is the list itself.
+    #[serde(default)]
+    pub list: String,
+    /// Each stored field and the path it comes from; `a|b` takes the first that is there.
+    #[serde(default)]
+    pub fields: BTreeMap<String, String>,
+    /// Also mirror each item as a task (R-27).
+    #[serde(default)]
+    pub mirror: bool,
+    /// Mail: items with any of these labels are not counted or mirrored (R-26).
+    #[serde(default)]
+    pub exclude_labels: Vec<String>,
+    /// Mail: the label on the last message that means the account wrote last (R-26, R-27).
+    pub done_label: Option<String>,
+    /// A link back to the item, with `{id}` filled in, when the answer has none.
+    pub link: Option<String>,
+    /// Mail: the read tool that fetches a body on demand, its id argument and the path of the
+    /// text in its answer (R-18).
+    pub body_tool: Option<String>,
+    pub body_arg: Option<String>,
+    pub body_path: Option<String>,
     pub into: String,
 }
 
@@ -129,6 +153,27 @@ pub struct Server {
     pub scopes: Vec<String>,
     /// Scopes asked for only when the named feature is switched on, such as `drafts`.
     pub optional_scopes: BTreeMap<String, Vec<String>>,
+    /// The switch that turns this server on in the setup sheet, in plain words.
+    pub label: Option<String>,
+    /// The switch for each optional scope, by feature.
+    pub optional_labels: BTreeMap<String, String>,
+    /// The provider's daily quota for this server, in units (R-20).
+    pub daily_units: Option<u32>,
+    /// What each tool costs in units; a tool not named costs 1.
+    pub units: BTreeMap<String, u32>,
+}
+
+/// Help for setting up a connector's own OAuth client (G-1), from the preset.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Setup {
+    /// The page where the user creates their client.
+    pub client_url: String,
+    /// The page where the user sets the client's project to "In production" (R-10a).
+    pub production_url: Option<String>,
+    /// Shell commands for the "Use gcloud instead" path, copied as text, never run.
+    #[serde(default)]
+    pub commands: Vec<String>,
 }
 
 /// The OAuth endpoints and consent parameters of a connector (RFC 8252).
@@ -166,6 +211,30 @@ pub struct Connector {
     /// The user's switches from Settings (exact tool names), which win over `tools`.
     pub user_tools: ToolLists,
     pub pulls: Vec<Pull>,
+    /// Scopes this connector never asks for, whatever is switched on (R-14).
+    pub forbidden_scopes: Vec<String>,
+    pub setup: Option<Setup>,
+    /// Tool patterns that never run, whatever the user switches (Google: anything that sends
+    /// mail, since email is draft-only).
+    pub forbidden_tools: Vec<String>,
+    /// How each "ask before" tool is previewed (R-23).
+    pub actions: Vec<Action>,
+}
+
+/// The preview of an "ask before" tool (R-23), from the preset.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Action {
+    pub tool: String,
+    /// The card's title, such as "New draft".
+    pub title: String,
+    /// The Enter button's words, such as "Save draft".
+    pub enter: String,
+    /// The setup switch the tool needs, such as `gmail.drafts`.
+    pub needs: Option<String>,
+    /// The arguments shown, in order, each with its label: `[["to", "To"], ...]`.
+    #[serde(default)]
+    pub fields: Vec<[String; 2]>,
 }
 
 impl Connector {
@@ -174,7 +243,11 @@ impl Connector {
     }
 
     /// The access for `tool`: the user's switch if there is one, else the default (R-5).
+    /// A tool in `forbidden_tools` is always off, whatever the user switched.
     pub fn access(&self, tool: &str) -> ToolAccess {
+        if self.forbidden_tools.iter().any(|p| glob(p, tool)) {
+            return ToolAccess::Off;
+        }
         self.user_access(tool)
             .unwrap_or_else(|| self.default_access(tool))
     }
@@ -238,6 +311,13 @@ struct PresetFile {
     tools: ToolLists,
     #[serde(default)]
     pull: Vec<Pull>,
+    #[serde(default)]
+    forbidden_scopes: Vec<String>,
+    setup: Option<Setup>,
+    #[serde(default)]
+    forbidden_tools: Vec<String>,
+    #[serde(default)]
+    actions: Vec<Action>,
 }
 
 #[derive(Deserialize)]
@@ -258,6 +338,12 @@ struct ServerFile {
     scopes: Vec<String>,
     #[serde(default)]
     optional_scopes: BTreeMap<String, Vec<String>>,
+    label: Option<String>,
+    #[serde(default)]
+    optional_labels: BTreeMap<String, String>,
+    daily_units: Option<u32>,
+    #[serde(default)]
+    units: BTreeMap<String, u32>,
 }
 
 /// How a custom server signs in.
@@ -361,10 +447,18 @@ impl CustomServer {
                 transport,
                 scopes: self.scopes.clone(),
                 optional_scopes: BTreeMap::new(),
+                label: None,
+                optional_labels: BTreeMap::new(),
+                daily_units: None,
+                units: BTreeMap::new(),
             }],
             tools: self.tools.clone(),
             user_tools: ToolLists::default(),
             pulls: Vec::new(),
+            forbidden_scopes: Vec::new(),
+            setup: None,
+            forbidden_tools: Vec::new(),
+            actions: Vec::new(),
         }
     }
 }
@@ -481,11 +575,27 @@ fn parse_preset(text: &str, source: &str, builtin: bool) -> Result<Connector, Re
             return Err(fail(format!("server {:?} appears twice", server.id)));
         }
         check_url(&server.url).map_err(|e| fail(format!("server {}: url {e}", server.id)))?;
+        let asks = server
+            .scopes
+            .iter()
+            .chain(server.optional_scopes.values().flatten());
+        for scope in asks {
+            if file.forbidden_scopes.contains(scope) {
+                return Err(fail(format!(
+                    "server {} asks for {scope}, which forbidden_scopes rules out",
+                    server.id
+                )));
+            }
+        }
         servers.push(Server {
             id: server.id,
             transport: Transport::Http(server.url),
             scopes: server.scopes,
             optional_scopes: server.optional_scopes,
+            label: server.label,
+            optional_labels: server.optional_labels,
+            daily_units: server.daily_units,
+            units: server.units,
         });
     }
     for pull in &file.pull {
@@ -494,6 +604,25 @@ fn parse_preset(text: &str, source: &str, builtin: bool) -> Result<Connector, Re
                 "a pull names server {:?}, which it has not",
                 pull.server
             )));
+        }
+        if let Some(tool) = &pull.body_tool
+            && file.tools.access(tool) != ToolAccess::Read
+        {
+            return Err(fail(format!("body_tool {tool} is not a read tool")));
+        }
+        if pull.into == "mail" {
+            for field in ["id", "labels"] {
+                if !pull.fields.contains_key(field) {
+                    return Err(fail(format!("a pull into mail needs fields.{field}")));
+                }
+            }
+        }
+        if pull.into == "events" {
+            for field in ["id", "title", "start", "end"] {
+                if !pull.fields.contains_key(field) {
+                    return Err(fail(format!("a pull into events needs fields.{field}")));
+                }
+            }
         }
         if file.tools.access(&pull.tool) != ToolAccess::Read {
             return Err(fail(format!(
@@ -512,6 +641,10 @@ fn parse_preset(text: &str, source: &str, builtin: bool) -> Result<Connector, Re
         tools: file.tools,
         user_tools: ToolLists::default(),
         pulls: file.pull,
+        forbidden_scopes: file.forbidden_scopes,
+        setup: file.setup,
+        forbidden_tools: file.forbidden_tools,
+        actions: file.actions,
     })
 }
 
