@@ -105,6 +105,16 @@ pub struct FakeMcp {
 impl FakeMcp {
     /// Serves on a random loopback port, accepting the bearer tokens `accept` allows.
     pub async fn start(accept: Accept) -> Self {
+        Self::start_with(accept, false).await
+    }
+
+    /// Like Google's servers (slice 1): `initialize` gets "Method not supported", so only the
+    /// stateless lifecycle (`server/discover`) works.
+    pub async fn start_stateless(accept: Accept) -> Self {
+        Self::start_with(accept, true).await
+    }
+
+    async fn start_with(accept: Accept, refuse_initialize: bool) -> Self {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let url = format!("http://{}/mcp", listener.local_addr().unwrap());
         let seen = Arc::new(Mutex::new(Seen::default()));
@@ -124,7 +134,11 @@ impl FakeMcp {
                 tokio::spawn(async move {
                     let service = service_fn(move |request: Request<Incoming>| {
                         let (mcp, seen, accept) = (mcp.clone(), seen.clone(), accept.clone());
-                        async move { Ok::<_, Infallible>(answer(request, &mcp, &seen, &accept).await) }
+                        async move {
+                            Ok::<_, Infallible>(
+                                answer(request, &mcp, &seen, &accept, refuse_initialize).await,
+                            )
+                        }
                     });
                     let _ = http1::Builder::new()
                         .serve_connection(TokioIo::new(stream), service)
@@ -168,6 +182,7 @@ async fn answer(
     mcp: &StreamableHttpService<Tools, LocalSessionManager>,
     seen: &Mutex<Seen>,
     accept: &Accept,
+    refuse_initialize: bool,
 ) -> Response<http_body_util::combinators::BoxBody<Bytes, Infallible>> {
     let header = request
         .headers()
@@ -192,5 +207,28 @@ async fn answer(
             .body(Full::new(Bytes::new()).boxed())
             .unwrap();
     }
-    mcp.handle(request).await
+    if !refuse_initialize {
+        return mcp.handle(request).await;
+    }
+    let (parts, body) = request.into_parts();
+    let bytes = body
+        .collect()
+        .await
+        .map(|b| b.to_bytes())
+        .unwrap_or_default();
+    let message: serde_json::Value = serde_json::from_slice(&bytes).unwrap_or_default();
+    if message["method"] == "initialize" {
+        let error = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": message["id"],
+            "error": { "code": -32601, "message": "Method not supported" },
+        });
+        return Response::builder()
+            .status(StatusCode::OK)
+            .header("content-type", "application/json")
+            .body(Full::new(Bytes::from(error.to_string())).boxed())
+            .unwrap();
+    }
+    mcp.handle(Request::from_parts(parts, Full::new(bytes)))
+        .await
 }
