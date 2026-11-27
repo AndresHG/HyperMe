@@ -37,4 +37,11 @@ Both steps are far under the 1-second budget of R-20. The store is small, though
 
 ## AC-12: a real issue from a bundle
 
-Pending: the owner builds a report in the app, reads it, and opens an issue with it.
+The owner built a report in the app, read the preview and pressed Open issue: [#242](https://github.com/AndresHG/hyperme/issues/242), a test issue.
+
+- The bug form came prefilled. Version, system and providers landed in their own fields. The timing field held the allowlisted settings, the 7-day numbers and 13 recent dictations as offsets and stage timings.
+- The body is 3,722 characters, with no path, email, address, warning line or crash text.
+- The form showed everything before submitting, and the app made no request itself.
+- The build field read "local build", because `HYPERME_COMMIT` is set only by release builds.
+
+The prefilled numbers show the 800 ms budget missed at the 90th percentile (1,340 ms over 13 dictations), with cleanup the slowest stage. That is the kind of finding the report exists to surface.
