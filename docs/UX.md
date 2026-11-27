@@ -452,7 +452,26 @@ focus and stays in one place. Each kind maps to a roadmap job:
 | Waiting for you | "Reply draft ready" | ↵ Review · ⌘K More |
 | Agent done | "Claude Code finished: pull request ready" | ↵ Review |
 | Job failed | "Morning plan could not reach your calendar" | ↵ Fix (opens the setting) |
+| Needs your OK | "Google mail wants your OK before HyperMe reads it for personal" | ↵ Review (opens the account's page, where Review shows the approval card) |
 | Morning card | "Good morning · Friday 27": meetings, top tasks, what waits | ↵ Open Today · Esc |
+
+**The approval card** ([spec 166](../specs/166-gmail-approvals/spec.md)). When a connector
+server asks before HyperMe reads (Google's form elicitation), the card shows who asks
+("Google · personal · Mail"), the server's question and message as plain text, and one key per
+choice in the server's order. ↵ picks the broadest "Always allow" for a background read, since
+background updates cannot ask; 1 to n pick a choice; Esc sends nothing. In version 0.x it opens
+in Settings: in the setup sheet's check, and from Review or Ask again on the account page.
+
+```
++--------------------------------------------------+
+| Google · personal · Mail                         |
+| Allow HyperMe to use search_threads?             |
+| HyperMe wants to read **12 threads** ...         |
+| Background updates need an Always allow choice.  |
+| ↵ Always allow this tool  2 Allow once           |
+| 3 Don't allow                        Esc Later   |
++--------------------------------------------------+
+```
 
 The morning card is drafted in [spec 92](../specs/92-daily-tasks/spec.md), with a mockup in
 [ux/daily-cards.svg](ux/daily-cards.svg). The evening card in the same mockup is deferred (owner,

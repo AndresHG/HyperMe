@@ -123,8 +123,9 @@ that asks through form elicitation. Google is the first server, and the one test
   - mark that account's server "Needs your OK";
   - raise at most one alert per account and server per day, with ↵ Review, which runs the same
     pull with the interactive approver;
-  - run that server's unattended pulls only once a day (on the morning presence event) until the
-    state clears, so a state that only the user can change costs no quota every 30 minutes.
+  - run that server's unattended pulls only once a day (the first unattended pull of the local
+    day) until the state clears, so a state that only the user can change costs no quota every
+    30 minutes.
 - R-9. The interactive approver shall show the approval card and wait for the user. If the user
   presses Esc, or the card goes unanswered for 5 minutes, it shall send nothing. The call then
   ends as "approval needed". The alert shrinks into the dot's ring and stays in Today, as every

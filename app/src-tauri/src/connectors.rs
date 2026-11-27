@@ -51,6 +51,9 @@ pub struct Page {
     features: Vec<String>,
     /// "31 requests today · 310 of 5000 units", per server (R-20).
     requests: Vec<String>,
+    /// "Mail · Needs your OK", "Mail · Google held back 12 items", per server waiting for the
+    /// user or holding items back (specs/166, R-8, R-15 to R-17).
+    approvals: Vec<ApprovalLine>,
 }
 
 /// The setup sheet for one OAuth preset.
@@ -65,6 +68,16 @@ pub struct SetupSheet {
     production_url: Option<String>,
     commands: Vec<String>,
     features: Vec<setup_core::Feature>,
+}
+
+/// One server's state on the account page, with the key that resolves it (specs/166, A-3).
+#[derive(Debug, Serialize, PartialEq, Eq)]
+pub struct ApprovalLine {
+    server: String,
+    text: String,
+    /// "Review" (needs your OK, or items held back) or "Ask again" (not allowed); none for an
+    /// admin block, which only the admin can lift.
+    action: Option<String>,
 }
 
 /// What the Connectors section and its Setup check rows show.
@@ -84,6 +97,8 @@ pub struct View {
 pub struct Local<'a> {
     status: &'a dyn hyperme_core::health::AccountStatusStore,
     log: &'a dyn hyperme_core::connectors::RequestLog,
+    /// Why a server waits for the user, and what it held back (specs/166).
+    servers: &'a dyn hyperme_core::health::ServerStatusStore,
 }
 
 /// Works out an account's health: "Sign in again" when its refresh was refused (R-10), else
@@ -111,6 +126,62 @@ fn health(
     } else {
         AccountHealth::NotSignedIn
     }
+}
+
+/// The account page's lines for one server: its state and what its last pull held back
+/// (specs/166, R-8, R-15 to R-17).
+fn approval_lines(
+    connector: &hyperme_core::registry::Connector,
+    server: &hyperme_core::registry::Server,
+    local: &Local<'_>,
+    account: &str,
+) -> Vec<ApprovalLine> {
+    use hyperme_core::health::ServerState;
+    let status = local
+        .servers
+        .status(account, &server.id)
+        .unwrap_or_default();
+    let what = server
+        .label
+        .as_deref()
+        .and_then(|l| l.split(':').next())
+        .unwrap_or(&server.id)
+        .to_owned();
+    let noun = match connector
+        .pulls
+        .iter()
+        .find(|p| p.server == server.id)
+        .map(|p| p.into.as_str())
+    {
+        Some("mail") => "threads",
+        Some("events") => "events",
+        _ => "items",
+    };
+    let line = |text: String, action: Option<&str>| ApprovalLine {
+        server: server.id.clone(),
+        text,
+        action: action.map(str::to_owned),
+    };
+    let mut lines = Vec::new();
+    if let Some(state) = status.state {
+        let action = match state {
+            ServerState::NeedsOk => Some("Review"),
+            ServerState::NotAllowed => Some("Ask again"),
+            ServerState::Blocked => None,
+        };
+        lines.push(line(format!("{what} · {}", state.words()), action));
+    }
+    if status.held_back > 0 {
+        let action = status.state.is_none().then_some("Review");
+        lines.push(line(
+            format!(
+                "{what} · {} held back {} {noun}",
+                connector.name, status.held_back
+            ),
+            action,
+        ));
+    }
+    lines
 }
 
 fn build_view(
@@ -141,6 +212,11 @@ fn build_view(
                 enabled: entry.is_none_or(|a| a.enabled),
                 tools_verified: connector.tools_verified,
                 tools: cs::tool_rows(connector),
+                approvals: connector
+                    .servers
+                    .iter()
+                    .flat_map(|server| approval_lines(connector, server, local, &row.id))
+                    .collect(),
                 requests: connector
                     .servers
                     .iter()
@@ -222,6 +298,7 @@ pub fn connectors_view(app: AppHandle) -> View {
                 &Local {
                     status: &data,
                     log: &data,
+                    servers: &data,
                 },
                 UtcDateTime::now(),
             ),
@@ -451,6 +528,8 @@ pub async fn connectors_sign_in(
     // A new sign-in clears "Sign in again" (R-10).
     let data = account_data(&app).map_err(fail)?;
     hyperme_core::health::AccountStatusStore::clear(&data, &account).map_err(fail)?;
+    // A new sign-in starts the account's servers afresh (specs/166, R-16a).
+    hyperme_core::health::ServerStatusStore::clear_account(&data, &account).map_err(fail)?;
 
     let auth = std::sync::Arc::new(
         hyperme_providers::mcp::AccountAuth::new(oauth, store, &account).with_token(token),
@@ -466,6 +545,20 @@ pub async fn connectors_sign_in(
         let hyperme_core::registry::Transport::Http(url) = &server.transport else {
             continue;
         };
+        // A server with a pull is checked by running it, with the approval card answering
+        // what the server asks, so background updates work from the start (specs/166, R-14).
+        let tasks_on = {
+            use tauri::Manager;
+            app.try_state::<crate::tasks::Tasks>().is_some()
+        };
+        if tasks_on && preset.pulls.iter().any(|p| p.server == server.id) {
+            let line = match ui_approver(&app, &account, &server.id) {
+                Ok(approver) => crate::tasks::review(&app, &account, &server.id, approver).await,
+                Err(e) => Err(e),
+            };
+            checks.push(line.unwrap_or_else(|e| format!("{} · {e}", feature.label)));
+            continue;
+        }
         let remote = hyperme_providers::mcp::RemoteServer::new(
             &server.id,
             url,
@@ -479,6 +572,40 @@ pub async fn connectors_sign_in(
         });
     }
     Ok(SignInResult { account, checks })
+}
+
+/// Review, or Ask again, on the account page: runs the server's pulls now, with the approval
+/// card answering what the server asks (specs/166, R-8, A-3). Returns the check line.
+#[tauri::command]
+pub async fn connectors_review(
+    app: AppHandle,
+    account: String,
+    server: String,
+) -> Result<String, String> {
+    let approver = ui_approver(&app, &account, &server)?;
+    crate::tasks::review(&app, &account, &server, approver).await
+}
+
+/// The card's approver for one account's server, named the way the card shows it.
+fn ui_approver(
+    app: &AppHandle,
+    account: &str,
+    server: &str,
+) -> Result<std::sync::Arc<dyn hyperme_core::approval::Approver>, String> {
+    let (connector_id, label) = account.split_once(':').unwrap_or((account, ""));
+    let connector = connector_of(app, connector_id)?;
+    let what = connector
+        .server(server)
+        .and_then(|s| s.label.as_deref())
+        .and_then(|l| l.split(':').next())
+        .unwrap_or(server)
+        .to_owned();
+    Ok(std::sync::Arc::new(crate::approvals::UiApprover {
+        app: app.clone(),
+        who: format!("{} · {label}", connector.name),
+        what,
+        read: true,
+    }))
 }
 
 /// Cancel in the "Finish in your browser" step: stops waiting and closes the listener.
@@ -558,9 +685,12 @@ mod tests {
             std::sync::LazyLock::new(Default::default);
         static LOG: std::sync::LazyLock<hyperme_core::connectors::MemoryRequestLog> =
             std::sync::LazyLock::new(Default::default);
+        static SERVERS: std::sync::LazyLock<hyperme_core::health::MemoryServerStatus> =
+            std::sync::LazyLock::new(Default::default);
         Local {
             status: &*STATUS,
             log: &*LOG,
+            servers: &*SERVERS,
         }
     }
 
@@ -650,6 +780,12 @@ mod tests {
             view.privacy.accounts[0].reads,
             ["Calendar: read your events"]
         );
+        // specs/166 AC-17, R-21: one line per account about approvals.
+        assert_eq!(
+            view.privacy.accounts[0].approvals,
+            "Google may ask for your OK before HyperMe reads some of it. Google keeps your \
+             choice, not HyperMe."
+        );
         let shown = serde_json::to_string(&view).unwrap();
         assert!(!shown.contains("fake-client-secret"), "{shown}");
     }
@@ -676,6 +812,68 @@ mod tests {
         assert!(access("on").is_err());
     }
 
+    /// specs/166 AC-3, AC-5, AC-9, AC-14 (page part): each server's state and held-back count
+    /// show on the account page.
+    #[test]
+    fn server_states_show_on_the_page() {
+        use hyperme_core::health::{
+            MemoryAccountStatus, MemoryServerStatus, PullEnd, ServerState, after_pull,
+        };
+        let connectors =
+            connectors("[[connectors.accounts]]\nconnector = \"google\"\nlabel = \"work\"\n");
+        let registry = cs::registry(None, &connectors).unwrap();
+        let store = MemorySecretStore::default();
+        store.set("google:work", "fake-refresh-token").unwrap();
+        let (status, log, servers) = (
+            MemoryAccountStatus::default(),
+            hyperme_core::connectors::MemoryRequestLog::default(),
+            MemoryServerStatus::default(),
+        );
+        let now = UtcDateTime::now();
+        let gmail = PullEnd::NeedsUser(ServerState::NeedsOk);
+        after_pull(&servers, "google:work", "gmail", gmail, now.date()).unwrap();
+        let calendar = PullEnd::Done { held_back: 12 };
+        after_pull(&servers, "google:work", "calendar", calendar, now.date()).unwrap();
+        let local = Local {
+            status: &status,
+            log: &log,
+            servers: &servers,
+        };
+        let view = build_view(&connectors, &registry, &store, &local, now);
+        let lines: Vec<(&str, Option<&str>)> = view.pages[0]
+            .approvals
+            .iter()
+            .map(|l| (l.text.as_str(), l.action.as_deref()))
+            .collect();
+        assert_eq!(
+            lines,
+            [
+                ("Calendar · Google held back 12 events", Some("Review")),
+                ("Mail · Needs your OK", Some("Review"))
+            ]
+        );
+        // A-3: "Not allowed" offers Ask again; an admin block offers nothing.
+        let deny = PullEnd::NeedsUser(ServerState::NotAllowed);
+        after_pull(&servers, "google:work", "gmail", deny, now.date()).unwrap();
+        let block = PullEnd::NeedsUser(ServerState::Blocked);
+        after_pull(&servers, "google:work", "calendar", block, now.date()).unwrap();
+        let view = build_view(&connectors, &registry, &store, &local, now);
+        let lines: Vec<(&str, Option<&str>)> = view.pages[0]
+            .approvals
+            .iter()
+            .map(|l| (l.text.as_str(), l.action.as_deref()))
+            .collect();
+        assert_eq!(
+            lines,
+            [
+                ("Calendar · Blocked by your admin", None),
+                // The count from the last pull that worked stays; Review is offered by the state.
+                ("Calendar · Google held back 12 events", None),
+                ("Mail · Not allowed", Some("Ask again"))
+            ]
+        );
+    }
+
     /// R-10, R-20: an account whose refresh was refused shows "Sign in again"; its page shows
     /// the day's requests against each server's quota.
     #[test]
@@ -693,9 +891,11 @@ mod tests {
         let now = UtcDateTime::now();
         log.record("google:work", now.date(), "gmail", 10).unwrap();
         status.mark_sign_in_needed("google:work", now).unwrap();
+        let servers = hyperme_core::health::MemoryServerStatus::default();
         let local = Local {
             status: &status,
             log: &log,
+            servers: &servers,
         };
         let view = build_view(&connectors, &registry, &store, &local, now);
         assert_eq!(view.rows[0].state, "Sign in again");

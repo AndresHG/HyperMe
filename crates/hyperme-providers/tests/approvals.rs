@@ -541,3 +541,45 @@ async fn a_pull_waiting_for_the_user_is_not_a_failure() {
     let error = caller.call(SERVER, READ_TOOL, json!({})).await.unwrap_err();
     assert!(matches!(error, SyncError::NeedsUser(_)), "{error:?}");
 }
+
+/// Slice 2 (live check finding): servers see the client as HyperMe, the name they show when
+/// they ask ("Allow HyperMe to use ..."), not rmcp's default.
+#[tokio::test]
+async fn servers_see_the_client_as_hyperme() {
+    let (mcp, server) = world(Kind::Stateless).await;
+    server.list_tools().await.unwrap();
+    let list = mcp
+        .messages()
+        .into_iter()
+        .find(|m| m["method"] == "tools/list")
+        .unwrap();
+    assert_eq!(
+        list["params"]["_meta"]["io.modelcontextprotocol/clientInfo"]["name"], "HyperMe",
+        "{list}"
+    );
+}
+
+/// AC-5, AC-9 (sync part): a refusal and an admin block reach the sync job as their own
+/// states, so the app marks the server and raises no job-failed alert (R-15, R-16, R-16b).
+#[tokio::test]
+async fn refusals_and_blocks_reach_the_sync_as_states() {
+    use hyperme_core::health::ServerState;
+    let cases = [
+        (
+            vec![refused(Some("UserDeniedAction"))],
+            ServerState::NotAllowed,
+        ),
+        (
+            vec![refused(Some("AdminPolicyBlock"))],
+            ServerState::Blocked,
+        ),
+        (vec![asking()], ServerState::NeedsOk),
+    ];
+    for (script, state) in cases {
+        let (mcp, server) = world(Kind::Stateless).await;
+        mcp.script(script);
+        let caller = McpCaller::new(vec![server], allow(&[READ_TOOL]));
+        let error = caller.call(SERVER, READ_TOOL, json!({})).await.unwrap_err();
+        assert_eq!(error, SyncError::NeedsUser(state));
+    }
+}

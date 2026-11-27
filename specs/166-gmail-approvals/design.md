@@ -103,8 +103,8 @@ The boxed future keeps the trait object-safe, so callers hold `Arc<dyn Approver>
 mode. It needs a schema with exactly one required property, of type string, with `enum` (labels
 from `enumNames`, which rmcp keeps as `LegacyEnumSchema`) or with `oneOf` of `{const, title}`.
 Anything else, including a sampling or roots request, becomes `UnsupportedInput { tool }`. A
-result that rmcp cannot parse at all arrives as a transport error. During a call that already
-had an `input_required` round, that is also reported as `UnsupportedInput`.
+result that rmcp cannot parse at all arrives as a transport error and stays one (slice 1: mapping
+every transport error after the first round to "needs an update" would hide network failures).
 
 **The answer key.** The key of `inputResponses` is the input request's key. The property inside
 `content` is the schema's one property. Neither is hard-coded, so a server with other names works
@@ -172,7 +172,7 @@ The migration is additive (`create table if not exists`). Disconnect deletes by 
 
 - **Precedence (R-16a).** If the account needs a sign-in, `guarded_sync` already skips it. Then:
   - Blocked and NotAllowed skip the server's unattended pulls;
-  - NeedsOk runs them only on the morning presence event;
+  - NeedsOk runs them once a day: the first unattended pull of the local day (slice 2);
   - otherwise they run normally.
 - **Clearing.**
   - Any pull that succeeds clears the server's state.
