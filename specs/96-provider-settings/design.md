@@ -65,6 +65,13 @@ deadline_ms = 1500
 Model names above are today's; the real ones for each new provider are checked against its docs
 in the slice that adds it (`CLAUDE.md`, working rules).
 
+**Where the catalogue lives (slice 1).** Built into the app as `default-providers.toml`, not
+written into the user's `config.toml`. A copy in the user's file would freeze that release's
+prices and providers forever; built in, each release brings its own. The user's file may still
+add an entry or replace a built-in one by writing `[providers.<name>]`, which wins by name (R-5).
+`needs_key` is spelled `key_required` (default true), because the config refuses any field whose
+name ends in `_key` as a likely secret.
+
 **Migration (R-4).** An old `[speech]` or `[cleanup]` with `endpoint`, `key_url` or price fields
 still parses: those fields override the catalogue entry of the same provider, and the app does
 not rewrite the user's file. The catalogue itself comes from `default-config.toml` when the user's

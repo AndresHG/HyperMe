@@ -201,19 +201,9 @@ fn empty_names_and_wrong_schemes_are_rejected() {
         ),
         ("model = \"melia-1\"", "model = \"\"", "speech.model"),
         (
-            "endpoint = \"wss://eu.rt.speechmatics.com/v2\"",
-            "endpoint = \"https://eu.rt.speechmatics.com/v2\"",
-            "speech.endpoint",
-        ),
-        (
             "provider = \"groq\"",
             "provider = \" \"",
             "cleanup.provider",
-        ),
-        (
-            "endpoint = \"https://api.groq.com/openai/v1\"",
-            "endpoint = \"api.groq.com\"",
-            "cleanup.endpoint",
         ),
         (
             "reasoning_effort = \"low\"",
@@ -224,6 +214,27 @@ fn empty_names_and_wrong_schemes_are_rejected() {
     ];
     for (from, to, key) in cases {
         let msg = parse(&default_with(from, to)).unwrap_err().to_string();
+        assert!(msg.contains(key), "{to}: {msg}");
+    }
+    // A file from before the provider catalogue still sets endpoints, and they are checked
+    // against the provider's protocol.
+    let before = include_str!("fixtures/config-before-96.toml");
+    for (from, to, key) in [
+        (
+            "endpoint = \"wss://eu.rt.speechmatics.com/v2\"",
+            "endpoint = \"https://eu.rt.speechmatics.com/v2\"",
+            "speech.endpoint",
+        ),
+        (
+            "endpoint = \"https://api.groq.com/openai/v1\"",
+            "endpoint = \"api.groq.com\"",
+            "cleanup.endpoint",
+        ),
+    ] {
+        assert!(before.contains(from), "{from}");
+        let msg = parse(&before.replacen(from, to, 1))
+            .unwrap_err()
+            .to_string();
         assert!(msg.contains(key), "{to}: {msg}");
     }
 }
