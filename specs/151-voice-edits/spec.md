@@ -1,6 +1,6 @@
 # Voice edits of selected text
 
-**Status:** draft, 27 November 2026. Waits for the owner's approval.
+**Status:** approved by the owner, 27 November 2026 (E-1 and E-2 answered the same day). Build starts as the first work of phase 3.
 **Issue:** [#151](https://github.com/AndresHG/hyperme/issues/151). **Size:** L.
 **Design:** [design.md](design.md). **Slices:** [tasks.md](tasks.md).
 **Traces to:** [PRD](../../docs/PRD.md) 7.2 ("Voice edit of selected text", phase 3, P0; owner,
@@ -245,9 +245,9 @@ Proposed in this spec (Claude), rejected options in brackets:
 | D-7 | One paste at the end [stream into the app] | One undo step, and no half-edited text if it fails |
 | D-8 | Not-an-edit marker in the same request [a separate classifier call] | No extra round trip; the phase 3 router can take over later |
 
-For the owner (on the approval card in the project thread):
+For the owner (answered on the approval card in the project thread):
 
 | # | Question | Recommendation | Status |
 | --- | --- | --- | --- |
-| E-1 | Privacy: approving adds "the selected text, when you ask Hyper to edit it" to what may leave the Mac (PRD section 9) | Yes; the user asks for it explicitly, it goes only to their own cleanup provider | Open |
-| E-2 | When to build it | As the first work of phase 3: it needs no MCP and no router beyond the "Hyper" prefix | Open |
+| E-1 | Privacy: approving adds "the selected text, when you ask Hyper to edit it" to what may leave the Mac (PRD section 9) | Yes; the user asks for it explicitly, it goes only to their own cleanup provider | Decided 27 November 2026 (owner): yes |
+| E-2 | When to build it | As the first work of phase 3: it needs no MCP and no router beyond the "Hyper" prefix | Decided 27 November 2026 (owner): first work of phase 3 |

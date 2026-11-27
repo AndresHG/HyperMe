@@ -171,7 +171,7 @@ to the next release; **P2** is nice to have. The phase is from [ROADMAP.md](ROAD
 | Switch the model from the answer card and regenerate the last answer | 3 | P1 | Owner, Q-11 |
 | Preview card for actions, Enter to confirm, Esc to drop | 3 | P0 | Under one second from release to card. Default for every tool; a tool can be switched to fire at once in Settings later; email stays draft-only (owner, Q-8) |
 | One MCP client; GitHub as the first connector | 3 | P0 | Owner, 25 November 2026 |
-| Voice edit of selected text ("Hyper, make this shorter", "translate this"): the edit replaces the selection | 3 | P0 | Owner, 26 November 2026. The most common feature after dictation (Wispr Flow Command Mode, Raycast, OpenWhispr). Uses the cleanup path, no tool call, so it can ship before MCP actions ([competitor research](research/2026-11-26-competitors-and-plan-sign-in.md); [draft spec](../specs/151-voice-edits/spec.md)) |
+| Voice edit of selected text ("Hyper, make this shorter", "translate this"): the edit replaces the selection | 3 | P0 | Owner, 26 November 2026. The most common feature after dictation (Wispr Flow Command Mode, Raycast, OpenWhispr). Uses the cleanup path, no tool call, so it can ship before MCP actions ([competitor research](research/2026-11-26-competitors-and-plan-sign-in.md); [spec](../specs/151-voice-edits/spec.md)) |
 | Context of the frontmost app and selected text | 3 | P1 | Within the privacy boundary (section 9) |
 | "Continue with ChatGPT" as a provider for the answers model: a Plus or Pro user connects their plan instead of a key, through OpenAI's official Sign in with ChatGPT for open-source apps | 3 | P1 | Owner, 26 November 2026. Text only, so speech still needs its key; cleanup stays on its own model. Measure latency first. No Claude equivalent: Anthropic forbids third-party Claude.ai login ([competitor research](research/2026-11-26-competitors-and-plan-sign-in.md)). See Q-17 |
 | HyperMe as an MCP server: tasks, dictation history, memory and later meeting notes, readable from Claude, ChatGPT, Claude Code and Cursor | 3 or 4 | P1 | Owner, 26 November 2026. The allowed way for a Claude subscriber to use their plan with HyperMe's data ([competitor research](research/2026-11-26-competitors-and-plan-sign-in.md)). Read-only first; any write goes through the preview |
@@ -263,7 +263,7 @@ adds already works (owner, 26 November 2026).
 
 | Topic | Rule | Source |
 | --- | --- | --- |
-| What may leave the Mac | Audio, transcript, dictionary, app name and the text before the cursor, to the providers the user configured, under the user's keys | `CLAUDE.md` |
+| What may leave the Mac | Audio, transcript, dictionary, app name and the text before the cursor, to the providers the user configured, under the user's keys; the selected text when the user asks Hyper to edit it, to their cleanup provider only | `CLAUDE.md`; owner, 27 November 2026 ([spec 151](../specs/151-voice-edits/spec.md)) |
 | Behind a switch, off by default | Window text, screenshots | `CLAUDE.md` |
 | Never | Password fields; telemetry; any destination the user did not configure | `CLAUDE.md`, spec R-17, R-29 |
 | On disk | Dictation history, audio and text, on by default, 30 days or unlimited, under a size limit (default 1 GB); audio of a failed dictation kept for retry even with history off | Owner, 26 November 2026; spec R-18, R-31 |

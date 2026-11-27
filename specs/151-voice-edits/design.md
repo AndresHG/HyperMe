@@ -1,6 +1,6 @@
 # Voice edits of selected text: design
 
-How [spec.md](spec.md) fits the code that exists. Draft, 27 November 2026.
+How [spec.md](spec.md) fits the code that exists. Approved with the spec, 27 November 2026.
 
 ## The flow
 

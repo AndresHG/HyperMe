@@ -2,8 +2,7 @@
 
 Each slice is one pull request, starts from failing tests that cite its `AC-n`, and passes fmt,
 clippy and tests before it merges. Open one issue per slice when the spec is approved. Build
-starts when the owner says (E-2 in [spec.md](spec.md); the recommendation is the first work of
-phase 3).
+starts as the first work of phase 3 (owner, 27 November 2026, E-2 in [spec.md](spec.md)).
 
 | # | Slice | Proves | Size | Depends on |
 | --- | --- | --- | --- | --- |
