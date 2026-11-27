@@ -23,26 +23,26 @@ itself; a later version may hand a task to Claude Code ([docs/PRD.md](docs/PRD.m
 - `docs/SPEED_TEST.md`: Phase 0, the first thing to build
 - `docs/ROADMAP.md`: the phases and their gates, and the gap to Wispr Flow (adopted 25 November 2026)
 - `docs/RELEASES.md`: version numbering, what each version (0.1 to 0.4) brings and when, and
-  triage of new asks into versions (adopted 27 November 2026)
+  triage of new asks into versions (adopted approved 28 November 2026)
 - `docs/plans/2026-11-26-phases-1-2.md`: phases 1 and 2 cut into chunks for parallel threads
 - `docs/PITCH.md`: pitch, positioning against Wispr Flow, and the ledger of claims still to earn
 - `specs/25-dictation-core/`: draft Phase 1 spec, design and slices (not yet approved)
 - `specs/96-provider-settings/`: draft spec for choosing the speech and cleanup provider in Settings
 - `specs/92-daily-tasks/`: draft phase 4 spec for the task list with dependencies, the morning card
   and the scheduler (core slices 1 to 6 approved to start, 26 November 2026)
-- `specs/93-personal-dictionary/`: Phase 2 spec for the personal dictionary (approved 27 November 2026)
+- `specs/93-personal-dictionary/`: Phase 2 spec for the personal dictionary (approved approved 28 November 2026)
 - `specs/151-voice-edits/`: phase 3 spec for voice edits of selected text ("Hyper, make this shorter";
   approved 27 November 2026, first work of phase 3)
 - `specs/166-gmail-approvals/`: spec for approvals asked by connector servers (MCP form
-  elicitation), first for Gmail (approved 27 November 2026)
+  elicitation), first for Gmail (approved approved 28 November 2026)
 - `specs/182-trace-store/`: phase 2 spec for local traces of every dictation (the `tracing`
   crate, a SQLite trace store, the timing log on spans; nothing leaves the Mac); implemented
 - `specs/200-diagnostics/`: spec for the Diagnostics view in Settings, stage bars on History
   items, the Report a problem bundle the user previews and attaches to an issue, and local crash
-  files (approved 27 November 2026)
-- `specs/257-ui-framework/`: draft spec for moving the UI to Svelte 5, TypeScript and Vite, with
+  files (approved approved 28 November 2026)
+- `specs/257-ui-framework/`: spec for moving the UI to Svelte 5, TypeScript and Vite, with
   typed command bindings and Settings inside Home (owner asked for state-of-the-art libraries,
-  27 November 2026)
+  approved 28 November 2026)
 - `docs/RELEASING.md`: how a release is built, signed, notarised and published, and how updates work
 - `docs/FIELD.md`: existing projects and what to borrow from each
 - `docs/research/2026-11-27-telemetry-and-tracing.md`: local tracing, what other users' copies may

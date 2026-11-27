@@ -1,6 +1,6 @@
 # UI framework: Svelte 5, TypeScript and Vite
 
-**Status:** draft, 28 November 2026.
+**Status:** approved by the owner, 28 November 2026 (PR 258).
 **Issue:** [#257](https://github.com/AndresHG/hyperme/issues/257). **Size:** L (a new build step
 and toolchain, every page, more than one pull request).
 **Traces to:** the audit of 27 November 2026 (project thread "Audit and refactor the frontend and
