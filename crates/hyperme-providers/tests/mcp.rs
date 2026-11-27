@@ -281,3 +281,68 @@ async fn tokens_stay_out_of_debug_and_errors() {
         assert!(!shown.contains(token.as_str()), "{token} leaked: {shown}");
     }
 }
+
+/// R-20: a tool's call is counted at its cost in units from the preset; others cost 1.
+#[tokio::test]
+async fn calls_are_counted_at_their_cost_in_units() {
+    let world = World::new(3600).await;
+    let costly = RemoteServer::new(
+        "costly",
+        world.mcp.url(),
+        world.auth.clone(),
+        world.log.clone(),
+        Arc::new(day),
+    )
+    .with_units([(READ_TOOL.to_owned(), 10)].into());
+    costly
+        .call_tool(READ_TOOL, None, &allow(&[READ_TOOL]))
+        .await
+        .unwrap();
+    costly.list_tools().await.unwrap();
+    assert_eq!(
+        world.log.usage(ACCOUNT, day(), "costly").unwrap(),
+        hyperme_core::connectors::Usage {
+            calls: 2,
+            units: 11
+        }
+    );
+}
+
+/// AC-4 (alert part), R-10: a pull whose refresh token is refused reports "sign in again" to
+/// the sync, which marks the account and raises exactly one alert; the next sync is not tried.
+#[tokio::test]
+async fn a_revoked_sign_in_reaches_the_sync_as_one_alert() {
+    use hyperme_core::health::{self, MemoryAccountStatus, SyncOutcome};
+    use hyperme_core::sync::{SyncError, ToolCaller};
+
+    let world = World::new(3600).await;
+    world.refuse_current_tokens();
+    world.oauth.revoke_all_refresh_tokens();
+    let server = RemoteServer::new(
+        SERVER,
+        world.mcp.url(),
+        world.auth.clone(),
+        world.log.clone(),
+        Arc::new(day),
+    );
+    let caller = hyperme_providers::mcp::McpCaller::new(vec![server], allow(&[READ_TOOL]));
+    let status = MemoryAccountStatus::default();
+    let now = time::UtcDateTime::now();
+
+    let first = health::guarded_sync(&status, ACCOUNT, "Google · personal", now, || async {
+        caller.call(SERVER, READ_TOOL, serde_json::json!({})).await
+    })
+    .await;
+    assert!(matches!(first, SyncOutcome::Alert(_)), "{first:?}");
+    let refreshes = world.oauth.refresh_calls();
+    let second = health::guarded_sync(&status, ACCOUNT, "Google · personal", now, || async {
+        caller.call(SERVER, READ_TOOL, serde_json::json!({})).await
+    })
+    .await;
+    assert!(matches!(second, SyncOutcome::SignInNeeded), "{second:?}");
+    assert_eq!(world.oauth.refresh_calls(), refreshes, "no retry");
+    assert!(matches!(
+        caller.call(SERVER, READ_TOOL, serde_json::json!({})).await,
+        Err(SyncError::SignInAgain)
+    ));
+}

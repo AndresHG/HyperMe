@@ -157,6 +157,10 @@ pub struct Server {
     pub label: Option<String>,
     /// The switch for each optional scope, by feature.
     pub optional_labels: BTreeMap<String, String>,
+    /// The provider's daily quota for this server, in units (R-20).
+    pub daily_units: Option<u32>,
+    /// What each tool costs in units; a tool not named costs 1.
+    pub units: BTreeMap<String, u32>,
 }
 
 /// Help for setting up a connector's own OAuth client (G-1), from the preset.
@@ -337,6 +341,9 @@ struct ServerFile {
     label: Option<String>,
     #[serde(default)]
     optional_labels: BTreeMap<String, String>,
+    daily_units: Option<u32>,
+    #[serde(default)]
+    units: BTreeMap<String, u32>,
 }
 
 /// How a custom server signs in.
@@ -442,6 +449,8 @@ impl CustomServer {
                 optional_scopes: BTreeMap::new(),
                 label: None,
                 optional_labels: BTreeMap::new(),
+                daily_units: None,
+                units: BTreeMap::new(),
             }],
             tools: self.tools.clone(),
             user_tools: ToolLists::default(),
@@ -585,6 +594,8 @@ fn parse_preset(text: &str, source: &str, builtin: bool) -> Result<Connector, Re
             optional_scopes: server.optional_scopes,
             label: server.label,
             optional_labels: server.optional_labels,
+            daily_units: server.daily_units,
+            units: server.units,
         });
     }
     for pull in &file.pull {

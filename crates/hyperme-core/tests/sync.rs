@@ -14,7 +14,7 @@ use hyperme_core::connector_settings as cs;
 use hyperme_core::registry::Pull;
 use hyperme_core::schedule::{Schedule, Zone};
 use hyperme_core::scheduler::JobKind;
-use hyperme_core::sync::{self, EventStore, MemoryEvents, ToolCaller};
+use hyperme_core::sync::{self, EventStore, MemoryEvents, SyncError, ToolCaller};
 use hyperme_core::tasks::{Source, Status, TaskStore};
 use serde_json::{Value, json};
 use tasks_store::MemoryTaskStore;
@@ -54,7 +54,7 @@ impl FakeCalendar {
 }
 
 impl ToolCaller for FakeCalendar {
-    async fn call(&self, server: &str, tool: &str, args: Value) -> Result<Value, String> {
+    async fn call(&self, server: &str, tool: &str, args: Value) -> Result<Value, SyncError> {
         self.calls
             .lock()
             .unwrap()
@@ -444,7 +444,7 @@ async fn mirrored_tasks_follow_their_source() {
 async fn a_wrong_answer_leaves_the_cache_alone() {
     struct Broken;
     impl ToolCaller for Broken {
-        async fn call(&self, _: &str, _: &str, _: Value) -> Result<Value, String> {
+        async fn call(&self, _: &str, _: &str, _: Value) -> Result<Value, SyncError> {
             Ok(json!({ "unexpected": true }))
         }
     }
@@ -460,6 +460,7 @@ async fn a_wrong_answer_leaves_the_cache_alone() {
         &Plus1,
     )
     .await
-    .unwrap_err();
+    .unwrap_err()
+    .to_string();
     assert!(error.contains("items"), "{error}");
 }

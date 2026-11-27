@@ -92,6 +92,8 @@
     $('page-enabled').checked = page.enabled;
     $('page-token-row').classList.toggle('hidden', page.account || page.state !== 'Not signed in');
     $('page-unverified').classList.toggle('hidden', page.tools_verified);
+    $('page-requests').replaceChildren(...(page.requests || []).map((line) =>
+      el('div', { class: 'row', 'data-words': 'requests quota today' }, el('div', { class: 'what' }, el('small', {}, line)))));
     $('page-oauth-row').classList.toggle('hidden', !(page.account && page.oauth));
     const connector = page.id.split(':')[0];
     $('page-tools').replaceChildren(...page.tools.map((t) => {

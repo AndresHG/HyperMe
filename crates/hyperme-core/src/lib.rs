@@ -10,6 +10,7 @@ pub mod connector_setup;
 pub mod connectors;
 pub mod cost;
 pub mod dictation;
+pub mod health;
 pub mod registry;
 pub mod schedule;
 pub mod scheduler;

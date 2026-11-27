@@ -195,6 +195,8 @@ pub struct RemoteServer {
     today: Today,
     http: reqwest::Client,
     session: Mutex<Option<Session>>,
+    /// What each tool costs in quota units; others cost 1 (R-20).
+    units: std::collections::BTreeMap<String, u32>,
 }
 
 impl fmt::Debug for RemoteServer {
@@ -227,7 +229,13 @@ impl RemoteServer {
             today,
             http,
             session: Mutex::new(None),
+            units: std::collections::BTreeMap::new(),
         }
+    }
+
+    /// Counts each tool's calls at its cost in units, from the preset (R-20).
+    pub fn with_units(self, units: std::collections::BTreeMap<String, u32>) -> Self {
+        RemoteServer { units, ..self }
     }
 
     /// Every tool the server offers.
@@ -279,8 +287,12 @@ impl RemoteServer {
         rejected: Option<&AccessToken>,
     ) -> Result<Reply, Failure> {
         let (peer, token) = self.connect(rejected).await?;
+        let units = match request {
+            Request::CallTool(params) => self.units.get(params.name.as_ref()).copied().unwrap_or(1),
+            Request::ListTools => 1,
+        };
         self.log
-            .record(&self.auth.account, (self.today)(), &self.id, 1)
+            .record(&self.auth.account, (self.today)(), &self.id, units)
             .map_err(ConnectorError::Count)?;
         let result = match request {
             Request::ListTools => peer.list_all_tools().await.map(Reply::Tools),
@@ -369,7 +381,7 @@ impl hyperme_core::sync::ToolCaller for McpCaller {
         server: &str,
         tool: &str,
         args: serde_json::Value,
-    ) -> Result<serde_json::Value, String> {
+    ) -> Result<serde_json::Value, hyperme_core::sync::SyncError> {
         let remote = self
             .servers
             .iter()
@@ -378,14 +390,17 @@ impl hyperme_core::sync::ToolCaller for McpCaller {
         let arguments = match args {
             serde_json::Value::Object(map) => Some(map),
             serde_json::Value::Null => None,
-            other => return Err(format!("{tool}: arguments must be an object, not {other}")),
+            other => return Err(format!("{tool}: arguments must be an object, not {other}").into()),
         };
         let result = remote
             .call_tool(tool, arguments, &self.allowlist)
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| match e {
+                ConnectorError::SignInAgain => hyperme_core::sync::SyncError::SignInAgain,
+                other => other.to_string().into(),
+            })?;
         if result.is_error == Some(true) {
-            return Err(format!("{tool} answered with an error"));
+            return Err(format!("{tool} answered with an error").into());
         }
         if let Some(structured) = result.structured_content {
             return Ok(structured);
@@ -395,6 +410,7 @@ impl hyperme_core::sync::ToolCaller for McpCaller {
             .iter()
             .find_map(|block| block.as_text().map(|t| t.text.clone()))
             .ok_or_else(|| format!("{tool} answered with no text"))?;
-        serde_json::from_str(&text).map_err(|_| format!("{tool} answered text that is not JSON"))
+        serde_json::from_str(&text)
+            .map_err(|_| format!("{tool} answered text that is not JSON").into())
     }
 }
