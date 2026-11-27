@@ -659,18 +659,24 @@ where
             settings,
             status,
             failed: slot,
+            dictionary_line,
             ..
         } = self;
         let emit = |s: Status| {
             let _ = status.send(s);
         };
         let Parts {
-            speech,
-            cleanup,
+            providers,
             inserter,
             history,
             ..
         } = parts;
+        // specs/96, R-9: this retry uses the providers set now, start to end.
+        let current = Arc::clone(&providers.borrow());
+        let Providers { speech, cleanup } = &*current;
+        if let Some(line) = dictionary_line.as_deref() {
+            cleanup.set_dictionary(line);
+        }
         // The pill and menu keep offering Retry for the last failed dictation, if any.
         let fail = |message: String| {
             emit(Status::Failed {
