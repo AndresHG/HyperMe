@@ -29,6 +29,9 @@ security-framework = "3.7.0"
 # Notification blocks for presence.rs; already in the tree through Tauri, MIT.
 block2 = "0.6.2"
 objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "block2", "NSArray", "NSData", "NSDate", "NSDistributedNotificationCenter", "NSEnumerator", "NSGeometry", "NSNotification", "NSOperation", "NSProcessInfo", "NSString", "NSTimeZone"] }
+# Core Audio's mute switch on the default output (output_mute.rs, #221). Already in the tree
+# through cpal, with the same features, MIT.
+objc2-core-audio = { version = "0.3.2", default-features = false, features = ["std", "AudioHardware", "objc2", "objc2-foundation"] }
 objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "libc", "NSApplication", "NSEvent", "NSGraphicsContext", "NSPasteboard", "NSPasteboardItem", "NSResponder", "NSRunningApplication", "NSSound", "NSWorkspace"] }
 
 [dev-dependencies]
