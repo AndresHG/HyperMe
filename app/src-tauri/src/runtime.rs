@@ -435,17 +435,22 @@ pub fn card_open_today(app: AppHandle) {
     crate::home::open(&app, "today");
 }
 
-/// "Fix" on an alert: Settings where the fix is (R-36), and the card goes back into the dot.
+/// The main button of an alert: Fix opens Settings where the fix is (R-36), Join a meeting's
+/// web link, Open Today Home at Today (R-22). The card goes back into the dot.
 #[tauri::command]
-pub fn card_fix(app: AppHandle) {
+pub fn card_action(app: AppHandle) {
     let link = match &lock(&app).card {
         Some(pill::Card::Alert(alert)) => alert.link.clone(),
         _ => None,
     };
     settle(&app);
-    match link {
+    match link.as_deref() {
+        Some(crate::tasks::TODAY_LINK) => crate::home::open(&app, "today"),
+        Some(url) if url.starts_with("https://") => {
+            let _ = crate::tasks::tasks_open_meeting(url.to_owned());
+        }
         Some(link) => {
-            let _ = crate::connectors::open_link(&app, &link);
+            let _ = crate::connectors::open_link(&app, link);
         }
         None => crate::settings::open(&app, "connectors"),
     }

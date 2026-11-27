@@ -36,6 +36,8 @@ pub trait Ui: Send + Sync {
     /// The morning card, built now. `update` is true when a sync filled in a card already
     /// shown today (R-18); the view replaces it only if it is still on screen.
     fn morning(&self, card: &MorningCard, update: bool);
+    /// A nudge before a meeting or a due time (R-22).
+    fn nudge(&self, card: &crate::pill::AlertView);
 }
 
 /// Runs one connector's pulls for every account that has it.
@@ -207,11 +209,118 @@ impl<C: Clock + Sync, Y: Syncer, U: Ui> Runner for DailyRunner<C, Y, U> {
                 }
                 self.ui.refresh();
             }
-            // Nudges, the evening card and prompt jobs are later slices.
-            JobKind::Evening | JobKind::Nudge | JobKind::Prompt => {}
+            JobKind::Nudge => {
+                let (today, day_began_ms) = self.today(now);
+                let meetings = sync::meetings_on(&*self.store, today, &self.clock)?;
+                let snapshot = self
+                    .store
+                    .snapshot(today, day_began_ms)
+                    .await
+                    .map_err(|e| e.to_string())?;
+                if let Some(card) = nudge_card(&job.name, &meetings, &snapshot, now, &self.clock) {
+                    self.ui.nudge(&card);
+                }
+            }
+            // The evening card and prompt jobs are later slices.
+            JobKind::Evening | JobKind::Prompt => {}
         }
         Ok(())
     }
+}
+
+// --- Nudges (slice 10, R-22, AC-10) -------------------------------------------------------
+
+/// A meeting is nudged this long before it starts (R-22, default 2 minutes).
+pub const MEETING_LEAD: Duration = Duration::minutes(2);
+/// A task with a due time is nudged this long before it (R-22, default 10 minutes).
+pub const DUE_LEAD: Duration = Duration::minutes(10);
+/// Where "Open Today" on a card goes.
+pub const TODAY_LINK: &str = "hyperme://home/today";
+
+/// When a task's due date and time fall, in the zone at `now`.
+fn due_at(
+    task: &hyperme_core::tasks::Task,
+    zone: &dyn Zone,
+    now: UtcDateTime,
+) -> Option<UtcDateTime> {
+    let due = task.due?;
+    let time = due.time?;
+    Some(
+        PlainDateTime::new(due.date, time)
+            .assume_offset(zone.offset_at(now))
+            .to_utc(),
+    )
+}
+
+/// The nudges still to come today: each meeting two minutes ahead and each open task with a
+/// due time ten minutes ahead. Only moments after `now`, so one already shown is not shown
+/// again when the list is computed anew.
+pub fn nudges_for(
+    meetings: &[sync::Meeting],
+    tasks: &[hyperme_core::tasks::Task],
+    now: UtcDateTime,
+    zone: &dyn Zone,
+) -> Vec<hyperme_core::scheduler::Nudge> {
+    use hyperme_core::scheduler::Nudge;
+    let mut nudges: Vec<Nudge> = meetings
+        .iter()
+        .map(|m| Nudge {
+            id: format!("meeting:{}", ms(m.start)),
+            at: m.start - MEETING_LEAD,
+            until: m.start,
+        })
+        .chain(
+            tasks
+                .iter()
+                .filter(|t| t.status == hyperme_core::tasks::Status::Open)
+                .filter_map(|t| {
+                    let due = due_at(t, zone, now)?;
+                    Some(Nudge {
+                        id: format!("task:{}", t.id),
+                        at: due - DUE_LEAD,
+                        until: due,
+                    })
+                }),
+        )
+        .filter(|n| n.at > now)
+        .collect();
+    nudges.sort_by_key(|n| n.at);
+    nudges.dedup_by(|a, b| a.id == b.id);
+    nudges
+}
+
+/// The card for nudge `id` at `now`: "Weekly planning in 2 min" with Join, or a task's title
+/// with its due time and Open Today. `None` when the meeting or task is gone.
+pub fn nudge_card(
+    id: &str,
+    meetings: &[sync::Meeting],
+    tasks: &[hyperme_core::tasks::Task],
+    now: UtcDateTime,
+    zone: &dyn Zone,
+) -> Option<crate::pill::AlertView> {
+    let minutes = |at: UtcDateTime| ((at - now).whole_seconds() + 59).max(60) / 60;
+    if let Some(start) = id.strip_prefix("meeting:") {
+        let start: i64 = start.parse().ok()?;
+        let m = meetings.iter().find(|m| ms(m.start) == start)?;
+        let join = m.url.as_deref().filter(|u| u.starts_with("https://"));
+        return Some(crate::pill::AlertView {
+            title: format!("{} in {} min", m.title, minutes(m.start)),
+            detail: format!("{}–{}", hhmm(m.start, zone), hhmm(m.end, zone)),
+            action: if join.is_some() { "Join" } else { "Open Today" }.to_owned(),
+            link: Some(join.unwrap_or(TODAY_LINK).to_owned()),
+        });
+    }
+    let task_id: TaskId = id.strip_prefix("task:")?.parse().ok()?;
+    let task = tasks
+        .iter()
+        .find(|t| t.id == task_id && t.status == hyperme_core::tasks::Status::Open)?;
+    let due = due_at(task, zone, now)?;
+    Some(crate::pill::AlertView {
+        title: task.title.clone(),
+        detail: format!("Due at {} · in {} min", hhmm(due, zone), minutes(due)),
+        action: "Open Today".to_owned(),
+        link: Some(TODAY_LINK.to_owned()),
+    })
 }
 
 // --- Home's Today (slice 8) -----------------------------------------------------------------
@@ -575,6 +684,7 @@ pub fn start(app: &tauri::AppHandle) {
                 return;
             }
         };
+        plan_nudges(&app);
         let runner = DailyRunner {
             store: store.clone(),
             clock: MacClock,
@@ -695,7 +805,9 @@ pub async fn tasks_add(app: tauri::AppHandle, title: String) -> Result<(), Strin
     let (store, rules) = state(&app)?;
     let now = UtcDateTime::now();
     let (today, _) = today_of(&hyperme_platform::presence::MacClock, &rules, now);
-    add_today(&store, &title, today, ms(now)).await.map(drop)
+    add_today(&store, &title, today, ms(now)).await?;
+    plan_nudges(&app);
+    Ok(())
 }
 
 /// A row action: `done`, `drop`, `tomorrow`, `keep`, `move` with `value` a `YYYY-MM-DD` day,
@@ -719,7 +831,9 @@ pub async fn tasks_act(
         ("move", Some(day)) => Act::Move(parse_day(&day).ok_or(format!("{day} is not a day"))?),
         (other, _) => return Err(format!("{other} is not a task action")),
     };
-    act(&store, id, action, today, ms(now)).await
+    act(&store, id, action, today, ms(now)).await?;
+    plan_nudges(&app);
+    Ok(())
 }
 
 /// Opens a meeting's link in the browser; only web links.
@@ -752,6 +866,7 @@ struct AppUi(tauri::AppHandle);
 impl Ui for AppUi {
     fn refresh(&self) {
         crate::home::refresh(&self.0, "home");
+        plan_nudges(&self.0);
         // Something new in Today lights the dot until Home shows it (R-21).
         let app = self.0.clone();
         tauri::async_runtime::spawn(async move {
@@ -769,6 +884,32 @@ impl Ui for AppUi {
             update,
         );
     }
+    fn nudge(&self, card: &crate::pill::AlertView) {
+        crate::runtime::show_card(&self.0, crate::pill::Card::Alert(card.clone()), false);
+    }
+}
+
+/// Computes the nudges still to come today and hands them to the scheduler. Called at start,
+/// after every job (a sync brings new meetings) and after every change in Home.
+fn plan_nudges(app: &tauri::AppHandle) {
+    use hyperme_platform::presence::MacClock;
+    use tauri::Manager;
+    let Some(tasks) = app.try_state::<Tasks>() else {
+        return;
+    };
+    let (commands, store, rules) = (tasks.commands.clone(), tasks.store.clone(), tasks.rules);
+    tauri::async_runtime::spawn(async move {
+        let now = UtcDateTime::now();
+        let (today, day_began_ms) = today_of(&MacClock, &rules, now);
+        let (Ok(meetings), Ok(snapshot)) = (
+            sync::meetings_on(&*store, today, &MacClock),
+            store.snapshot(today, day_began_ms).await,
+        ) else {
+            return;
+        };
+        let nudges = nudges_for(&meetings, &snapshot, now, &MacClock);
+        let _ = commands.send(hyperme_core::scheduler::Command::SetNudges { nudges });
+    });
 }
 
 /// The pulls through each account's remote MCP servers, with the job's allowlist (G-5, R-22).
@@ -937,6 +1078,7 @@ mod tests {
     struct FakeUi {
         refreshes: Mutex<usize>,
         cards: Mutex<Vec<(MorningCard, bool)>>,
+        nudges: Mutex<Vec<crate::pill::AlertView>>,
     }
 
     impl Ui for Arc<FakeUi> {
@@ -945,6 +1087,9 @@ mod tests {
         }
         fn morning(&self, card: &MorningCard, update: bool) {
             self.cards.lock().unwrap().push((card.clone(), update));
+        }
+        fn nudge(&self, card: &crate::pill::AlertView) {
+            self.nudges.lock().unwrap().push(card.clone());
         }
     }
 
@@ -1426,5 +1571,99 @@ mod tests {
         let alert = failed_alert("rollover", &registry, &connectors);
         assert_eq!(alert.detail, "rollover failed twice today");
         assert_eq!(alert.link, None);
+    }
+
+    // --- Nudges ---
+
+    fn due_task(title: &str, h: u8, m: u8) -> NewTask {
+        NewTask {
+            due: Some(hyperme_core::tasks::Due {
+                date: day(FRI),
+                time: Some(Time::from_hms(h, m, 0).unwrap()),
+            }),
+            ..task(title, day(FRI), day(FRI))
+        }
+    }
+
+    /// AC-10, R-22: a meeting at 10:30 is nudged at 10:28 and a task due at 16:00 at 15:50;
+    /// moments already past, tasks with no due time and finished tasks get none.
+    #[test]
+    fn nudges_come_two_minutes_before_meetings_and_ten_before_due_times() {
+        let store = store("nudges_plan");
+        let due = block_on(store.add(due_task("Send the numbers", 16, 0))).unwrap();
+        block_on(store.add(task("No time", day(FRI), day(FRI)))).unwrap();
+        let done = block_on(store.add(due_task("Already done", 17, 0))).unwrap();
+        block_on(store.finish(done, Finish::Done, 0)).unwrap();
+        let now = local(FRI, 9, 0);
+        let snapshot = block_on(store.snapshot(day(FRI), 0)).unwrap();
+        let meetings = [
+            meeting("Standup", local(FRI, 8, 30), 15),
+            meeting("Weekly planning", local(FRI, 10, 30), 30),
+        ];
+        let nudges = nudges_for(&meetings, &snapshot, now, &FixedClock(now));
+        let got: Vec<(String, UtcDateTime, UtcDateTime)> =
+            nudges.into_iter().map(|n| (n.id, n.at, n.until)).collect();
+        assert_eq!(
+            got,
+            [
+                (
+                    format!("meeting:{}", ms(local(FRI, 10, 30))),
+                    local(FRI, 10, 28),
+                    local(FRI, 10, 30)
+                ),
+                (format!("task:{due}"), local(FRI, 15, 50), local(FRI, 16, 0)),
+            ]
+        );
+    }
+
+    /// AC-10, R-22: the nudge card says what and when, with Join for a meeting's web link and
+    /// Open Today for a task; a task finished meanwhile shows nothing.
+    #[test]
+    fn a_nudge_card_says_what_and_when() {
+        let store = store("nudge_card");
+        let id = block_on(store.add(due_task("Send the numbers", 16, 0))).unwrap();
+        let now = local(FRI, 10, 28);
+        let snapshot = block_on(store.snapshot(day(FRI), 0)).unwrap();
+        let meetings = [meeting("Weekly planning", local(FRI, 10, 30), 30)];
+        let zone = FixedClock(now);
+        let card = nudge_card(
+            &format!("meeting:{}", ms(local(FRI, 10, 30))),
+            &meetings,
+            &snapshot,
+            now,
+            &zone,
+        )
+        .unwrap();
+        assert_eq!(card.title, "Weekly planning in 2 min");
+        assert_eq!(card.detail, "10:30–11:00");
+        assert_eq!(
+            (card.action.as_str(), card.link.as_deref()),
+            ("Join", Some("https://meet.example/x"))
+        );
+
+        let at = local(FRI, 15, 50);
+        let card = nudge_card(&format!("task:{id}"), &[], &snapshot, at, &FixedClock(at)).unwrap();
+        assert_eq!(card.title, "Send the numbers");
+        assert_eq!(card.detail, "Due at 16:00 · in 10 min");
+        assert_eq!(card.link.as_deref(), Some(TODAY_LINK));
+
+        block_on(store.finish(id, Finish::Done, 0)).unwrap();
+        let snapshot = block_on(store.snapshot(day(FRI), 0)).unwrap();
+        assert_eq!(
+            nudge_card(&format!("task:{id}"), &[], &snapshot, at, &FixedClock(at)),
+            None
+        );
+    }
+
+    /// AC-10, R-22: the Nudge job shows the card through the UI, with no sound or refresh.
+    #[test]
+    fn the_nudge_job_shows_its_card() {
+        let store = store("nudge_job");
+        let id = block_on(store.add(due_task("Send the numbers", 16, 0))).unwrap();
+        let mut s = setup(store, local(FRI, 15, 50), Feeds::default(), false);
+        block_on(s.runner.run(&job(&format!("task:{id}"), JobKind::Nudge))).unwrap();
+        assert_eq!(s.ui.nudges.lock().unwrap()[0].title, "Send the numbers");
+        assert_eq!(*s.ui.refreshes.lock().unwrap(), 0);
+        assert!(s.ui.cards.lock().unwrap().is_empty());
     }
 }

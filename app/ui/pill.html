@@ -277,7 +277,7 @@
     const fix = node('button', 'main', view.action);
     const later = node('button', null, 'Later');
     if (tauri) {
-      fix.addEventListener('click', () => tauri.core.invoke('card_fix'));
+      fix.addEventListener('click', () => tauri.core.invoke('card_action'));
       later.addEventListener('click', () => tauri.core.invoke('card_dismiss'));
     }
     keys.append(fix, later);

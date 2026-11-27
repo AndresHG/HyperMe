@@ -159,6 +159,22 @@ pub enum Command {
     SetJobs {
         jobs: Vec<Job>,
     },
+    /// Replaces the nudges still to come; the app computes them from the calendar cache and the
+    /// tasks with a due time.
+    SetNudges {
+        nudges: Vec<Nudge>,
+    },
+}
+
+/// A one-off card at a moment (R-22): a meeting a few minutes ahead, or a task's due time. It
+/// shows once at `at`, or later after a sleep while `until` (the meeting's start, the due time)
+/// is still ahead; after that it is dropped. While HyperMe is paused it is held and not shown
+/// (R-23). The runner gets it as a job of kind [`JobKind::Nudge`] named `id`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Nudge {
+    pub id: String,
+    pub at: UtcDateTime,
+    pub until: UtcDateTime,
 }
 
 /// What the scheduler tells the app.
@@ -243,6 +259,8 @@ struct Scheduler<C, P, R, S> {
     paused_until: Option<UtcDateTime>,
     /// Cards held during a pause, in the order they came.
     held: Vec<usize>,
+    /// Nudges still to come.
+    nudges: Vec<Nudge>,
 }
 
 /// Runs the scheduler until the command channel closes. At start it catches up missed runs;
@@ -271,6 +289,7 @@ pub async fn run<C: Clock, P: Presence, R: Runner, S: JobStore>(parts: Parts<C, 
         missed_on_low_power: false,
         paused_until: None,
         held: Vec::new(),
+        nudges: Vec::new(),
     };
     let now = s.clock.now();
     s.recompute(now);
@@ -344,6 +363,7 @@ impl<C: Clock, P: Presence, R: Runner, S: JobStore> Scheduler<C, P, R, S> {
             .iter()
             .filter_map(|e| e.next)
             .chain(self.paused_until)
+            .chain(self.nudges.iter().map(|n| n.at))
             .min()
     }
 
@@ -368,6 +388,22 @@ impl<C: Clock, P: Presence, R: Runner, S: JobStore> Scheduler<C, P, R, S> {
         let now = self.clock.now();
         if self.paused_until.is_some_and(|until| until <= now) {
             self.resume(now).await;
+        }
+        let paused = self.paused_until.is_some_and(|until| until > now);
+        let (due, later): (Vec<Nudge>, Vec<Nudge>) = std::mem::take(&mut self.nudges)
+            .into_iter()
+            .partition(|n| n.at <= now);
+        self.nudges = later;
+        for nudge in due {
+            if now < nudge.until && !paused {
+                let job = Job::new(
+                    &nudge.id,
+                    JobKind::Nudge,
+                    Schedule::EveryWhilePresent { minutes: 0 },
+                );
+                // A nudge is not in the job table: nothing to record or retry.
+                let _ = self.runner.run(&job).await;
+            }
         }
         for i in 0..self.jobs.len() {
             if !self.jobs[i].next.is_some_and(|next| next <= now) {
@@ -541,6 +577,7 @@ impl<C: Clock, P: Presence, R: Runner, S: JobStore> Scheduler<C, P, R, S> {
                 }
             }
             Command::SetJobs { jobs } => self.set_jobs(jobs, now),
+            Command::SetNudges { nudges } => self.nudges = nudges,
         }
     }
 
