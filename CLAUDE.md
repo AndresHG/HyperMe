@@ -90,9 +90,11 @@ passes, update this section and record the evidence in `docs/results/`.
   The text the user selects may go to their own cleanup provider when they ask Hyper to edit it
   (owner, 27 November 2026, spec 151). Calendar and mail content from a connected account may go to the user's own language-model
   provider, only when a briefing, summary, triage or question needs it (owner, 26 November 2026).
-- Memory starts with commands in phase 3: "Hyper, remember …", proposed facts approved by the
-  user, kept in a folder of Markdown files on the user's Mac (owner, 26 November 2026; replaces
-  "not in a first version"). See `docs/PRD.md` section 7.5.
+- Memory ("Hyper, remember …", proposed facts approved by the user, kept in a folder of Markdown
+  files on the user's Mac), self-learning facts, the graph and contexts come after 1.0. The near
+  versions are dictation (0.1), voice commands and the to-do list (0.2), email (0.3), meetings
+  (0.4) (owner, 27 November 2026; replaces "memory starts in phase 3"). See `docs/RELEASES.md` and
+  `docs/PRD.md` section 7.5.
 - This project's own tickets live in GitHub Projects.
 - After dictation comes smart routing and actions; the first tracker connector is GitHub,
   not Linear (owner, 25 November 2026). See `docs/ROADMAP.md`.
