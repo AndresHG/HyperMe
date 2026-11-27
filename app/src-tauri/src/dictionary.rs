@@ -10,7 +10,7 @@ use std::sync::{Mutex, PoisonError};
 
 use hyperme_core::config::Config;
 use hyperme_core::dictation::Pasted;
-use hyperme_core::dictionary::{Corrected, Dictionary, Term, is_common_word};
+use hyperme_core::dictionary::{Corrected, Dictionary, Term, is_common_word, key};
 use hyperme_core::traits::{self, Added, Correction, Error, ErrorKind, Refusal};
 use hyperme_platform::dictionary_store::{DictionaryStore, Source, Suggestion};
 use serde::{Deserialize, Serialize};
@@ -305,6 +305,49 @@ pub fn on_pasted(app: &AppHandle, pasted: &Pasted) -> bool {
         store.learning()
     })
     .unwrap_or(false)
+}
+
+/// Dictations in the history whose text holds `words` as whole words (R-17).
+fn dictations_with(app: &AppHandle, words: &str) -> u32 {
+    let wanted: Vec<String> = words.split_whitespace().map(key).collect();
+    if wanted.is_empty() {
+        return 0;
+    }
+    let holds = |text: &str| {
+        let have: Vec<String> = text
+            .split(|c: char| !c.is_alphanumeric())
+            .filter(|w| !w.is_empty())
+            .map(key)
+            .collect();
+        have.windows(wanted.len()).any(|w| w == wanted.as_slice())
+    };
+    let hits =
+        crate::runtime::with_history(app, |h| h.search(words, None, 500)).unwrap_or_default();
+    let n = hits
+        .iter()
+        .filter(|item| item.text.as_deref().is_some_and(holds))
+        .count();
+    u32::try_from(n).unwrap_or(u32::MAX)
+}
+
+/// The watch of a pasted dictation ended with `edited` in its place (R-16 to R-19, slice D7):
+/// fixes of misheard words become suggestions or learned words; a learned word applies from the
+/// next dictation. The field text goes no further than this call (R-21).
+pub fn learn(app: &AppHandle, pasted: &Pasted, edited: &str) {
+    let learned = with_store(app, |store, _| {
+        store.learn(
+            &pasted.text,
+            &pasted.transcript,
+            edited,
+            pasted.app.as_deref(),
+            |words| dictations_with(app, words),
+        )
+    });
+    match learned {
+        Ok(Some(dictionary)) => crate::runtime::update_dictionary(app, dictionary),
+        Ok(None) => {}
+        Err(why) => tracing::warn!("dictionary learning: {why}"),
+    }
 }
 
 /// Applies a fix (R-12, R-17, AC-12): `None` when the heard form is common and needs a yes.
