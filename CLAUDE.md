@@ -28,6 +28,8 @@ itself; a later version may hand a task to Claude Code ([docs/PRD.md](docs/PRD.m
 - `specs/92-daily-tasks/`: draft phase 4 spec for the task list with dependencies, the morning card
   and the scheduler (core slices 1 to 6 approved to start, 26 November 2026)
 - `specs/93-personal-dictionary/`: Phase 2 spec for the personal dictionary (approved 27 November 2026)
+- `specs/151-voice-edits/`: phase 3 spec for voice edits of selected text ("Hyper, make this shorter";
+  approved 27 November 2026, first work of phase 3)
 - `docs/RELEASING.md`: how a release is built, signed, notarised and published, and how updates work
 - `docs/FIELD.md`: existing projects and what to borrow from each
 - `docs/UX.md`: UX and UI by phase (one shape at the bottom centre: dot, pill, card and quick sheet; the Home window; settings and menus), with mockups in `docs/ux/` (draft)
@@ -73,7 +75,8 @@ passes, update this section and record the evidence in `docs/results/`.
   telemetry. Audio stays on the Mac: dictation history (audio and text) is on by default,
   kept 30 days or unlimited, under a size limit the user sets, so a dropped connection never
   loses a dictation (owner, 26 November 2026; this replaces "no audio kept on disk").
-  Calendar and mail content from a connected account may go to the user's own language-model
+  The text the user selects may go to their own cleanup provider when they ask Hyper to edit it
+  (owner, 27 November 2026, spec 151). Calendar and mail content from a connected account may go to the user's own language-model
   provider, only when a briefing, summary, triage or question needs it (owner, 26 November 2026).
 - Memory starts with commands in phase 3: "Hyper, remember …", proposed facts approved by the
   user, kept in a folder of Markdown files on the user's Mac (owner, 26 November 2026; replaces
