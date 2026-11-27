@@ -39,16 +39,52 @@ dictionary, write the dictionary term. Otherwise change nothing.";
 /// spoken sequence words become a list and are dropped, topic shifts become paragraphs. Plain
 /// `- ` and `1.` markers read well in every app, rendered or not, so they are the same
 /// everywhere; the app line can still forbid formatting (code editors, terminals).
-const FORMAT_RULE: &str = "Format for reading, without changing words: when the speaker \
-lists three or more items or steps (one, two, three; first, second, then; primero, segundo; \
-or \"three things: ...\"), end any lead-in sentence with a colon and put each item on its own \
-line. Start items with \"1.\", \"2.\", \"3.\" when the speaker numbered them (one, two; first, \
-second; uno, dos; primero, segundo), otherwise with \"- \", and drop the spoken words that only \
-number them. Start every item with a capital and end all items alike: a full stop when they \
-are sentences, nothing when they are short phrases. When a longer text moves to another \
-topic, start a new paragraph with an empty line. \"New line\", \"new paragraph\", \"nueva \
-línea\" or \"punto y aparte\" said as a command becomes that break. Keep a short text as one \
-paragraph. Never add headings, bold or other markdown.";
+const FORMAT_RULE: &str = "Format lists and paragraphs without changing words. Three or \
+more items or steps: a lead-in ending in a colon, then one item per line, \"1.\" when the \
+speaker numbered them (first, second; uno, dos), else \"- \"; drop the numbering words; each \
+item starts with a capital, and all end alike. A topic change in a long text starts a new \
+paragraph. \"New line\", \"new paragraph\", \"nueva línea\" or \"punto y aparte\" said as a \
+command is that break. No headings or bold.";
+
+/// Words that suggest a list or a dictated break, in English and Spanish.
+const FORMAT_CUES: &[&str] = &[
+    "first",
+    "firstly",
+    "second",
+    "secondly",
+    "third",
+    "finally",
+    "primero",
+    "segundo",
+    "tercero",
+    "primera",
+    "segunda",
+    "tercera",
+    "luego",
+    "line",
+    "paragraph",
+    "línea",
+    "aparte",
+];
+
+/// Whether a transcript may need the formatting rule: long enough to change topic, a colon or
+/// three commas (a spoken enumeration), or a list or break word. The rule costs time to the
+/// first token (about 140 ms on OpenAI, 27 November 2026), so a short plain dictation goes
+/// without it and gets `v4`'s prompt.
+pub fn needs_formatting(raw: &str) -> bool {
+    let words: Vec<String> = raw
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|w| !w.is_empty())
+        .map(str::to_lowercase)
+        .collect();
+    words.len() >= FORMAT_WORDS
+        || raw.contains(':')
+        || raw.matches(',').count() >= 3
+        || words.iter().any(|w| FORMAT_CUES.contains(&w.as_str()))
+}
+
+/// From this many words a dictation may change topic, so it gets the formatting rule.
+const FORMAT_WORDS: usize = 40;
 
 /// The first `medium` prompt (P2-2): light's rules, plus repetitions, small grammar slips and
 /// spoken formatting. Still never rephrased, translated or answered.
@@ -128,6 +164,9 @@ pub struct ChatCleanup {
     /// `None` leaves `reasoning_effort` out of the request.
     reasoning_effort: Option<String>,
     prompt: String,
+    /// The prompt without the formatting rule, for a dictation that cannot need it
+    /// ([`needs_formatting`]). `None` when the prompt has no such rule.
+    plain: Option<String>,
     /// The user's dictionary line (spec 93, R-4), between the prompt and the app line. Behind a
     /// lock so a saved dictionary reaches a provider the engine shares (specs/96, R-8).
     dictionary: std::sync::Mutex<String>,
@@ -189,6 +228,9 @@ impl ChatCleanup {
             model: config.model.clone(),
             reasoning_effort: (config.reasoning_effort != "off")
                 .then(|| config.reasoning_effort.clone()),
+            plain: prompt
+                .contains(FORMAT_RULE)
+                .then(|| prompt.replace(&format!(" {FORMAT_RULE}"), "")),
             prompt,
             dictionary: std::sync::Mutex::default(),
             auth,
@@ -267,7 +309,11 @@ impl ChatCleanup {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .clone();
-        let mut system = format!("{}{dictionary}", self.prompt);
+        let prompt = match &self.plain {
+            Some(plain) if !needs_formatting(raw) => plain,
+            _ => &self.prompt,
+        };
+        let mut system = format!("{prompt}{dictionary}");
         // Issue 219: the app name and the style it calls for, last, so the start stays fixed.
         if let Some(app) = app.filter(|a| !a.trim().is_empty()) {
             system.push_str(&AppStyle::for_app(Some(app)).prompt_line(app));
@@ -519,7 +565,36 @@ mod tests {
         let v5 = prompt_named("v5").unwrap();
         assert_eq!(v5, format!("{PROMPT_V3} {FORMAT_RULE} {V4_RULE}"));
         assert!(v5.contains("\"- \""));
-        assert!(v5.contains("Never add headings, bold"));
+        assert!(v5.contains("No headings or bold"));
+    }
+
+    /// Formatting, AC-8: a short plain dictation gets `v4`'s prompt, without the formatting
+    /// rule; a long one, a spoken enumeration or a break word gets `v5`'s.
+    #[test]
+    fn only_a_dictation_that_may_need_formatting_gets_the_rule() {
+        assert!(!needs_formatting(
+            "Sounds good, see you at the office tomorrow."
+        ));
+        assert!(!needs_formatting(
+            "Vale, nos vemos a las ocho en la puerta del cine."
+        ));
+        assert!(needs_formatting(
+            "Things to buy, milk, eggs, bread and coffee."
+        ));
+        assert!(needs_formatting("First call the bank and then send it."));
+        assert!(needs_formatting("Hecho. Punto y aparte. Ahora lo otro."));
+        assert!(needs_formatting(&"word ".repeat(40)));
+        let body = |raw| {
+            cleanup("low", "v5").unwrap().request_body(raw, None)["messages"][0]["content"]
+                .as_str()
+                .unwrap()
+                .to_owned()
+        };
+        assert_eq!(
+            body("sounds good see you then"),
+            prompt_named("v4").unwrap()
+        );
+        assert_eq!(body("first this, then that"), prompt_named("v5").unwrap());
     }
 
     /// P2-2 AC-6: the level picks its named prompt; `prompt` overrides it. Light is v4, and
