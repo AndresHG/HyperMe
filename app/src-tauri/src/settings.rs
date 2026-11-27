@@ -769,6 +769,23 @@ pub fn app_restart(app: AppHandle) {
 
 #[cfg(test)]
 mod tests {
+
+    /// #216 regression, V0.1 redesign: the account label is a choice (Personal, Work, Other), so
+    /// no greyed placeholder can look like a value already filled in; and the Dictionary is not
+    /// in Settings any more (it lives in Home's sidebar).
+    #[test]
+    fn the_connect_dialog_label_is_a_choice_and_no_dictionary_in_settings() {
+        let page = include_str!("../../ui/settings.html");
+        for value in ["personal", "work", "other"] {
+            assert!(
+                page.contains(&format!("name=\"oauth-label-choice\" value=\"{value}\"")),
+                "missing the {value} choice"
+            );
+        }
+        assert!(!page.contains("placeholder=\"personal\""));
+        assert!(!page.contains("id=\"dictionary\""));
+        assert!(!page.contains("dictionary.js"));
+    }
     /// Bug, 26 November 2026: the walkthrough's Test button saves a typed key, clears the field
     /// and waits for `providers-changed` to test it, but saving a key never sent that event, so
     /// the key seemed to vanish untested. Saving a key must tell the walkthrough (U-12, AC-21).
