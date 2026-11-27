@@ -1,6 +1,6 @@
 # Diagnostics and Report a problem
 
-**Status:** draft, for the owner's approval.
+**Status:** approved by the owner, 27 November 2026 (DG-1 to DG-3 decided).
 **Issue:** [#200](https://github.com/AndresHG/hyperme/issues/200). **Size:** L (a new Settings
 section, a change to History, a bundle that a user may take off the Mac, crash capture).
 **Traces to:** [PRD](../../docs/PRD.md) Q-18 (no telemetry; a Diagnostics view and a Report a
