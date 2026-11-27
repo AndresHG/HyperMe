@@ -547,13 +547,26 @@ pub fn start(app: &tauri::AppHandle) {
             });
     }
     let app = app.clone();
-    tauri::async_runtime::spawn(async move {
-        while let Some(signal) = signals.recv().await {
-            // The "Job failed" alert waits for the cards (R-36).
-            let hyperme_core::scheduler::Signal::JobFailed { job } = signal;
-            eprintln!("HyperMe: job {job} failed twice today");
-        }
-    });
+    {
+        let app = app.clone();
+        tauri::async_runtime::spawn(async move {
+            while let Some(signal) = signals.recv().await {
+                // The scheduler sends this once, at a job's second failure in a day (R-36).
+                let hyperme_core::scheduler::Signal::JobFailed { job } = signal;
+                eprintln!("HyperMe: job {job} failed twice today");
+                let alert = match config(&app).and_then(|c| Ok((registry(&app, &c)?, c))) {
+                    Ok((registry, config)) => failed_alert(&job, &registry, &config.connectors),
+                    Err(_) => crate::pill::AlertView {
+                        title: "Job failed".to_owned(),
+                        detail: format!("{job} failed twice today"),
+                        action: "Fix".to_owned(),
+                        link: None,
+                    },
+                };
+                crate::runtime::show_card(&app, crate::pill::Card::Alert(alert), false);
+            }
+        });
+    }
     tauri::async_runtime::spawn(async move {
         let jobs = match job_table(&app, &store).await {
             Ok(jobs) => jobs,
@@ -583,6 +596,55 @@ pub fn start(app: &tauri::AppHandle) {
         })
         .await;
     });
+}
+
+/// The "Job failed" alert for a job (R-36, docs/UX.md "Alerts"): what could not be reached,
+/// and Fix opening that account's page in Settings → Connectors, or the connector's when it
+/// has several accounts.
+pub fn failed_alert(
+    job: &str,
+    registry: &hyperme_core::registry::Registry,
+    connectors: &hyperme_core::config::Connectors,
+) -> crate::pill::AlertView {
+    use hyperme_core::connector_settings::link_for;
+    let found = job.strip_prefix("sync:").and_then(|id| {
+        registry.connectors().iter().find_map(|c| {
+            c.servers
+                .iter()
+                .find(|s| format!("{}-{}", c.id, s.id) == id)
+                .map(|s| (c, s))
+        })
+    });
+    let Some((connector, server)) = found else {
+        return crate::pill::AlertView {
+            title: "Job failed".to_owned(),
+            detail: format!("{job} failed twice today"),
+            action: "Fix".to_owned(),
+            link: None,
+        };
+    };
+    let what = server
+        .label
+        .as_deref()
+        .and_then(|l| l.split(':').next())
+        .unwrap_or(&server.id)
+        .to_lowercase();
+    let accounts: Vec<String> = connectors
+        .accounts
+        .iter()
+        .filter(|a| a.connector == connector.id && a.enabled)
+        .map(|a| a.id())
+        .collect();
+    let link = match accounts.as_slice() {
+        [one] => link_for(one),
+        _ => link_for(&connector.id),
+    };
+    crate::pill::AlertView {
+        title: "Job failed".to_owned(),
+        detail: format!("Couldn't reach your {} {what} twice today", connector.name),
+        action: "Fix".to_owned(),
+        link: Some(link),
+    }
 }
 
 /// The connectors changed (an account added, removed, switched): rebuild the job table.
@@ -701,7 +763,11 @@ impl Ui for AppUi {
         });
     }
     fn morning(&self, card: &MorningCard, update: bool) {
-        crate::runtime::show_card(&self.0, crate::pill::morning_view(card), update);
+        crate::runtime::show_card(
+            &self.0,
+            crate::pill::Card::Morning(crate::pill::morning_view(card)),
+            update,
+        );
     }
 }
 
@@ -1302,5 +1368,63 @@ mod tests {
         );
         assert_eq!(parse_day("2026-02-30"), None);
         assert_eq!(parse_day("monday"), None);
+    }
+
+    // --- Job failed ---
+
+    fn google_with(
+        accounts: &[&str],
+    ) -> (
+        hyperme_core::registry::Registry,
+        hyperme_core::config::Connectors,
+    ) {
+        let mut text = hyperme_core::config::DEFAULT_CONFIG.to_owned();
+        for label in accounts {
+            text.push_str(&format!(
+                "\n[[connectors.accounts]]\nconnector = \"google\"\nlabel = \"{label}\"\n"
+            ));
+        }
+        let connectors =
+            hyperme_core::config::Config::parse(&text, std::path::Path::new("config.toml"))
+                .unwrap()
+                .connectors;
+        let registry = hyperme_core::connector_settings::registry(None, &connectors).unwrap();
+        (registry, connectors)
+    }
+
+    /// AC-16, R-36: a sync job that failed twice says what it could not reach, and Fix opens
+    /// the account's page; with two accounts, the connector's.
+    #[test]
+    fn a_failed_sync_names_what_it_could_not_reach_and_links_the_fix() {
+        let (registry, connectors) = google_with(&["personal"]);
+        let alert = failed_alert("sync:google-calendar", &registry, &connectors);
+        assert_eq!(alert.title, "Job failed");
+        assert_eq!(
+            alert.detail,
+            "Couldn't reach your Google calendar twice today"
+        );
+        assert_eq!(alert.action, "Fix");
+        assert_eq!(
+            alert.link.as_deref(),
+            Some("hyperme://settings/connectors/google:personal")
+        );
+
+        let (registry, connectors) = google_with(&["personal", "work"]);
+        let alert = failed_alert("sync:google-gmail", &registry, &connectors);
+        assert_eq!(alert.detail, "Couldn't reach your Google mail twice today");
+        assert_eq!(
+            alert.link.as_deref(),
+            Some("hyperme://settings/connectors/google")
+        );
+    }
+
+    /// R-36: a job that is not a sync (roll-over, the morning card) still alerts, with Fix
+    /// opening Settings.
+    #[test]
+    fn another_failed_job_alerts_without_a_link() {
+        let (registry, connectors) = google_with(&[]);
+        let alert = failed_alert("rollover", &registry, &connectors);
+        assert_eq!(alert.detail, "rollover failed twice today");
+        assert_eq!(alert.link, None);
     }
 }

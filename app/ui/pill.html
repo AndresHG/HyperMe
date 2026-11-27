@@ -102,6 +102,7 @@
   .card .keys { height: 42px; display: flex; align-items: flex-end; gap: 8px; }
   .card button { font: 600 11px -apple-system, sans-serif; height: 26px; padding: 0 12px; border-radius: 7px; border: 0; background: #26262b; color: var(--muted); cursor: pointer; }
   .card button.main { background: #7c5cff; color: #fff; }
+  .card .bad { color: var(--recording); }
 </style>
 </head>
 <body>
@@ -239,9 +240,11 @@
   const card = document.getElementById('card');
   const node = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 
+  // A card is the morning card or an alert (docs/UX.md, "Alerts"); `kind` says which.
   function showCard(view) {
     hidden();
     kind = 'card';
+    if (view.kind === 'alert') return showAlert(view);
     const parts = [node('h1', null, view.title)];
     if (view.yesterday) parts.push(node('div', 'line', view.yesterday));
     if (view.meetings) parts.push(node('div', 'line strong', view.meetings));
@@ -264,6 +267,21 @@
     keys.append(open, later);
     parts.push(keys);
     card.replaceChildren(...parts);
+    card.hidden = false;
+  }
+
+  function showAlert(view) {
+    const title = node('h1', null, view.title);
+    title.prepend(node('span', 'bad', '! '));
+    const keys = node('div', 'keys');
+    const fix = node('button', 'main', view.action);
+    const later = node('button', null, 'Later');
+    if (tauri) {
+      fix.addEventListener('click', () => tauri.core.invoke('card_fix'));
+      later.addEventListener('click', () => tauri.core.invoke('card_dismiss'));
+    }
+    keys.append(fix, later);
+    card.replaceChildren(title, node('div', 'line strong', view.detail), keys);
     card.hidden = false;
   }
 

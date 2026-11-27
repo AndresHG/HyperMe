@@ -231,6 +231,39 @@ pub fn morning_view(card: &MorningCard) -> CardView {
     }
 }
 
+/// An alert from the dot (docs/UX.md, "Alerts"): a title, one line, and a button that opens
+/// where the fix is. Never takes focus.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct AlertView {
+    pub title: String,
+    pub detail: String,
+    /// The main button's word, such as `Fix`.
+    pub action: String,
+    /// A `hyperme://settings/...` link the main button opens, when there is one.
+    pub link: Option<String>,
+}
+
+/// A card the pill grows into: the morning card or an alert.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(tag = "kind", rename_all = "lowercase")]
+pub enum Card {
+    Morning(CardView),
+    Alert(AlertView),
+}
+
+impl Card {
+    /// The panel's size for this card.
+    pub fn size(&self) -> (f64, f64) {
+        match self {
+            Card::Morning(view) => card_size(view),
+            Card::Alert(_) => (
+                CARD_WIDTH,
+                2.0 * CARD_PAD + CARD_TITLE + CARD_LINE + CARD_KEYS,
+            ),
+        }
+    }
+}
+
 /// Heights in points; `pill.html` uses the same ones, so the panel fits the card exactly.
 pub const CARD_PAD: f64 = 18.0;
 pub const CARD_TITLE: f64 = 24.0;
@@ -563,5 +596,30 @@ mod level_tests {
             (None, None),
             "nothing to say, no line"
         );
+    }
+
+    /// R-36, AC-16: an alert card has one size, and serialises with its kind for the page.
+    #[test]
+    fn an_alert_card_is_tagged_and_sized() {
+        use super::{AlertView, Card};
+        let alert = Card::Alert(AlertView {
+            title: "Job failed".into(),
+            detail: "Couldn't reach your calendar twice today".into(),
+            action: "Fix".into(),
+            link: Some("hyperme://settings/connectors/google:personal".into()),
+        });
+        assert_eq!(
+            alert.size(),
+            (
+                CARD_WIDTH,
+                2.0 * CARD_PAD + CARD_TITLE + CARD_LINE + CARD_KEYS
+            )
+        );
+        let json = serde_json::to_value(&alert).unwrap();
+        assert_eq!(json["kind"], "alert");
+        assert_eq!(json["action"], "Fix");
+        let morning = Card::Morning(morning_view(&card()));
+        assert_eq!(serde_json::to_value(&morning).unwrap()["kind"], "morning");
+        assert_eq!(morning.size(), card_size(&morning_view(&card())));
     }
 }
