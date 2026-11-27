@@ -145,8 +145,26 @@ impl ChatCleanup {
             ));
         }
         let body = response.text().await.unwrap_or_default();
+        if model_not_found(status, &body) {
+            return Err(self.error(
+                ErrorKind::Other,
+                format!(
+                    "the model {} was not found. Pick another in Settings",
+                    self.model
+                ),
+            ));
+        }
         let body: String = body.chars().take(300).collect();
         Err(self.error(ErrorKind::Other, format!("HTTP {status}: {}", body.trim())))
+    }
+
+    /// Settings' Test (R-13): asks the chosen model to clean a one-word transcript through the
+    /// same request a dictation sends (prompt, reasoning effort, streaming), so a wrong model
+    /// fails Test, not the next dictation. A design note asked for a one-token completion; a
+    /// token limit is left out because hosts disagree on its name (`max_tokens` against
+    /// `max_completion_tokens`), and a one-word transcript costs about as little.
+    pub async fn check(&self) -> Result<(), Error> {
+        self.clean("Test.", None, &mut |_| {}).await
     }
 
     /// Adds the user's dictionary to the prompt (spec 93, R-4): `line` is
@@ -265,6 +283,16 @@ pub async fn list_models(provider: &str, endpoint: &str, key: &str) -> Result<Ve
                 .collect()
         })
         .unwrap_or_default())
+}
+
+/// Whether an error answer means the model does not exist. Providers say it in different
+/// shapes: OpenAI and Groq a `model_not_found` code, Google a 404 naming `models/…`.
+fn model_not_found(status: StatusCode, body: &str) -> bool {
+    let lower = body.to_lowercase();
+    lower.contains("model_not_found")
+        || (status == StatusCode::NOT_FOUND && lower.contains("model"))
+        || (lower.contains("model")
+            && (lower.contains("does not exist") || lower.contains("not found")))
 }
 
 impl CleanupProvider for ChatCleanup {

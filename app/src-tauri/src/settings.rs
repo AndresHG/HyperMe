@@ -8,7 +8,7 @@ use std::time::Instant;
 
 use hyperme_core::config::{self, Config, ConfigError, Hotkey, Retention, Role};
 use hyperme_core::secrets::SecretStore;
-use hyperme_core::traits::{CleanupProvider, SpeechProvider};
+use hyperme_core::traits::SpeechProvider;
 use hyperme_platform::keychain::KeychainStore;
 use hyperme_platform::permissions;
 use hyperme_providers::any;
@@ -476,8 +476,8 @@ fn save_key<R: tauri::Runtime>(
     Ok(())
 }
 
-/// Tests a key against its provider: opens a speech session (no audio is sent) or warms the
-/// cleanup connection. Returns the time it took in ms. With `provider` and `model`, tests the
+/// Tests a key and model against their provider (R-13): opens a speech session with the model
+/// (no audio is sent), or has the cleanup model clean one word. Returns the time it took in ms. With `provider` and `model`, tests the
 /// pair being picked in the providers table without saving it (R-12).
 #[tauri::command]
 pub async fn key_test(
@@ -505,9 +505,10 @@ pub async fn key_test(
             .map_err(|e| e.message)?;
         drop(session);
     } else {
+        // R-13: a completion from the chosen model, so a wrong model fails here.
         any::cleanup(&config, &keys)
             .map_err(|e| e.message)?
-            .warm()
+            .check()
             .await
             .map_err(|e| e.message)?;
     }

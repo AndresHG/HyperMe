@@ -85,6 +85,13 @@ impl CleanupProvider for AnyCleanup {
 }
 
 impl AnyCleanup {
+    /// Settings' Test: the key and the chosen model together (R-13).
+    pub async fn check(&self) -> Result<(), Error> {
+        match self {
+            AnyCleanup::Chat(p) => p.check().await,
+        }
+    }
+
     /// Adds the user's dictionary to the prompt (spec 93, R-4): `line` is
     /// `Dictionary::prompt_line()`.
     pub fn with_dictionary(self, line: &str) -> Self {
