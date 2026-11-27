@@ -66,6 +66,37 @@ pub fn sync_jobs(registry: &Registry, connectors: &Connectors) -> Vec<Job> {
     jobs
 }
 
+/// Why a pull failed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SyncError {
+    /// The account's refresh token was refused: it needs a new sign-in (R-10).
+    SignInAgain,
+    Failed(String),
+}
+
+impl std::fmt::Display for SyncError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SyncError::SignInAgain => write!(f, "the account needs a new sign-in"),
+            SyncError::Failed(reason) => write!(f, "{reason}"),
+        }
+    }
+}
+
+impl std::error::Error for SyncError {}
+
+impl From<String> for SyncError {
+    fn from(reason: String) -> Self {
+        SyncError::Failed(reason)
+    }
+}
+
+impl From<&str> for SyncError {
+    fn from(reason: &str) -> Self {
+        SyncError::Failed(reason.to_owned())
+    }
+}
+
 /// Calls one tool on one of the account's servers and returns its answer as JSON.
 pub trait ToolCaller {
     fn call(
@@ -73,7 +104,7 @@ pub trait ToolCaller {
         server: &str,
         tool: &str,
         args: Value,
-    ) -> impl Future<Output = Result<Value, String>> + Send;
+    ) -> impl Future<Output = Result<Value, SyncError>> + Send;
 }
 
 /// One calendar event in the cache.
@@ -300,7 +331,7 @@ pub async fn pull_events<C: ToolCaller, T: TaskStore>(
     pull: &Pull,
     now: UtcDateTime,
     zone: &(dyn Zone + Sync),
-) -> Result<PullReport, String> {
+) -> Result<PullReport, SyncError> {
     let args = expand_args(&pull.args, now, zone);
     let answer = caller.call(&pull.server, &pull.tool, args).await?;
     let mut report = PullReport::default();
@@ -530,7 +561,7 @@ pub async fn pull_mail<C: ToolCaller, T: TaskStore>(
     pull: &Pull,
     now: UtcDateTime,
     zone: &(dyn Zone + Sync),
-) -> Result<MailReport, String> {
+) -> Result<MailReport, SyncError> {
     let args = expand_args(&pull.args, now, zone);
     let answer = caller.call(&pull.server, &pull.tool, args).await?;
     let mut report = MailReport::default();
@@ -628,7 +659,7 @@ pub async fn fetch_body<C: ToolCaller>(
     caller: &C,
     pull: &Pull,
     thread: &str,
-) -> Result<String, String> {
+) -> Result<String, SyncError> {
     let tool = pull
         .body_tool
         .as_deref()

@@ -60,6 +60,12 @@ impl LiveSession for AnySession {
 }
 
 impl CleanupProvider for AnyCleanup {
+    fn set_dictionary(&self, line: &str) {
+        match self {
+            AnyCleanup::Chat(p) => p.set_dictionary(line),
+        }
+    }
+
     async fn warm(&self) -> Result<(), Error> {
         match self {
             AnyCleanup::Chat(p) => p.warm().await,

@@ -436,6 +436,17 @@ impl History for NoHistory {
     fn audio(&self, _id: DictationId) -> Result<Vec<i16>, Error> {
         Ok(Vec::new())
     }
+    fn app(&self, _id: DictationId) -> Result<Option<String>, Error> {
+        Ok(None)
+    }
+    fn replace_text(
+        &mut self,
+        _id: DictationId,
+        _text: &str,
+        _language: Option<&str>,
+    ) -> Result<(), Error> {
+        Ok(())
+    }
 }
 
 struct NoTiming;

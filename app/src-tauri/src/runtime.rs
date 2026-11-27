@@ -7,7 +7,9 @@ use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
 use hyperme_core::config::Config;
-use hyperme_core::dictation::{Engine, Event, Parts, Providers, Settings, Status};
+use hyperme_core::dictation::{
+    DictionaryUpdates, Engine, Event, Parts, Providers, Settings, Status,
+};
 use hyperme_core::dictionary::Dictionary;
 use hyperme_core::traits::{
     DictationId, Error, ErrorKind, History, Inserter, TimingLine, TimingLog,
@@ -48,6 +50,14 @@ struct Shared {
     providers: Option<watch::Sender<Arc<Providers<AnySpeech, AnyCleanup>>>>,
     /// The timing log, whose provider and model names follow a switch.
     timing: Arc<Mutex<FileTimingLog>>,
+    /// A dictation or retry is in progress: from its first status until Idle.
+    busy: bool,
+    /// The dictation Home asked to retry, while that retry runs (spec 98, R-16).
+    home_retry: Option<DictationId>,
+    /// History is on in the config (spec 98, R-19).
+    history_enabled: bool,
+    /// Where Settings → Dictionary sends a saved dictionary (spec 93, R-10a).
+    dictionary: Option<DictionaryUpdates>,
 }
 
 type State = Mutex<Shared>;
@@ -108,8 +118,18 @@ pub fn start(app: &AppHandle, menu: TrayMenu) {
         _hotkey: None,
         providers: None,
         timing: Arc::new(Mutex::new(timing_log(&Config::default()))),
+        busy: false,
+        home_retry: None,
+        history_enabled: Config::load_or_create(&data_dir(app).join("config.toml"))
+            .map_or(true, |config| config.history.enabled),
+        dictionary: None,
     }));
     settle(app);
+    // Home shows the history even before the keys are in, or when one cannot be read.
+    let dir = data_dir(app);
+    if let Ok(config) = Config::load_or_create(&dir.join("config.toml")) {
+        open_history(&history, &dir, &config);
+    }
     match wire(app, history) {
         Ok(()) => set_status(app, "Ready"),
         Err(why) => set_status(app, &why),
@@ -130,11 +150,29 @@ pub fn ensure_running(app: &AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+/// Opens the history store if it is not open yet. A history that cannot open leaves dictation
+/// working, without history or retry.
+fn open_history(history: &Mutex<HistoryInner>, dir: &std::path::Path, config: &Config) {
+    let mut inner = history.lock().unwrap_or_else(PoisonError::into_inner);
+    if inner.store.is_none() {
+        inner.store = SqliteHistory::open(
+            &dir.join("history"),
+            HistorySettings::from_config(&config.history),
+        )
+        .ok();
+    }
+}
+
 fn wire(app: &AppHandle, history: Arc<Mutex<HistoryInner>>) -> Result<(), String> {
     let dir = data_dir(app);
     let config =
         Config::load_or_create(&dir.join("config.toml")).map_err(|e| format!("Config: {e}"))?;
-    let dictionary = load_dictionary(config.dictation.dictionary.as_deref());
+    let dictionary_file = crate::dictionary::file(&dir, Some(&config));
+    let (dictionary, unread) = crate::dictionary::read(&dictionary_file);
+    // An unreadable dictionary leaves dictation working without it; Settings shows why.
+    if let Some(why) = unread {
+        eprintln!("HyperMe: {why}");
+    }
     let providers = with_dictionary(
         any::resolve(&config, &KeychainStore::new()).map_err(|e| e.message)?,
         &dictionary,
@@ -142,15 +180,7 @@ fn wire(app: &AppHandle, history: Arc<Mutex<HistoryInner>>) -> Result<(), String
     let (switch, providers) = watch::channel(Arc::new(providers));
     let timing = lock(app).timing.clone();
     *timing.lock().unwrap_or_else(PoisonError::into_inner) = timing_log(&config);
-    {
-        let mut inner = history.lock().unwrap_or_else(PoisonError::into_inner);
-        // A history that cannot open leaves dictation working, without history or retry.
-        inner.store = SqliteHistory::open(
-            &dir.join("history"),
-            HistorySettings::from_config(&config.history),
-        )
-        .ok();
-    }
+    open_history(&history, &dir, &config);
 
     let (events, events_rx) = mpsc::channel(1024);
     // The microphone's frames pass through a task that feeds the level meter.
@@ -172,6 +202,7 @@ fn wire(app: &AppHandle, history: Arc<Mutex<HistoryInner>>) -> Result<(), String
         ..Settings::from_config(&config)
     };
     let engine = Engine::new(parts, settings, status_tx);
+    let dictionary_updates = engine.dictionary_updates();
     tauri::async_runtime::spawn(engine.run(events_rx));
     tauri::async_runtime::spawn(forward_audio(app.clone(), mic_rx, events.clone()));
     tauri::async_runtime::spawn(show_statuses(app.clone(), status_rx));
@@ -179,6 +210,7 @@ fn wire(app: &AppHandle, history: Arc<Mutex<HistoryInner>>) -> Result<(), String
     shared.events = Some(events);
     shared._hotkey = Some(hotkey);
     shared.providers = Some(switch);
+    shared.dictionary = Some(dictionary_updates);
     Ok(())
 }
 
@@ -192,7 +224,8 @@ pub fn reload_providers(app: &AppHandle) -> Result<(), String> {
     };
     let config = Config::load_or_create(&data_dir(app).join("config.toml"))
         .map_err(|e| format!("Config: {e}"))?;
-    let dictionary = load_dictionary(config.dictation.dictionary.as_deref());
+    let (dictionary, _) =
+        crate::dictionary::read(&crate::dictionary::file(&data_dir(app), Some(&config)));
     let providers = with_dictionary(
         any::resolve(&config, &KeychainStore::new()).map_err(|e| e.message)?,
         &dictionary,
@@ -239,18 +272,11 @@ fn with_dictionary(
     }
 }
 
-/// The dictionary file named in the config (spec 93). A missing or unreadable file leaves
-/// dictation working with no dictionary.
-fn load_dictionary(path: Option<&std::path::Path>) -> Dictionary {
-    let Some(path) = path else {
-        return Dictionary::default();
-    };
-    match std::fs::read_to_string(path) {
-        Ok(text) => Dictionary::parse(&text),
-        Err(e) => {
-            eprintln!("HyperMe: dictionary {} not read: {e}", path.display());
-            Dictionary::default()
-        }
+/// Hands a dictionary saved in Settings to the running dictation (spec 93, R-10a). Before the
+/// dictation is running there is nothing to update: it reads the file when it starts.
+pub fn update_dictionary(app: &AppHandle, dictionary: Dictionary) {
+    if let Some(updates) = lock(app).dictionary.clone() {
+        updates.send(dictionary);
     }
 }
 
@@ -279,6 +305,7 @@ async fn show_statuses(app: AppHandle, mut statuses: mpsc::UnboundedReceiver<Sta
     // Key release, for the walkthrough's "Pasted in 0.43 s".
     let mut released: Option<Instant> = None;
     while let Some(status) = statuses.recv().await {
+        follow_for_home(&app, &status);
         match status {
             Status::Transcribing if released.is_none() => released = Some(Instant::now()),
             Status::Done { .. } => {
@@ -422,8 +449,102 @@ pub fn pill_clicked(app: AppHandle) {
     }
     settle(&app);
     if retry && let Some(events) = events {
-        let _ = events.try_send(Event::Retry);
+        let _ = events.try_send(Event::Retry(None));
     }
+}
+
+/// Tells Home how a retry it asked for is going, and that the history changed after any other
+/// dictation (spec 98, R-16, AC-15).
+fn follow_for_home(app: &AppHandle, status: &Status) {
+    use crate::home::{RetryEvent, RetryUpdate, retry_update};
+    let retrying = {
+        let mut shared = lock(app);
+        shared.busy = *status != Status::Idle;
+        shared.home_retry
+    };
+    let Some(id) = retrying else {
+        if matches!(
+            status,
+            Status::Done { .. } | Status::Copied { .. } | Status::Failed { retry: true, .. }
+        ) {
+            crate::home::emit_changed(app);
+        }
+        return;
+    };
+    let event = |state, text, message| RetryEvent {
+        id,
+        state,
+        text,
+        message,
+    };
+    let (event, ended) = match retry_update(status) {
+        Some(RetryUpdate::Working) => (event("working", None, None), false),
+        Some(RetryUpdate::Done) => {
+            let text = with_history(app, |h| h.item(id))
+                .ok()
+                .flatten()
+                .and_then(|i| i.text);
+            (event("done", text, None), true)
+        }
+        Some(RetryUpdate::Failed(message)) => (event("failed", None, Some(message)), true),
+        Some(RetryUpdate::Ended) => (event("ended", None, None), true),
+        None => return,
+    };
+    if ended {
+        lock(app).home_retry = None;
+    }
+    crate::home::emit_retry(app, event);
+}
+
+/// Home's Retry (spec 98, R-16): refused while a dictation runs, as Phase 1 refuses a second
+/// one, so the row says so instead of waiting on nothing.
+pub fn retry_from_home(app: &AppHandle, id: DictationId) -> Result<(), String> {
+    let mut shared = lock(app);
+    if shared.busy || shared.home_retry.is_some() {
+        return Err("A dictation is in progress; retry when it is done".to_owned());
+    }
+    let events = shared.events.clone().ok_or_else(|| {
+        "Retry needs the speech and cleanup keys; add them in Settings".to_owned()
+    })?;
+    events
+        .try_send(Event::Retry(Some(id)))
+        .map_err(|_| "HyperMe is busy; try again".to_owned())?;
+    shared.home_retry = Some(id);
+    Ok(())
+}
+
+/// History is on in the config (spec 98, R-19).
+pub fn history_enabled(app: &AppHandle) -> bool {
+    lock(app).history_enabled
+}
+
+/// Runs `change` on the history store, for Home's actions.
+pub fn with_history_mut<T>(
+    app: &AppHandle,
+    change: impl FnOnce(&mut SqliteHistory) -> Result<T, Error>,
+) -> Result<T, String> {
+    let history = lock(app).history.clone();
+    let mut inner = history.lock().unwrap_or_else(PoisonError::into_inner);
+    let store = inner
+        .store
+        .as_mut()
+        .ok_or_else(|| "History is not available yet".to_owned())?;
+    change(store).map_err(|e| e.message)
+}
+
+/// Runs `read` on the history store, for Home's commands. An error when the history is not
+/// open (no keys yet, or it could not open).
+pub fn with_history<T>(
+    app: &AppHandle,
+    read: impl FnOnce(&SqliteHistory) -> Result<T, Error>,
+) -> Result<T, String> {
+    let history = lock(app).history.clone();
+    let inner = history.lock().unwrap_or_else(PoisonError::into_inner);
+    let store = inner
+        .store
+        .as_ref()
+        .ok_or_else(|| "History is not available yet".to_owned())?;
+    read(store).map_err(|e| e.message)
 }
 
 /// The menu's actions.
@@ -456,9 +577,11 @@ pub fn menu_action(app: &AppHandle, id: &str) {
             });
         }
         "settings" => crate::settings::open(app, "setup"),
+        "open-home" => crate::home::open(app, "home"),
+        "dictionary" => crate::settings::open(app, "dictionary"),
         "retry" => {
             if let Some(events) = lock(app).events.clone() {
-                let _ = events.try_send(Event::Retry);
+                let _ = events.try_send(Event::Retry(None));
             }
         }
         _ => {}
@@ -527,5 +650,23 @@ impl History for SharedHistory {
             message: "history is not available".to_owned(),
         })?;
         store.audio(id)
+    }
+
+    fn app(&self, id: DictationId) -> Result<Option<String>, Error> {
+        let inner = self.inner();
+        let store = inner.store.as_ref().ok_or_else(|| Error {
+            kind: ErrorKind::Device,
+            message: "history is not available".to_owned(),
+        })?;
+        store.app(id)
+    }
+
+    fn replace_text(
+        &mut self,
+        id: DictationId,
+        text: &str,
+        language: Option<&str>,
+    ) -> Result<(), Error> {
+        self.inner().store()?.replace_text(id, text, language)
     }
 }

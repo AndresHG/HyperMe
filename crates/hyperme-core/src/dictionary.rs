@@ -18,6 +18,12 @@
 
 use std::collections::BTreeMap;
 
+/// Limits on what the Settings page accepts (R-15), the same as Wispr Flow's and
+/// Speechmatics' so an import from either fits and a later `additional_vocab` needs no new rules.
+pub const MAX_ENTRIES: usize = 1000;
+pub const MAX_CHARS: usize = 60;
+pub const MAX_HEARD_WORDS: usize = 6;
+
 /// At most this many entries go in the cleanup prompt (R-5). Slice D3 adds a relevance filter
 /// for the rest; until then the first ones in alphabetical order are used.
 pub const PROMPT_CAP: usize = 150;
@@ -160,6 +166,71 @@ impl Dictionary {
             variants,
             by_first,
         }
+    }
+
+    /// Checks entries from the Settings page (R-15) and says what is wrong, naming the entry.
+    pub fn check(terms: &[Term]) -> Result<(), String> {
+        if terms.len() > MAX_ENTRIES {
+            return Err(format!(
+                "At most {MAX_ENTRIES} words; this list has {}.",
+                terms.len()
+            ));
+        }
+        let mut seen: Vec<Vec<char>> = Vec::with_capacity(terms.len());
+        for term in terms {
+            let written = term.written.trim();
+            if written.is_empty() {
+                return Err("A word is empty.".to_owned());
+            }
+            if written.contains(':') || written.contains(['\n', '\r']) {
+                return Err(format!(
+                    "\"{written}\" cannot contain a colon or a line break."
+                ));
+            }
+            if written.chars().count() > MAX_CHARS {
+                return Err(format!(
+                    "\"{written}\" is longer than {MAX_CHARS} characters."
+                ));
+            }
+            let key = folded(written);
+            if seen.contains(&key) {
+                return Err(format!("\"{written}\" is in the list twice."));
+            }
+            seen.push(key);
+            for heard in &term.heard {
+                let heard = heard.trim();
+                if heard.contains([',', ':', '\n', '\r']) {
+                    return Err(format!(
+                        "\"{heard}\" (heard as, for {written}) cannot contain a comma, a colon or a line break."
+                    ));
+                }
+                if heard.chars().count() > MAX_CHARS
+                    || heard.split_whitespace().count() > MAX_HEARD_WORDS
+                {
+                    return Err(format!(
+                        "\"{heard}\" (heard as, for {written}) is longer than {MAX_HEARD_WORDS} words or {MAX_CHARS} characters."
+                    ));
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// The text format, as [`Dictionary::parse`] reads it, for saving.
+    pub fn to_text(&self) -> String {
+        let mut out = String::from(
+            "# HyperMe dictionary: one word per line, then how it is heard wrong.\n\
+             # Zentrix: zen trix, sun trix\n",
+        );
+        for term in &self.terms {
+            out.push_str(&term.written);
+            if !term.heard.is_empty() {
+                out.push_str(": ");
+                out.push_str(&term.heard.join(", "));
+            }
+            out.push('\n');
+        }
+        out
     }
 
     pub fn is_empty(&self) -> bool {
@@ -336,6 +407,45 @@ mod tests {
         let many: String = (0..400).map(|i| format!("Term{i:03}\n")).collect();
         let line = Dictionary::parse(&many).prompt_line();
         assert_eq!(line.matches(", ").count() + 1, PROMPT_CAP);
+    }
+
+    /// AC-10 (R-15): entries over the limits, duplicates and characters the text format
+    /// cannot hold are refused with a reason naming the entry.
+    #[test]
+    fn check_refuses_what_the_file_cannot_hold() {
+        let term = |w: &str, h: &[&str]| Term {
+            written: w.to_owned(),
+            heard: h.iter().map(|s| (*s).to_owned()).collect(),
+        };
+        assert!(
+            Dictionary::check(&[term("Zentrix", &["zen trix"]), term("LangChain", &[])]).is_ok()
+        );
+        let refused = |terms: &[Term], part: &str| {
+            let error = Dictionary::check(terms).unwrap_err();
+            assert!(error.contains(part), "{error}");
+        };
+        refused(&[term("", &[])], "empty");
+        refused(&[term("a:b", &[])], "colon");
+        refused(&[term(&"x".repeat(61), &[])], "60 characters");
+        refused(&[term("Zentrix", &[]), term("zentrix", &[])], "twice");
+        refused(&[term("Zentrix", &["zen, trix"])], "comma");
+        refused(
+            &[term("Zentrix", &["one two three four five six seven"])],
+            "6 words",
+        );
+        let many: Vec<Term> = (0..=MAX_ENTRIES)
+            .map(|i| term(&format!("w{i}"), &[]))
+            .collect();
+        refused(&many, "At most 1000");
+    }
+
+    /// AC-10: saving and reading the text format gives the same entries back.
+    #[test]
+    fn the_text_format_round_trips() {
+        let d = Dictionary::parse("Zentrix: zen trix, sun trix\nLangChain\nAna Ruiz: ana ruis\n");
+        let again = Dictionary::parse(&d.to_text());
+        assert_eq!(again, d);
+        assert!(d.to_text().starts_with("# HyperMe dictionary"));
     }
 
     /// AC-6 (rough bound; release-mode timing is slice D3): 1,000 entries over a long

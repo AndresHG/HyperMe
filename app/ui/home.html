@@ -1,0 +1,824 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>HyperMe</title>
+<style>
+  /* docs/UX.md, "Home" and "Visual language": the system's light or dark colours, Hyper violet
+     for focus and the attention dot, 12 px radius, SF Pro. Dictation text arrives only through
+     commands and is never stored by the page (spec 98, R-24). */
+  :root {
+    color-scheme: light dark;
+    --violet: #7c5cff;
+    --warn: #f59e0b;
+    --bad: #ff4d4f;
+    --line: color-mix(in srgb, CanvasText 10%, transparent);
+    --muted: color-mix(in srgb, CanvasText 55%, transparent);
+    --faint: color-mix(in srgb, CanvasText 38%, transparent);
+    --side: color-mix(in srgb, CanvasText 4%, Canvas);
+    --card: color-mix(in srgb, CanvasText 2%, Canvas);
+    --hover: color-mix(in srgb, CanvasText 5%, transparent);
+    --on: color-mix(in srgb, var(--violet) 16%, transparent);
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { margin: 0; font: 13px -apple-system, "SF Pro Text", system-ui, sans-serif; background: Canvas; color: CanvasText; display: grid; grid-template-columns: 200px 1fr; overflow: hidden; -webkit-user-select: none; user-select: none; }
+  :focus-visible { outline: 2px solid var(--violet); outline-offset: 1px; }
+  nav { background: var(--side); border-right: 1px solid var(--line); padding: 16px 10px 12px; display: flex; flex-direction: column; gap: 2px; }
+  .brand { display: flex; align-items: center; gap: 8px; padding: 0 8px 14px; font: 700 15px ui-rounded, "SF Pro Rounded", -apple-system, sans-serif; }
+  .brand i { width: 14px; height: 14px; border-radius: 999px; background: #111113; box-shadow: 0 0 0 2px var(--violet); }
+  nav a { display: flex; align-items: center; justify-content: space-between; padding: 6px 8px; border-radius: 7px; color: inherit; text-decoration: none; cursor: default; }
+  nav a:hover { background: var(--hover); }
+  nav a.on { background: var(--on); font-weight: 600; }
+  nav a kbd { font: 11px -apple-system, sans-serif; color: var(--faint); }
+  nav a .dot { width: 7px; height: 7px; border-radius: 999px; background: var(--violet); margin-left: auto; margin-right: 6px; }
+  nav .spacer { flex: 1; }
+  nav .bottom { border-top: 1px solid var(--line); padding-top: 8px; display: flex; flex-direction: column; gap: 2px; }
+  nav .bottom a { color: var(--muted); }
+  main { overflow: auto; padding: 28px 36px 40px; }
+  section { display: none; max-width: 820px; }
+  section.on { display: block; }
+  header { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; margin-bottom: 28px; }
+  h1 { font: 700 24px ui-rounded, "SF Pro Rounded", -apple-system, sans-serif; margin: 0 0 4px; }
+  .lead { color: var(--muted); margin: 0; }
+  .stats { display: flex; gap: 8px; }
+  .stat { min-width: 110px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); }
+  .stat b { display: block; font: 700 17px ui-rounded, "SF Pro Rounded", -apple-system, sans-serif; }
+  .stat span { font-size: 11px; color: var(--muted); }
+  h2 { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin: 0 0 8px; }
+  .day { font-size: 11px; font-weight: 600; color: var(--muted); margin: 18px 0 4px; }
+  /* Rows sit in a list that keeps only those near the viewport (AC-2): each is placed by its
+     offset, collapsed rows have a fixed height, and the first and last of a day round the group. */
+  #recent, #list { position: relative; }
+  #recent > .row, #recent > .day, #list > .row, #list > .day { position: absolute; left: 0; right: 0; }
+  .day { height: 40px; box-sizing: border-box; padding-top: 18px; margin: 0 !important; }
+  .row { display: grid; grid-template-columns: 52px 110px 1fr; gap: 10px; align-items: baseline; padding: 8px 12px; height: 36px; box-sizing: border-box; overflow: hidden; background: var(--card); border: 1px solid var(--line); border-top: 0; }
+  .row.first { border-top: 1px solid var(--line); border-radius: 12px 12px 0 0; }
+  .row.last { border-radius: 0 0 12px 12px; }
+  .row.first.last { border-radius: 12px; }
+  .row.open { height: auto; }
+  .row:hover { background: var(--hover); }
+  .row time { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 12px; }
+  .row .app { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row .text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; -webkit-user-select: text; user-select: text; }
+  .row.failed .text { color: var(--warn); }
+  .empty { color: var(--muted); padding: 18px 0; }
+  .error { color: var(--bad); padding: 18px 0; }
+  #blocks:empty { display: none; }
+  #blocks { margin-bottom: 24px; }
+  .search { width: 100%; padding: 8px 12px; border-radius: 9px; border: 1px solid var(--line); background: Canvas; color: inherit; font: inherit; margin: 0 0 8px; }
+  .search:focus { outline: none; border-color: var(--violet); box-shadow: 0 0 0 3px color-mix(in srgb, var(--violet) 25%, transparent); }
+  .more { color: var(--faint); font-size: 12px; padding: 12px 0; text-align: center; }
+  /* Slice 4: a selected row shows its full text and its actions (R-11, R-13). */
+  .row { cursor: default; outline: none; }
+  .row.sel { background: color-mix(in srgb, var(--violet) 9%, var(--card)); box-shadow: inset 3px 0 0 var(--violet); }
+  .row.sel .text { white-space: pre-wrap; overflow: visible; }
+  .row .bar { grid-column: 1 / -1; display: none; align-items: center; gap: 6px; flex-wrap: wrap; padding-top: 6px; font-size: 12px; }
+  .row.sel .bar, .row.working .bar { display: flex; }
+  .bar button { font: inherit; font-size: 12px; padding: 3px 8px; border-radius: 6px; border: 1px solid var(--line); background: Canvas; color: inherit; cursor: default; }
+  .bar button:hover { border-color: var(--violet); }
+  .bar button kbd { font: 11px -apple-system, sans-serif; color: var(--faint); margin-left: 4px; }
+  .bar .say { color: var(--muted); }
+  .bar .say.bad { color: var(--bad); }
+  .bar .say.warn { color: var(--warn); }
+  .bar .ask { color: CanvasText; }
+  .bar .ask kbd, .bar .say kbd { font: 11px -apple-system, sans-serif; color: var(--faint); padding: 0 2px; }
+  .bar input { font: inherit; font-size: 12px; padding: 3px 8px; border-radius: 6px; border: 1px solid var(--violet); background: Canvas; color: inherit; width: 200px; }
+  .row.working .text { color: var(--muted); }
+  mark { background: color-mix(in srgb, var(--violet) 28%, transparent); color: inherit; border-radius: 3px; padding: 0 1px; }
+  .off { padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); margin-bottom: 12px; color: var(--muted); }
+  .off a { color: var(--violet); text-decoration: none; }
+  #menu { position: fixed; display: none; min-width: 200px; padding: 4px; border-radius: 10px; border: 1px solid var(--line); background: Canvas; box-shadow: 0 8px 28px rgba(0,0,0,.18); z-index: 10; }
+  #menu.on { display: block; }
+  #menu div { display: flex; justify-content: space-between; gap: 18px; padding: 6px 8px; border-radius: 6px; }
+  #menu div.on, #menu div:hover { background: var(--on); }
+  #menu kbd { font: 11px -apple-system, sans-serif; color: var(--faint); }
+</style>
+</head>
+<body>
+<nav aria-label="Sections">
+  <div class="brand"><i aria-hidden="true"></i>HyperMe</div>
+  <div id="sections"></div>
+  <div class="spacer"></div>
+  <div class="bottom">
+    <a href="#" id="open-settings">Settings <kbd>⌘,</kbd></a>
+    <a href="#" id="open-help">Help</a>
+  </div>
+</nav>
+<main id="main">
+  <section id="home" aria-labelledby="greeting">
+    <header>
+      <div>
+        <h1 id="greeting">Hello</h1>
+        <p class="lead" id="today"></p>
+      </div>
+      <div class="stats">
+        <div class="stat"><b id="words">–</b><span>words this week</span></div>
+        <div class="stat"><b id="saved">–</b><span>saved vs typing</span></div>
+      </div>
+    </header>
+    <div id="blocks"></div>
+    <h2>Recent</h2>
+    <div id="recent"></div>
+  </section>
+
+  <section id="history" aria-label="History">
+    <header><div><h1>History</h1><p class="lead">Everything you dictated, newest first.</p></div></header>
+    <div class="off" id="off" hidden>History is off · <a href="#" id="off-link">Settings → Privacy</a>. Only dictations waiting for a retry are listed.</div>
+    <input id="search" class="search" type="search" placeholder="Search your dictations" aria-label="Search your dictations" autocomplete="off">
+    <div id="list"></div>
+    <div class="more" id="more"></div>
+  </section>
+</main>
+<div id="menu" role="menu" aria-label="Actions"></div>
+<script>
+  const { invoke } = window.__TAURI__.core;
+  const { listen, emit } = window.__TAURI__.event;
+  const $ = (id) => document.getElementById(id);
+  const PAGE = 50;
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  let sections = [];
+
+  // ---- Sidebar and routing (R-5, R-6) ----
+  function route() {
+    const [section, block] = location.hash.replace(/^#/, '').split('/');
+    const id = sections.some((s) => s.id === section) ? section : 'home';
+    document.querySelectorAll('main > section').forEach((s) => s.classList.toggle('on', s.id === id));
+    document.querySelectorAll('#sections a').forEach((a) => a.classList.toggle('on', a.dataset.id === id));
+    if (id === 'home') {
+      loadHome();
+      if (block) document.getElementById('block-' + block)?.scrollIntoView();
+    } else if (id === 'history') {
+      resetHistory();
+
+    }
+  }
+
+  async function loadSections() {
+    sections = await invoke('home_sections');
+    const nav = $('sections');
+    nav.replaceChildren(...sections.map((s) => {
+      const a = document.createElement('a');
+      a.href = '#' + s.id;
+      a.dataset.id = s.id;
+      const label = document.createElement('span');
+      label.textContent = s.title;
+      const key = document.createElement('kbd');
+      key.textContent = s.shortcut;
+      a.append(label, key);
+      return a;
+    }));
+    showAttention(await invoke('home_attention', { on: null }));
+  }
+
+  function showAttention(on) {
+    const home = document.querySelector('#sections a[data-id="home"]');
+    if (!home) return;
+    home.querySelector('.dot')?.remove();
+    if (on) {
+      const dot = document.createElement('span');
+      dot.className = 'dot';
+      dot.setAttribute('aria-label', 'Something is waiting for you');
+      home.insertBefore(dot, home.querySelector('kbd'));
+    }
+  }
+
+  const openSettings = (section) => invoke('home_settings', { section });
+  $('open-settings').addEventListener('click', (e) => { e.preventDefault(); openSettings(settingsSection()); });
+  $('open-help').addEventListener('click', (e) => { e.preventDefault(); openSettings('about'); });
+  // ⌘, opens Settings at the section closest to where you are (docs/UX.md).
+  const settingsSection = () => (location.hash.startsWith('#history') ? 'privacy' : 'general');
+
+  document.addEventListener('keydown', (e) => {
+    if (!e.metaKey || e.altKey || e.ctrlKey) return;
+    if (e.key === ',') { e.preventDefault(); openSettings(settingsSection()); return; }
+    const n = Number(e.key);
+    if (n >= 1 && n <= 5 && sections[n - 1]) {
+      e.preventDefault();
+      location.hash = sections[n - 1].id;
+    }
+  });
+
+  // ---- Rows, shared by Recent and History (R-8, R-11) ----
+  // The page's copy is English, so dates and numbers are too, until the app is translated.
+  const LOCALE = 'en-GB';
+  const timeFormat = new Intl.DateTimeFormat(LOCALE, { hour: '2-digit', minute: '2-digit' });
+  const dayFormat = new Intl.DateTimeFormat(LOCALE, { weekday: 'long', day: 'numeric', month: 'long' });
+  // What the app said once: history on or off, a dictionary or not (R-19, R-21).
+  let info = { history: true, dictionary: false };
+
+  function startOfDay(ms) {
+    const d = new Date(ms);
+    d.setHours(0, 0, 0, 0);
+    return d.getTime();
+  }
+
+  function dayLabel(ms) {
+    const today = startOfDay(Date.now());
+    const day = startOfDay(ms);
+    if (day === today) return 'Today';
+    if (day === startOfDay(today - DAY_MS / 2)) return 'Yesterday';
+    return dayFormat.format(new Date(ms));
+  }
+
+  // Case and accents fold as the search does (R-12), keeping each character's place, so the
+  // matches can be marked in the original text.
+  const foldChar = (c) => c.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+
+  function fillText(el, text, words) {
+    el.replaceChildren();
+    if (!words || words.length === 0) { el.textContent = text; return; }
+    const chars = Array.from(text);
+    let folded = '';
+    const start = [];
+    chars.forEach((c, i) => { const f = foldChar(c); for (let k = 0; k < f.length; k++) start.push(i); folded += f; });
+    const marked = new Array(chars.length).fill(false);
+    for (const w of words) {
+      let at = folded.indexOf(w);
+      while (at !== -1) {
+        for (let k = at; k < at + w.length; k++) marked[start[k]] = true;
+        at = folded.indexOf(w, at + w.length);
+      }
+    }
+    let i = 0;
+    while (i < chars.length) {
+      let j = i;
+      while (j < chars.length && marked[j] === marked[i]) j++;
+      const piece = chars.slice(i, j).join('');
+      if (marked[i]) { const m = document.createElement('mark'); m.textContent = piece; el.append(m); } else { el.append(piece); }
+      i = j;
+    }
+  }
+
+  const queryWords = () => (historyQuery.trim() ? Array.from(new Set(historyQuery.trim().split(/\s+/).map((w) => Array.from(w).map(foldChar).join('')))) : []);
+
+  // Per-row state that outlives the row's element: the step in progress, a notice, a retry.
+  const ui = new Map();
+  const stateOf = (id) => { if (!ui.has(id)) ui.set(id, { mode: null, say: null, working: false }); return ui.get(id); };
+
+  // ---- A list that keeps only the rows near the viewport in the page (AC-2) ----
+  // Collapsed rows and day headings have fixed heights; the selected row is measured. Item data
+  // stays in memory (a few hundred bytes each); only elements come and go.
+  const ROW_H = 36;
+  const DAY_H = 40;
+  const OVERSCAN = 600;
+  const main = $('main');
+
+  class List {
+    constructor(el, empty) {
+      this.el = el;
+      this.empty = empty;
+      this.items = [];
+      this.words = [];
+      this.entries = [];
+      this.nodes = new Map();
+      this.tall = new Map();
+    }
+    set(items, words = []) { this.items = items.slice(); this.words = words; this.nodes.forEach((n) => n.remove()); this.nodes.clear(); this.rebuild(); }
+    append(items) { this.items.push(...items); this.rebuild(); }
+    prepend(items) { this.items.unshift(...items); this.nodes.forEach((n) => n.remove()); this.nodes.clear(); this.rebuild(); }
+    has(id) { return this.items.some((i) => i.id === id); }
+    get(id) { return this.items.find((i) => i.id === id); }
+    remove(id) { this.items = this.items.filter((i) => i.id !== id); this.forget(id); this.rebuild(); }
+    replace(item) { const at = this.items.findIndex((i) => i.id === item.id); if (at !== -1) { this.items[at] = item; this.redraw(item.id); } }
+    forget(id) { this.nodes.forEach((n, k) => { if (k.endsWith(':' + id)) { n.remove(); this.nodes.delete(k); } }); }
+    redraw(id) { this.forget(id); this.layout(); this.render(); }
+    visible() { return this.el.closest('section').classList.contains('on'); }
+    rebuild() {
+      this.entries = [];
+      let label = null;
+      for (const item of this.items) {
+        const day = dayLabel(item.started_ms);
+        if (day !== label) {
+          if (this.entries.length) this.entries[this.entries.length - 1].last = true;
+          this.entries.push({ key: 'day:' + day, day });
+          label = day;
+          this.entries.push({ key: 'row:' + item.id, item, first: true });
+        } else {
+          this.entries.push({ key: 'row:' + item.id, item });
+        }
+      }
+      if (this.entries.length) this.entries[this.entries.length - 1].last = true;
+      this.layout();
+      this.render();
+    }
+    height(entry) {
+      if (entry.day) return DAY_H;
+      return isSelected(entry.item.id) || stateOf(entry.item.id).working ? (this.tall.get(entry.item.id) || ROW_H * 3) : ROW_H;
+    }
+    layout() {
+      let top = 0;
+      for (const entry of this.entries) { entry.top = top; top += this.height(entry); }
+      this.total = top;
+    }
+    render() {
+      if (this.items.length === 0) {
+        this.nodes.forEach((n) => n.remove()); this.nodes.clear();
+        this.el.style.height = '';
+        if (this.empty && !this.el.querySelector('.empty')) this.el.replaceChildren(Object.assign(document.createElement('p'), { className: 'empty', textContent: this.empty() }));
+        return;
+      }
+      this.el.querySelector('.empty')?.remove();
+      this.el.style.height = this.total + 'px';
+      if (!this.visible()) return;
+      const offset = this.el.offsetTop;
+      const from = main.scrollTop - offset - OVERSCAN;
+      const to = main.scrollTop - offset + main.clientHeight + OVERSCAN;
+      const keep = new Set();
+      let remeasure = false;
+      for (const entry of this.entries) {
+        const bottom = entry.top + this.height(entry);
+        if (bottom < from || entry.top > to) continue;
+        keep.add(entry.key);
+        let node = this.nodes.get(entry.key);
+        if (!node) {
+          node = entry.day ? dayNode(entry.day) : rowNode(entry, this.words);
+          this.nodes.set(entry.key, node);
+          this.el.append(node);
+        }
+        node.style.top = entry.top + 'px';
+        if (!entry.day && node.classList.contains('open')) {
+          const h = node.offsetHeight;
+          if (h && h !== this.tall.get(entry.item.id)) { this.tall.set(entry.item.id, h); remeasure = true; }
+        }
+      }
+      this.nodes.forEach((n, k) => { if (!keep.has(k)) { n.remove(); this.nodes.delete(k); } });
+      if (remeasure) { this.layout(); this.render(); }
+    }
+    node(id) { return this.nodes.get('row:' + id); }
+    top(id) { const e = this.entries.find((x) => x.item && x.item.id === id); return e ? e.top : 0; }
+  }
+
+  const recentList = new List($('recent'), () => (info.history ? 'No dictations in the last 7 days. Hold your shortcut and talk.' : 'History is off, and no dictation is waiting for a retry.'));
+  const historyList = new List($('list'), null);
+  const lists = [recentList, historyList];
+  const currentList = () => ($('history').classList.contains('on') ? historyList : recentList);
+
+  function dayNode(label) {
+    const d = document.createElement('div');
+    d.className = 'day';
+    d.textContent = label;
+    return d;
+  }
+
+  function rowNode(entry, words) {
+    const item = entry.item;
+    const state = stateOf(item.id);
+    const div = document.createElement('div');
+    const open = isSelected(item.id) || state.working;
+    div.className = 'row' + (item.state === 'failed' ? ' failed' : '') + (entry.first ? ' first' : '') + (entry.last ? ' last' : '') + (isSelected(item.id) ? ' sel' : '') + (state.working ? ' working' : '') + (open ? ' open' : '');
+    div.dataset.id = item.id;
+    div.tabIndex = -1;
+    const time = document.createElement('time');
+    time.textContent = timeFormat.format(new Date(item.started_ms));
+    const app = document.createElement('span');
+    app.className = 'app';
+    app.textContent = item.app || '—';
+    const text = document.createElement('span');
+    text.className = 'text';
+    if (item.state === 'failed') text.textContent = item.message || 'Failed';
+    else fillText(text, item.text || '', words);
+    div.append(time, app, text);
+    if (open) {
+      const bar = document.createElement('div');
+      bar.className = 'bar';
+      drawBar(bar, item);
+      div.append(bar);
+    }
+    div.addEventListener('mousedown', (e) => { if (!e.target.closest('.bar')) select(item.id, false); });
+    text.addEventListener('mouseup', () => offerFix(item.id));
+    text.addEventListener('dblclick', () => setTimeout(() => offerFix(item.id), 0));
+    return div;
+  }
+
+  main.addEventListener('scroll', () => {
+    currentList().render();
+    if ($('history').classList.contains('on') && main.scrollTop + main.clientHeight > main.scrollHeight - 600) loadMoreHistory();
+  }, { passive: true });
+  window.addEventListener('resize', () => currentList().render());
+
+  const cursor = (items) => {
+    const last = items[items.length - 1];
+    return last ? [last.started_ms, last.id] : null;
+  };
+
+  // ---- Selection and actions (R-13 to R-18) ----
+  let selected = null; // { list, id }
+  const isSelected = (id) => selected !== null && selected.id === id;
+  const selectedItem = () => (selected ? selected.list.get(selected.id) : null);
+
+  // Redraws a row wherever it shows.
+  function refresh(id) { for (const l of lists) if (l.has(id)) l.redraw(id); }
+
+  function select(id, scroll = true, list = currentList()) {
+    if (selected && selected.id === id && selected.list === list) return;
+    const previous = selected;
+    selected = id === null ? null : { list, id };
+    closeMenu();
+    if (previous) { stateOf(previous.id).mode = null; refresh(previous.id); }
+    if (id === null) return;
+    refresh(id);
+    if (scroll) reveal(list, id);
+    list.node(id)?.focus({ preventScroll: true });
+  }
+
+  function reveal(list, id) {
+    const top = list.el.offsetTop + list.top(id);
+    const height = list.tall.get(id) || ROW_H * 3;
+    if (top < main.scrollTop) main.scrollTop = top - 8;
+    else if (top + height > main.scrollTop + main.clientHeight) main.scrollTop = top + height - main.clientHeight + 8;
+    list.render();
+  }
+
+  function move(step) {
+    const list = currentList();
+    const items = list.items;
+    if (items.length === 0) return;
+    const at = selected && selected.list === list ? items.findIndex((i) => i.id === selected.id) : -1;
+    const next = at === -1 ? (step > 0 ? 0 : items.length - 1) : Math.max(0, Math.min(items.length - 1, at + step));
+    select(items[next].id, true, list);
+    if (step > 0 && next >= items.length - 5 && list === historyList) loadMoreHistory();
+  }
+
+  const key = (k) => { const e = document.createElement('kbd'); e.textContent = k; return e; };
+  const span = (cls, ...parts) => { const e = document.createElement('span'); e.className = cls; e.append(...parts); return e; };
+
+  // The bar under a selected row: its actions, or the step in progress (R-13, R-16 to R-18).
+  function drawBar(bar, item) {
+    const state = stateOf(item.id);
+    const mode = state.mode;
+    if (mode && mode.kind === 'confirm-delete') {
+      bar.append(span('ask', 'Delete this dictation and its audio? ', key('↵'), ' Delete · ', key('Esc'), ' Keep'));
+      return;
+    }
+    if (mode && mode.kind === 'fix-select') {
+      bar.append(span('say', 'Select the wrong word in the text, or double-click it. ', key('Esc'), ' Cancel'));
+      return;
+    }
+    if (mode && mode.kind === 'fix-type') {
+      const input = document.createElement('input');
+      input.placeholder = 'Should be';
+      input.setAttribute('aria-label', 'What “' + mode.heard + '” should be');
+      input.value = mode.wanted || '';
+      input.addEventListener('input', () => { mode.wanted = input.value; });
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); mode.wanted = input.value; sendFix(item.id, false); }
+        if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); state.mode = null; refresh(item.id); }
+      });
+      bar.append(span('say', '“' + mode.heard + '” should be: '), input, span('say', ' ', key('↵')));
+      setTimeout(() => input.focus(), 0);
+      return;
+    }
+    if (mode && mode.kind === 'fix-confirm') {
+      bar.append(span('ask warn', '“' + mode.heard + '” is a common word and will be replaced everywhere. ', key('↵'), ' Replace anyway · ', key('Esc'), ' Cancel'));
+      return;
+    }
+    if (state.working) {
+      bar.append(span('say', 'Working…'));
+      return;
+    }
+    for (const action of item.actions || []) {
+      const button = document.createElement('button');
+      button.append(action.label, key(action.key));
+      button.addEventListener('click', () => run(item.id, action.id));
+      bar.append(button);
+    }
+    if (state.say) bar.append(span('say' + (state.say.bad ? ' bad' : ''), state.say.text));
+  }
+
+  function say(id, text, bad = false) {
+    const state = stateOf(id);
+    const mine = { text, bad };
+    state.say = mine;
+    refresh(id);
+    if (!bad) setTimeout(() => { if (state.say === mine) { state.say = null; refresh(id); } }, 3000);
+  }
+
+  const itemOf = (id) => { for (const l of lists) { const i = l.get(id); if (i) return i; } return null; };
+  const has = (id, action) => (itemOf(id)?.actions || []).some((a) => a.id === action);
+
+  async function run(id, action) {
+    if (id === null || !has(id, action)) return;
+    try {
+      if (action === 'copy') { await invoke('home_copy', { id }); say(id, 'Copied'); }
+      if (action === 'paste') {
+        const outcome = await invoke('home_paste', { id });
+        say(id, outcome.pasted ? 'Pasted' : outcome.notice);
+      }
+      if (action === 'retry') { await invoke('home_retry', { id }); setWorking(id, true); }
+      if (action === 'fix') { stateOf(id).mode = { kind: 'fix-select' }; refresh(id); offerFix(id); }
+      if (action === 'delete') { stateOf(id).mode = { kind: 'confirm-delete' }; refresh(id); }
+    } catch (error) {
+      say(id, String(error), true);
+    }
+  }
+
+  async function confirmDelete(id) {
+    try {
+      await invoke('home_delete', { id });
+      const list = selected ? selected.list : currentList();
+      const at = list.items.findIndex((i) => i.id === id);
+      const next = list.items[at + 1] || list.items[at - 1] || null;
+      selected = null;
+      ui.delete(id);
+      for (const l of lists) if (l.has(id)) l.remove(id);
+      if (next) select(next.id, true, list);
+    } catch (error) {
+      stateOf(id).mode = null;
+      say(id, String(error), true);
+    }
+  }
+
+  function setWorking(id, on) {
+    stateOf(id).working = on;
+    refresh(id);
+  }
+
+  function updateItem(id, item) {
+    for (const l of lists) l.replace(item);
+  }
+
+  // Fix a word (R-17): a selection inside the selected row's text starts it, once asked for.
+  function offerFix(id) {
+    const item = itemOf(id);
+    const state = stateOf(id);
+    if (!info.dictionary || !item || !has(id, 'fix')) return;
+    if (!state.mode || (state.mode.kind !== 'fix-select' && state.mode.kind !== 'fix-type')) return;
+    const chosen = String(window.getSelection() || '').trim();
+    if (!chosen || !(item.text || '').includes(chosen)) return;
+    state.mode = { kind: 'fix-type', heard: chosen, wanted: '' };
+    refresh(id);
+  }
+
+  async function sendFix(id, confirmed) {
+    const state = stateOf(id);
+    const mode = state.mode;
+    try {
+      const outcome = await invoke('home_fix_word', { id, heard: mode.heard, wanted: mode.wanted, confirmedCommon: confirmed });
+      if (outcome.outcome === 'needs_confirm') {
+        state.mode = { kind: 'fix-confirm', heard: mode.heard, wanted: mode.wanted };
+        refresh(id);
+        return;
+      }
+      state.mode = null;
+      const item = await invoke('home_item', { id });
+      if (item) updateItem(id, item);
+      say(id, 'Fixed. Press ↵ to paste it again');
+    } catch (error) {
+      state.mode = null;
+      say(id, String(error), true);
+    }
+  }
+
+  // ⌘K: the selected row's actions with their keys (R-13).
+  let menuAt = 0;
+  function openMenu() {
+    const item = selectedItem();
+    if (!item) return;
+    const menu = $('menu');
+    const list = item.actions || [];
+    menu.replaceChildren(...list.map((a, i) => {
+      const d = document.createElement('div');
+      d.setAttribute('role', 'menuitem');
+      d.append(a.label, key(a.key));
+      d.addEventListener('mousedown', (e) => { e.preventDefault(); closeMenu(); run(item.id, a.id); });
+      d.classList.toggle('on', i === 0);
+      return d;
+    }));
+    menuAt = 0;
+    const node = selected.list.node(item.id);
+    const box = node ? node.getBoundingClientRect() : { right: window.innerWidth - 40, top: 100 };
+    menu.style.left = Math.max(12, box.right - 220) + 'px';
+    menu.style.top = Math.min(window.innerHeight - 40 * list.length - 12, box.top + 30) + 'px';
+    menu.classList.add('on');
+  }
+  function closeMenu() { $('menu').classList.remove('on'); }
+  const menuOpen = () => $('menu').classList.contains('on');
+
+  document.addEventListener('keydown', (e) => {
+    const typing = e.target instanceof HTMLInputElement;
+    if (menuOpen()) {
+      const items = Array.from($('menu').children);
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        menuAt = (menuAt + (e.key === 'ArrowDown' ? 1 : items.length - 1)) % items.length;
+        items.forEach((d, i) => d.classList.toggle('on', i === menuAt));
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        const action = (selectedItem()?.actions || [])[menuAt];
+        closeMenu();
+        if (action) run(selected.id, action.id);
+      } else if (e.key === 'Escape' || (e.metaKey && e.key === 'k')) {
+        e.preventDefault();
+        closeMenu();
+      }
+      return;
+    }
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      if (typing && e.target.id !== 'search') return;
+      e.preventDefault();
+      if (typing) e.target.blur();
+      move(e.key === 'ArrowDown' ? 1 : -1);
+      return;
+    }
+    if (!selected || (typing && e.target.id !== 'search')) return;
+    const id = selected.id;
+    const mode = stateOf(id).mode;
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      if (mode) { stateOf(id).mode = null; refresh(id); } else select(null);
+      return;
+    }
+    if (e.key === 'Enter' && !typing) {
+      e.preventDefault();
+      if (mode && mode.kind === 'confirm-delete') confirmDelete(id);
+      else if (mode && mode.kind === 'fix-confirm') sendFix(id, true);
+      else if (!mode) run(id, 'paste');
+      return;
+    }
+    if (!e.metaKey || e.altKey || e.ctrlKey || typing) return;
+    if (e.key === 'c' && String(window.getSelection() || '') === '') { e.preventDefault(); run(id, 'copy'); }
+    else if (e.key === 'r') { e.preventDefault(); run(id, 'retry'); }
+    else if (e.key === 'f') { e.preventDefault(); run(id, 'fix'); }
+    else if (e.key === 'Backspace') { e.preventDefault(); run(id, 'delete'); }
+    else if (e.key === 'k') { e.preventDefault(); openMenu(); }
+  });
+  document.addEventListener('mousedown', (e) => { if (!e.target.closest('#menu')) closeMenu(); });
+
+  // ---- The Home page (R-7, R-8, R-9) ----
+  function greet() {
+    const hour = new Date().getHours();
+    $('greeting').textContent = hour < 5 ? 'Good evening' : hour < 12 ? 'Good morning' : hour < 19 ? 'Good afternoon' : 'Good evening';
+    $('today').textContent = dayFormat.format(new Date());
+  }
+
+  function duration(seconds) {
+    if (seconds < 60) return seconds + ' s';
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return minutes + ' min';
+    return Math.floor(minutes / 60) + ' h ' + (minutes % 60) + ' min';
+  }
+
+  async function loadStats() {
+    try {
+      const stats = await invoke('home_stats', { utcOffsetMinutes: -new Date().getTimezoneOffset() });
+      $('words').textContent = stats.words_this_week.toLocaleString(LOCALE);
+      $('saved').textContent = duration(stats.seconds_saved);
+    } catch (_) {
+      $('words').textContent = '–';
+      $('saved').textContent = '–';
+    }
+  }
+
+  async function loadHome() {
+    greet();
+    await loadStats();
+    await loadBlocks();
+    if (selected && selected.list === recentList) selected = null;
+    try {
+      // The last 7 days, a page at a time; with history off, only what waits for a retry.
+      const since = startOfDay(Date.now()) - 6 * DAY_MS;
+      let items = [];
+      let before = null;
+      if (!info.history) items = (await invoke('home_failed')).filter((i) => i.started_ms >= since);
+      else for (;;) {
+        const page = await invoke('home_page', { before, limit: PAGE });
+        const fresh = page.filter((i) => i.started_ms >= since);
+        items = items.concat(fresh);
+        if (page.length < PAGE || fresh.length < page.length) break;
+        before = cursor(page);
+      }
+      recentList.set(items);
+    } catch (error) {
+      recentList.set([]);
+      $('recent').replaceChildren(Object.assign(document.createElement('p'), { className: 'error', textContent: String(error) }));
+    }
+  }
+
+  // Blocks above Recent come from other features (#92, #93); none ship yet.
+  const seen = new IntersectionObserver((entries) => {
+    for (const entry of entries) {
+      if (entry.isIntersecting) {
+        emit('home://block-viewed', entry.target.dataset.block);
+        seen.unobserve(entry.target);
+      }
+    }
+  });
+
+  async function loadBlocks() {
+    const list = await invoke('home_blocks');
+    $('blocks').replaceChildren(...list.map((b) => {
+      const div = document.createElement('div');
+      div.id = 'block-' + b.id;
+      div.dataset.block = b.id;
+      const title = document.createElement('h2');
+      title.textContent = b.title;
+      div.append(title);
+      seen.observe(div);
+      return div;
+    }));
+  }
+
+  // ---- History (R-10, R-12, R-19) ----
+  let historyQuery = '';
+  let historyBefore = null;
+  let historyDone = false;
+  let historyLoading = false;
+  let historyToken = 0;
+
+  function resetHistory() {
+    historyBefore = null;
+    historyDone = false;
+    historyToken += 1;
+    if (selected && selected.list === historyList) selected = null;
+    $('off').hidden = info.history;
+    $('search').hidden = !info.history;
+    historyList.set([], queryWords());
+    $('more').textContent = '';
+    loadMoreHistory();
+  }
+
+  async function loadMoreHistory() {
+    if (historyLoading || historyDone) return;
+    historyLoading = true;
+    const token = historyToken;
+    try {
+      const page = !info.history
+        ? await invoke('home_failed')
+        : historyQuery.trim()
+          ? await invoke('home_search', { query: historyQuery, before: historyBefore, limit: PAGE })
+          : await invoke('home_page', { before: historyBefore, limit: PAGE });
+      if (token !== historyToken) return;
+      historyList.append(page);
+      historyBefore = cursor(page) || historyBefore;
+      historyDone = !info.history || page.length < PAGE;
+      if (historyList.items.length === 0) {
+        $('more').textContent = !info.history ? 'No dictation is waiting for a retry.' : historyQuery.trim() ? 'Nothing matches.' : 'No dictations yet.';
+      } else {
+        $('more').textContent = historyDone ? '' : 'Scroll for more';
+      }
+    } catch (error) {
+      if (token === historyToken) $('more').textContent = String(error);
+    } finally {
+      historyLoading = false;
+    }
+  }
+
+  let searchTimer = null;
+  $('search').addEventListener('input', () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => {
+      historyQuery = $('search').value;
+      resetHistory();
+    }, 120);
+  });
+
+  // Typing anywhere in History goes to the search field. It is not focused on entry: a focused
+  // field kept about 20 MB of graphics memory alive (AC-2).
+  document.addEventListener('keydown', (e) => {
+    if (!$('history').classList.contains('on') || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.target instanceof HTMLInputElement || e.key.length !== 1 || $('search').hidden) return;
+    if (selected && stateOf(selected.id).mode) return;
+    $('search').focus();
+  });
+
+  $('off-link').addEventListener('click', (e) => { e.preventDefault(); openSettings('privacy'); });
+
+  // A dictation made while Home is open goes on top of Recent and History (AC-15).
+  async function showNew() {
+    try {
+      const page = info.history ? await invoke('home_page', { before: null, limit: PAGE }) : await invoke('home_failed');
+      for (const list of [recentList, historyList]) {
+        if (list === historyList && (historyQuery.trim() || list.items.length === 0)) continue;
+        const newest = list.items.length ? list.items[0].started_ms : -Infinity;
+        const fresh = page.filter((i) => !list.has(i.id) && i.started_ms >= newest);
+        if (fresh.length) list.prepend(fresh);
+      }
+      await loadStats();
+    } catch (_) { /* the next open shows them */ }
+  }
+
+  // ---- Events from the app (R-16, R-22) ----
+  listen('home://attention', (e) => showAttention(e.payload));
+  listen('home://refresh', () => route());
+  listen('home://changed', () => showNew());
+  listen('home://retry', async (e) => {
+    const { id, state, message } = e.payload;
+    if (state === 'working') { setWorking(id, true); return; }
+    stateOf(id).working = false;
+    if (state === 'done') {
+      const item = await invoke('home_item', { id });
+      if (item) updateItem(id, item);
+      say(id, 'Retried · new text copied');
+    } else if (state === 'failed') {
+      say(id, message, true);
+    } else {
+      refresh(id);
+    }
+  });
+
+  window.addEventListener('hashchange', route);
+  Promise.all([invoke('home_info').then((i) => { info = i; }), loadSections()]).then(route);
+</script>
+</body>
+</html>

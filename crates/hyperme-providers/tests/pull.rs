@@ -187,7 +187,8 @@ async fn the_calendar_pull_runs_through_the_mcp_client() {
     let refused = caller
         .call("calendar", WRITE_TOOL, json!({}))
         .await
-        .unwrap_err();
+        .unwrap_err()
+        .to_string();
     assert!(refused.contains(WRITE_TOOL), "{refused}");
     assert_eq!(mcp.calls(), [READ_TOOL]);
 
@@ -195,6 +196,7 @@ async fn the_calendar_pull_runs_through_the_mcp_client() {
     let error = caller
         .call("calendar", READ_TOOL, json!({}))
         .await
-        .unwrap_err();
+        .unwrap_err()
+        .to_string();
     assert!(error.contains("not JSON"), "{error}");
 }
