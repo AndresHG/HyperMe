@@ -53,9 +53,13 @@ ask = ["create_draft"]
 off = ["trash_*", "mark_*_spam", "label_*", "unlabel_*", "create_label", "update_message_labels"]
 
 # G-5: declarative pulls, run without a model, by the sync jobs of #92 (slices 7 and 8).
+# The answer's shape follows Google Calendar's events list; UNVERIFIED until slice 1.
+# {today_start} is this morning at 00:00 local time; {today_plus_7} the end of the 7th day after.
 [[pull]]
 server = "calendar"
 tool = "list_events"
 args = { timeMin = "{today_start}", timeMax = "{today_plus_7}" }
-keep = ["id", "summary", "start", "end", "attendees[].email", "hangoutLink", "htmlLink", "status"]
+keep = ["id", "summary", "start", "end", "hangoutLink", "htmlLink", "status", "organizer.email"]
+list = "items"
+fields = { id = "id", title = "summary", start = "start.dateTime|start.date", end = "end.dateTime|end.date", url = "hangoutLink|htmlLink", status = "status", calendar = "organizer.email" }
 into = "events"

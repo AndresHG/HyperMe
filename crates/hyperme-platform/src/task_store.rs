@@ -14,6 +14,7 @@ use std::sync::{Mutex, MutexGuard};
 use hyperme_core::connectors::{AccountData, RequestLog, Usage};
 use hyperme_core::schedule::Schedule;
 use hyperme_core::scheduler::{Job, JobKind, JobStatus, JobStore};
+use hyperme_core::sync::{Event, EventStore};
 use hyperme_core::tasks::{
     Due, Finish, NewTask, Source, Status, Task, TaskError, TaskId, TaskStore, TaskUpdate,
     WeekdaySet,
@@ -81,6 +82,21 @@ const MIGRATIONS: &[&str] = &[
         units   INTEGER NOT NULL DEFAULT 0,
         PRIMARY KEY (account, day, server)
     ) WITHOUT ROWID;",
+    // 4: the calendar cache (specs/97-google-connectors, design.md, "Storage"). Times are
+    // Unix seconds, UTC.
+    "CREATE TABLE events (
+        account   TEXT    NOT NULL,
+        id        TEXT    NOT NULL,
+        calendar  TEXT,
+        title     TEXT    NOT NULL,
+        starts_at INTEGER NOT NULL,
+        ends_at   INTEGER NOT NULL,
+        all_day   INTEGER NOT NULL DEFAULT 0,
+        url       TEXT,
+        status    TEXT,
+        PRIMARY KEY (account, id)
+    ) WITHOUT ROWID;
+    CREATE INDEX events_start ON events (starts_at);",
 ];
 
 const TASK_COLUMNS: &str = "id, title, notes, status, day, due_date, due_time, source, \
@@ -917,16 +933,117 @@ impl RequestLog for SqliteTaskStore {
     }
 }
 
-/// Disconnect deletes every row kept from the account (R-12, AC-6). The events and mail
-/// tables join this when the pulls add them (slices 7 and 8).
+/// Disconnect deletes every row kept from the account (R-12, AC-6). The mail table joins this
+/// with the mail pull (slice 8).
 impl AccountData for SqliteTaskStore {
     fn delete_account(&self, account: &str) -> Result<(), String> {
-        self.db()
-            .execute(
-                "DELETE FROM connector_requests WHERE account = ?1",
+        let db = self.db();
+        for table in ["connector_requests", "events"] {
+            db.execute(
+                &format!("DELETE FROM {table} WHERE account = ?1"),
                 params![account],
             )
-            .map(drop)
-            .map_err(|error| format!("connector requests: {error}"))
+            .map_err(|error| format!("{table}: {error}"))?;
+        }
+        Ok(())
+    }
+}
+
+fn unix(at: UtcDateTime) -> i64 {
+    (at - UtcDateTime::UNIX_EPOCH).whole_seconds()
+}
+
+fn from_unix(seconds: i64) -> rusqlite::Result<UtcDateTime> {
+    UtcDateTime::from_unix_timestamp(seconds).map_err(|e| {
+        rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Integer, Box::new(e))
+    })
+}
+
+fn events_error(error: rusqlite::Error) -> String {
+    format!("events: {error}")
+}
+
+/// The calendar cache (specs/97-google-connectors, R-19), in the app's one SQLite file.
+impl EventStore for SqliteTaskStore {
+    fn replace(
+        &self,
+        account: &str,
+        from: UtcDateTime,
+        to: UtcDateTime,
+        events: &[Event],
+    ) -> Result<(), String> {
+        let mut db = self.db();
+        let tx = db.transaction().map_err(events_error)?;
+        tx.execute(
+            "DELETE FROM events WHERE account = ?1 AND starts_at >= ?2 AND starts_at < ?3",
+            params![account, unix(from), unix(to)],
+        )
+        .map_err(events_error)?;
+        for e in events {
+            tx.execute(
+                "INSERT OR REPLACE INTO events
+                 (account, id, calendar, title, starts_at, ends_at, all_day, url, status)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                params![
+                    account,
+                    e.id,
+                    e.calendar,
+                    e.title,
+                    unix(e.start),
+                    unix(e.end),
+                    e.all_day,
+                    e.url,
+                    e.status
+                ],
+            )
+            .map_err(events_error)?;
+        }
+        tx.commit().map_err(events_error)
+    }
+
+    fn between(
+        &self,
+        account: Option<&str>,
+        from: UtcDateTime,
+        to: UtcDateTime,
+    ) -> Result<Vec<Event>, String> {
+        let db = self.db();
+        let mut statement = db
+            .prepare(
+                "SELECT account, id, calendar, title, starts_at, ends_at, all_day, url, status
+                 FROM events
+                 WHERE (?1 IS NULL OR account = ?1) AND starts_at >= ?2 AND starts_at < ?3
+                 ORDER BY starts_at, id",
+            )
+            .map_err(events_error)?;
+        let rows = statement
+            .query_map(params![account, unix(from), unix(to)], |row| {
+                Ok(Event {
+                    account: row.get(0)?,
+                    id: row.get(1)?,
+                    calendar: row.get(2)?,
+                    title: row.get(3)?,
+                    start: from_unix(row.get(4)?)?,
+                    end: from_unix(row.get(5)?)?,
+                    all_day: row.get(6)?,
+                    url: row.get(7)?,
+                    status: row.get(8)?,
+                })
+            })
+            .map_err(events_error)?;
+        rows.collect::<rusqlite::Result<Vec<_>>>()
+            .map_err(events_error)
+    }
+
+    fn retain(&self, now: UtcDateTime) -> Result<usize, String> {
+        self.db()
+            .execute(
+                "DELETE FROM events WHERE ends_at < ?1 OR starts_at >= ?2",
+                params![
+                    unix(now - hyperme_core::sync::KEEP_BEHIND),
+                    unix(now + hyperme_core::sync::KEEP_AHEAD)
+                ],
+            )
+            .map_err(events_error)
     }
 }

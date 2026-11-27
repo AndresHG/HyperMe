@@ -105,9 +105,21 @@ fn glob(pattern: &str, name: &str) -> bool {
 pub struct Pull {
     pub server: String,
     pub tool: String,
+    /// Arguments; `{today_start}`, `{today_plus_7}` and `{now}` are filled in at run time.
     #[serde(default)]
     pub args: BTreeMap<String, String>,
+    /// Paths of the fields kept from each item, for documentation and review.
+    #[serde(default)]
     pub keep: Vec<String>,
+    /// Where the items are in the tool's answer (`items`); empty when it is the list itself.
+    #[serde(default)]
+    pub list: String,
+    /// Each stored field and the path it comes from; `a|b` takes the first that is there.
+    #[serde(default)]
+    pub fields: BTreeMap<String, String>,
+    /// Also mirror each item as a task (R-27).
+    #[serde(default)]
+    pub mirror: bool,
     pub into: String,
 }
 
@@ -538,6 +550,13 @@ fn parse_preset(text: &str, source: &str, builtin: bool) -> Result<Connector, Re
                 "a pull names server {:?}, which it has not",
                 pull.server
             )));
+        }
+        if pull.into == "events" {
+            for field in ["id", "title", "start", "end"] {
+                if !pull.fields.contains_key(field) {
+                    return Err(fail(format!("a pull into events needs fields.{field}")));
+                }
+            }
         }
         if file.tools.access(&pull.tool) != ToolAccess::Read {
             return Err(fail(format!(
