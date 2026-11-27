@@ -45,6 +45,9 @@ itself; a later version may hand a task to Claude Code ([docs/PRD.md](docs/PRD.m
 - `docs/research/2026-11-27-telemetry-and-tracing.md`: local tracing, what other users' copies may
   send, and backends (research; PRD Q-18 decided: no telemetry, a report bundle)
 - `docs/UX.md`: UX and UI by phase (one shape at the bottom centre: dot, pill, card and quick sheet; the Home window; settings and menus), with mockups in `docs/ux/` (draft)
+- `docs/DESIGN.md`: the macOS design system (native window chrome, the type scale, the 4-point
+  grid, radii, semantic colours, behaviour rules) and `app/ui/tokens.css`. Required reading
+  before any UI work; a test holds migrated pages to the tokens
 - `docs/RESEARCH.md`: verdict, product focus, pitch and field map from the research of
   24 November 2026
 - `KICKOFF.md`: the first two sessions, step by step

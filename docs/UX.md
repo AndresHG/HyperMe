@@ -36,14 +36,17 @@ patterns are borrowed from the best Mac apps, not from any single app.
 
 ## Visual language
 
+The values and rules for building any of this are in [DESIGN.md](DESIGN.md) and
+`app/ui/tokens.css`; the table below is the product view of them.
+
 | Token | Value | Use |
 | --- | --- | --- |
 | Surface | `#111113` pill and card, `#1B1B1F` raised, `#26262B` hover | Pill and cards (Home uses the system's colours) |
 | Text | `#FFFFFF` primary, `#A1A1AA` secondary, `#6B6B73` live or muted | White is final, grey is provisional (this matters in meetings) |
 | Signature | `#7C5CFF` Hyper violet | Focus, the main key on a card, the waiting ring on the dot |
 | State | `#FF4D4F` recording, `#22C55E` done, `#F59E0B` raw text or warning | State only, never decoration |
-| Radius | 999 px dot and pill, 18 px card, 12 px window | |
-| Type | SF Pro Rounded for titles and the pill, SF Pro for body; 13 px body, 15 px titles, 11 px meta | Native, no font download; the rounded titles match the shape |
+| Radius | 999 px dot and pill, 12 px card on the pill (`--radius-sheet`); windows are drawn by macOS | [DESIGN.md](DESIGN.md) holds the full scale |
+| Type | SF Pro (the system font) everywhere, macOS text styles: 13 px body, 15 px titles, 11 px meta | Native, no font download; no rounded font ([DESIGN.md](DESIGN.md), 27 November 2026) |
 | Motion | One 180 ms spring from the dot's centre for every size change; level meter at 30 fps | With "Reduce motion", cross-fade only |
 
 Colour is never the only signal: each state also has an icon and a word. Contrast of text on the
