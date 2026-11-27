@@ -206,7 +206,7 @@ fn roles_view(config: &Config, keys: &dyn SecretStore) -> Vec<RoleView> {
         let recommended = Config::recommended(role).0;
         let fallback = match role {
             Role::Cleanup => config.cleanup.fallback.as_ref(),
-            Role::Speech => None,
+            Role::Speech => config.speech.fallback.as_ref(),
         }
         .map(|f| FallbackView {
             provider: f.provider.clone(),
@@ -407,7 +407,15 @@ pub async fn fallback_set(
             .check()
             .await
             .map_err(|e| e.message)?,
-        Role::Speech => return Err("a speech fallback is not available yet".to_owned()),
+        Role::Speech => {
+            // As Test does for speech: a session with the model opens, and no audio is sent.
+            let session = any::speech_fallback(&config, &keys)
+                .map_err(|e| e.message)?
+                .open()
+                .await
+                .map_err(|e| e.message)?;
+            drop(session);
+        }
     }
     let ms = start.elapsed().as_millis() as u64;
     rewrite_config(&app, |text| {

@@ -893,6 +893,11 @@ async fn transcribe_and_clean<L: LiveSession, C: CleanupProvider>(
         Waited::Closed => return Err(NoText::Closed),
     };
     trace.transcript(transcript.language.as_deref());
+    // specs/96, R-27: a fallback that transcribed it is named on the pill and the timing line.
+    if let Some(via) = &transcript.via {
+        trace.speech_via(&via.provider, &via.model);
+    }
+    let speech_via = transcript.via.as_ref().map(|v| v.name.clone());
     let language = transcript.language.clone();
     // Spec 93, R-1: the dictionary fixes the raw transcript once, so the short path, the
     // cleanup and the raw fallback all get the user's words.
@@ -923,7 +928,7 @@ async fn transcribe_and_clean<L: LiveSession, C: CleanupProvider>(
             language,
             transcript: raw.to_owned(),
             used: used.clone(),
-            via: None,
+            via: speech_via,
         });
     }
     // Spec 93, R-5: above the prompt cap, the prompt carries the entries relevant to this one.
@@ -965,7 +970,7 @@ async fn transcribe_and_clean<L: LiveSession, C: CleanupProvider>(
                 language,
                 transcript: raw.to_owned(),
                 used: used.clone(),
-                via: via.map(|v| v.name),
+                via: joined_via(speech_via, via.map(|v| v.name)),
             })
         }
         // R-12 (deadline), R-20 (error) and an empty answer: the raw transcript.
@@ -977,7 +982,7 @@ async fn transcribe_and_clean<L: LiveSession, C: CleanupProvider>(
                 language,
                 transcript: raw.to_owned(),
                 used: used.clone(),
-                via: None,
+                via: speech_via,
             })
         }
         Waited::Cancelled => {
@@ -985,6 +990,15 @@ async fn transcribe_and_clean<L: LiveSession, C: CleanupProvider>(
             Err(NoText::Cancelled)
         }
         Waited::Closed => Err(NoText::Closed),
+    }
+}
+
+/// The names of the fallbacks that answered, for "Pasted · via …": one name when speech and
+/// cleanup fell back to the same provider.
+fn joined_via(speech: Option<String>, cleanup: Option<String>) -> Option<String> {
+    match (speech, cleanup) {
+        (Some(s), Some(c)) if s != c => Some(format!("{s} and {c}")),
+        (s, c) => s.or(c),
     }
 }
 

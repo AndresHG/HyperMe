@@ -319,6 +319,10 @@ pub struct Speech {
     /// From the catalogue unless an older file sets it.
     #[serde(default)]
     free_credit_usd: Option<f64>,
+    /// Opened when the main provider fails (R-25, R-26). Settings saves it only after its Test
+    /// passes (R-24a).
+    #[serde(default)]
+    pub fallback: Option<FallbackChoice>,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -806,6 +810,22 @@ impl Config {
         })
     }
 
+    /// The speech section for the fallback, when one is set (R-25): its provider, model and
+    /// catalogue endpoint.
+    pub fn speech_fallback(&self) -> Option<Speech> {
+        let f = self.speech.fallback.as_ref()?;
+        let entry = self.provider(&f.provider)?;
+        Some(Speech {
+            provider: f.provider.clone(),
+            model: f.model.clone(),
+            endpoint: entry.endpoint.clone(),
+            key_url: entry.key_url.clone(),
+            price_per_hour_usd: None,
+            free_credit_usd: entry.free_credit_usd,
+            fallback: None,
+        })
+    }
+
     /// A provider in the catalogue.
     pub fn provider(&self, id: &str) -> Option<&ProviderEntry> {
         self.providers.get(id)
@@ -973,6 +993,10 @@ impl Config {
         let s = &self.speech;
         let speech = self.role_provider(Role::Speech, "speech.provider", &s.provider, path)?;
         named("speech.model", &s.model)?;
+        if let Some(f) = &s.fallback {
+            self.role_provider(Role::Speech, "speech.fallback", &f.provider, path)?;
+            named("speech.fallback", &f.model)?;
+        }
         if !s.endpoint.is_empty() {
             scheme("speech.endpoint", &s.endpoint, speech.protocol.schemes())?;
         }

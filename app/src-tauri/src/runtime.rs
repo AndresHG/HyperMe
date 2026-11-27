@@ -12,6 +12,7 @@ use hyperme_core::dictation::{
     DictionaryUpdates, Engine, Event, Parts, Providers, Settings, Status,
 };
 use hyperme_core::dictionary::Dictionary;
+use hyperme_core::fallback::FallbackStreak;
 use hyperme_core::trace::{self, TimingSink, TraceSink};
 use hyperme_core::traits::{
     DictationId, Error, ErrorKind, History, Inserter, TimingLine, TimingLog,
@@ -27,7 +28,7 @@ use hyperme_platform::paste::{ClipboardInserter, RESTORE_AFTER};
 use hyperme_platform::sounds::SystemSounds;
 use hyperme_platform::timing::{FileTimingLog, Names};
 use hyperme_platform::trace_store::{Labels, TraceSettings, TraceStore};
-use hyperme_providers::any::{self, AnySpeech};
+use hyperme_providers::any;
 use hyperme_providers::speechmatics::SAMPLE_RATE;
 use tauri::{AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, Position, Size};
 use tauri_nspanel::ManagerExt;
@@ -52,7 +53,7 @@ struct Shared {
     /// Hotkey listening must live as long as the app.
     _hotkey: Option<HotkeyListener>,
     /// Replaces the providers the next dictation uses (specs/96-provider-settings, R-8).
-    providers: Option<watch::Sender<Arc<Providers<AnySpeech, any::Cleanup>>>>,
+    providers: Option<watch::Sender<Arc<Providers<any::Speech, any::Cleanup>>>>,
     /// The timing log, whose provider and model names follow a switch.
     timing: Arc<Mutex<FileTimingLog>>,
     /// Timing is on in the config (R-30); the trace layer's timing sink reads it.
@@ -69,6 +70,8 @@ struct Shared {
     dictionary: Option<DictionaryUpdates>,
     /// The card on screen, while it is: the morning card or an alert (#92, R-19, R-36).
     card: Option<pill::Card>,
+    /// "<provider> keeps failing", waiting for the dictation to end (specs/96, R-28).
+    fallback_notice: Option<pill::Card>,
 }
 
 type State = Mutex<Shared>;
@@ -139,10 +142,16 @@ pub fn start(app: &AppHandle, menu: TrayMenu) {
     // log (R-30) while timing is on. Nothing here leaves the Mac.
     let timing = Arc::new(Mutex::new(timing_log(&Config::default())));
     let timing_on = Arc::new(AtomicBool::new(false));
-    let mut sinks: Vec<Arc<dyn TraceSink>> = vec![Arc::new(TimingSink::new(
-        timing_on.clone(),
-        SharedTiming(timing.clone()),
-    ))];
+    let mut sinks: Vec<Arc<dyn TraceSink>> = vec![
+        Arc::new(TimingSink::new(
+            timing_on.clone(),
+            SharedTiming(timing.clone()),
+        )),
+        Arc::new(Streaks {
+            app: app.clone(),
+            streak: Mutex::default(),
+        }),
+    ];
     // The trace store shares the history's file; one that cannot open only loses traces.
     let config = Config::load_or_create(&data_dir(app).join("config.toml")).unwrap_or_default();
     let traces = TraceStore::open(
@@ -179,6 +188,7 @@ pub fn start(app: &AppHandle, menu: TrayMenu) {
             .map_or(true, |config| config.history.enabled),
         dictionary: None,
         card: None,
+        fallback_notice: None,
     }));
     settle(app);
     // Home shows the history even before the keys are in, or when one cannot be read.
@@ -348,6 +358,27 @@ fn timing_log(config: &Config) -> FileTimingLog {
     )
 }
 
+/// Counts fallbacks in a row from each finished dictation (specs/96, R-28). After three for a
+/// role, one notice waits for the dictation to end; the setting never changes by itself.
+struct Streaks {
+    app: AppHandle,
+    streak: Mutex<FallbackStreak>,
+}
+
+impl TraceSink for Streaks {
+    fn finished(&self, trace: &hyperme_core::trace::FinishedTrace) {
+        let roles = self
+            .streak
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .observe(trace);
+        let Some(role) = roles.first() else { return };
+        let config =
+            Config::load_or_create(&data_dir(&self.app).join("config.toml")).unwrap_or_default();
+        lock(&self.app).fallback_notice = Some(pill::fallback_notice(&config, *role));
+    }
+}
+
 /// The timing log behind a lock, so a provider switch can relabel it.
 struct SharedTiming(Arc<Mutex<FileTimingLog>>);
 
@@ -362,10 +393,10 @@ impl TimingLog for SharedTiming {
 
 /// The cleanup provider with the user's dictionary in its prompt (spec 93, R-4).
 fn with_dictionary(
-    providers: Providers<AnySpeech, any::Cleanup>,
+    providers: Providers<any::Speech, any::Cleanup>,
     dictionary: &Dictionary,
     config: &Config,
-) -> Providers<AnySpeech, any::Cleanup> {
+) -> Providers<any::Speech, any::Cleanup> {
     let cap = config.dictation.dictionary_prompt_cap as usize;
     Providers {
         cleanup: providers
@@ -447,7 +478,21 @@ async fn show_statuses(app: AppHandle, mut statuses: mpsc::UnboundedReceiver<Sta
                     let _ = app.emit_to(crate::walkthrough::WALKTHROUGH, "dictation-pasted", ms);
                 }
             }
-            Status::Idle => released = None,
+            Status::Idle => {
+                released = None;
+                // R-28: the notice waits until the "Pasted · via" pill has been read.
+                if let Some(card) = lock(&app).fallback_notice.take() {
+                    let app = app.clone();
+                    tauri::async_runtime::spawn(async move {
+                        tokio::time::sleep(Duration::from_millis(1600)).await;
+                        if lock(&app).busy {
+                            lock(&app).fallback_notice.get_or_insert(card);
+                        } else {
+                            show_card(&app, card, false);
+                        }
+                    });
+                }
+            }
             _ => {}
         }
         if let Status::Failed { message, retry } = &status {

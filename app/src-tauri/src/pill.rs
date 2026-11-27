@@ -2,6 +2,7 @@
 //! table is tested without a window; `main.rs` sends the view to the page and shows, sizes and
 //! hides the panel.
 
+use hyperme_core::config::{Config, Role};
 use hyperme_core::dictation::Status;
 use serde::Serialize;
 
@@ -307,8 +308,65 @@ pub fn card_size(view: &CardView) -> (f64, f64) {
     (CARD_WIDTH, height)
 }
 
+/// The alert after three fallbacks in a row: which provider keeps failing, which one stood in,
+/// and a link to the role's row in Settings → Providers (R-28).
+pub fn fallback_notice(config: &Config, role: Role) -> Card {
+    let name = |id: &str| {
+        config
+            .provider(id)
+            .map_or_else(|| id.to_owned(), |p| p.name.clone())
+    };
+    let (main, spare) = match role {
+        Role::Speech => (&config.speech.provider, config.speech.fallback.as_ref()),
+        Role::Cleanup => (&config.cleanup.provider, config.cleanup.fallback.as_ref()),
+    };
+    let spare = spare.map_or_else(|| "the fallback".to_owned(), |f| name(&f.provider));
+    Card::Alert(AlertView {
+        title: format!("{} keeps failing", name(main)),
+        detail: format!(
+            "{} {} in a row went to {spare}. Nothing was changed.",
+            hyperme_core::fallback::STREAK,
+            match role {
+                Role::Speech => "dictations",
+                Role::Cleanup => "cleanups",
+            }
+        ),
+        action: "Open".to_owned(),
+        link: Some(format!("hyperme://settings/providers/{}", role.section())),
+    })
+}
+
 #[cfg(test)]
 mod tests {
+    /// specs/96, AC-13: the notice names the failing provider and the one that stood in, and
+    /// links to the role's row; it changes nothing.
+    #[test]
+    fn the_fallback_notice_links_to_the_role_row() {
+        use hyperme_core::config::{self, Config, DEFAULT_CONFIG, Role};
+        let text = config::set_fallback(
+            DEFAULT_CONFIG,
+            Role::Speech,
+            Some(("openai-speech", "gpt-live-transcribe")),
+        )
+        .unwrap();
+        let config = Config::parse(&text, std::path::Path::new("c.toml")).unwrap();
+        let super::Card::Alert(alert) = super::fallback_notice(&config, Role::Speech) else {
+            panic!("an alert");
+        };
+        assert_eq!(alert.title, "Speechmatics keeps failing");
+        assert!(
+            alert
+                .detail
+                .contains("3 dictations in a row went to OpenAI"),
+            "{}",
+            alert.detail
+        );
+        assert_eq!(
+            alert.link.as_deref(),
+            Some("hyperme://settings/providers/speech")
+        );
+    }
+
     use super::*;
 
     fn view(status: Status) -> View {

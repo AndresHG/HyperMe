@@ -127,6 +127,7 @@ impl LiveSession for SavedSession {
         Ok(Transcript {
             text: self.0.unwrap_or_default(),
             language: None,
+            via: None,
         })
     }
 }

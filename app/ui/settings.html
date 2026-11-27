@@ -247,6 +247,12 @@
       id = 'providers';
       showAdvanced(true);
     }
+    // hyperme://settings/providers/speech, from the "keeps failing" notice (specs/96, R-28):
+    // the table, with that role's row in view.
+    if (id === 'providers' && item) {
+      showAdvanced(true);
+      setTimeout(() => { const row = $('role-' + item); if (row) row.scrollIntoView({ block: 'center' }); }, 0);
+    }
     document.querySelectorAll('section').forEach((s) => s.classList.toggle('on', s.id === id));
     document.querySelectorAll('nav a').forEach((a) => a.classList.toggle('on', a.getAttribute('href') === '#' + id));
   }
@@ -403,7 +409,7 @@
       const hint = el('td', { className: 'hint', colSpan: 4, id: 'hint-' + r.role });
       body.append(el('tr', {}, hint));
       if (want.model) showHint(hint, r.role, chosen.id, want.model);
-      if (r.role === 'cleanup') body.append(fallbackRow(r));
+      body.append(fallbackRow(r));
     }
   }
 

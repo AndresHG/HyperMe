@@ -57,6 +57,7 @@ impl LiveSession for FakeSession {
             Some(text) => Ok(Transcript {
                 text: text.to_owned(),
                 language: None,
+                via: None,
             }),
             None => Err(Error {
                 kind: ErrorKind::Network,

@@ -247,6 +247,6 @@ fn resolve_builds_openai_speech_with_the_shared_openai_key() {
     assert!(missing.message.contains("openai"), "{}", missing.message);
     keys.set("openai", KEY).unwrap();
     let providers = any::resolve(&config, &keys).unwrap();
-    assert!(matches!(providers.speech, AnySpeech::OpenAi(_)));
+    assert!(matches!(**providers.speech.main(), AnySpeech::OpenAi(_)));
     assert!(any::key_ready(&config, "openai-speech", &keys));
 }

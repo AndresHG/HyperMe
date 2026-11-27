@@ -259,6 +259,7 @@ async fn read_until_final(mut stream: Stream, provider: String) -> Result<Transc
                         return Ok(Transcript {
                             text: text.trim().to_owned(),
                             language: None,
+                            via: None,
                         });
                     }
                     FAILED | "error" => return Err(server_error(&provider, &value)),
