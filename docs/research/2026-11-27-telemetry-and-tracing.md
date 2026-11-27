@@ -2,8 +2,9 @@
 
 Research of 27 November 2026, asked by the owner: "full traceability of things happening, so it
 is easier to improve the system and optimise", on his own Mac and for other people who install
-HyperMe. Research and recommendation only: nothing here changes an earlier decision. One choice
-is the owner's (section 7); until he decides, "no telemetry" (`CLAUDE.md`, spec 25 R-29) stands.
+HyperMe. Research and recommendation only: nothing here changes an earlier decision. The one
+choice it needed from the owner, what other users' copies may send, was decided on 27 November
+2026: nothing, plus a report bundle (section 7, T-2). "No telemetry" stands.
 
 ## 1. Summary
 
@@ -187,10 +188,10 @@ issues in hand.
 | ID | Question | Recommendation | Status |
 | --- | --- | --- | --- |
 | T-1 | Adopt `tracing` with a local trace store as the app's one instrumentation, and OpenTelemetry export as a developer-only feature | Yes: an M-sized change after the phase 1 gate's code is stable; it rebuilds R-30 on spans and adds stage bars to history items | Recommended; engineering choice within existing rules |
-| T-2 | What other users' copies may send | No telemetry in version 1; a local Diagnostics view and a **Report a problem** bundle the user attaches to an issue. Opt-in signals (5.2) reconsidered after the first release | Open: the owner's decision (PRD section 12, Q-18) |
+| T-2 | What other users' copies may send | No telemetry in version 1; a local Diagnostics view and a **Report a problem** bundle the user attaches to an issue. Opt-in signals (5.2) reconsidered after the first release | Decided 27 November 2026: as recommended (PRD Q-18) |
 | T-3 | Where the owner looks at his own traces | `otel-desktop-viewer` locally; Honeycomb's free plan in a personal team for weeks of data | Recommended; his choice of tool |
 
-## 8. Next steps once T-2 is decided
+## 8. Next steps
 
 1. A spec (M, `AC-n` in the issue) for the trace store and the move of R-30 onto spans, with
    the privacy grep test and the budget gates of section 6.
