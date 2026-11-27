@@ -228,6 +228,7 @@ fn wire(app: &AppHandle, history: Arc<Mutex<HistoryInner>>) -> Result<(), String
     let providers = with_dictionary(
         any::resolve(&config, &KeychainStore::new()).map_err(|e| e.message)?,
         &dictionary,
+        &config,
     );
     let (switch, providers) = watch::channel(Arc::new(providers));
     let (timing, timing_on, traces) = {
@@ -291,6 +292,7 @@ pub fn reload_providers(app: &AppHandle) -> Result<(), String> {
     let providers = with_dictionary(
         any::resolve(&config, &KeychainStore::new()).map_err(|e| e.message)?,
         &dictionary,
+        &config,
     );
     let (timing, timing_on, traces) = {
         let shared = lock(app);
@@ -359,9 +361,13 @@ impl TimingLog for SharedTiming {
 fn with_dictionary(
     providers: Providers<AnySpeech, AnyCleanup>,
     dictionary: &Dictionary,
+    config: &Config,
 ) -> Providers<AnySpeech, AnyCleanup> {
+    let cap = config.dictation.dictionary_prompt_cap as usize;
     Providers {
-        cleanup: providers.cleanup.with_dictionary(&dictionary.prompt_line()),
+        cleanup: providers
+            .cleanup
+            .with_dictionary(&dictionary.prompt_line(cap)),
         ..providers
     }
 }

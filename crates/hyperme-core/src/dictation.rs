@@ -46,6 +46,8 @@ pub struct Settings {
     /// Spec 93, R-1: the user's dictionary, applied to every final transcript. The app loads it
     /// from the `dictation.dictionary` file; empty by default.
     pub dictionary: Dictionary,
+    /// Spec 93, R-5: above this many entries, the prompt carries only the relevant ones.
+    pub prompt_cap: usize,
 }
 
 impl Settings {
@@ -64,6 +66,7 @@ impl Settings {
             cleanup_deadline: Duration::from_millis(config.cleanup.deadline_ms),
             sounds: config.dictation.sounds,
             dictionary: Dictionary::default(),
+            prompt_cap: config.dictation.dictionary_prompt_cap as usize,
         }
     }
 }
@@ -275,7 +278,7 @@ where
     /// Uses the newest saved dictionary, if one is waiting: substitution and the cleanup prompt.
     fn apply_dictionary_update(&mut self) {
         if let Some(dictionary) = self.dictionary.take() {
-            self.dictionary_line = Some(dictionary.prompt_line());
+            self.dictionary_line = Some(dictionary.prompt_line(self.settings.prompt_cap));
             self.settings.dictionary = dictionary;
         }
     }
@@ -840,9 +843,9 @@ async fn transcribe_and_clean<L: LiveSession, C: CleanupProvider>(
     let language = transcript.language.clone();
     // Spec 93, R-1: the dictionary fixes the raw transcript once, so the short path, the
     // cleanup and the raw fallback all get the user's words.
-    let (substituted, applied) = settings.dictionary.apply(transcript.text.trim());
-    trace.dictionary(applied);
-    let raw = substituted.as_str();
+    let substituted = settings.dictionary.substitute(transcript.text.trim());
+    trace.dictionary(substituted.made);
+    let raw = substituted.text.as_str();
     let words = raw.split_whitespace().count();
     trace.words(words);
     // R-14.
@@ -860,6 +863,13 @@ async fn transcribe_and_clean<L: LiveSession, C: CleanupProvider>(
             raw: false,
             language,
         });
+    }
+    // Spec 93, R-5: above the prompt cap, the prompt carries the entries relevant to this one.
+    if let Some(line) = settings
+        .dictionary
+        .relevant_line(&substituted, settings.prompt_cap)
+    {
+        cleanup.set_dictionary(&line);
     }
     emit(Status::Cleaning);
     trace.cleanup_started();
