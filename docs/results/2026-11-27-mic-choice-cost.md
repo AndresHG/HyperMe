@@ -16,7 +16,7 @@ What follows from it:
   listing the devices. Only a dictation on a lower choice lists them, to see whether a better
   microphone came back: 2 to 8 ms of the 50 ms key-down budget.
 - The cold first call (about 89 ms) predates #221 and falls on the first dictation after launch.
-  Warming the host at startup is a separate change.
+  HyperMe now warms the host on a short-lived thread at launch (#250).
 
 `START_SOUND`: `afinfo /System/Library/Sounds/Tink.aiff` gives an estimated duration of
 0.564 s. The mute waits 250 ms, past the click.

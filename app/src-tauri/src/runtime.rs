@@ -315,6 +315,8 @@ fn wire(app: &AppHandle, history: Arc<Mutex<HistoryInner>>) -> Result<(), String
     let (pasted_tx, pasted_rx) = mpsc::unbounded_channel();
     engine.tell_pasted(pasted_tx);
     tauri::async_runtime::spawn(after_paste(app.clone(), pasted_rx));
+    // The first dictation would otherwise start Core Audio on key-down (#250).
+    hyperme_platform::microphone::warm_up();
     tauri::async_runtime::spawn(engine.run(events_rx));
     tauri::async_runtime::spawn(forward_audio(app.clone(), mic_rx, events.clone()));
     tauri::async_runtime::spawn(show_statuses(app.clone(), status_rx));

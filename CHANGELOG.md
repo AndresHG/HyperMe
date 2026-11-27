@@ -15,6 +15,11 @@ All notable changes to HyperMe are recorded here. The format follows
   goes on. "Mute audio while dictating" (on by default) mutes the Mac's output while you talk,
   after the start sound, and gives it back as it was before the stop sound. Nothing polls.
 
+### Changed
+
+- The first dictation after launch no longer starts Core Audio on key-down, about 89 ms on the
+  owner's Mac: HyperMe starts it on a short-lived thread at launch (#250).
+
 ## [0.1.0-alpha.1] - 2026-11-27
 
 ### Fixed

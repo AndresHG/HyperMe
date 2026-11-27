@@ -88,6 +88,21 @@ fn device_name(device: &cpal::Device) -> String {
         .unwrap_or_default()
 }
 
+/// Starts Core Audio in this process on a short-lived thread, so the first dictation after
+/// launch does not pay for it on key-down: the first default-device query costs about 89 ms
+/// cold and 18 µs warm (docs/results/2026-11-27-mic-choice-cost.md, #250). It reads device
+/// properties only: no device is opened, so the microphone indicator stays off and macOS asks
+/// for no permission.
+pub fn warm_up() {
+    let _ = std::thread::Builder::new()
+        .name("hyperme-audio-warm-up".into())
+        .spawn(|| {
+            let _ = cpal::default_host()
+                .default_input_device()
+                .map(|device| device.id());
+        });
+}
+
 /// The names of the connected microphones, for Settings, and the system default's name.
 pub fn microphones() -> (Vec<String>, Option<String>) {
     let host = cpal::default_host();
@@ -452,6 +467,14 @@ mod tests {
         assert!(!needs_rebuild(cpal::ErrorKind::DeviceChanged));
         assert!(needs_rebuild(cpal::ErrorKind::DeviceNotAvailable));
         assert!(needs_rebuild(cpal::ErrorKind::StreamInvalidated));
+    }
+
+    /// #250: launch never waits for Core Audio to start; the warm-up runs on its own thread.
+    #[test]
+    fn warming_up_returns_at_once() {
+        let started = std::time::Instant::now();
+        warm_up();
+        assert!(started.elapsed() < Duration::from_millis(20));
     }
 
     #[test]
