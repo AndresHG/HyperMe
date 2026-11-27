@@ -324,8 +324,8 @@ mod window {
         attention: bool,
         /// The app in front before Home took focus, for Paste again (R-15).
         front_app: Option<FrontApp>,
-        /// The personal dictionary, when the app holds one (R-21). None until #93 brings it;
-        /// while it is None nothing in Home mentions the dictionary.
+        /// The personal dictionary, when the app holds one (R-21): the dictionary file (#93,
+        /// slice D5). While it is None nothing in Home mentions the dictionary.
         dictionary: Option<Box<dyn Dictionary + Send>>,
     }
 
@@ -341,6 +341,11 @@ mod window {
     /// Registers Home's state. Called once at setup.
     pub fn init(app: &AppHandle) {
         app.manage::<State>(Mutex::new(HomeState::default()));
+    }
+
+    /// Hands Home the personal dictionary (#93), which turns on Fix a word (R-17, R-21).
+    pub fn set_dictionary(app: &AppHandle, dictionary: Box<dyn Dictionary + Send>) {
+        state(app).dictionary = Some(dictionary);
     }
 
     fn has_dictionary(app: &AppHandle) -> bool {
