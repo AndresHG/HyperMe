@@ -2,7 +2,8 @@
 
 Research of 27 November 2026, for the phase 3 command loop ([ROADMAP.md](../ROADMAP.md)) and the
 voice capture of phase 4 ([spec 92](../../specs/92-daily-tasks/spec.md)). Research only: nothing
-here changes a decision. The one choice it needs from the owner is in section 5.
+here changes an earlier decision. The one choice it needed from the owner, how strictly a command
+must start with "Hyper", was decided on 27 November 2026 (section 5).
 
 The owner wants spoken commands such as "Hyper, create a task …", "Hyper, remind me to …" and
 "Hyper, draft an email to …". Already decided: one key for everything, with "Hyper, …" routing to
@@ -205,6 +206,8 @@ owner's samples with the `flowbench` approach before any card is built.
 ## 5. The decision for the owner
 
 **How strictly must commands start with "Hyper"?**
+
+**Decided by the owner on 27 November 2026: option A, the name at the start only.**
 
 | Option | Behaviour | For | Against |
 | --- | --- | --- | --- |

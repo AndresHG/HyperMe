@@ -318,7 +318,7 @@ Asked in the interview of 26 November 2026. Recommendations first.
 | --- | --- | --- | --- |
 | Q-1 | Product identity | "Voice to done"; Wispr Flow as the bar for dictation only | Decided 26 November 2026: voice to done |
 | Q-2 | Phase 0 gate | Declare passed on the Wispr comparison and approve the Phase 1 spec | Decided 26 November 2026: Phase 1 approved to start, with the spec's open questions answered (hotkey Fn, cleanup deadline 1.5 s, speed gate wired only) |
-| Q-3 | One key or two | One key; "Hyper, …" routes to commands; optional command key | Decided 26 November 2026: one key, "Hyper" prefix |
+| Q-3 | One key or two | One key; "Hyper, …" routes to commands; optional command key | Decided 26 November 2026: one key, "Hyper" prefix. 27 November 2026: the name must come in the first words; no intent detection without it ([research](research/2026-11-27-voice-commands.md)) |
 | Q-4 | First outside user | Developers who dictate into coding agents and chat | Decided 26 November 2026: people in tech companies, developers first, product owners and data people too |
 | Q-5 | Keys model for outside users | Bring your own keys only in version 1 | Decided 26 November 2026: own keys with a recommended setup and cost estimate; other providers in Advanced; a local mode in a later version |
 | Q-6 | Email (phase 4) before meetings (phase 5) | Keep email first | Decided 26 November 2026: daily tasks and email first, meetings next or in parallel; coding agents move to later, as a hand-off only |
