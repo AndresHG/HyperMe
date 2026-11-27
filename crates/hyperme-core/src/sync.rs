@@ -71,6 +71,9 @@ pub fn sync_jobs(registry: &Registry, connectors: &Connectors) -> Vec<Job> {
 pub enum SyncError {
     /// The account's refresh token was refused: it needs a new sign-in (R-10).
     SignInAgain,
+    /// The server waits for the user: an approval nobody gave, a refusal, or an admin block
+    /// (specs/166). Not a failure: it never counts toward the job-failed alert (R-16b).
+    NeedsUser(String),
     Failed(String),
 }
 
@@ -78,7 +81,7 @@ impl std::fmt::Display for SyncError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             SyncError::SignInAgain => write!(f, "the account needs a new sign-in"),
-            SyncError::Failed(reason) => write!(f, "{reason}"),
+            SyncError::NeedsUser(reason) | SyncError::Failed(reason) => write!(f, "{reason}"),
         }
     }
 }
