@@ -13,3 +13,6 @@ clippy, tests and `cargo deny` on the owner's Mac before it merges.
 | 6 | Live: Diagnostics and bundle timings, a real issue from a bundle; numbers to `docs/results/` | AC-11, AC-12 | S | 2, 5 |
 
 Slices 1 and 4 can start in parallel. 2, 3 and 5 follow 1.
+
+The crash notice of R-25 is split: slice 4 writes and reads the marker (`CrashFolder::take_notice`),
+and slice 5 shows it in the menu, since the notice points to Report a problem.
