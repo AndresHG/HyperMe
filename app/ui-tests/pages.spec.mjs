@@ -81,6 +81,19 @@ test('settings', async ({ page }) => {
   await expect(page).toHaveScreenshot('settings.png');
   const settings = page.frames().find((f) => f.url().includes('settings.html'));
   expect(await layoutProblems(settings)).toEqual([]);
+  // Regressions (27 November 2026): the section opened scrolled down to its anchor, and the
+  // microphone rows (#221) sat outside General's grouped card.
+  const layout = await settings.evaluate(() => {
+    const box = (el) => el.getBoundingClientRect();
+    const card = box(document.querySelector('#general .card-rows'));
+    const mics = [...document.querySelectorAll('#mic-list .row')].map(box);
+    return {
+      scrollTop: document.querySelector('main').scrollTop,
+      mics: mics.length,
+      inside: mics.every((m) => m.left >= card.left && m.right <= card.right && m.top >= card.top && m.bottom <= card.bottom),
+    };
+  });
+  expect(layout).toEqual({ scrollTop: 0, mics: 2, inside: true });
 });
 
 test('onboarding', async ({ page }) => {

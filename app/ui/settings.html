@@ -76,6 +76,9 @@
   section > .row:not(.row + .row), section .card-rows > .row:first-child { border-top: 1px solid var(--color-separator); border-radius: var(--radius-card) var(--radius-card) 0 0; margin-top: var(--space-2); }
   section > .row:not(:has(+ .row)), section .card-rows > .row:last-child { border-radius: 0 0 var(--radius-card) var(--radius-card); margin-bottom: var(--space-4); }
   section > .row:not(.row + .row):not(:has(+ .row)) { border-radius: var(--radius-card); }
+  /* General's microphone order (#221): its rows sit inside the card, under the Microphone row. */
+  #mic-list { display: contents; }
+  #mic-list > .row { border: 1px solid var(--color-separator); border-top: 0; padding: var(--space-2) var(--space-4) var(--space-2) var(--space-8); background: var(--color-card-bg); }
   input[type=text], input[type=number], input[type=password], select { min-width: 180px; }
   /* The connect dialog. */
   #connectors-oauth { display: flex; justify-content: center; padding-top: var(--space-2); }
@@ -150,12 +153,14 @@
   <section id="general">
     <h1>General</h1>
     <p class="lead">Everyday preferences.</p>
-    <div class="row" data-words="sounds start stop"><div class="what">Start and stop sounds<small>A soft sound when recording starts and stops.</small></div><input type="checkbox" data-section="dictation" data-key="sounds"></div>
-    <div class="row" data-words="mute audio music media sound video while dictating"><div class="what">Mute audio while dictating<small>Music and videos go quiet while you talk and come back when you stop.</small></div><input type="checkbox" data-section="dictation" data-key="mute_while_dictating"></div>
-    <div class="row" data-words="microphone mic input airpods usb order priority default"><div class="what">Microphone<small id="mic-note"></small></div><button id="mic-reset" class="hidden">Use system default</button></div>
-    <div id="mic-list"></div>
-    <div class="row" data-words="bead dot idle show while idle bottom"><div class="what">Show while idle<small>A small still bead at the bottom centre; it grows into the pill when you dictate.</small></div><input type="checkbox" data-section="dictation" data-key="show_while_idle"></div>
-    <div class="row" data-words="advanced"><div class="what">Show advanced<small>Deadlines, thresholds, endpoints and the config file.</small></div><input type="checkbox" id="show-advanced"></div>
+    <div class="card-rows">
+      <div class="row" data-words="sounds start stop"><div class="what">Start and stop sounds<small>A soft sound when recording starts and stops.</small></div><input type="checkbox" data-section="dictation" data-key="sounds"></div>
+      <div class="row" data-words="mute audio music media sound video while dictating"><div class="what">Mute audio while dictating<small>Music and videos go quiet while you talk and come back when you stop.</small></div><input type="checkbox" data-section="dictation" data-key="mute_while_dictating"></div>
+      <div class="row" data-words="microphone mic input airpods usb order priority default"><div class="what">Microphone<small id="mic-note"></small></div><button id="mic-reset" class="hidden">Use system default</button></div>
+      <div id="mic-list"></div>
+      <div class="row" data-words="bead dot idle show while idle bottom"><div class="what">Show while idle<small>A small still bead at the bottom centre; it grows into the pill when you dictate.</small></div><input type="checkbox" data-section="dictation" data-key="show_while_idle"></div>
+      <div class="row" data-words="advanced"><div class="what">Show advanced<small>Deadlines, thresholds, endpoints and the config file.</small></div><input type="checkbox" id="show-advanced"></div>
+    </div>
   </section>
 
   <section id="shortcuts">
@@ -386,6 +391,8 @@
     }
     document.querySelectorAll('section').forEach((s) => s.classList.toggle('on', s.id === id));
     document.querySelectorAll('nav a').forEach((a) => a.classList.toggle('on', a.getAttribute('href') === '#' + id));
+    // The hash names the section, so the browser scrolls to it; a section always opens at its top.
+    requestAnimationFrame(() => { document.querySelector('main').scrollTop = 0; });
   }
   window.addEventListener('hashchange', showSection);
 
