@@ -3,135 +3,119 @@
 <head>
 <meta charset="utf-8">
 <title>HyperMe Settings</title>
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="components.css">
 <style>
   /* docs/UX.md: windows use the system's light or dark colours, one signature colour. */
-  :root {
-    color-scheme: light dark;
-    --violet: #7c5cff;
-    --ok: #22c55e;
-    --warn: #f59e0b;
-    --bad: #ff4d4f;
-    --line: color-mix(in srgb, CanvasText 12%, transparent);
-    --muted: color-mix(in srgb, CanvasText 55%, transparent);
-    --side: color-mix(in srgb, CanvasText 4%, Canvas);
-    --card: color-mix(in srgb, CanvasText 2%, Canvas);
-    --line2: color-mix(in srgb, CanvasText 18%, transparent);
-  }
-  * { box-sizing: border-box; }
   html, body { height: 100%; }
-  body { margin: 0; font: 13px -apple-system, system-ui, sans-serif; background: Canvas; color: CanvasText; display: grid; grid-template-columns: 200px 1fr; }
-  nav { background: var(--side); border-right: 1px solid var(--line); padding: 14px 10px; display: flex; flex-direction: column; gap: 2px; }
-  nav input { width: 100%; margin-bottom: 10px; padding: 6px 8px; border-radius: 7px; border: 1px solid var(--line); background: Canvas; color: inherit; }
-  nav .group { font-size: 11px; color: var(--muted); margin: 10px 8px 4px; text-transform: uppercase; letter-spacing: 0.04em; }
-  nav a { padding: 6px 8px; border-radius: 7px; color: inherit; text-decoration: none; }
-  nav a.on { background: color-mix(in srgb, var(--violet) 18%, transparent); }
-  main { overflow: auto; padding: 22px 28px; }
-  h1 { font: 600 15px ui-rounded, -apple-system, sans-serif; margin: 0 0 4px; }
-  .lead { color: var(--muted); margin: 0 0 16px; }
+  body { margin: 0; font: var(--text-body) var(--font-system); background: var(--color-content-bg); color: var(--color-label); display: grid; grid-template-columns: 200px 1fr; }
+  nav { background: var(--color-sidebar-bg); border-right: 1px solid var(--color-separator); padding: var(--space-4) var(--space-3); display: flex; flex-direction: column; gap: var(--space-1); }
+  nav input { width: 100%; margin-bottom: var(--space-3); padding: var(--space-2) var(--space-2); border-radius: var(--radius-control); border: 1px solid var(--color-separator); background: var(--color-content-bg); color: inherit; }
+  nav .group { font-size: var(--text-subheadline); color: var(--color-label-secondary); margin: var(--space-3) var(--space-2) var(--space-1); text-transform: uppercase; letter-spacing: 0.04em; }
+  nav a { display: flex; align-items: center; min-height: var(--row-height); padding: 0 var(--space-2); border-radius: var(--radius-control); color: inherit; text-decoration: none; }
+  nav a.on { background: var(--color-accent-selected); }
+  main { overflow: auto; padding: var(--space-6) var(--space-8); }
+  h1 { font: 600 var(--text-title3) var(--font-system); margin: 0 0 var(--space-1); }
+  .lead { color: var(--color-label-secondary); margin: 0 0 var(--space-4); }
   section { display: none; }
   section.on { display: block; }
-  .row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 0; border-bottom: 1px solid var(--line); }
-  .row .what small { display: block; color: var(--muted); margin-top: 2px; }
-  input[type=text], input[type=number], input[type=password], select { padding: 5px 8px; border-radius: 6px; border: 1px solid var(--line); background: Canvas; color: inherit; font: inherit; min-width: 180px; }
-  button { padding: 5px 12px; border-radius: 6px; border: 1px solid var(--line); background: Canvas; color: inherit; font: inherit; cursor: pointer; }
-  button.main { background: var(--violet); color: white; border-color: var(--violet); }
-  .state { font-size: 12px; }
-  .ok { color: var(--ok); } .bad { color: var(--bad); } .warn { color: var(--warn); }
+  .row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); padding: var(--space-3) 0; border-bottom: 1px solid var(--color-separator); }
+  .row .what small { display: block; color: var(--color-label-secondary); margin-top: var(--space-1); }
+  .state { font-size: var(--text-callout); }
+  .ok { color: var(--color-green); } .bad { color: var(--color-red); } .warn { color: var(--color-orange); }
   /* The approval card (specs/166, slice 3): what a connector server asks, above the view. */
-  #approval-card { border: 1px solid var(--violet); border-radius: 10px; padding: 12px 14px; margin: 0 0 16px; background: color-mix(in srgb, var(--violet) 6%, Canvas); }
-  #approval-card .who { color: var(--muted); font-size: 12px; }
-  #approval-card h2 { font-size: 15px; margin: 4px 0 8px; }
-  #approval-card .message p { margin: 0 0 6px; } #approval-card .message ul { margin: 0 0 6px 18px; padding: 0; }
-  #approval-card .keys { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; align-items: center; }
-  #approval-card kbd { font: 11px ui-monospace, monospace; border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; margin-right: 4px; }
-  #banner { display: none; position: sticky; top: 0; margin: -22px -28px 16px; padding: 10px 28px; background: color-mix(in srgb, var(--violet) 14%, Canvas); border-bottom: 1px solid var(--line); align-items: center; justify-content: space-between; }
+  #approval-card { border: 1px solid var(--color-accent); border-radius: var(--radius-card); padding: var(--space-3) var(--space-4); margin: 0 0 var(--space-4); background: var(--color-accent-soft); }
+  #approval-card .who { color: var(--color-label-secondary); font-size: var(--text-callout); }
+  #approval-card h2 { font-size: var(--text-title3); margin: var(--space-1) 0 var(--space-2); }
+  #approval-card .message p { margin: 0 0 var(--space-2); } #approval-card .message ul { margin: 0 0 var(--space-2) var(--space-5); padding: 0; }
+  #approval-card .keys { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-3); align-items: center; }
+  #approval-card kbd { font: var(--text-subheadline) var(--font-mono); border: 1px solid var(--color-separator); border-radius: var(--radius-small); padding: 0 var(--space-1); margin-right: var(--space-1); }
+  #banner { display: none; position: sticky; top: 0; margin: calc(-1 * var(--space-6)) calc(-1 * var(--space-8)) var(--space-4); padding: var(--space-3) var(--space-8); background: var(--color-accent-soft); border-bottom: 1px solid var(--color-separator); align-items: center; justify-content: space-between; }
   #banner.on { display: flex; }
   .hidden { display: none !important; }
-  code { font-size: 12px; }
+  code { font-size: var(--text-callout); }
   /* Settings → Providers, "Show advanced": one table of roles (specs/96-provider-settings, R-6). */
-  .roles { width: 100%; border-collapse: collapse; margin-top: 8px; }
-  .roles th { text-align: left; font-weight: 500; color: var(--muted); font-size: 12px; padding: 6px 8px 6px 0; border-bottom: 1px solid var(--line); }
-  .roles td { padding: 10px 8px 2px 0; vertical-align: top; }
-  .roles td.hint { padding: 0 0 10px; color: var(--muted); font-size: 12px; border-bottom: 1px solid var(--line); }
+  .roles { width: 100%; border-collapse: collapse; margin-top: var(--space-2); }
+  .roles th { text-align: left; font-weight: 500; color: var(--color-label-secondary); font-size: var(--text-callout); padding: var(--space-2) var(--space-2) var(--space-2) 0; border-bottom: 1px solid var(--color-separator); }
+  .roles td { padding: var(--space-3) var(--space-2) var(--space-1) 0; vertical-align: top; }
+  .roles td.hint { padding: 0 0 var(--space-3); color: var(--color-label-secondary); font-size: var(--text-callout); border-bottom: 1px solid var(--color-separator); }
   .roles select, .roles input[type=text] { min-width: 0; width: 100%; }
-  .roles .key { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .roles .key { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
   .roles .key input[type=password] { min-width: 140px; flex: 1; }
-  .roles .effort { margin-top: 6px; font-size: 12px; color: var(--muted); }
-  .roles .effort select { width: auto; margin-left: 4px; }
+  .roles .effort { margin-top: var(--space-2); font-size: var(--text-callout); color: var(--color-label-secondary); }
+  .roles .effort select { width: auto; margin-left: var(--space-1); }
   /* Settings → Diagnostics (specs/200-diagnostics, slice 2). */
-  .diag { width: 100%; border-collapse: collapse; margin-top: 8px; }
-  .diag th { text-align: left; font-weight: 500; color: var(--muted); font-size: 12px; padding: 6px 8px 6px 0; border-bottom: 1px solid var(--line); }
-  .diag td { padding: 8px 8px 8px 0; border-bottom: 1px solid var(--line); }
+  .diag { width: 100%; border-collapse: collapse; margin-top: var(--space-2); }
+  .diag th { text-align: left; font-weight: 500; color: var(--color-label-secondary); font-size: var(--text-callout); padding: var(--space-2) var(--space-2) var(--space-2) 0; border-bottom: 1px solid var(--color-separator); }
+  .diag td { padding: var(--space-2) var(--space-2) var(--space-2) 0; border-bottom: 1px solid var(--color-separator); }
   .diag td.n { text-align: right; font-variant-numeric: tabular-nums; }
-  .faint { color: var(--muted); }
+  .faint { color: var(--color-label-secondary); }
   /* Report a problem (specs/200-diagnostics, R-13 to R-16): the whole bundle, read before anything happens. */
-  #report { position: fixed; inset: 0; background: color-mix(in srgb, Canvas 70%, transparent); display: flex; align-items: center; justify-content: center; z-index: 10; }
-  #report > div { background: Canvas; border: 1px solid var(--line); border-radius: 12px; width: min(760px, 92vw); max-height: 88vh; display: flex; flex-direction: column; gap: 8px; padding: 16px 18px; box-shadow: 0 12px 40px rgba(0,0,0,.25); }
-  #report textarea { font: inherit; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--line); background: Canvas; color: inherit; min-height: 54px; resize: vertical; }
-  #report pre { font: 11px ui-monospace, monospace; white-space: pre-wrap; overflow: auto; flex: 1; min-height: 200px; margin: 0; padding: 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--side); }
-  #diag-warnings { font: 11px ui-monospace, monospace; white-space: pre-wrap; color: var(--muted); margin: 8px 0 0; max-height: 240px; overflow: auto; }
-  .toolbar { display: flex; justify-content: space-between; align-items: center; margin-top: 18px; }
-  .add { display: flex; gap: 6px; margin-top: 8px; }
+  #report { position: fixed; inset: 0; background: var(--color-scrim); display: flex; align-items: center; justify-content: center; z-index: 10; }
+  #report > div { background: var(--color-content-bg); border: 1px solid var(--color-separator); border-radius: var(--radius-sheet); width: min(760px, 92vw); max-height: 88vh; display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-4) var(--space-5); box-shadow: var(--shadow-sheet); }
+  #report textarea { font: inherit; padding: var(--space-2) var(--space-2); border-radius: var(--radius-control); border: 1px solid var(--color-separator); background: var(--color-content-bg); color: inherit; min-height: 54px; resize: vertical; }
+  #report pre { font: var(--text-subheadline) var(--font-mono); white-space: pre-wrap; overflow: auto; flex: 1; min-height: 200px; margin: 0; padding: var(--space-2); border: 1px solid var(--color-separator); border-radius: var(--radius-control); background: var(--color-sidebar-bg); }
+  #diag-warnings { font: var(--text-subheadline) var(--font-mono); white-space: pre-wrap; color: var(--color-label-secondary); margin: var(--space-2) 0 0; max-height: 240px; overflow: auto; }
+  .toolbar { display: flex; justify-content: space-between; align-items: center; margin-top: var(--space-5); }
+  .add { display: flex; gap: var(--space-2); margin-top: var(--space-2); }
   .add input { flex: 1; min-width: 0; }
   .add select { flex: 1; min-width: 0; }
   td.local { padding-top: 0; }
-  a.link { color: var(--violet); cursor: pointer; text-decoration: none; }
+  a.link { color: var(--color-accent); cursor: pointer; text-decoration: none; }
   /* Settings is a sheet inside Home's page (V0.1 redesign): Home draws the rounded corners and
      shadow around this frame, so the page fills it; a close button and Esc. */
   body { overflow: hidden; grid-template-columns: 196px 1fr; }
-  nav { padding: 16px 10px; }
-  main { position: relative; padding: 20px 56px 20px 24px !important; }
-  #sheet-x { position: fixed; top: 12px; right: 14px; width: 28px; height: 28px; padding: 0; border-radius: 999px; border: 0; background: var(--line); font-size: 16px; line-height: 1; z-index: 5; }
-  #sheet-x:hover { background: var(--line2); }
+  nav { padding: var(--space-4) var(--space-3); }
+  /* Room on the right for the close button. */
+  main { position: relative; padding: var(--space-5) calc(var(--space-8) + var(--space-6)) var(--space-5) var(--space-6) !important; }
+  #sheet-x { position: fixed; top: 12px; right: 14px; width: 28px; height: 28px; padding: 0; border-radius: var(--radius-capsule); border: 0; background: var(--color-separator); font-size: var(--text-title3); line-height: 1; z-index: 5; }
+  #sheet-x:hover { background: var(--color-control-border); }
   /* V0.1 redesign: rows sit in grouped cards, switches instead of checkboxes, as in macOS
      System Settings and Wispr Flow's settings. */
-  section > .row, section .card-rows > .row { border: 1px solid var(--line); border-top: 0; padding: 10px 14px; background: var(--card); }
-  section > .row:not(.row + .row), section .card-rows > .row:first-child { border-top: 1px solid var(--line); border-radius: 10px 10px 0 0; margin-top: 8px; }
-  section > .row:not(:has(+ .row)), section .card-rows > .row:last-child { border-radius: 0 0 10px 10px; margin-bottom: 14px; }
-  section > .row:not(.row + .row):not(:has(+ .row)) { border-radius: 10px; }
-  input[type=checkbox]:not([data-feature]) { appearance: none; width: 30px; height: 18px; border-radius: 9px; background: var(--line2); position: relative; margin: 0; flex: none; transition: background .15s; }
-  input[type=checkbox]:not([data-feature])::after { content: ''; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: white; box-shadow: 0 1px 2px rgb(0 0 0 / .3); transition: left .15s; }
-  input[type=checkbox]:not([data-feature]):checked { background: var(--violet); }
-  input[type=checkbox]:not([data-feature]):checked::after { left: 14px; }
+  section > .row, section .card-rows > .row { border: 1px solid var(--color-separator); border-top: 0; padding: var(--space-3) var(--space-4); background: var(--color-card-bg); }
+  section > .row:not(.row + .row), section .card-rows > .row:first-child { border-top: 1px solid var(--color-separator); border-radius: var(--radius-card) var(--radius-card) 0 0; margin-top: var(--space-2); }
+  section > .row:not(:has(+ .row)), section .card-rows > .row:last-child { border-radius: 0 0 var(--radius-card) var(--radius-card); margin-bottom: var(--space-4); }
+  section > .row:not(.row + .row):not(:has(+ .row)) { border-radius: var(--radius-card); }
+  input[type=text], input[type=number], input[type=password], select { min-width: 180px; }
   /* The connect dialog. */
-  #connectors-oauth { display: flex; justify-content: center; padding-top: 8px; }
+  #connectors-oauth { display: flex; justify-content: center; padding-top: var(--space-2); }
   #connectors-oauth.hidden { display: none; }
-  .dialog { width: 100%; max-width: 520px; border: 1px solid var(--line); border-radius: 14px; background: var(--card); display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 10px 40px rgb(0 0 0 / .10); }
-  .dialog-head { display: flex; align-items: center; gap: 10px; padding: 14px 18px; border-bottom: 1px solid var(--line); }
-  .dialog-head h1 { flex: 1; margin: 0; font-size: 16px; }
-  .glyph { width: 28px; height: 28px; border-radius: 8px; background: var(--line); display: flex; align-items: center; justify-content: center; font-weight: 700; }
-  .step-count { font-size: 12px; color: var(--muted); }
-  .steps { display: flex; gap: 8px; margin: 0; padding: 12px 18px 0; list-style: none; }
-  .steps li { flex: 1; display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
-  .steps .n { width: 18px; height: 18px; border-radius: 999px; background: var(--line); display: flex; align-items: center; justify-content: center; font-size: 11px; color: inherit; }
-  .steps li.now { color: CanvasText; font-weight: 600; }
-  .steps li.now .n { background: var(--violet); color: #fff; }
-  .steps li.done .n { background: var(--ok); color: #fff; }
-  .dialog-body { padding: 16px 18px; display: flex; flex-direction: column; gap: 14px; }
+  .dialog { width: 100%; max-width: 520px; border: 1px solid var(--color-separator); border-radius: var(--radius-sheet); background: var(--color-card-bg); display: flex; flex-direction: column; overflow: hidden; box-shadow: var(--shadow-popover); }
+  .dialog-head { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-4) var(--space-5); border-bottom: 1px solid var(--color-separator); }
+  .dialog-head h1 { flex: 1; margin: 0; font-size: var(--text-title3); }
+  .glyph { width: 28px; height: 28px; border-radius: var(--radius-control); background: var(--color-separator); display: flex; align-items: center; justify-content: center; font-weight: 700; }
+  .step-count { font-size: var(--text-callout); color: var(--color-label-secondary); }
+  .steps { display: flex; gap: var(--space-2); margin: 0; padding: var(--space-3) var(--space-5) 0; list-style: none; }
+  .steps li { flex: 1; display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-callout); color: var(--color-label-secondary); }
+  .steps .n { width: 18px; height: 18px; border-radius: var(--radius-capsule); background: var(--color-separator); display: flex; align-items: center; justify-content: center; font-size: var(--text-subheadline); color: inherit; }
+  .steps li.now { color: var(--color-label); font-weight: 600; }
+  .steps li.now .n { background: var(--color-accent); color: var(--color-on-accent); }
+  .steps li.done .n { background: var(--color-green); color: var(--color-on-accent); }
+  .dialog-body { padding: var(--space-4) var(--space-5); display: flex; flex-direction: column; gap: var(--space-4); }
   .dialog-body .lead { margin: 0; }
-  .dialog-body .small { font-size: 12px; }
-  .field { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
+  .dialog-body .small { font-size: var(--text-callout); }
+  .field { display: flex; flex-direction: column; gap: var(--space-2); margin-top: var(--space-3); }
   .field span { font-weight: 600; }
-  .field small { font-weight: 400; color: var(--muted); }
-  .field input { min-width: 0; width: 100%; padding: 7px 10px; border-radius: 8px; }
-  .choice { border: 0; margin: 0 0 14px; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-  .choice legend { padding: 0; margin-bottom: 8px; font-weight: 600; }
-  .chips { display: flex; gap: 8px; }
-  .chips label { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; height: 34px; border-radius: 8px; border: 1.5px solid var(--line2); }
-  .chips label:has(input:checked) { border-color: var(--violet); background: color-mix(in srgb, var(--violet) 10%, transparent); font-weight: 600; }
-  .chips input { margin: 0; accent-color: var(--violet); }
-  .choice .say { color: var(--muted); }
+  .field small { font-weight: 400; color: var(--color-label-secondary); }
+  .field input { min-width: 0; width: 100%; padding: var(--space-2) var(--space-3); border-radius: var(--radius-control); }
+  .choice { border: 0; margin: 0 0 var(--space-4); padding: 0; display: flex; flex-direction: column; gap: var(--space-2); }
+  .choice legend { padding: 0; margin-bottom: var(--space-2); font-weight: 600; }
+  .chips { display: flex; gap: var(--space-2); }
+  .chips label { flex: 1; display: flex; align-items: center; justify-content: center; gap: var(--space-2); height: 34px; border-radius: var(--radius-control); border: 1.5px solid var(--color-control-border); }
+  .chips label:has(input:checked) { border-color: var(--color-accent); background: var(--color-accent-soft); font-weight: 600; }
+  .chips input { margin: 0; accent-color: var(--color-accent); }
+  .choice .say { color: var(--color-label-secondary); }
   .choice .say:empty { display: none; }
-  .checks { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
-  .checks label { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-top: 1px solid var(--line); }
+  .checks { border: 1px solid var(--color-separator); border-radius: var(--radius-card); overflow: hidden; }
+  .checks label { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); border-top: 1px solid var(--color-separator); }
   .checks label:first-child { border-top: 0; }
-  .checks input { margin: 0; accent-color: var(--violet); }
-  .dialog-foot { display: flex; align-items: center; gap: 8px; padding: 12px 18px; border-top: 1px solid var(--line); }
+  .checks input { margin: 0; accent-color: var(--color-accent); }
+  .dialog-foot { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-3) var(--space-5); border-top: 1px solid var(--color-separator); }
   .dialog-foot .state { flex: 1; text-align: right; }
 
 </style>
 </head>
-<body>
+<body class="ui-native">
 <nav>
   <input id="search" type="search" placeholder="Search settings" aria-label="Search settings">
   <a href="#setup">Setup check</a>
@@ -188,7 +172,7 @@
     <div id="providers-simple">
       <div class="row" data-words="speech provider speechmatics key test"><div class="what">Speech<small id="speech-name">Used by dictation</small><small class="state" id="speech-state"></small></div><span><input type="password" id="speech-key" placeholder="Paste a new key" autocomplete="off"> <button data-key-save="speech">Save</button> <button data-key-test="speech">Test</button></span></div>
       <div class="row" data-words="cleanup provider groq key test"><div class="what">Cleanup<small id="cleanup-name">Used by dictation cleanup</small><small class="state" id="cleanup-state"></small></div><span><input type="password" id="cleanup-key" placeholder="Paste a new key" autocomplete="off"> <button data-key-save="cleanup">Save</button> <button data-key-test="cleanup">Test</button></span></div>
-      <p class="lead" style="margin-top:12px">Turn on <a class="link" href="#general">Show advanced</a> to choose other providers and models.</p>
+      <p class="lead" style="margin-top:var(--space-3)">Turn on <a class="link" href="#general">Show advanced</a> to choose other providers and models.</p>
     </div>
     <div id="providers-advanced" class="hidden" data-words="provider model openai openrouter gemini anthropic local custom endpoint reasoning">
       <table class="roles">
@@ -204,7 +188,7 @@
       <div class="who" id="approval-who"></div>
       <h2 id="approval-title"></h2>
       <div class="message" id="approval-message"></div>
-      <p class="lead hidden" id="approval-note" style="margin:4px 0 0"></p>
+      <p class="lead hidden" id="approval-note" style="margin:var(--space-1) 0 0"></p>
       <div class="keys" id="approval-keys"></div>
     </div>
     <div id="connectors-list">
@@ -286,7 +270,7 @@
       <div class="row hidden" id="page-oauth-row" data-words="sign in again disconnect account"><div class="what">Account<small id="page-disconnect-note">Disconnect removes access and deletes what HyperMe cached from this account.</small></div><span style="white-space:nowrap"><button id="page-sign-in">Sign in again</button> <button id="page-disconnect">Disconnect</button></span></div>
       <div id="page-approvals"></div>
       <div id="page-requests"></div>
-      <p class="lead" style="margin-top:14px">Tools<span id="page-unverified" class="warn hidden"> · names not checked against the live server yet</span></p>
+      <p class="lead" style="margin-top:var(--space-4)">Tools<span id="page-unverified" class="warn hidden"> · names not checked against the live server yet</span></p>
       <div id="page-tools"></div>
     </div>
   </section>
@@ -302,10 +286,10 @@
     <div class="row" data-words="timing traces stages measure keep"><div class="what">Keep timing traces<small>Stage timings of each dictation for 30 days, even with history off. Numbers only, never text.</small></div><input type="checkbox" data-section="history" data-key="keep_traces"></div>
     <div class="row" data-words="timing log measure"><div class="what">Timing log<small>One line of stage timings per dictation, numbers only.</small></div><input type="checkbox" data-section="timing" data-key="log"></div>
     <div id="privacy-connectors" class="hidden" data-words="connected accounts google calendar mail privacy">
-      <p class="lead" style="margin:16px 0 4px">Connected accounts</p>
+      <p class="lead" style="margin:var(--space-4) 0 var(--space-1)">Connected accounts</p>
       <div id="privacy-accounts"></div>
-      <p class="lead" id="privacy-where" style="margin:8px 0 0"></p>
-      <p class="lead" id="privacy-kept" style="margin:4px 0 0"></p>
+      <p class="lead" id="privacy-where" style="margin:var(--space-2) 0 0"></p>
+      <p class="lead" id="privacy-kept" style="margin:var(--space-1) 0 0"></p>
     </div>
   </section>
 
@@ -313,15 +297,15 @@
     <div class="row" style="border:0;padding-top:0"><div><h1>Diagnostics</h1><p class="lead" style="margin:0">How fast your dictations are and what failed, from the timing traces on this Mac. Nothing is sent.</p></div><span style="white-space:nowrap"><button id="diag-refresh">Refresh</button> <button class="main" id="diag-report" data-words="report problem bug issue">Report a problem…</button></span></div>
     <p class="lead hidden" id="diag-off" data-words="diagnostics traces off empty"></p>
     <div id="diag-body" class="hidden">
-      <p class="lead" style="margin:16px 0 4px">Key release to text</p>
+      <p class="lead" style="margin:var(--space-4) 0 var(--space-1)">Key release to text</p>
       <div id="diag-release" data-words="latency speed key release text median slow budget"></div>
       <p class="state bad hidden" id="diag-slow"></p>
-      <p class="lead" style="margin:16px 0 4px">Stages, last 7 days</p>
+      <p class="lead" style="margin:var(--space-4) 0 var(--space-1)">Stages, last 7 days</p>
       <table class="diag" data-words="stages speech cleanup provider model median"><thead><tr><th>Stage</th><th>Provider</th><th class="n">Median</th><th class="n">90%</th><th class="n">Dictations</th></tr></thead><tbody id="diag-stages"></tbody></table>
-      <p class="lead" style="margin:16px 0 4px">Outcomes, last 7 days</p>
+      <p class="lead" style="margin:var(--space-4) 0 var(--space-1)">Outcomes, last 7 days</p>
       <div id="diag-outcomes" data-words="outcomes pasted copied failed cancelled failures errors"></div>
     </div>
-    <p class="lead" style="margin:16px 0 4px">Warnings and errors</p>
+    <p class="lead" style="margin:var(--space-4) 0 var(--space-1)">Warnings and errors</p>
     <pre id="diag-warnings" data-words="warnings errors log"></pre>
     <p class="state bad" id="diag-error"></p>
   </section>
