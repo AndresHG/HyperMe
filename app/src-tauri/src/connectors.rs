@@ -592,7 +592,7 @@ mod tests {
         assert_eq!(view.rows[0].state, "Works · not synced yet");
         assert_eq!(view.pages[0].id, "google:personal");
         assert!(view.pages[0].account);
-        assert!(!view.pages[0].tools_verified);
+        assert!(view.pages[0].tools_verified);
         let shown = serde_json::to_string(&view).unwrap();
         assert!(!shown.contains("fake-refresh-token"), "{shown}");
     }

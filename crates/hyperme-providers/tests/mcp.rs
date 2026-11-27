@@ -346,3 +346,48 @@ async fn a_revoked_sign_in_reaches_the_sync_as_one_alert() {
         Err(SyncError::SignInAgain)
     ));
 }
+
+/// Slice 1 (live check, 27 November 2026): Google's servers answer `initialize` with "Method
+/// not supported" and speak only the stateless lifecycle; the client connects anyway.
+#[tokio::test]
+async fn connects_to_a_server_that_refuses_initialize() {
+    let oauth = FakeOAuth::start().await;
+    let accept = {
+        let oauth = oauth.clone();
+        Arc::new(move |token: &str| oauth.issued_access_tokens().iter().any(|t| t == token))
+    };
+    let mcp = FakeMcp::start_stateless(accept).await;
+    let client = Arc::new(OAuthClient::new(OAuthConfig {
+        auth_url: oauth.auth_url(),
+        token_url: oauth.token_url(),
+        revoke_url: None,
+        client_id: "fake-client-id".to_owned(),
+        client_secret: None,
+        extra_auth_params: Vec::new(),
+    }));
+    let store = Arc::new(MemorySecretStore::default());
+    let first = client
+        .sign_in(
+            &AllowingBrowser,
+            &*store,
+            ACCOUNT,
+            &["mail.read"],
+            DEFAULT_LISTEN_TIMEOUT,
+        )
+        .await
+        .unwrap();
+    let auth = Arc::new(AccountAuth::new(client, store, ACCOUNT).with_token(first));
+    let server = RemoteServer::new(
+        SERVER,
+        mcp.url(),
+        auth,
+        Arc::new(MemoryRequestLog::default()),
+        Arc::new(day),
+    );
+    let tools = server.list_tools().await.unwrap();
+    assert_eq!(tools.len(), 2);
+    server
+        .call_tool(READ_TOOL, None, &allow(&[READ_TOOL]))
+        .await
+        .unwrap();
+}

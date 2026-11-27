@@ -57,24 +57,31 @@ impl ToolCaller for FakeGmail {
         self.calls.lock().unwrap().push((tool.to_owned(), args));
         match tool {
             "search_threads" => Ok(json!({ "threads": self.threads.lock().unwrap().clone() })),
-            "get_thread" => Ok(json!({ "messages": [
-                { "body": "earlier message" },
-                { "body": self.body.lock().unwrap().clone() },
+            "get_thread" => Ok(json!({ "id": "t9", "messageCount": 2, "messages": [
+                { "plaintextBody": "earlier message" },
+                { "plaintextBody": self.body.lock().unwrap().clone() },
             ]})),
             other => Err(format!("{other} is not allowed").into()),
         }
     }
 }
 
+/// A thread in the live answer's shape (slice 1): {id, messages: [Message]}. `labels` are on
+/// every message; `last` are added to the last one (SENT when the account wrote last).
 fn thread(id: &str, subject: &str, labels: &[&str], last: &[&str]) -> Value {
+    let mut last_labels: Vec<&str> = labels.to_vec();
+    last_labels.extend(last.iter().filter(|l| !labels.contains(l)));
     json!({
         "id": id,
-        "subject": subject,
-        "from": "Synthetic Sender <sender@example.test>",
-        "snippet": format!("snippet of {id}"),
-        "date": "2026-11-26T18:00:00Z",
-        "labels": labels,
-        "lastMessage": { "labels": last },
+        "messageCount": 2,
+        "messages": [
+            { "id": format!("{id}-a"), "subject": subject, "sender": "someone@example.test",
+              "snippet": "an earlier message", "internalDate": "1795700000000", "labelIds": labels },
+            { "id": format!("{id}-b"), "subject": format!("Re: {subject}"),
+              "sender": "Synthetic Sender <sender@example.test>",
+              "snippet": format!("snippet of {id}"), "internalDate": "1795716000000",
+              "labelIds": last_labels },
+        ],
     })
 }
 
@@ -240,7 +247,7 @@ async fn a_body_is_read_on_demand_as_data() {
     let calls = gmail.calls.lock().unwrap().clone();
     assert_eq!(calls.len(), 1);
     assert_eq!(calls[0].0, "get_thread");
-    assert_eq!(calls[0].1["thread_id"], "t9");
+    assert_eq!(calls[0].1["threadId"], "t9");
     assert!(
         store.all(None).unwrap().is_empty(),
         "the body is not cached"
