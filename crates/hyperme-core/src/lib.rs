@@ -19,6 +19,7 @@ pub mod health;
 pub mod hints;
 pub mod learning;
 pub mod registry;
+pub mod report;
 pub mod schedule;
 pub mod scheduler;
 pub mod secrets;

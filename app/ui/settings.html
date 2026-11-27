@@ -61,6 +61,11 @@
   .diag td { padding: 8px 8px 8px 0; border-bottom: 1px solid var(--line); }
   .diag td.n { text-align: right; font-variant-numeric: tabular-nums; }
   .faint { color: var(--muted); }
+  /* Report a problem (specs/200-diagnostics, R-13 to R-16): the whole bundle, read before anything happens. */
+  #report { position: fixed; inset: 0; background: color-mix(in srgb, Canvas 70%, transparent); display: flex; align-items: center; justify-content: center; z-index: 10; }
+  #report > div { background: Canvas; border: 1px solid var(--line); border-radius: 12px; width: min(760px, 92vw); max-height: 88vh; display: flex; flex-direction: column; gap: 8px; padding: 16px 18px; box-shadow: 0 12px 40px rgba(0,0,0,.25); }
+  #report textarea { font: inherit; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--line); background: Canvas; color: inherit; min-height: 54px; resize: vertical; }
+  #report pre { font: 11px ui-monospace, monospace; white-space: pre-wrap; overflow: auto; flex: 1; min-height: 200px; margin: 0; padding: 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--side); }
   #diag-warnings { font: 11px ui-monospace, monospace; white-space: pre-wrap; color: var(--muted); margin: 8px 0 0; max-height: 240px; overflow: auto; }
   .toolbar { display: flex; justify-content: space-between; align-items: center; margin-top: 18px; }
   .add { display: flex; gap: 6px; margin-top: 8px; }
@@ -222,7 +227,7 @@
   </section>
 
   <section id="diagnostics">
-    <div class="row" style="border:0;padding-top:0"><div><h1>Diagnostics</h1><p class="lead" style="margin:0">How fast your dictations are and what failed, from the timing traces on this Mac. Nothing is sent.</p></div><button id="diag-refresh">Refresh</button></div>
+    <div class="row" style="border:0;padding-top:0"><div><h1>Diagnostics</h1><p class="lead" style="margin:0">How fast your dictations are and what failed, from the timing traces on this Mac. Nothing is sent.</p></div><span style="white-space:nowrap"><button id="diag-refresh">Refresh</button> <button class="main" id="diag-report" data-words="report problem bug issue">Report a problem…</button></span></div>
     <p class="lead hidden" id="diag-off" data-words="diagnostics traces off empty"></p>
     <div id="diag-body" class="hidden">
       <p class="lead" style="margin:16px 0 4px">Key release to text</p>
@@ -237,6 +242,18 @@
     <pre id="diag-warnings" data-words="warnings errors log"></pre>
     <p class="state bad" id="diag-error"></p>
   </section>
+
+  <div id="report" class="hidden" role="dialog" aria-label="Report a problem">
+    <div>
+      <h1>Report a problem</h1>
+      <p class="lead" style="margin:0">This is everything in the report. Nothing is sent: Open issue opens a GitHub page in your browser and shows the saved file for you to attach.</p>
+      <textarea id="report-description" placeholder="What happened? (optional, goes in the file)"></textarea>
+      <label id="report-ips-row" class="hidden"><input type="checkbox" id="report-ips" checked> Include macOS crash reports</label>
+      <pre id="report-text">Building…</pre>
+      <p class="state" id="report-note"></p>
+      <div class="row" style="border:0;padding:0"><button id="report-cancel">Cancel</button><span><button id="report-save">Save…</button> <button class="main" id="report-issue">Open issue</button></span></div>
+    </div>
+  </div>
 
   <section id="advanced">
     <h1>Advanced</h1>
@@ -279,7 +296,11 @@
       showAdvanced(true);
       setTimeout(() => { const row = $('role-' + item); if (row) row.scrollIntoView({ block: 'center' }); }, 0);
     }
-    if (id === 'diagnostics') showDiagnostics();
+    if (id === 'diagnostics') {
+      showDiagnostics();
+      // hyperme settings#diagnostics/report[/<history id>]: Home's Help, a failed item, the crash notice.
+      if (item && item.startsWith('report')) openReport(Number(item.split('/')[1]) || null);
+    }
     document.querySelectorAll('section').forEach((s) => s.classList.toggle('on', s.id === id));
     document.querySelectorAll('nav a').forEach((a) => a.classList.toggle('on', a.getAttribute('href') === '#' + id));
   }
@@ -741,6 +762,50 @@
       ...(failures ? [el('div', { className: 'row' }, el('div', { className: 'what' }, 'Failures by kind', el('small', {}, failures)))] : []));
   }
   $('diag-refresh').addEventListener('click', showDiagnostics);
+
+  // Report a problem (R-12 to R-16, R-24): build on the Mac, show it all, then Save or Open issue.
+  let report = null;
+  let reportFrom = null;
+  let reportTimer = null;
+  async function buildReport() {
+    try {
+      report = await invoke('report_build', { description: $('report-description').value, includeReports: $('report-ips').checked, fromItem: reportFrom });
+    } catch (e) { $('report-note').textContent = String(e); return; }
+    $('report-text').textContent = report.text;
+    $('report-ips-row').classList.toggle('hidden', !report.has_reports);
+    $('report-note').textContent = report.trimmed.length ? 'Trimmed to 1 MB: ' + report.trimmed.join(', ') + '.' : '';
+  }
+  function openReport(from) {
+    reportFrom = from;
+    report = null;
+    $('report-description').value = '';
+    $('report-text').textContent = 'Building…';
+    $('report-note').textContent = '';
+    $('report').classList.remove('hidden');
+    buildReport();
+  }
+  function closeReport() {
+    $('report').classList.add('hidden');
+    if (location.hash.startsWith('#diagnostics/')) history.replaceState(null, '', '#diagnostics');
+  }
+  $('diag-report').addEventListener('click', () => openReport(null));
+  $('report-cancel').addEventListener('click', closeReport);
+  $('report-ips').addEventListener('change', buildReport);
+  $('report-description').addEventListener('input', () => { clearTimeout(reportTimer); reportTimer = setTimeout(buildReport, 400); });
+  $('report-save').addEventListener('click', async () => {
+    if (!report) return;
+    try {
+      const path = await invoke('report_save', { text: report.text });
+      if (path) $('report-note').textContent = 'Saved to ' + path + '.';
+    } catch (e) { $('report-note').textContent = String(e); }
+  });
+  $('report-issue').addEventListener('click', async () => {
+    if (!report) return;
+    try {
+      const path = await invoke('report_open_issue', { text: report.text, url: report.url });
+      $('report-note').textContent = 'Saved to ' + path + '. Attach it to the issue in your browser.';
+    } catch (e) { $('report-note').textContent = String(e); }
+  });
 
   showSection();
   refresh().catch((e) => { $('error').textContent = String(e); });
