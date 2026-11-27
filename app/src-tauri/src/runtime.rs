@@ -889,7 +889,7 @@ pub fn menu_action(app: &AppHandle, id: &str) {
         }
         "settings" => crate::settings::open(app, "setup"),
         "open-home" => crate::home::open(app, "home"),
-        "dictionary" => crate::settings::open(app, "dictionary"),
+        "dictionary" => crate::home::open(app, "dictionary"),
         "retry" => {
             if let Some(events) = lock(app).events.clone() {
                 let _ = events.try_send(Event::Retry(None));

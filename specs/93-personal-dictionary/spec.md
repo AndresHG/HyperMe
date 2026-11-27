@@ -68,11 +68,10 @@ EARS form. "The app" is HyperMe running on macOS.
 
 ### Adding and editing words
 
-- R-10. The Settings window shall have a **Dictionary** section, one click from the menu-bar
-  menu ("Dictionary…"), that lists the entries with their heard forms, where they came from and
-  how often they were used, with search, add, edit and delete (owner, 26 November 2026: "a
-  section in the settings to add more words, similar to Wispr Flow"). When the Home window
-  exists, the same page also appears in its sidebar; both show and edit the same dictionary.
+- R-10. The Home window shall have a **Dictionary** section in its sidebar, one click from the
+  menu-bar menu ("Dictionary…"), that lists the entries with their heard forms, with search, add,
+  edit and delete, in Wispr Flow's layout. It is not in Settings: showing it in both overlapped
+  (V0.1 redesign, owner, 27 November 2026; this replaces "a section in the settings", 26 November).
 - R-10a. A change made on the Dictionary page shall take effect from the next dictation, with
   no restart.
 - R-11. When the user adds an entry, the app shall ask for the written form and, optionally, the
