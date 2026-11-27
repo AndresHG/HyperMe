@@ -106,7 +106,8 @@ EARS form. "The app" is HyperMe running on macOS.
 
 - R-16. The app shall pull calendar events for today and the next 7 days, and mail metadata
   (sender, subject, snippet, date, labels, thread id) for the inbox, as scheduler jobs of #92
-  named `sync:google-calendar` and `sync:google-mail`: every 30 minutes while the user is
+  named `sync:google-calendar` and `sync:google-gmail` (`sync:<connector>-<server>`, owner,
+  27 November 2026): every 30 minutes while the user is
   present, once on the morning presence event, and on "Hyper, what's next". No network call
   happens on a card's path; a card shows the cached data and "Updating…" until a running sync
   ends.

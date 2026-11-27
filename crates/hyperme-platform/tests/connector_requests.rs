@@ -72,7 +72,7 @@ fn an_older_file_gains_the_table() {
     let path = temp_db("older");
     drop(SqliteTaskStore::open(&path).unwrap());
     let db = rusqlite::Connection::open(&path).unwrap();
-    db.execute_batch("DROP TABLE connector_requests; DROP TABLE events; DROP TABLE mail_meta; PRAGMA user_version = 2;")
+    db.execute_batch("DROP TABLE connector_requests; DROP TABLE events; DROP TABLE mail_meta; DROP TABLE connector_sign_in; PRAGMA user_version = 2;")
         .unwrap();
     drop(db);
 
@@ -110,4 +110,28 @@ fn disconnect_deletes_only_that_accounts_rows() {
             .calls,
         1
     );
+}
+
+/// specs/97-google-connectors R-10, AC-4: the "Sign in again" mark survives a restart, is set
+/// once (so the alert is raised once), clears on a new sign-in, and goes with Disconnect.
+#[test]
+fn the_sign_in_mark_is_kept_and_set_once() {
+    use hyperme_core::health::AccountStatusStore;
+    use time::UtcDateTime;
+
+    let path = temp_db("sign_in");
+    let store = SqliteTaskStore::open(&path).unwrap();
+    let now = UtcDateTime::now();
+    assert!(!store.sign_in_needed("google:work").unwrap());
+    assert!(store.mark_sign_in_needed("google:work", now).unwrap());
+    assert!(!store.mark_sign_in_needed("google:work", now).unwrap());
+    drop(store);
+
+    let store = SqliteTaskStore::open(&path).unwrap();
+    assert!(store.sign_in_needed("google:work").unwrap());
+    store.clear("google:work").unwrap();
+    assert!(!store.sign_in_needed("google:work").unwrap());
+    store.mark_sign_in_needed("google:work", now).unwrap();
+    store.delete_account("google:work").unwrap();
+    assert!(!store.sign_in_needed("google:work").unwrap());
 }

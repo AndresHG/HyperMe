@@ -12,7 +12,7 @@ use hyperme_core::config::Connectors;
 use hyperme_core::connector_settings as cs;
 use hyperme_core::registry::Pull;
 use hyperme_core::schedule::Zone;
-use hyperme_core::sync::{self, MailStore, MemoryMail, ToolCaller};
+use hyperme_core::sync::{self, MailStore, MemoryMail, SyncError, ToolCaller};
 use hyperme_core::tasks::{Source, Status, TaskStore};
 use serde_json::{Value, json};
 use tasks_store::MemoryTaskStore;
@@ -53,7 +53,7 @@ impl FakeGmail {
 }
 
 impl ToolCaller for FakeGmail {
-    async fn call(&self, _server: &str, tool: &str, args: Value) -> Result<Value, String> {
+    async fn call(&self, _server: &str, tool: &str, args: Value) -> Result<Value, SyncError> {
         self.calls.lock().unwrap().push((tool.to_owned(), args));
         match tool {
             "search_threads" => Ok(json!({ "threads": self.threads.lock().unwrap().clone() })),
@@ -61,7 +61,7 @@ impl ToolCaller for FakeGmail {
                 { "body": "earlier message" },
                 { "body": self.body.lock().unwrap().clone() },
             ]})),
-            other => Err(format!("{other} is not allowed")),
+            other => Err(format!("{other} is not allowed").into()),
         }
     }
 }

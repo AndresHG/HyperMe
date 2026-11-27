@@ -7,7 +7,7 @@
 
 use serde::Serialize;
 
-/// The Home window's label. Only the macOS window uses it until Linux and Windows follow.
+/// The Home window's label. Only the macOS window code uses it so far.
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub const HOME: &str = "home";
 
