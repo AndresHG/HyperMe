@@ -38,6 +38,23 @@ use tauri::image::Image;
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::TrayIconBuilder;
 
+/// Writes a crash file to `~/Library/Logs/HyperMe/crashes/` on a panic, and keeps that folder to
+/// ten files from the last 30 days (spec 200, R-21 to R-23). The notice it leaves is read with
+/// Report a problem (slice 5).
+#[cfg(target_os = "macos")]
+fn install_crash_hook() {
+    use hyperme_platform::crash::LocalCrashFiles;
+    let Some(home) = std::env::var_os("HOME").map(std::path::PathBuf::from) else {
+        return;
+    };
+    let files = LocalCrashFiles::for_home(&home, env!("CARGO_PKG_VERSION"));
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs());
+    files.folder().prune(now);
+    files.folder().clone().install();
+}
+
 /// The pill window's label.
 #[cfg(target_os = "macos")]
 const PILL: &str = "pill";
@@ -51,6 +68,8 @@ fn activate_at_launch() -> bool {
 }
 
 fn main() {
+    #[cfg(target_os = "macos")]
+    install_crash_hook();
     let builder = tauri::Builder::default();
     #[cfg(target_os = "macos")]
     let builder = builder
