@@ -17,4 +17,4 @@ Slices 2, 3 and 4 can run in parallel once slice 1 has merged.
 
 Slices 1 to 4 merged (#189, #190, #192, #193). Slice 5's numbers are in
 `docs/results/2026-11-27-trace-budgets.md`: both budgets hold. The `history_write` span of R-2 is
-not recorded yet; it is issue-tracked with the slice 5 PR.
+not recorded yet; it is issue 195.
