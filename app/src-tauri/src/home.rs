@@ -456,9 +456,15 @@ mod window {
         if !others.iter().any(|w| app.get_webview_window(w).is_some()) {
             let _ = app.set_activation_policy(tauri::ActivationPolicy::Accessory);
         }
-        // AppKit frees the closed window on its next main-loop turn; post an event so that turn
-        // comes now, not at the next open (AC-2). Twice, a moment apart: the first turn runs
-        // the close, the second the release.
+        free_closed_window(app);
+    }
+
+    /// AppKit frees a closed window, and WebKit ends its page process, on the next main-loop
+    /// turn. An idle menu-bar app may not get one until the user next does something, so the
+    /// page's 25 MB or more stays (spec 98 AC-2; the same leak in Settings, 27 November 2026).
+    /// Posts an event so that turn comes now. Twice, a moment apart: the first turn runs the
+    /// close, the second the release. Every window calls this once it is destroyed.
+    pub fn free_closed_window(app: &AppHandle) {
         let app = app.clone();
         std::thread::spawn(move || {
             for _ in 0..2 {
