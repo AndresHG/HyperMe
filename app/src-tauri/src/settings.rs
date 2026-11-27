@@ -23,31 +23,79 @@ fn config_path(app: &AppHandle) -> PathBuf {
     crate::runtime::data_dir(app).join("config.toml")
 }
 
-/// Opens Settings, or brings it to the front, at `section` (`providers`, for example).
+/// The sheet's size when Home has room for it (V0.1 redesign).
+const SHEET: (f64, f64) = (820.0, 580.0);
+/// The smallest sheet; Home's own minimum is 720 × 480.
+const SHEET_MIN: (f64, f64) = (640.0, 440.0);
+
+/// Where the Settings sheet sits over Home, in logical points: centred across, 28 pt below
+/// Home's top edge (under its title bar), and never larger than Home less a margin.
+pub fn sheet_frame(home_pos: (f64, f64), home_size: (f64, f64)) -> (f64, f64, f64, f64) {
+    let w = SHEET.0.min(home_size.0 - 40.0).max(SHEET_MIN.0);
+    let h = SHEET.1.min(home_size.1 - 56.0).max(SHEET_MIN.1);
+    let x = home_pos.0 + (home_size.0 - w) / 2.0;
+    let y = home_pos.1 + 28.0;
+    (x, y, w, h)
+}
+
+/// Opens Settings at `section` (`providers`, for example) as a sheet over the Home window, as in
+/// Wispr Flow (V0.1 redesign, owner, 27 November 2026): Home opens first if it is closed, and the
+/// sheet is a borderless child window that moves with Home and closes with it. The menu, the
+/// walkthrough, Gmail approvals and Home itself all come here.
 pub fn open(app: &AppHandle, section: &str) {
-    let url = format!("settings.html#{section}");
     if let Some(window) = app.get_webview_window(SETTINGS) {
         let _ = window.eval(format!("location.hash = {}", serde_json::json!(section)));
         let _ = window.show();
         let _ = window.set_focus();
         return;
     }
-    let built = WebviewWindowBuilder::new(app, SETTINGS, WebviewUrl::App(url.into()))
+    if app.get_webview_window(crate::home::HOME).is_none() {
+        crate::home::open(app, "home");
+    }
+    let Some(home) = app.get_webview_window(crate::home::HOME) else {
+        return;
+    };
+    let scale = home.scale_factor().unwrap_or(1.0);
+    let (Ok(pos), Ok(size)) = (home.outer_position(), home.outer_size()) else {
+        return;
+    };
+    let (pos, size) = (pos.to_logical::<f64>(scale), size.to_logical::<f64>(scale));
+    let (x, y, w, h) = sheet_frame((pos.x, pos.y), (size.width, size.height));
+    let url = format!("settings.html#{section}");
+    let Ok(builder) = WebviewWindowBuilder::new(app, SETTINGS, WebviewUrl::App(url.into()))
         .title("HyperMe Settings")
-        .inner_size(760.0, 540.0)
-        .min_inner_size(640.0, 440.0)
-        .build();
-    if let Ok(window) = built {
+        .inner_size(w, h)
+        .position(x, y)
+        .decorations(false)
+        .resizable(false)
+        .shadow(true)
+        .parent(&home)
+    else {
+        return;
+    };
+    if let Ok(window) = builder.build() {
+        let _ = home.eval("document.body.classList.add('sheet-open')");
         // Its page process must end when it closes, or it stays in memory while idle.
         let handle = app.clone();
         window.on_window_event(move |event| {
             if matches!(event, tauri::WindowEvent::Destroyed) {
                 // An approval card left open answers nothing (specs/166, R-9).
                 crate::approvals::window_closed();
+                if let Some(home) = handle.get_webview_window(crate::home::HOME) {
+                    let _ = home.eval("document.body.classList.remove('sheet-open')");
+                }
                 crate::home::free_closed_window(&handle);
             }
         });
         let _ = window.set_focus();
+    }
+}
+
+/// Closes the Settings sheet: its × button, Esc, or a click on Home's dimmed page.
+#[tauri::command]
+pub fn settings_close(app: AppHandle) {
+    if let Some(window) = app.get_webview_window(SETTINGS) {
+        let _ = window.close();
     }
 }
 
@@ -769,6 +817,18 @@ pub fn app_restart(app: AppHandle) {
 
 #[cfg(test)]
 mod tests {
+
+    /// V0.1 redesign: the sheet sits centred over Home under its title bar, and shrinks with a
+    /// small Home but never below its minimum.
+    #[test]
+    fn the_sheet_sits_over_home() {
+        assert_eq!(
+            super::sheet_frame((100.0, 50.0), (1000.0, 700.0)),
+            (190.0, 78.0, 820.0, 580.0)
+        );
+        let (_, _, w, h) = super::sheet_frame((0.0, 0.0), (720.0, 480.0));
+        assert_eq!((w, h), (680.0, 440.0));
+    }
 
     /// #216 regression, V0.1 redesign: the account label is a choice (Personal, Work, Other), so
     /// no greyed placeholder can look like a value already filled in; and the Dictionary is not

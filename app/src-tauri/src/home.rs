@@ -445,6 +445,10 @@ mod window {
     /// R-2, R-3: the window and its web view are gone; the Dock icon goes too unless another
     /// window of the app is still open.
     fn closed(app: &AppHandle) {
+        // The Settings sheet belongs to Home and goes with it (V0.1 redesign).
+        if let Some(sheet) = app.get_webview_window(crate::settings::SETTINGS) {
+            let _ = sheet.close();
+        }
         let others = [crate::settings::SETTINGS, crate::walkthrough::WALKTHROUGH];
         if !others.iter().any(|w| app.get_webview_window(w).is_some()) {
             let _ = app.set_activation_policy(tauri::ActivationPolicy::Accessory);
