@@ -45,6 +45,10 @@ now, beside Phase 1; Part B waits for Phase 2 (owner, 26 November 2026, P-1 in [
   are held only while a fallback is set. `Transcript.via` carries the name to the pill and the
   timing line. `FallbackStreak` in the app shows one alert card after three in a row, linking
   to `hyperme://settings/providers/<role>`.
+- Slice 11: `Config::destinations()` lists every provider set, fallbacks included, and Settings
+  → Privacy shows each with what it receives ("Stays on this Mac" for a local server). A test
+  with counting servers shows choosing, saving and rebuilding providers opens no connection;
+  Test is the first request.
 
 ## Later, one pull request each
 

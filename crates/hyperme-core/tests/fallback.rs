@@ -141,3 +141,45 @@ fn a_fallback_of_the_wrong_kind_is_refused() {
     .to_string();
     assert!(msg.contains("cleanup.fallback"), "{msg}");
 }
+
+/// AC-14 (R-29): the Privacy section's list names every provider set, fallbacks included, and
+/// a server on this Mac as such.
+#[test]
+fn ac14_every_provider_set_is_a_destination_fallbacks_included() {
+    let only = Config::default().destinations();
+    let names: Vec<&str> = only.iter().map(|d| d.name.as_str()).collect();
+    assert_eq!(names, ["Speechmatics", "Groq"]);
+    assert!(
+        only.iter()
+            .all(|d| d.fallback_for.is_none() && !d.on_this_mac)
+    );
+
+    let text = config::set_fallback(
+        DEFAULT_CONFIG,
+        Role::Cleanup,
+        Some(("openai", "gpt-6-luna")),
+    )
+    .unwrap();
+    let text = config::set_fallback(
+        &text,
+        Role::Speech,
+        Some(("openai-speech", "gpt-live-transcribe")),
+    )
+    .unwrap();
+    let both = Config::parse(&text, Path::new("config.toml"))
+        .unwrap()
+        .destinations();
+    let shown: Vec<(Role, &str, Option<&str>)> = both
+        .iter()
+        .map(|d| (d.role, d.name.as_str(), d.fallback_for.as_deref()))
+        .collect();
+    assert_eq!(
+        shown,
+        [
+            (Role::Speech, "Speechmatics", None),
+            (Role::Speech, "OpenAI", Some("Speechmatics")),
+            (Role::Cleanup, "Groq", None),
+            (Role::Cleanup, "OpenAI", Some("Groq")),
+        ]
+    );
+}
