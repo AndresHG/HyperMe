@@ -344,9 +344,13 @@ impl RemoteServer {
                 params.request_state = Some(state);
                 continue;
             }
+            // Every form is read before anyone is asked, so no choice is thrown away (R-12).
+            let forms = requests
+                .iter()
+                .map(|(key, request)| Ok((key.clone(), Form::read(request, name)?)))
+                .collect::<Result<Vec<_>, ConnectorError>>()?;
             let mut responses = InputResponses::new();
-            for (key, request) in requests {
-                let form = Form::read(&request, name)?;
+            for (key, form) in forms {
                 let ask = ApprovalAsk {
                     account: self.auth.account.clone(),
                     server: self.id.clone(),
@@ -478,13 +482,27 @@ impl RemoteServer {
             let discover = ClientLifecycleMode::Discover {
                 preferred_versions: vec![ProtocolVersion::LATEST],
             };
-            match (HyperClient { declare: true })
-                .serve_with_lifecycle(self.transport(token), discover)
-                .await
-            {
+            let opened = tokio::time::timeout(
+                CONNECT_TIMEOUT,
+                (HyperClient { declare: true })
+                    .serve_with_lifecycle(self.transport(token), discover),
+            )
+            .await
+            .map_err(|_| {
+                Failure::Other(ConnectorError::Transport(
+                    "server/discover timed out".to_owned(),
+                ))
+            })?;
+            match opened {
                 Ok(service) => return Ok(service),
-                Err(error) if error.is_authorization_required() => return Err(failed(error)),
-                Err(_) => self.legacy.store(true, Ordering::Relaxed),
+                // Only a server that does not know `server/discover` is older; a network
+                // error, a 5xx or any other refusal is returned as it is (R-1a).
+                Err(ClientInitializeError::JsonRpcError(data))
+                    if data.code == rmcp::model::ErrorCode::METHOD_NOT_FOUND =>
+                {
+                    self.legacy.store(true, Ordering::Relaxed);
+                }
+                Err(error) => return Err(failed(error)),
             }
         }
         (HyperClient { declare: false })
@@ -727,6 +745,11 @@ impl hyperme_core::sync::ToolCaller for McpCaller {
             .await
             .map_err(|e| match e {
                 ConnectorError::SignInAgain => hyperme_core::sync::SyncError::SignInAgain,
+                ConnectorError::ApprovalNeeded(_)
+                | ConnectorError::Denied(_)
+                | ConnectorError::AdminBlocked(_) => {
+                    hyperme_core::sync::SyncError::NeedsUser(e.to_string())
+                }
                 other => other.to_string().into(),
             })?;
         if result.is_error == Some(true) {

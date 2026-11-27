@@ -74,6 +74,8 @@ pub enum SyncOutcome<R> {
     Alert(Alert),
     /// The account is waiting for a new sign-in; nothing was tried (R-10).
     SignInNeeded,
+    /// The server waits for the user (specs/166); not a failure (R-16b).
+    NeedsUser(String),
     Failed(String),
 }
 
@@ -107,6 +109,7 @@ where
             Ok(false) => SyncOutcome::SignInNeeded,
             Err(error) => SyncOutcome::Failed(error),
         },
+        Err(SyncError::NeedsUser(reason)) => SyncOutcome::NeedsUser(reason),
         Err(SyncError::Failed(reason)) => SyncOutcome::Failed(reason),
     }
 }

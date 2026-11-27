@@ -26,7 +26,7 @@ use std::time::Instant;
 use hyperme_core::approval::{Approval, ApprovalAsk, ApprovalFuture, Approver, Unattended};
 use hyperme_core::config::Connectors;
 use hyperme_core::connector_settings as cs;
-use hyperme_core::connectors::MemoryRequestLog;
+use hyperme_core::connectors::{MemoryRequestLog, RequestLog};
 use hyperme_core::schedule::Zone;
 use hyperme_core::secrets::{SecretError, SecretStore};
 use hyperme_core::sync::{self, MemoryEvents, MemoryMail, ToolCaller};
@@ -174,6 +174,19 @@ impl Approver for TerminalApprover {
     }
 }
 
+/// A tool's answer as JSON: its structured content, or its first text block, as McpCaller
+/// reads it.
+fn answer_json(result: &rmcp::model::CallToolResult) -> Value {
+    result.structured_content.clone().unwrap_or_else(|| {
+        result
+            .content
+            .iter()
+            .find_map(|block| block.as_text().map(|t| t.text.clone()))
+            .and_then(|text| serde_json::from_str(&text).ok())
+            .unwrap_or(Value::Null)
+    })
+}
+
 /// The approval runs of AC-15: counts, choice values and timings only.
 async fn approvals(
     mode: &str,
@@ -222,7 +235,7 @@ async fn approvals(
     }
     match result {
         Ok(result) => {
-            let answer = result.structured_content.clone().unwrap_or(Value::Null);
+            let answer = answer_json(&result);
             let threads = answer
                 .get("threads")
                 .and_then(Value::as_array)
@@ -231,8 +244,12 @@ async fn approvals(
                 .get("omittedContent")
                 .map(shape)
                 .unwrap_or_else(|| "none".to_owned());
+            // Requests sent, so a silent retry (R-2a) shows: 1 means no `input_required`.
+            let requests = log
+                .usage(ACCOUNT, UtcDateTime::now().date(), "gmail")
+                .map_or(0, |u| u.calls);
             println!(
-                "{mode} {url} {}: ok, {ms} ms, is_error {:?}, {threads} threads, omitted: {omitted}",
+                "{mode} {url} {}: ok, {ms} ms, is_error {:?}, {threads} threads, omitted: {omitted}, requests so far: {requests}",
                 pull.tool, result.is_error
             );
         }
@@ -269,10 +286,8 @@ async fn approvals(
         .await
     {
         Ok(result) => {
-            let events = result
-                .structured_content
-                .as_ref()
-                .and_then(|a| a.get("events"))
+            let events = answer_json(&result)
+                .get("events")
                 .and_then(Value::as_array)
                 .map_or(0, Vec::len);
             println!(

@@ -1001,6 +1001,9 @@ impl Syncer for McpSyncer {
                         let _ = self.store.mark_sign_in_needed(&account, now);
                         failures.push(format!("{account} needs a new sign-in"));
                     }
+                    // Waits for the user's OK, refusal or admin (specs/166): not a failure
+                    // for the job-failed alert (R-16b); slice 2 shows it on the account page.
+                    Err(sync::SyncError::NeedsUser(_)) => {}
                     Err(e) => failures.push(format!("{account}: {e}")),
                 }
             }

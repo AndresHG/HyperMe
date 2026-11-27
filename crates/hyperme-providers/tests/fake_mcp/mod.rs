@@ -47,6 +47,8 @@ struct Seen {
     /// Scripted answers to the read tool, used in order before the normal answer: each is a
     /// result object, `input_required` or complete (specs/166).
     script: std::collections::VecDeque<serde_json::Value>,
+    /// The next this many requests get HTTP 503, as a server having a bad moment.
+    fail_next: usize,
 }
 
 #[derive(Clone)]
@@ -214,6 +216,11 @@ impl FakeMcp {
         self.seen.lock().unwrap().script.extend(answers);
     }
 
+    /// Answers the next `n` requests with HTTP 503.
+    pub fn fail_next(&self, n: usize) {
+        self.seen.lock().unwrap().fail_next = n;
+    }
+
     /// Every JSON-RPC message received, in order.
     pub fn messages(&self) -> Vec<serde_json::Value> {
         self.seen.lock().unwrap().messages.clone()
@@ -263,6 +270,16 @@ async fn answer(
             .header("www-authenticate", "Bearer error=\"invalid_token\"")
             .body(Full::new(Bytes::new()).boxed())
             .unwrap();
+    }
+    {
+        let mut seen = seen.lock().unwrap();
+        if seen.fail_next > 0 {
+            seen.fail_next -= 1;
+            return Response::builder()
+                .status(StatusCode::SERVICE_UNAVAILABLE)
+                .body(Full::new(Bytes::new()).boxed())
+                .unwrap();
+        }
     }
     let (parts, body) = request.into_parts();
     let bytes = body

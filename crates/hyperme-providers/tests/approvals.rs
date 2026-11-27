@@ -14,7 +14,8 @@ use fake_oauth::FakeOAuth;
 use hyperme_core::approval::{Approval, ApprovalAsk, ApprovalFuture, Approver, Unattended};
 use hyperme_core::connectors::MemoryRequestLog;
 use hyperme_core::secrets::MemorySecretStore;
-use hyperme_providers::mcp::{AccountAuth, ConnectorError, RemoteServer};
+use hyperme_core::sync::{SyncError, ToolCaller};
+use hyperme_providers::mcp::{AccountAuth, ConnectorError, McpCaller, RemoteServer};
 use hyperme_providers::oauth::{Browser, DEFAULT_LISTEN_TIMEOUT, OAuthClient, OAuthConfig};
 use serde_json::{Value, json};
 use time::{Date, Month};
@@ -204,7 +205,10 @@ async fn stateless_requests_declare_form_elicitation() {
 }
 
 /// AC-1: an older server that speaks only `initialize` is told nothing about elicitation, so
-/// it never asks and HyperMe never declines on its own (R-1a).
+/// it never asks and HyperMe never declines on its own (R-1a). That is found once: the next
+/// call does not try `server/discover` again. (The other half of R-1a, answering a
+/// server-to-client `elicitation/create` with an error, is `HyperClient::create_elicitation`;
+/// the fake cannot send server-to-client requests, so it has no test here.)
 #[tokio::test]
 async fn legacy_servers_are_not_told_about_elicitation() {
     let (mcp, server) = world(Kind::Legacy).await;
@@ -227,6 +231,37 @@ async fn legacy_servers_are_not_told_about_elicitation() {
         let capabilities = &call["_meta"]["io.modelcontextprotocol/clientCapabilities"];
         assert!(capabilities.get("elicitation").is_none(), "{call}");
     }
+    let discovers = |mcp: &FakeMcp| {
+        mcp.messages()
+            .iter()
+            .filter(|m| m["method"] == "server/discover")
+            .count()
+    };
+    server.list_tools().await.unwrap();
+    assert_eq!(discovers(&mcp), 1);
+}
+
+/// R-1a: a server that fails once (HTTP 503) is not taken for an older one: the next call
+/// still uses the stateless lifecycle and declares form elicitation.
+#[tokio::test]
+async fn a_failed_discover_does_not_make_a_server_legacy() {
+    let (mcp, server) = world(Kind::Stateless).await;
+    mcp.fail_next(1);
+    assert!(server.list_tools().await.is_err());
+    server.list_tools().await.unwrap();
+    let messages = mcp.messages();
+    assert!(
+        !messages.iter().any(|m| m["method"] == "initialize"),
+        "{messages:?}"
+    );
+    let list = messages
+        .iter()
+        .find(|m| m["method"] == "tools/list")
+        .unwrap();
+    assert!(
+        list["params"]["_meta"]["io.modelcontextprotocol/clientCapabilities"]["elicitation"]["form"]
+            .is_object()
+    );
 }
 
 /// AC-2: the server asks; the approver sees Google's question and choices; the retry carries
@@ -309,7 +344,10 @@ async fn unattended_calls_never_answer() {
         "{error:?}"
     );
     assert_eq!(mcp.tool_calls().len(), 1);
-    assert!(!format!("{error} {error:?}").contains("synthetic senders"));
+    let shown = format!("{error} {error:?}");
+    for secret in ["synthetic senders", "list_events?", "b-1", "e-1"] {
+        assert!(!shown.contains(secret), "{secret} in {shown}");
+    }
 }
 
 /// AC-5 (client part): "Don't allow" is sent as the form's own value, and the error that comes
@@ -491,4 +529,15 @@ async fn a_value_the_form_does_not_offer_is_not_sent() {
         "{error:?}"
     );
     assert_eq!(mcp.tool_calls().len(), 1);
+}
+
+/// R-16b: a sync job's caller reports a call waiting for the user as `NeedsUser`, not as a
+/// failure, so it never counts toward the job-failed alert.
+#[tokio::test]
+async fn a_pull_waiting_for_the_user_is_not_a_failure() {
+    let (mcp, server) = world(Kind::Stateless).await;
+    mcp.script(vec![asking()]);
+    let caller = McpCaller::new(vec![server], allow(&[READ_TOOL]));
+    let error = caller.call(SERVER, READ_TOOL, json!({})).await.unwrap_err();
+    assert!(matches!(error, SyncError::NeedsUser(_)), "{error:?}");
 }
