@@ -688,3 +688,86 @@ async fn a_new_job_list_adds_and_removes_jobs() {
         "the removed sync never runs again; roll-over still fires at 04:00"
     );
 }
+
+// --- Nudges --------------------------------------------------------------------------------
+
+use hyperme_core::scheduler::Nudge;
+
+fn nudge(id: &str, at: UtcDateTime, until: UtcDateTime) -> Nudge {
+    Nudge {
+        id: id.into(),
+        at,
+        until,
+    }
+}
+
+/// AC-10, R-22: a task due at 16:00 shows its nudge at 15:50, once, with no wake-up before it
+/// beyond the timer; a meeting at 10:30 is nudged at 10:28.
+#[tokio::test(start_paused = true)]
+async fn a_nudge_shows_once_at_its_time() {
+    let h = Harness::start(local(THU, 9, 0), Vec::new());
+    h.command(Command::SetNudges {
+        nudges: vec![
+            nudge("task:7", local(THU, 15, 50), local(THU, 16, 0)),
+            nudge("meeting:1", local(THU, 10, 28), local(THU, 10, 30)),
+        ],
+    })
+    .await;
+    h.pass(SignedDuration::minutes(87)).await;
+    assert!(h.runs().is_empty(), "nothing before 10:28");
+    h.pass(SignedDuration::minutes(2)).await;
+    assert_eq!(h.runs(), [("meeting:1".to_owned(), local(THU, 10, 28))]);
+    h.pass(SignedDuration::hours(7)).await;
+    assert_eq!(
+        names(&h.runs()),
+        ["meeting:1", "task:7"],
+        "each once, the task at 15:50"
+    );
+    assert_eq!(h.runs()[1].1, local(THU, 15, 50));
+}
+
+/// R-22, R-35: a nudge whose moment passed while the Mac slept is shown on wake only if its
+/// meeting or due time is still ahead; otherwise it is dropped.
+#[tokio::test(start_paused = true)]
+async fn a_nudge_missed_asleep_shows_only_while_still_useful() {
+    let h = Harness::start(local(THU, 9, 0), Vec::new());
+    h.command(Command::SetNudges {
+        nudges: vec![
+            nudge("meeting:1", local(THU, 10, 28), local(THU, 10, 30)),
+            nudge("task:7", local(THU, 10, 50), local(THU, 11, 0)),
+        ],
+    })
+    .await;
+    // Asleep from 09:00 to 10:55: the meeting has started, the task is due in 5 minutes.
+    h.sleep_mac(SignedDuration::minutes(115));
+    h.send(PresenceEvent::Woke).await;
+    h.pass(SignedDuration::SECOND).await;
+    assert_eq!(names(&h.runs()), ["task:7"]);
+}
+
+/// R-23: while HyperMe is paused, nudges are held and not shown; a new list replaces the old.
+#[tokio::test(start_paused = true)]
+async fn nudges_are_held_while_paused_and_replaced_by_a_new_list() {
+    let h = Harness::start(local(THU, 9, 0), Vec::new());
+    h.command(Command::SetNudges {
+        nudges: vec![nudge("task:1", local(THU, 9, 30), local(THU, 9, 40))],
+    })
+    .await;
+    h.command(Command::Pause {
+        until: local(THU, 10, 0),
+    })
+    .await;
+    h.pass(SignedDuration::hours(1)).await;
+    assert!(h.runs().is_empty(), "held during the pause");
+
+    h.command(Command::SetNudges {
+        nudges: vec![nudge("task:2", local(THU, 11, 0), local(THU, 11, 10))],
+    })
+    .await;
+    h.command(Command::SetNudges {
+        nudges: vec![nudge("task:3", local(THU, 11, 5), local(THU, 11, 15))],
+    })
+    .await;
+    h.pass(SignedDuration::hours(2)).await;
+    assert_eq!(names(&h.runs()), ["task:3"]);
+}
