@@ -15,7 +15,7 @@
 //!
 //! - `APPROVE=ask` runs the mail pull's list call on Gmail's `/mcp/v1` (or `URL=...`) and, when
 //!   Google asks, shows its question and choices in the terminal (never its message) and sends
-//!   the number typed;
+//!   the number typed (`SERVER=calendar` for the calendar pull on the preset's endpoint);
 //! - `APPROVE=unattended` runs the same call answering nothing, then the calendar pull on the
 //!   preset's endpoint, as the scheduler would.
 
@@ -194,21 +194,29 @@ async fn approvals(
     auth: Arc<AccountAuth>,
     log: Arc<MemoryRequestLog>,
 ) {
-    let gmail = google.server("gmail").expect("gmail server");
+    // SERVER=calendar asks on the calendar pull instead of the mail pull.
+    let id = std::env::var("SERVER").unwrap_or_else(|_| "gmail".to_owned());
+    let gmail = google.server(&id).expect("server in the preset");
     let hyperme_core::registry::Transport::Http(preset_url) = &gmail.transport else {
         return;
     };
-    let url =
-        std::env::var("URL").unwrap_or_else(|_| preset_url.trim_end_matches("self").to_owned());
+    // Gmail on /mcp/v1 (A-2); other servers on the preset's endpoint.
+    let url = std::env::var("URL").unwrap_or_else(|_| {
+        if id == "gmail" {
+            preset_url.trim_end_matches("self").to_owned()
+        } else {
+            preset_url.clone()
+        }
+    });
     let pull = google
         .pulls
         .iter()
-        .find(|p| p.server == "gmail")
-        .expect("mail pull");
+        .find(|p| p.server == id)
+        .expect("pull for the server");
     let args = sync::expand_args(&pull.args, UtcDateTime::now(), &Local);
     let arguments = args.as_object().cloned();
     let remote = RemoteServer::new(
-        "gmail",
+        &id,
         &url,
         auth.clone(),
         log.clone(),
@@ -246,7 +254,7 @@ async fn approvals(
                 .unwrap_or_else(|| "none".to_owned());
             // Requests sent, so a silent retry (R-2a) shows: 1 means no `input_required`.
             let requests = log
-                .usage(ACCOUNT, UtcDateTime::now().date(), "gmail")
+                .usage(ACCOUNT, UtcDateTime::now().date(), &id)
                 .map_or(0, |u| u.calls);
             println!(
                 "{mode} {url} {}: ok, {ms} ms, is_error {:?}, {threads} threads, omitted: {omitted}, requests so far: {requests}",
