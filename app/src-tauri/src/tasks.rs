@@ -757,6 +757,200 @@ pub fn failed_alert(
     }
 }
 
+/// The local day of `now` on this Mac.
+fn local_day(now: UtcDateTime) -> time::Date {
+    use hyperme_platform::presence::MacClock;
+    now.to_offset(hyperme_core::schedule::Zone::offset_at(&MacClock, now))
+        .date()
+}
+
+/// One account's client for one remote server, with its keychain sign-in and request counter;
+/// `None` for a server that is not remote.
+fn remote_server(
+    connector: &hyperme_core::registry::Connector,
+    server: &hyperme_core::registry::Server,
+    account: &str,
+    store: &Arc<SqliteTaskStore>,
+) -> Result<Option<hyperme_providers::mcp::RemoteServer>, String> {
+    use hyperme_platform::keychain::KeychainStore;
+    use hyperme_providers::mcp::{AccountAuth, RemoteServer};
+    let hyperme_core::registry::Transport::Http(url) = &server.transport else {
+        return Ok(None);
+    };
+    let keychain: Arc<dyn hyperme_core::secrets::SecretStore + Send + Sync> = Arc::new(
+        KeychainStore::with_service(crate::connectors::KEYCHAIN_SERVICE),
+    );
+    let oauth = Arc::new(
+        hyperme_providers::setup::oauth_client(connector, &*keychain).map_err(|e| e.to_string())?,
+    );
+    let auth = Arc::new(AccountAuth::new(oauth, keychain, account));
+    Ok(Some(
+        RemoteServer::new(
+            &server.id,
+            url,
+            auth,
+            store.clone(),
+            Arc::new(|| local_day(UtcDateTime::now())),
+        )
+        .with_units(server.units.clone()),
+    ))
+}
+
+/// What one server's pulls did for one account.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ServerPull {
+    /// How they ended together (specs/166, R-16a).
+    pub end: hyperme_core::health::PullEnd,
+    /// Failures for the job-failed alert: never a state that waits for the user (R-16b).
+    pub failures: Vec<String>,
+    /// Events or threads kept.
+    pub items: usize,
+}
+
+/// Runs every pull of `server` for `account` through `caller`, keeping what they bring (G-5).
+/// A refused sign-in marks the account (spec 97, R-10).
+pub async fn pull_server<C: hyperme_core::sync::ToolCaller>(
+    caller: &C,
+    store: &Arc<SqliteTaskStore>,
+    connector: &hyperme_core::registry::Connector,
+    server: &hyperme_core::registry::Server,
+    account: &str,
+    now: UtcDateTime,
+) -> ServerPull {
+    use hyperme_core::health::{AccountStatusStore, PullEnd};
+    use hyperme_platform::presence::MacClock;
+    let mut pulled = ServerPull {
+        end: PullEnd::Done { held_back: 0 },
+        failures: Vec::new(),
+        items: 0,
+    };
+    for pull in connector.pulls.iter().filter(|p| p.server == server.id) {
+        let result = match pull.into.as_str() {
+            "events" => {
+                sync::pull_events(caller, &**store, &**store, account, pull, now, &MacClock)
+                    .await
+                    .map(|report| (report.events, 0))
+            }
+            "mail" => sync::pull_mail(caller, &**store, &**store, account, pull, now, &MacClock)
+                .await
+                .map(|report| {
+                    let held = u32::try_from(report.held_back).unwrap_or(u32::MAX);
+                    (report.threads, held)
+                }),
+            _ => Ok((0, 0)),
+        };
+        if let Err(sync::SyncError::SignInAgain) = &result {
+            let _ = store.mark_sign_in_needed(account, now);
+            pulled
+                .failures
+                .push(format!("{account} needs a new sign-in"));
+        } else if let Err(e @ sync::SyncError::Failed(_)) = &result {
+            pulled.failures.push(format!("{account}: {e}"));
+        }
+        // "Needs your OK" and the like wait for the user (specs/166): never a failure for the
+        // job-failed alert (R-16b); the account page shows the state.
+        pulled.end = pulled.end.and(match result {
+            Ok((items, held_back)) => {
+                pulled.items += items;
+                PullEnd::Done { held_back }
+            }
+            Err(sync::SyncError::NeedsUser(state)) => PullEnd::NeedsUser(state),
+            Err(_) => PullEnd::Failed,
+        });
+    }
+    pulled
+}
+
+/// Runs one account's server pulls now with `approver` answering what the server asks: the
+/// setup sheet's check, and Review or Ask again on the account page (specs/166, R-8, R-14,
+/// A-3). It runs whatever the server's state, and records how it ended; returns the check line.
+pub async fn review(
+    app: &tauri::AppHandle,
+    account: &str,
+    server_id: &str,
+    approver: Arc<dyn hyperme_core::approval::Approver>,
+) -> Result<String, String> {
+    use hyperme_core::health::after_pull;
+    use hyperme_providers::mcp::McpCaller;
+    use tauri::Manager;
+    let store = app
+        .try_state::<Tasks>()
+        .map(|t| t.store.clone())
+        .ok_or("daily tasks are off")?;
+    let config = config(app)?;
+    let registry = registry(app, &config)?;
+    let entry = config
+        .connectors
+        .accounts
+        .iter()
+        .find(|a| a.id() == account)
+        .ok_or_else(|| format!("no account {account}"))?;
+    let connector = registry
+        .get(&entry.connector)
+        .ok_or_else(|| format!("no connector {}", entry.connector))?;
+    let server = connector
+        .server(server_id)
+        .ok_or_else(|| format!("no server {server_id}"))?;
+    let Some(remote) = remote_server(connector, server, account, &store)? else {
+        return Err(format!("{server_id} is not a remote server"));
+    };
+    let allowlist: Vec<String> = connector
+        .pulls
+        .iter()
+        .filter(|p| p.server == server.id)
+        .map(|p| p.tool.clone())
+        .collect();
+    let caller = McpCaller::new(vec![remote], allowlist).with_approver(approver);
+    let now = UtcDateTime::now();
+    let pulled = pull_server(&caller, &store, connector, server, account, now).await;
+    // A Review never raises the alert: the user is already looking.
+    after_pull(&*store, account, &server.id, pulled.end, local_day(now))?;
+    Ok(check_line(connector, server, &pulled))
+}
+
+/// The line a check or Review shows for one server (specs/166, AC-13).
+pub fn check_line(
+    connector: &hyperme_core::registry::Connector,
+    server: &hyperme_core::registry::Server,
+    pulled: &ServerPull,
+) -> String {
+    use hyperme_core::health::{PullEnd, ServerState};
+    let what = server
+        .label
+        .as_deref()
+        .and_then(|l| l.split(':').next())
+        .unwrap_or(&server.id)
+        .to_owned();
+    let noun = match connector
+        .pulls
+        .iter()
+        .find(|p| p.server == server.id)
+        .map(|p| p.into.as_str())
+    {
+        Some("mail") => "threads",
+        Some("events") => "events",
+        _ => "items",
+    };
+    let lower = what.to_lowercase();
+    match pulled.end {
+        PullEnd::Done { .. } => format!("{what} · works, {} {noun}", pulled.items),
+        PullEnd::NeedsUser(ServerState::NeedsOk) => {
+            format!("{what} · not approved yet: {lower} pulls wait for your OK")
+        }
+        PullEnd::NeedsUser(ServerState::NotAllowed) => {
+            format!("{what} · not allowed: {lower} pulls are skipped")
+        }
+        PullEnd::NeedsUser(ServerState::Blocked) => format!("{what} · blocked by your admin"),
+        PullEnd::Failed => format!(
+            "{what} · {}",
+            pulled
+                .failures
+                .first()
+                .map_or("could not be reached", String::as_str)
+        ),
+    }
+}
+
 /// The "Needs your OK" alert (specs/166, R-8, docs/UX.md "Alerts"): which account's server
 /// waits for an approval, and Review opening that account's page in Settings → Connectors.
 pub fn needs_ok_alert(
@@ -945,12 +1139,8 @@ struct McpSyncer {
 
 impl Syncer for McpSyncer {
     async fn sync(&self, id: &str, allowlist: &[String], now: UtcDateTime) -> Result<(), String> {
-        use hyperme_core::health::{
-            AccountStatusStore, PullEnd, ServerStatusStore, after_pull, pull_runs,
-        };
-        use hyperme_platform::keychain::KeychainStore;
-        use hyperme_platform::presence::MacClock;
-        use hyperme_providers::mcp::{AccountAuth, McpCaller, RemoteServer};
+        use hyperme_core::health::{AccountStatusStore, ServerStatusStore, after_pull, pull_runs};
+        use hyperme_providers::mcp::McpCaller;
 
         let config = config(&self.app)?;
         let registry = registry(&self.app, &config)?;
@@ -962,19 +1152,7 @@ impl Syncer for McpSyncer {
         }) else {
             return Ok(()); // The connector went away; the next rebuild drops the job.
         };
-        let hyperme_core::registry::Transport::Http(url) = &server.transport else {
-            return Ok(());
-        };
-        let keychain: Arc<dyn hyperme_core::secrets::SecretStore + Send + Sync> = Arc::new(
-            KeychainStore::with_service(crate::connectors::KEYCHAIN_SERVICE),
-        );
-        let oauth = Arc::new(
-            hyperme_providers::setup::oauth_client(connector, &*keychain)
-                .map_err(|e| e.to_string())?,
-        );
-        let today = now
-            .to_offset(hyperme_core::schedule::Zone::offset_at(&MacClock, now))
-            .date();
+        let today = local_day(now);
         let mut failures = Vec::new();
         for entry in config.connectors.accounts.iter().filter(|a| {
             a.enabled
@@ -991,62 +1169,13 @@ impl Syncer for McpSyncer {
             if !pull_runs(&status, today) {
                 continue;
             }
-            let auth = Arc::new(AccountAuth::new(oauth.clone(), keychain.clone(), &account));
-            let remote = RemoteServer::new(
-                &server.id,
-                url,
-                auth,
-                self.store.clone(),
-                Arc::new(|| {
-                    let now = UtcDateTime::now();
-                    now.to_offset(hyperme_core::schedule::Zone::offset_at(&MacClock, now))
-                        .date()
-                }),
-            )
-            .with_units(server.units.clone());
+            let Some(remote) = remote_server(connector, server, &account, &self.store)? else {
+                return Ok(());
+            };
             let caller = McpCaller::new(vec![remote], allowlist.to_vec());
-            let mut end = PullEnd::Done { held_back: 0 };
-            for pull in connector.pulls.iter().filter(|p| p.server == server.id) {
-                let result = match pull.into.as_str() {
-                    "events" => sync::pull_events(
-                        &caller,
-                        &*self.store,
-                        &*self.store,
-                        &account,
-                        pull,
-                        now,
-                        &MacClock,
-                    )
-                    .await
-                    .map(|_| 0),
-                    "mail" => sync::pull_mail(
-                        &caller,
-                        &*self.store,
-                        &*self.store,
-                        &account,
-                        pull,
-                        now,
-                        &MacClock,
-                    )
-                    .await
-                    .map(|report| u32::try_from(report.held_back).unwrap_or(u32::MAX)),
-                    _ => Ok(0),
-                };
-                if let Err(sync::SyncError::SignInAgain) = &result {
-                    let _ = self.store.mark_sign_in_needed(&account, now);
-                    failures.push(format!("{account} needs a new sign-in"));
-                } else if let Err(e @ sync::SyncError::Failed(_)) = &result {
-                    failures.push(format!("{account}: {e}"));
-                }
-                // "Needs your OK" and the like wait for the user (specs/166): never a failure
-                // for the job-failed alert (R-16b); the account page shows the state.
-                end = end.and(match result {
-                    Ok(held_back) => PullEnd::Done { held_back },
-                    Err(sync::SyncError::NeedsUser(state)) => PullEnd::NeedsUser(state),
-                    Err(_) => PullEnd::Failed,
-                });
-            }
-            match after_pull(&*self.store, &account, &server.id, end, today) {
+            let pulled = pull_server(&caller, &self.store, connector, server, &account, now).await;
+            failures.extend(pulled.failures);
+            match after_pull(&*self.store, &account, &server.id, pulled.end, today) {
                 Ok(true) => crate::runtime::show_card(
                     &self.app,
                     crate::pill::Card::Alert(needs_ok_alert(

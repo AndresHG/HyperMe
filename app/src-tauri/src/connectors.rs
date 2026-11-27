@@ -53,7 +53,7 @@ pub struct Page {
     requests: Vec<String>,
     /// "Mail · Needs your OK", "Mail · Google held back 12 items", per server waiting for the
     /// user or holding items back (specs/166, R-8, R-15 to R-17).
-    approvals: Vec<String>,
+    approvals: Vec<ApprovalLine>,
 }
 
 /// The setup sheet for one OAuth preset.
@@ -68,6 +68,16 @@ pub struct SetupSheet {
     production_url: Option<String>,
     commands: Vec<String>,
     features: Vec<setup_core::Feature>,
+}
+
+/// One server's state on the account page, with the key that resolves it (specs/166, A-3).
+#[derive(Debug, Serialize, PartialEq, Eq)]
+pub struct ApprovalLine {
+    server: String,
+    text: String,
+    /// "Review" (needs your OK, or items held back) or "Ask again" (not allowed); none for an
+    /// admin block, which only the admin can lift.
+    action: Option<String>,
 }
 
 /// What the Connectors section and its Setup check rows show.
@@ -118,6 +128,62 @@ fn health(
     }
 }
 
+/// The account page's lines for one server: its state and what its last pull held back
+/// (specs/166, R-8, R-15 to R-17).
+fn approval_lines(
+    connector: &hyperme_core::registry::Connector,
+    server: &hyperme_core::registry::Server,
+    local: &Local<'_>,
+    account: &str,
+) -> Vec<ApprovalLine> {
+    use hyperme_core::health::ServerState;
+    let status = local
+        .servers
+        .status(account, &server.id)
+        .unwrap_or_default();
+    let what = server
+        .label
+        .as_deref()
+        .and_then(|l| l.split(':').next())
+        .unwrap_or(&server.id)
+        .to_owned();
+    let noun = match connector
+        .pulls
+        .iter()
+        .find(|p| p.server == server.id)
+        .map(|p| p.into.as_str())
+    {
+        Some("mail") => "threads",
+        Some("events") => "events",
+        _ => "items",
+    };
+    let line = |text: String, action: Option<&str>| ApprovalLine {
+        server: server.id.clone(),
+        text,
+        action: action.map(str::to_owned),
+    };
+    let mut lines = Vec::new();
+    if let Some(state) = status.state {
+        let action = match state {
+            ServerState::NeedsOk => Some("Review"),
+            ServerState::NotAllowed => Some("Ask again"),
+            ServerState::Blocked => None,
+        };
+        lines.push(line(format!("{what} · {}", state.words()), action));
+    }
+    if status.held_back > 0 {
+        let action = status.state.is_none().then_some("Review");
+        lines.push(line(
+            format!(
+                "{what} · {} held back {} {noun}",
+                connector.name, status.held_back
+            ),
+            action,
+        ));
+    }
+    lines
+}
+
 fn build_view(
     connectors: &Connectors,
     registry: &Registry,
@@ -149,37 +215,7 @@ fn build_view(
                 approvals: connector
                     .servers
                     .iter()
-                    .flat_map(|server| {
-                        let status = local
-                            .servers
-                            .status(&row.id, &server.id)
-                            .unwrap_or_default();
-                        let what = server
-                            .label
-                            .as_deref()
-                            .and_then(|l| l.split(':').next())
-                            .unwrap_or(&server.id)
-                            .to_owned();
-                        let state = status.state.map(|s| format!("{what} · {}", s.words()));
-                        // What the server's pull keeps, in its own words (R-17).
-                        let noun = match connector
-                            .pulls
-                            .iter()
-                            .find(|p| p.server == server.id)
-                            .map(|p| p.into.as_str())
-                        {
-                            Some("mail") => "threads",
-                            Some("events") => "events",
-                            _ => "items",
-                        };
-                        let held = (status.held_back > 0).then(|| {
-                            format!(
-                                "{what} · {} held back {} {noun}",
-                                connector.name, status.held_back
-                            )
-                        });
-                        state.into_iter().chain(held)
-                    })
+                    .flat_map(|server| approval_lines(connector, server, local, &row.id))
                     .collect(),
                 requests: connector
                     .servers
@@ -509,6 +545,16 @@ pub async fn connectors_sign_in(
         let hyperme_core::registry::Transport::Http(url) = &server.transport else {
             continue;
         };
+        // A server with a pull is checked by running it, with the approval card answering
+        // what the server asks, so background updates work from the start (specs/166, R-14).
+        if preset.pulls.iter().any(|p| p.server == server.id) {
+            let line = match ui_approver(&app, &account, &server.id) {
+                Ok(approver) => crate::tasks::review(&app, &account, &server.id, approver).await,
+                Err(e) => Err(e),
+            };
+            checks.push(line.unwrap_or_else(|e| format!("{} · {e}", feature.label)));
+            continue;
+        }
         let remote = hyperme_providers::mcp::RemoteServer::new(
             &server.id,
             url,
@@ -522,6 +568,40 @@ pub async fn connectors_sign_in(
         });
     }
     Ok(SignInResult { account, checks })
+}
+
+/// Review, or Ask again, on the account page: runs the server's pulls now, with the approval
+/// card answering what the server asks (specs/166, R-8, A-3). Returns the check line.
+#[tauri::command]
+pub async fn connectors_review(
+    app: AppHandle,
+    account: String,
+    server: String,
+) -> Result<String, String> {
+    let approver = ui_approver(&app, &account, &server)?;
+    crate::tasks::review(&app, &account, &server, approver).await
+}
+
+/// The card's approver for one account's server, named the way the card shows it.
+fn ui_approver(
+    app: &AppHandle,
+    account: &str,
+    server: &str,
+) -> Result<std::sync::Arc<dyn hyperme_core::approval::Approver>, String> {
+    let (connector_id, label) = account.split_once(':').unwrap_or((account, ""));
+    let connector = connector_of(app, connector_id)?;
+    let what = connector
+        .server(server)
+        .and_then(|s| s.label.as_deref())
+        .and_then(|l| l.split(':').next())
+        .unwrap_or(server)
+        .to_owned();
+    Ok(std::sync::Arc::new(crate::approvals::UiApprover {
+        app: app.clone(),
+        who: format!("{} · {label}", connector.name),
+        what,
+        read: true,
+    }))
 }
 
 /// Cancel in the "Finish in your browser" step: stops waiting and closes the listener.
@@ -756,11 +836,36 @@ mod tests {
             servers: &servers,
         };
         let view = build_view(&connectors, &registry, &store, &local, now);
+        let lines: Vec<(&str, Option<&str>)> = view.pages[0]
+            .approvals
+            .iter()
+            .map(|l| (l.text.as_str(), l.action.as_deref()))
+            .collect();
         assert_eq!(
-            view.pages[0].approvals,
+            lines,
             [
-                "Calendar · Google held back 12 events",
-                "Mail · Needs your OK"
+                ("Calendar · Google held back 12 events", Some("Review")),
+                ("Mail · Needs your OK", Some("Review"))
+            ]
+        );
+        // A-3: "Not allowed" offers Ask again; an admin block offers nothing.
+        let deny = PullEnd::NeedsUser(ServerState::NotAllowed);
+        after_pull(&servers, "google:work", "gmail", deny, now.date()).unwrap();
+        let block = PullEnd::NeedsUser(ServerState::Blocked);
+        after_pull(&servers, "google:work", "calendar", block, now.date()).unwrap();
+        let view = build_view(&connectors, &registry, &store, &local, now);
+        let lines: Vec<(&str, Option<&str>)> = view.pages[0]
+            .approvals
+            .iter()
+            .map(|l| (l.text.as_str(), l.action.as_deref()))
+            .collect();
+        assert_eq!(
+            lines,
+            [
+                ("Calendar · Blocked by your admin", None),
+                // The count from the last pull that worked stays; Review is offered by the state.
+                ("Calendar · Google held back 12 events", None),
+                ("Mail · Not allowed", Some("Ask again"))
             ]
         );
     }

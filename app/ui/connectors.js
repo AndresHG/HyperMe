@@ -93,8 +93,24 @@
     $('page-enabled').checked = page.enabled;
     $('page-token-row').classList.toggle('hidden', page.account || page.state !== 'Not signed in');
     $('page-unverified').classList.toggle('hidden', page.tools_verified);
-    $('page-approvals').replaceChildren(...(page.approvals || []).map((line) =>
-      el('div', { class: 'row', 'data-words': 'approval needs your ok not allowed blocked held back' }, el('div', { class: 'what' }, el('small', {}, line)))));
+    $('page-approvals').replaceChildren(...(page.approvals || []).map((line) => {
+      const words = 'approval needs your ok not allowed blocked held back review ask again';
+      if (!line.action) {
+        return el('div', { class: 'row', 'data-words': words }, el('div', { class: 'what' }, el('small', {}, line.text)));
+      }
+      const result = el('small', {});
+      const button = el('button', {}, line.action);
+      button.addEventListener('click', async () => {
+        button.disabled = true;
+        result.textContent = 'Checking…';
+        try { result.textContent = await invoke('connectors_review', { account: page.id, server: line.server }); }
+        catch (e) { result.textContent = String(e); }
+        button.disabled = false;
+        await refresh();
+      });
+      return el('div', { class: 'row', 'data-words': words },
+        el('div', { class: 'what' }, line.text, result), button);
+    }));
     $('page-requests').replaceChildren(...(page.requests || []).map((line) =>
       el('div', { class: 'row', 'data-words': 'requests quota today' }, el('div', { class: 'what' }, el('small', {}, line)))));
     $('page-oauth-row').classList.toggle('hidden', !(page.account && page.oauth));
@@ -114,6 +130,70 @@
     if (!page.tools.length) {
       $('page-tools').replaceChildren(el('p', { class: 'lead' }, 'Tools appear after the first connection.'));
     }
+  }
+
+  // The approval card (specs/166, slice 3): what a connector server asks while a check or a
+  // Review runs. Drawn with text only (R-11); ↵ picks the default, 1 to n a choice, Esc nothing.
+  let card = null;
+  function drawSpans(spans) {
+    const out = [];
+    let target = null; // the paragraph or list item that text goes into
+    let list = null;
+    for (const s of spans) {
+      if (s.kind === 'break') { target = null; list = null; continue; }
+      if (s.kind === 'item') {
+        if (!list) { list = el('ul', {}); out.push(list); }
+        target = el('li', {});
+        list.append(target);
+        continue;
+      }
+      if (!target) { target = el('p', {}); out.push(target); list = null; }
+      target.append(s.kind === 'bold' ? el('strong', {}, s.text)
+        : s.kind === 'italic' ? el('em', {}, s.text)
+        : s.kind === 'code' ? el('code', {}, s.text)
+        : s.kind === 'link' ? document.createTextNode(s.text + ' (' + s.url + ')')
+        : document.createTextNode(s.text));
+    }
+    return out;
+  }
+  function closeCard(id) {
+    if (!card || (id !== undefined && card.id !== id)) return;
+    card = null;
+    $('approval-card').classList.add('hidden');
+  }
+  function answerCard(value) {
+    if (!card) return;
+    const id = card.id;
+    closeCard();
+    invoke('connectors_answer', { id, value }).catch(fail);
+  }
+  function showCard(view) {
+    card = view;
+    $('approval-who').textContent = view.who;
+    $('approval-title').textContent = view.title;
+    $('approval-message').replaceChildren(...drawSpans(view.message));
+    $('approval-note').textContent = view.note || '';
+    $('approval-note').classList.toggle('hidden', !view.note);
+    $('approval-keys').replaceChildren(...view.choices.map((c, i) => {
+      const main = i === view.default;
+      return el('button', { class: main ? 'main' : '', onclick: () => answerCard(c.value) },
+        el('kbd', {}, main ? '↵' : String(i + 1)), c.label);
+    }), el('button', { onclick: () => answerCard(null) }, el('kbd', {}, 'Esc'), 'Later'));
+    $('approval-card').classList.remove('hidden');
+    $('approval-card').scrollIntoView({ block: 'nearest' });
+  }
+  document.addEventListener('keydown', (e) => {
+    if (!card || (e.target instanceof Element && e.target.matches('input, select, textarea'))) return;
+    if (e.key === 'Escape') { e.preventDefault(); answerCard(null); }
+    else if (e.key === 'Enter' && card.default != null) { e.preventDefault(); answerCard(card.choices[card.default].value); }
+    else if (/^[1-9]$/.test(e.key) && card.choices[Number(e.key) - 1]) { e.preventDefault(); answerCard(card.choices[Number(e.key) - 1].value); }
+  });
+  if (window.__TAURI__ && window.__TAURI__.event) {
+    window.__TAURI__.event.listen('connector-approval', (event) => {
+      location.hash = location.hash.startsWith('#connectors') ? location.hash : '#connectors';
+      showCard(event.payload);
+    });
+    window.__TAURI__.event.listen('connector-approval-closed', (event) => closeCard(event.payload));
   }
 
   // Called by settings.html when the hash changes: `item` is the row after connectors/.
