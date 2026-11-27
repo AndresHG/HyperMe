@@ -557,7 +557,7 @@ where
         trace.inserted();
         trace.end(Outcome::Pasted);
         if let Some(id) = id {
-            let _ = history.done(id, &text.text, text.language.as_deref());
+            let _ = trace.history_write(|| history.done(id, &text.text, text.language.as_deref()));
         }
         emit(Status::Done { raw: text.raw });
         Flow::Ended
@@ -684,7 +684,8 @@ where
         } else {
             Outcome::Copied
         });
-        let _ = history.done(failed.id, &text.text, text.language.as_deref());
+        let _ =
+            trace.history_write(|| history.done(failed.id, &text.text, text.language.as_deref()));
         emit(if same_app {
             Status::Done { raw: text.raw }
         } else {
@@ -797,7 +798,8 @@ where
         }
         trace.inserted();
         trace.end(Outcome::Copied);
-        let _ = history.replace_text(id, &text.text, text.language.as_deref());
+        let _ =
+            trace.history_write(|| history.replace_text(id, &text.text, text.language.as_deref()));
         if slot.as_ref().is_some_and(|f| f.id == id) {
             *slot = None;
         }

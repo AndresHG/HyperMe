@@ -45,7 +45,8 @@ async fn a_pasted_dictation_is_one_trace_with_its_stages() {
             "speech",
             "dictionary",
             "cleanup",
-            "insert"
+            "insert",
+            "history_write"
         ]
     );
     assert!(trace.spans[1..].iter().all(|s| s.parent == Some(0)));
@@ -58,6 +59,9 @@ async fn a_pasted_dictation_is_one_trace_with_its_stages() {
     assert_eq!(trace.span("mic_start").unwrap().end_us(), 40_000);
     assert_eq!(trace.span("capture").unwrap().end_us(), 1_000_000);
     assert_eq!(trace.span("speech").unwrap().duration_us, 300_000);
+    // #195 (R-2): the history write comes after the paste.
+    let insert = trace.span("insert").unwrap();
+    assert!(trace.span("history_write").unwrap().start_us >= insert.end_us());
     let cleanup = trace.span("cleanup").unwrap();
     assert_eq!(cleanup.event_us("first_token"), Some(1_420_000));
     assert_eq!(
@@ -95,6 +99,8 @@ async fn failed_cancelled_and_retried_dictations_leave_traces() {
     assert!(first.is_some());
     assert_eq!(traces[1].root().u64("retry_of"), first);
     assert_eq!(names(&traces[1]), ["dictation", "speech"]);
+    // #195 (R-2): nothing was saved as done, so no history write.
+    assert!(traces.iter().all(|t| t.span("history_write").is_none()));
 }
 
 /// AC-3, schema half (R-5): a span field that is not declared, or text in a debug value, is
