@@ -481,6 +481,26 @@ impl Harness {
             FakeFocus::textedit(),
             FakeHistory::new(log),
             (timing, timing_on),
+            true,
+        )
+    }
+
+    /// An engine with no subscriber at all: the "before" of spec 182's overhead measure (AC-11).
+    pub fn start_untraced(
+        log: &Log,
+        speech: FakeSpeech,
+        cleanup: FakeCleanup,
+        settings: Settings,
+    ) -> Self {
+        Self::start_parts(
+            log,
+            speech,
+            cleanup,
+            settings,
+            FakeFocus::textedit(),
+            FakeHistory::new(log),
+            (FakeTiming::default(), false),
+            false,
         )
     }
 
@@ -500,6 +520,7 @@ impl Harness {
             focus,
             history,
             (FakeTiming::default(), false),
+            true,
         )
     }
 
@@ -512,6 +533,7 @@ impl Harness {
         focus: FakeFocus,
         history: FakeHistory,
         (timing, timing_on): (FakeTiming, bool),
+        traced: bool,
     ) -> Self {
         let (events, events_rx) = mpsc::channel(256);
         let (status_tx, status) = mpsc::unbounded_channel();
@@ -537,7 +559,15 @@ impl Harness {
         ];
         let subscriber = tracing_subscriber::registry().with(TraceLayer::new(sinks));
         // Spawned on the runtime, which proves the engine's future is Send.
-        tokio::spawn(engine.run(events_rx).with_subscriber(subscriber));
+        if traced {
+            tokio::spawn(engine.run(events_rx).with_subscriber(subscriber));
+        } else {
+            tokio::spawn(
+                engine
+                    .run(events_rx)
+                    .with_subscriber(tracing::Dispatch::none()),
+            );
+        }
         Harness {
             events,
             dictionary,
