@@ -80,6 +80,19 @@ jobs:
         with:
           components: rustfmt, clippy
 
+      # The app's build script builds its pages with Vite (specs/257-ui-framework, R-2).
+      - uses: actions/setup-node@v4
+        if: matrix.crate == '.'
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/web/package-lock.json
+
+      - name: Pages (svelte-check, TypeScript, ESLint)
+        if: matrix.crate == '.'
+        working-directory: app/web
+        run: npm ci --no-audit --no-fund && npm run check
+
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: ${{ matrix.crate }}

@@ -1,10 +1,10 @@
-// Serves app/ui for the checks, with mock-tauri.js put into every top page in place of Tauri's
+// Serves the built pages (app/web/dist, spec 257) for the checks, with mock-tauri.js put into every top page in place of Tauri's
 // API. settings.html is not given it: it runs in Home's frame and borrows Home's, as in the app.
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 
-const ui = path.resolve(import.meta.dirname, '../ui');
+const ui = path.resolve(import.meta.dirname, '../web/dist');
 const mock = fs.readFileSync(path.join(import.meta.dirname, 'mock-tauri.js'), 'utf8');
 const types = { '.html': 'text/html', '.css': 'text/css', '.js': 'text/javascript' };
 

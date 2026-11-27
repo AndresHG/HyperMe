@@ -62,4 +62,25 @@
     },
     event: { listen: async () => () => {}, emit: async () => {} },
   };
+  // The same stand-in for pages built with @tauri-apps/api (app/web, spec 257), which call
+  // Tauri's internals. Events fire only when a check sends one with `window.__mockEmit`.
+  const callbacks = new Map();
+  const listeners = new Map();
+  let next = 1;
+  window.__TAURI_INTERNALS__ = {
+    transformCallback: (callback) => { const id = next++; callbacks.set(id, callback); return id; },
+    unregisterCallback: (id) => callbacks.delete(id),
+    invoke: async (cmd, args) => {
+      if (cmd === 'plugin:event|listen') {
+        listeners.set(args.event, [...(listeners.get(args.event) || []), args.handler]);
+        return args.handler;
+      }
+      if (cmd.startsWith('plugin:event|')) return null;
+      return window.__TAURI__.core.invoke(cmd, args);
+    },
+  };
+  window.__TAURI_EVENT_PLUGIN_INTERNALS__ = { unregisterListener: () => {} };
+  window.__mockEmit = (event, payload) => {
+    for (const id of listeners.get(event) || []) callbacks.get(id)?.({ event, id, payload });
+  };
 })();

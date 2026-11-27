@@ -39,11 +39,19 @@ cargo clippy --all-targets -- -D warnings
 cargo test
 ```
 
-A change to `app/ui` also runs the page screenshot checks, on a Mac (Node 20 or later):
+The pages are Svelte 5 components in TypeScript under `app/web`, built by Vite
+([spec 257](specs/257-ui-framework/spec.md)); pages not yet moved still live in `app/ui` and are
+copied as they are. Building the app needs Node 22 or later and npm: `cargo build` builds the
+pages first, through the app's build script. A change to the pages also runs their checks, and the
+screenshot checks on a Mac:
 
 ```sh
+cd app/web && npm run check                  # svelte-check, TypeScript, ESLint
 cd app/ui-tests && npm install && npm test   # npm run update after a change you mean
 ```
+
+`cd app/web && npm run tauri dev` runs the app with the pages served by Vite, so a saved change to
+a page shows at once.
 
 Tests must not call a paid API or need a key. Use the local fakes and test servers, as
 `spikes/flowbench` does. On Linux, `cpal` needs the ALSA headers (`libasound2-dev`).

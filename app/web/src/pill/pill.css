@@ -1,0 +1,4 @@
+/* The panel is transparent: only the capsule (or the bead, or the card) is drawn, centred in it.
+   The pill is always dark, whatever the system theme (U-16). */
+html, body { height: 100%; background: transparent; overflow: hidden; }
+body { display: flex; align-items: center; justify-content: center; }
