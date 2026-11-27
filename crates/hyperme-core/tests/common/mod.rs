@@ -442,6 +442,8 @@ pub struct Harness {
     pub events: mpsc::Sender<Event>,
     /// Where a changed dictionary goes (spec 93, R-10a).
     pub dictionary: hyperme_core::dictation::DictionaryUpdates,
+    /// Each pasted dictation, as the app's learning hears of it (spec 93, D6).
+    pub pasted: mpsc::UnboundedReceiver<hyperme_core::dictation::Pasted>,
     pub status: mpsc::UnboundedReceiver<Status>,
     pub log: Log,
     /// Replaces the providers, as Settings does (specs/96-provider-settings, R-8).
@@ -546,8 +548,10 @@ impl Harness {
             history,
             sounds: FakeSounds { log: log.clone() },
         };
-        let engine = Engine::new(parts, settings, status_tx);
+        let mut engine = Engine::new(parts, settings, status_tx);
         let dictionary = engine.dictionary_updates();
+        let (pasted_tx, pasted) = mpsc::unbounded_channel();
+        engine.tell_pasted(pasted_tx);
         // Spec 182: the engine's spans go to a timing sink and a trace collector, as in the app.
         let traces = FakeTraces::default();
         let sinks: Vec<Arc<dyn TraceSink>> = vec![
@@ -571,6 +575,7 @@ impl Harness {
         Harness {
             events,
             dictionary,
+            pasted,
             status,
             log: log.clone(),
             switch,

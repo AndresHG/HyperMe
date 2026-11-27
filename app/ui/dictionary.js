@@ -5,7 +5,11 @@
    its own. The whole list is saved on each change through `dictionary_save`.
 
    HyperDictionary.mount(root, { invoke, onError }) draws the page inside `root`. The add row is
-   always open: there is no separate "Add word" step. */
+   always open: there is no separate "Add word" step.
+
+   Learning (spec 93, D6, R-16 to R-19): a Suggested block on top while fixes wait (Add,
+   Dismiss), a "learned" mark on rows HyperMe learned with Undo in place of Remove, and the
+   "Learn from my edits" switch at the bottom. */
 (() => {
   const el = (tag, cls, text) => {
     const e = document.createElement(tag);
@@ -65,6 +69,9 @@
     search.placeholder = 'Filter the list';
     search.setAttribute('aria-label', 'Filter your words');
 
+    // R-18: fixes HyperMe noticed in the user's edits, waiting for a yes.
+    const suggested = el('div', 'dict-suggested hidden');
+
     const list = el('div', 'dict-rows');
     const empty = el('p', 'dict-empty hidden', 'No words yet. Add names, products and jargon, or fix a word from History.');
 
@@ -81,8 +88,21 @@
     file.hidden = true;
     foot.append(where, tools, file);
 
+    // R-16: on by default; what it reads stays on the Mac (R-21).
+    const learnLabel = el('label', 'dict-switch dict-learn');
+    const learnSwitch = el('input');
+    learnSwitch.type = 'checkbox';
+    learnSwitch.setAttribute('role', 'switch');
+    learnLabel.append(learnSwitch, el('span', '', 'Learn from my edits'));
+    const learnNote = el('p', 'dict-note', 'After a dictation, HyperMe notices when you fix a word. What it reads stays on your Mac.');
+    learnSwitch.addEventListener('change', async () => {
+      try { learnSwitch.checked = await invoke('dictionary_learning', { on: learnSwitch.checked }); say(''); } catch (e) { say(String(e)); }
+    });
+
     root.classList.add('dict');
-    root.replaceChildren(sheet, search, list, empty, foot);
+    root.replaceChildren(sheet, suggested, search, list, empty, foot, learnLabel, learnNote);
+    let learned = [];
+    const isLearned = (r) => learned.some((l) => key(l.written) === key(r.word) && key(l.heard) === key(r.wrong));
 
     function showMode() {
       const on = misspelling.checked;
@@ -117,10 +137,13 @@
         const what = el('div', 'dict-what');
         if (r.wrong) what.append(el('span', 'dict-wrong-word', r.wrong), el('span', 'dict-arrow', '→'));
         what.append(el('span', 'dict-word', r.word));
+        const mine = isLearned(r);
+        if (mine) what.append(el('span', 'dict-learned', 'learned'));
         const actions = el('span', 'dict-actions');
         const edit = el('button', '', 'Edit');
         edit.addEventListener('click', () => open(i));
-        const remove = el('button', '', 'Remove');
+        // R-18, R-19: undoing a learned row removes it, and it is never learned again.
+        const remove = el('button', '', mine ? 'Undo' : 'Remove');
         remove.addEventListener('click', () => save(rows.filter((_, j) => j !== i)));
         actions.append(edit, ' ', remove);
         row.append(what, actions);
@@ -128,7 +151,42 @@
       });
       empty.classList.toggle('hidden', rows.length > 0);
     }
+    function showSuggested(list) {
+      suggested.replaceChildren();
+      suggested.classList.toggle('hidden', !list.length);
+      if (!list.length) return;
+      suggested.append(el('h3', '', 'Suggested'));
+      for (const s of list) {
+        const row = el('div', 'dict-row');
+        const what = el('div', 'dict-what');
+        const times = s.seen > 1 ? 'fixed ' + s.seen + ' times' : 'fixed once';
+        what.append(el('span', 'dict-wrong-word', s.heard), el('span', 'dict-arrow', '→'), el('span', 'dict-word', s.written),
+          el('span', 'dict-seen', '· ' + times + (s.app ? ' in ' + s.app : '')));
+        let warned = false;
+        const act = (add) => async () => {
+          // R-17: a common misspelling would be replaced everywhere, so it needs a second press.
+          if (add && !warned && (await invoke('dictionary_is_common', { word: s.heard }))) {
+            warned = true;
+            say('“' + s.heard + '” is a common word. HyperMe will replace it everywhere.');
+            addButton.textContent = 'Add anyway';
+            return;
+          }
+          try { show(await invoke('dictionary_suggestion', { written: s.written, heard: s.heard, add })); say(''); } catch (e) { say(String(e)); }
+        };
+        const actions = el('span', 'dict-actions');
+        const addButton = el('button', 'main', 'Add');
+        addButton.addEventListener('click', act(true));
+        const dismiss = el('button', '', 'Dismiss');
+        dismiss.addEventListener('click', act(false));
+        actions.append(addButton, ' ', dismiss);
+        row.append(what, actions);
+        suggested.append(row);
+      }
+    }
     function show(view) {
+      learned = view.learned || [];
+      learnSwitch.checked = view.learning !== false;
+      showSuggested(view.suggestions || []);
       rows = toRows(view.entries);
       where.textContent = 'Saved on this Mac in ' + view.path;
       if (view.error) say(view.error);

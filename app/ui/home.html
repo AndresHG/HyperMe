@@ -41,6 +41,8 @@
   header { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; margin-bottom: 28px; }
   h1 { font: 700 24px ui-rounded, "SF Pro Rounded", -apple-system, sans-serif; margin: 0 0 4px; }
   .lead { color: var(--muted); margin: 0; }
+  .suggested-line { margin: 0 0 16px; color: var(--muted); }
+  .suggested-line a { color: var(--violet); }
   .stats { display: flex; gap: 8px; }
   .stat { min-width: 110px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); }
   .stat b { display: block; font: 700 17px ui-rounded, "SF Pro Rounded", -apple-system, sans-serif; }
@@ -145,6 +147,7 @@
         <div class="stat"><b id="saved">–</b><span>saved vs typing</span></div>
       </div>
     </header>
+    <p class="suggested-line" id="suggested-line" hidden><span id="suggested-count"></span> · <a href="#dictionary">Review</a></p>
     <div id="blocks"></div>
   </section>
 
@@ -709,7 +712,15 @@
   async function loadHome() {
     greet();
     await loadStats();
+    await loadSuggested();
     await loadBlocks();
+  }
+
+  // Spec 93, R-22: one line while dictionary suggestions wait; the pill shows nothing.
+  async function loadSuggested() {
+    const n = await invoke('dictionary_suggested').catch(() => 0);
+    $('suggested-line').hidden = !n;
+    $('suggested-count').textContent = n === 1 ? '1 suggested word' : n + ' suggested words';
   }
 
   // The Home page's blocks come from other features: Today (#92) first.

@@ -265,8 +265,11 @@ fn wire(app: &AppHandle, history: Arc<Mutex<HistoryInner>>) -> Result<(), String
         dictionary,
         ..Settings::from_config(&config)
     };
-    let engine = Engine::new(parts, settings, status_tx);
+    let mut engine = Engine::new(parts, settings, status_tx);
     let dictionary_updates = engine.dictionary_updates();
+    let (pasted_tx, pasted_rx) = mpsc::unbounded_channel();
+    engine.tell_pasted(pasted_tx);
+    tauri::async_runtime::spawn(after_paste(app.clone(), pasted_rx));
     tauri::async_runtime::spawn(engine.run(events_rx));
     tauri::async_runtime::spawn(forward_audio(app.clone(), mic_rx, events.clone()));
     tauri::async_runtime::spawn(show_statuses(app.clone(), status_rx));
@@ -377,6 +380,17 @@ fn with_dictionary(
 pub fn update_dictionary(app: &AppHandle, dictionary: Dictionary) {
     if let Some(updates) = lock(app).dictionary.clone() {
         updates.send(dictionary);
+    }
+}
+
+/// After each paste (spec 93, D6): the dictionary's use counts, and, with "Learn from my edits"
+/// on, the watch for the user's fixes.
+async fn after_paste(
+    app: AppHandle,
+    mut pasted: mpsc::UnboundedReceiver<hyperme_core::dictation::Pasted>,
+) {
+    while let Some(dictation) = pasted.recv().await {
+        let _learning = crate::dictionary::on_pasted(&app, &dictation);
     }
 }
 

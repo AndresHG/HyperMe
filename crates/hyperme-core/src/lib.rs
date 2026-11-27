@@ -14,6 +14,7 @@ pub mod dictation;
 pub mod dictionary;
 pub mod health;
 pub mod hints;
+pub mod learning;
 pub mod registry;
 pub mod schedule;
 pub mod scheduler;
