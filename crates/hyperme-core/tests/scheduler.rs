@@ -545,6 +545,69 @@ async fn a_wake_runs_jobs_skipped_on_low_power_once() {
     assert_eq!(h.runs().len(), before + 1);
 }
 
+// --- Connector sync (specs/97-google-connectors) -----------------------------------------
+
+fn google_sync_job() -> Job {
+    let text = format!(
+        "{}\n[[connectors.accounts]]\nconnector = \"google\"\nlabel = \"personal\"\n",
+        hyperme_core::config::DEFAULT_CONFIG
+    );
+    let connectors = Config::parse(&text, std::path::Path::new("config.toml"))
+        .unwrap()
+        .connectors;
+    let registry = hyperme_core::connector_settings::registry(None, &connectors).unwrap();
+    hyperme_core::sync::sync_jobs(&registry, &connectors)
+        .pop()
+        .unwrap()
+}
+
+/// specs/97-google-connectors AC-8, R-16, R-17: with the default sync job, a 12-hour present
+/// day makes no more than 40 calendar pulls, none while the Mac is asleep, and one on wake.
+#[tokio::test(start_paused = true)]
+async fn default_syncing_stays_under_forty_pulls_a_day_and_sleeps() {
+    let mut jobs = morning_only();
+    jobs.push(google_sync_job());
+    let h = Harness::start(local(THU, 8, 0), jobs);
+    h.send(PresenceEvent::Launched).await;
+    h.pass(SignedDuration::hours(12)).await; // to 20:00
+    let pulls = |h: &Harness| {
+        h.runs()
+            .into_iter()
+            .filter(|(name, _)| name == "sync:google-calendar")
+            .map(|(_, at)| at)
+            .collect::<Vec<_>>()
+    };
+    let day = pulls(&h);
+    assert!(day.len() <= 40, "{} pulls", day.len());
+    assert!(day.len() >= 24, "{} pulls", day.len());
+
+    h.send(PresenceEvent::Locked).await;
+    h.send(PresenceEvent::Asleep).await;
+    h.sleep_mac(SignedDuration::hours(11)); // the night, asleep: to 07:00
+    assert_eq!(pulls(&h).len(), day.len(), "no pull while asleep");
+    h.send(PresenceEvent::Woke).await;
+    h.send(PresenceEvent::Unlocked).await;
+    let after = pulls(&h);
+    assert_eq!(after.len(), day.len() + 1, "one pull on wake");
+    assert!(*after.last().unwrap() >= local(FRI, 7, 0));
+}
+
+/// R-16 ("Hyper, what's next"): a sync job runs at once on request, by name; an unknown name
+/// does nothing.
+#[tokio::test(start_paused = true)]
+async fn a_sync_runs_on_request() {
+    let h = Harness::start(local(THU, 9, 0), vec![google_sync_job()]);
+    h.command(Command::Run {
+        job: "sync:google-calendar".into(),
+    })
+    .await;
+    h.command(Command::Run {
+        job: "sync:nothing".into(),
+    })
+    .await;
+    assert_eq!(names(&h.runs()), ["sync:google-calendar"]);
+}
+
 // --- Built-in jobs -------------------------------------------------------------------------
 
 /// R-31, design.md: the built-in jobs come from the config (roll-over at day start every day,
