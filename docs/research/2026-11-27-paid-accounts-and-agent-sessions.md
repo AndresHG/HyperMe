@@ -1,7 +1,8 @@
 # Paid Claude and ChatGPT accounts, and launching agent tasks
 
-Research of 27 November 2026, at the owner's request. **The owner approved both recommendations on 27 November 2026**; they
-are now in the PRD, the roadmap and `CLAUDE.md`. Two separate questions, kept apart:
+Research of 27 November 2026, at the owner's request. **The owner approved both recommendations on 27 November 2026**, and
+placed agent tasks after the first-wave commands (tasks, reminders, email drafts) as not urgent;
+they are now in the PRD, the roadmap and `CLAUDE.md`. Two separate questions, kept apart:
 
 1. **Paid accounts (near term).** Many users already pay for Claude or ChatGPT. Can they connect
    that account to HyperMe, click and sign in like the Google connector, instead of pasting API
@@ -38,8 +39,8 @@ roadmap. That part is not redone here; only what is new or changes is added. Pag
   HyperMe's hidden model.
 - **Agent tasks:** launching a task is easy and allowed with each tool's own command line, run by
   the user on their own login; embedding their interface is not worth it. Recommended placement:
-  keep it in "Later", first in line once phase 3's command mode exists, as one action behind the
-  usual preview card.
+  keep it in "Later", as one action behind the usual preview card once command mode exists.
+  The owner placed it after the first-wave commands (tasks, reminders, email drafts): not urgent.
 
 ---
 
@@ -227,8 +228,8 @@ new crate. Mac first; both CLIs also run on Linux and Windows.
 
 ### Recommendation for part 2
 
-Keep it in **"Later"**, but first in line: start it right after phase 3's command mode and preview
-card work, because then it is one more action, not a new system. Begin with `claude --cloud` and
+Keep it in **"Later"**. Once command mode and the first-wave commands (tasks, reminders, email
+drafts) work, it is one more action, not a new system; the owner called it not urgent. Begin with `claude --cloud` and
 `claude -p`, then Codex. No embedding; no SDK runtime; no MCP route until one exists.
 
 ---

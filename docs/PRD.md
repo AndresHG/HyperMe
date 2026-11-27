@@ -250,7 +250,7 @@ designed: a design proposal will compare how other assistants build memory, befo
 
 A free local mode with speech and cleanup models you download in the app, so no key is
 needed (owner, Q-5); handing a task to Claude Code by voice ("Hyper, create this and send it to
-Claude Code"), a trigger and nothing more, through MCP or the agent's own interface (owner, Q-6). First in line once phase 3's command mode exists: one action that starts Claude Code (cloud or this Mac) or Codex through their own command line on the user's own login, behind the preview card, then shows an Open link; no embedded interface (owner, 27 November 2026, [research](research/2026-11-27-paid-accounts-and-agent-sessions.md)); Linux and Windows; a wake word; spoken answers (text-to-speech), not for now, maybe in the future
+Claude Code"), a trigger and nothing more, through MCP or the agent's own interface (owner, Q-6). Not urgent: it waits until the first-wave commands (tasks, reminders, email drafts) are working; then it is one action that starts Claude Code (cloud or this Mac) or Codex through their own command line on the user's own login, behind the preview card, then shows an Open link; no embedded interface (owner, 27 November 2026, [research](research/2026-11-27-paid-accounts-and-agent-sessions.md)); Linux and Windows; a wake word; spoken answers (text-to-speech), not for now, maybe in the future
 (owner, Q-14). Jira is not on the roadmap; it may come later, and an MCP server the user
 adds already works (owner, 26 November 2026).
 
