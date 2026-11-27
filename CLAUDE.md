@@ -31,8 +31,12 @@ itself; a later version may hand a task to Claude Code ([docs/PRD.md](docs/PRD.m
 - `specs/93-personal-dictionary/`: Phase 2 spec for the personal dictionary (approved 27 November 2026)
 - `specs/151-voice-edits/`: phase 3 spec for voice edits of selected text ("Hyper, make this shorter";
   approved 27 November 2026, first work of phase 3)
+- `specs/166-gmail-approvals/`: spec for approvals asked by connector servers (MCP form
+  elicitation), first for Gmail (approved 27 November 2026)
 - `docs/RELEASING.md`: how a release is built, signed, notarised and published, and how updates work
 - `docs/FIELD.md`: existing projects and what to borrow from each
+- `docs/research/2026-11-27-telemetry-and-tracing.md`: local tracing, what other users' copies may
+  send, and backends (research; PRD Q-18 decided: no telemetry, a report bundle)
 - `docs/UX.md`: UX and UI by phase (one shape at the bottom centre: dot, pill, card and quick sheet; the Home window; settings and menus), with mockups in `docs/ux/` (draft)
 - `docs/RESEARCH.md`: verdict, product focus, pitch and field map from the research of
   24 November 2026

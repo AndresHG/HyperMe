@@ -223,7 +223,8 @@ section; Settings keeps its entry. One page, two doors, so it is easy to find fr
   fix a word. What it reads stays on your Mac.").
 - Empty state: "No words yet. Add names, products and jargon, or fix a word from History."
 
-**Add or edit**, a small sheet, as in Wispr Flow (owner, 27 November 2026): one field, **Word**
+**Add or edit**, one row at the top of the page that is always open, as in Wispr Flow (owner, 27
+November 2026; no separate "Add word" step, which read as asking twice): one field, **Word**
 (`Zentrix`), and a switch, **Correct a misspelling**. With the switch on, the sheet shows two
 fields, the misspelling and the correct spelling (`zen trix → Zentrix`). One misspelling per row.
 A common misspelling shows, inline: "'sun' is a common word. HyperMe will replace it everywhere."
