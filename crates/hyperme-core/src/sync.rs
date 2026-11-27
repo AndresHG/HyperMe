@@ -571,6 +571,9 @@ pub fn held_back(answer: &Value) -> usize {
                 if listed > 0 { listed } else { 1 }
             }
             Value::Null => 0,
+            Value::Number(n) => n
+                .as_u64()
+                .map_or(1, |n| usize::try_from(n).unwrap_or(usize::MAX)),
             _ => 1,
         }
     }

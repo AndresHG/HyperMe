@@ -161,9 +161,20 @@ fn build_view(
                             .unwrap_or(&server.id)
                             .to_owned();
                         let state = status.state.map(|s| format!("{what} · {}", s.words()));
+                        // What the server's pull keeps, in its own words (R-17).
+                        let noun = match connector
+                            .pulls
+                            .iter()
+                            .find(|p| p.server == server.id)
+                            .map(|p| p.into.as_str())
+                        {
+                            Some("mail") => "threads",
+                            Some("events") => "events",
+                            _ => "items",
+                        };
                         let held = (status.held_back > 0).then(|| {
                             format!(
-                                "{what} · {} held back {} items",
+                                "{what} · {} held back {} {noun}",
                                 connector.name, status.held_back
                             )
                         });
@@ -717,7 +728,6 @@ mod tests {
         assert!(access("on").is_err());
     }
 
-    /// R-10, R-20: an account whose refresh was refused shows "Sign in again"; its page shows
     /// specs/166 AC-3, AC-5, AC-9, AC-14 (page part): each server's state and held-back count
     /// show on the account page.
     #[test]
@@ -749,12 +759,13 @@ mod tests {
         assert_eq!(
             view.pages[0].approvals,
             [
-                "Calendar · Google held back 12 items",
+                "Calendar · Google held back 12 events",
                 "Mail · Needs your OK"
             ]
         );
     }
 
+    /// R-10, R-20: an account whose refresh was refused shows "Sign in again"; its page shows
     /// the day's requests against each server's quota.
     #[test]
     fn sign_in_again_and_requests_show_on_the_page() {

@@ -153,6 +153,7 @@ fn held_back_items_are_counted_and_kept() {
     );
     assert_eq!(held_back(&json!({"threads": []})), 0);
     assert_eq!(held_back(&json!({"omittedContent": []})), 0);
+    assert_eq!(held_back(&json!({"omittedContent": 12})), 12);
 
     let store = MemoryServerStatus::default();
     after_pull(
@@ -164,4 +165,20 @@ fn held_back_items_are_counted_and_kept() {
     )
     .unwrap();
     assert_eq!(store.status(ACCOUNT, SERVER).unwrap().held_back, 12);
+}
+
+/// R-16a: several pulls of one server combine: the strongest waiting state wins, waiting wins
+/// over a failure, a failure over success, and held-back counts add up.
+#[test]
+fn pull_ends_combine() {
+    let done = |n| PullEnd::Done { held_back: n };
+    let needs = PullEnd::NeedsUser(ServerState::NeedsOk);
+    let blocked = PullEnd::NeedsUser(ServerState::Blocked);
+    assert_eq!(done(2).and(done(3)), done(5));
+    assert_eq!(done(2).and(PullEnd::Failed), PullEnd::Failed);
+    assert_eq!(needs.and(PullEnd::Failed), needs);
+    assert_eq!(PullEnd::Failed.and(needs), needs);
+    assert_eq!(blocked.and(needs), blocked);
+    assert_eq!(needs.and(blocked), blocked);
+    assert_eq!(done(1).and(needs), needs);
 }

@@ -1032,25 +1032,19 @@ impl Syncer for McpSyncer {
                     .map(|report| u32::try_from(report.held_back).unwrap_or(u32::MAX)),
                     _ => Ok(0),
                 };
-                match result {
-                    Ok(held_back) => {
-                        if let PullEnd::Done { held_back: total } = &mut end {
-                            *total = total.saturating_add(held_back);
-                        }
-                    }
-                    Err(sync::SyncError::SignInAgain) => {
-                        let _ = self.store.mark_sign_in_needed(&account, now);
-                        failures.push(format!("{account} needs a new sign-in"));
-                        end = PullEnd::Failed;
-                    }
-                    // Waits for the user's OK, refusal or admin (specs/166): not a failure for
-                    // the job-failed alert (R-16b); the account page shows the state.
-                    Err(sync::SyncError::NeedsUser(state)) => end = PullEnd::NeedsUser(state),
-                    Err(e) => {
-                        failures.push(format!("{account}: {e}"));
-                        end = PullEnd::Failed;
-                    }
+                if let Err(sync::SyncError::SignInAgain) = &result {
+                    let _ = self.store.mark_sign_in_needed(&account, now);
+                    failures.push(format!("{account} needs a new sign-in"));
+                } else if let Err(e @ sync::SyncError::Failed(_)) = &result {
+                    failures.push(format!("{account}: {e}"));
                 }
+                // "Needs your OK" and the like wait for the user (specs/166): never a failure
+                // for the job-failed alert (R-16b); the account page shows the state.
+                end = end.and(match result {
+                    Ok(held_back) => PullEnd::Done { held_back },
+                    Err(sync::SyncError::NeedsUser(state)) => PullEnd::NeedsUser(state),
+                    Err(_) => PullEnd::Failed,
+                });
             }
             match after_pull(&*self.store, &account, &server.id, end, today) {
                 Ok(true) => crate::runtime::show_card(

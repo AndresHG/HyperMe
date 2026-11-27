@@ -282,6 +282,22 @@ pub enum PullEnd {
     Failed,
 }
 
+impl PullEnd {
+    /// Combines the ends of several pulls of one server: the strongest waiting state wins,
+    /// waiting wins over any other failure, a failure over success, and held-back counts add
+    /// up (R-16a).
+    pub fn and(self, next: PullEnd) -> PullEnd {
+        match (self, next) {
+            (PullEnd::NeedsUser(a), PullEnd::NeedsUser(b)) => PullEnd::NeedsUser(a.max(b)),
+            (PullEnd::NeedsUser(a), _) | (_, PullEnd::NeedsUser(a)) => PullEnd::NeedsUser(a),
+            (PullEnd::Failed, _) | (_, PullEnd::Failed) => PullEnd::Failed,
+            (PullEnd::Done { held_back: a }, PullEnd::Done { held_back: b }) => PullEnd::Done {
+                held_back: a.saturating_add(b),
+            },
+        }
+    }
+}
+
 /// Records how a pull ended and says whether the "Needs your OK" alert is due: a pull that
 /// works clears the state (R-16a); a higher state replaces a lower one; the alert comes at most
 /// once a day per account and server (R-8), and never for "Not allowed" or "Blocked" (R-15,

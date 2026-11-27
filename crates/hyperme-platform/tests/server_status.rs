@@ -85,3 +85,27 @@ fn sign_in_and_disconnect_clear_the_account() {
     store.delete_account("google:work").unwrap();
     assert_eq!(store.status("google:work", "gmail").unwrap().state, None);
 }
+
+/// Migration 8: a file at schema 7 (before this table) gains it on open.
+#[test]
+fn a_version_7_file_gains_the_table() {
+    let path = temp_db("upgrade");
+    drop(SqliteTaskStore::open(&path).unwrap());
+    let db = rusqlite::Connection::open(&path).unwrap();
+    db.execute_batch("DROP TABLE connector_server_status; PRAGMA user_version = 7;")
+        .unwrap();
+    drop(db);
+    let store = SqliteTaskStore::open(&path).unwrap();
+    after_pull(
+        &store,
+        "google:personal",
+        "gmail",
+        PullEnd::Done { held_back: 3 },
+        day(27),
+    )
+    .unwrap();
+    assert_eq!(
+        store.status("google:personal", "gmail").unwrap().held_back,
+        3
+    );
+}
