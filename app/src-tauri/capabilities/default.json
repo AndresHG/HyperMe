@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "The pill listens for state and level events from Rust and reports clicks; nothing else.",
-  "windows": ["pill", "settings", "walkthrough"],
+  "description": "The app's pages listen for events from Rust and call its commands; Home also emits home://block-viewed.",
+  "windows": ["pill", "settings", "walkthrough", "home"],
   "permissions": ["core:event:default"]
 }
