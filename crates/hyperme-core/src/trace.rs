@@ -90,6 +90,8 @@ pub const CLEANUP: &str = "cleanup";
 pub const INSERT: &str = "insert";
 /// The event on [`CLEANUP`] when its first cleaned token arrives.
 pub const FIRST_TOKEN: &str = "first_token";
+/// Saving the finished dictation to the history, after the paste or copy (#195).
+pub const HISTORY_WRITE: &str = "history_write";
 
 /// What a declared field may hold.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -135,6 +137,7 @@ pub const SCHEMA: &[(&str, &[(&str, Kind)])] = &[
         ],
     ),
     (INSERT, &[]),
+    (HISTORY_WRITE, &[]),
 ];
 
 /// Events the layer keeps, by name, on the span they belong to.
@@ -643,6 +646,13 @@ impl DictationTrace {
     /// The paste or copy was sent.
     pub fn inserted(&mut self) {
         self.insert = None;
+    }
+
+    /// Runs `write`, the history write of the finished dictation, inside a `history_write` span
+    /// (#195, R-2).
+    pub fn history_write<T>(&self, write: impl FnOnce() -> T) -> T {
+        let _span = tracing::info_span!(parent: &self.root, "history_write").entered();
+        write()
     }
 
     pub fn end(&mut self, outcome: Outcome) {
