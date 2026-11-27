@@ -115,7 +115,10 @@ Weights are `--weight-regular`, `--weight-medium`, `--weight-semibold` and `--we
 
 Built only from tokens, in one shared CSS file, the same on every page: button (default, primary,
 borderless), field, toggle, segmented control, list row, card, menu. A page adds layout, never its
-own look for a control. (The shared file arrives with the first migrated page.)
+own look for a control. The file is `app/ui/components.css`; every page links `tokens.css`, then
+`components.css`. Its classes carry a `ui-` prefix (`ui-button primary`, `ui-field`,
+`ui-switch`, `ui-segmented`, `ui-row`, `ui-card`, `ui-menu`), and it holds the behaviour every page
+shares (arrow cursor, non-selectable interface text, focus ring, no page bounce).
 
 ## Other platforms (later)
 

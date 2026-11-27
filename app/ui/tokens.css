@@ -55,6 +55,7 @@
   --sidebar-width: 208px;
   --title-bar-height: 28px; /* the overlay title bar the traffic lights sit in */
   --border-width: 1px;
+  --segment-inset: 2px; /* the track around a segmented control's segments */
   --focus-ring-width: 3px;
 
   /* Motion. Reduced motion turns every duration to nothing (below). */
@@ -105,7 +106,16 @@
   --color-pill-label: #ffffff;
   --color-pill-label-secondary: #a1a1aa;
   --color-pill-label-tertiary: #6b6b73;
-  --color-pill-border: rgba(255, 255, 255, 0.08);
+  --color-pill-pressed: #33333a;
+  --color-pill-border: rgba(255, 255, 255, 0.06);
+  --color-pill-border-strong: #3a3a40;
+  --color-pill-accent-text: #a08cff;
+  --color-done-soft: rgba(34, 197, 94, 0.2);
+  --color-done-soft-strong: rgba(34, 197, 94, 0.32);
+  /* The bead at rest: a small dark glass bead with a soft highlight (docs/UX.md, U-13). */
+  --pill-bead: radial-gradient(circle at 35% 30%, #4a4a55 0%, #18181d 60%, #0b0b0e 100%);
+  --pill-bead-highlight: rgba(255, 255, 255, 0.35);
+  --shadow-bead: inset 0 0 0 1px rgba(255, 255, 255, 0.18), 0 1px 3px rgba(0, 0, 0, 0.35);
   --color-recording: #ff4d4f;
   --color-done: #22c55e;
   --color-raw: #f59e0b;
