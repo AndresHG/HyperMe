@@ -52,6 +52,7 @@ sees unless set.
 | `HYPERME_NO_WALKTHROUGH=1` | The first-launch walkthrough stays closed (`scripts/measure-idle.sh` uses it) |
 | `HYPERME_SHOW_PILL=1` | The pill shows at launch, to check its shape |
 | `HYPERME_OPEN_HOME=<target>` | Home opens at launch at a section or block, such as `history` |
+| `HYPERME_OPEN_SETTINGS=<section>` | Home opens at launch with the Settings sheet at a section, such as `general` |
 | `HYPERME_TRACE_CHROME=<path>` | With `--features trace-chrome`: a trace of the session at `<path>`, to open in [Perfetto](https://ui.perfetto.dev) |
 | `HYPERME_OTLP_ENDPOINT=<url>` | With `--features otel`: spans exported over OTLP/HTTP to `<url>/v1/traces`, such as `https://api.honeycomb.io` |
 | `HYPERME_OTLP_HEADERS=<name>=<value>,…` | Headers for that export, such as `x-honeycomb-team=<your key>`. Never logged; keep the key out of shell history |

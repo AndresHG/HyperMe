@@ -415,6 +415,9 @@ mod window {
         let url = format!("home.html#{resolved}");
         let mut builder = WebviewWindowBuilder::new(app, HOME, WebviewUrl::App(url.into()))
             .title("HyperMe")
+            // Native chrome with the traffic lights over the page (docs/DESIGN.md, "Windows").
+            .title_bar_style(tauri::TitleBarStyle::Overlay)
+            .hidden_title(true)
             .min_inner_size(MIN_SIZE.0, MIN_SIZE.1);
         builder = match saved {
             Some(g) => builder.inner_size(g.width, g.height).position(g.x, g.y),
@@ -442,15 +445,26 @@ mod window {
         }
     }
 
+    /// Brings an open Home to the front without changing its section.
+    pub fn bring_to_front(app: &AppHandle) {
+        if let Some(window) = app.get_webview_window(HOME) {
+            if !window.is_focused().unwrap_or(false) {
+                record_front_app(app);
+            }
+            let _ = window.show();
+            let _ = window.set_focus();
+        }
+    }
+
     /// R-2, R-3: the window and its web view are gone; the Dock icon goes too unless another
     /// window of the app is still open.
     fn closed(app: &AppHandle) {
-        // The Settings sheet belongs to Home and goes with it (V0.1 redesign).
-        if let Some(sheet) = app.get_webview_window(crate::settings::SETTINGS) {
-            let _ = sheet.close();
-        }
-        let others = [crate::settings::SETTINGS, crate::walkthrough::WALKTHROUGH];
-        if !others.iter().any(|w| app.get_webview_window(w).is_some()) {
+        // The Settings sheet is part of Home's page and goes with it (V0.1 redesign).
+        crate::settings::sheet_gone();
+        if app
+            .get_webview_window(crate::walkthrough::WALKTHROUGH)
+            .is_none()
+        {
             let _ = app.set_activation_policy(tauri::ActivationPolicy::Accessory);
         }
         free_closed_window(app);
@@ -515,13 +529,6 @@ mod window {
             set_attention(&app, on);
         }
         state(&app).attention
-    }
-
-    /// Settings and Help at the bottom of the sidebar open the Settings window at a section
-    /// (docs/UX.md: ⌘, opens it at the section closest to where you are).
-    #[tauri::command]
-    pub fn home_settings(app: AppHandle, section: String) {
-        crate::settings::open(&app, &section);
     }
 
     #[tauri::command]
