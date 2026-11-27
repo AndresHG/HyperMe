@@ -90,7 +90,8 @@ identity would make every installed copy lose its permission grants on the next 
 
 ## Making a release
 
-1. Bump `version` in the root `Cargo.toml` (the app's version comes from there only) and move the
+1. Bump `version` in the root `Cargo.toml` (the app's version comes from there only; the
+   numbering, including `-alpha.K` trial builds, is in [RELEASES.md](RELEASES.md)) and move the
    `[Unreleased]` entries in `CHANGELOG.md` under the new version. Merge that pull request.
 2. On an up-to-date, clean `master`:
 

@@ -22,6 +22,8 @@ itself; a later version may hand a task to Claude Code ([docs/PRD.md](docs/PRD.m
 - `docs/SPEC.md`: requirements, architecture, budgets and safety rules
 - `docs/SPEED_TEST.md`: Phase 0, the first thing to build
 - `docs/ROADMAP.md`: the phases and their gates, and the gap to Wispr Flow (adopted 25 November 2026)
+- `docs/RELEASES.md`: version numbering, what each version (0.1 to 0.4) brings and when, and
+  triage of new asks into versions (adopted 27 November 2026)
 - `docs/plans/2026-11-26-phases-1-2.md`: phases 1 and 2 cut into chunks for parallel threads
 - `docs/PITCH.md`: pitch, positioning against Wispr Flow, and the ledger of claims still to earn
 - `specs/25-dictation-core/`: draft Phase 1 spec, design and slices (not yet approved)

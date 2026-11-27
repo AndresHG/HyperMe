@@ -5,6 +5,8 @@
 under way. On 26 November 2026 the owner also asked to start phase 2 work in parallel: see
 [the plan for phases 1 and 2](plans/2026-11-26-phases-1-2.md). The first public release still waits for both gates. The weeks of daily use in the gates are important checks, but development does not stop to wait for them (owner, 27 November 2026).
 
+Versions, dates and how a new ask finds its version: [RELEASES.md](RELEASES.md).
+
 ## Where we stand against Wispr Flow
 
 The owner's target is Wispr Flow's performance. Measured so far, on the owner's Mac (refreshed 26 November 2026):
@@ -113,4 +115,5 @@ The single list of open questions is now [PRD.md](PRD.md) section 12. Earlier it
 ## Not checked
 
 Whether a roadmap exists on a GitHub Projects board: this session can read the repository and
-its issues but not the account's Projects. No milestones exist in the repository.
+its issues but not the account's Projects. Milestones 0.1 to 0.4 exist in the repository, one
+per version in [RELEASES.md](RELEASES.md).
