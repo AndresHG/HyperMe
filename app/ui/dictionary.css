@@ -1,5 +1,8 @@
 /* The Dictionary page (dictionary.js), in Settings and in Home. Uses the page's --violet, --line
    and --muted. */
+.dict .hidden { display: none !important; }
+.dict button { padding: 5px 12px; border-radius: 6px; border: 1px solid var(--line); background: Canvas; color: inherit; font: inherit; cursor: pointer; }
+.dict button.main { background: var(--violet); color: white; border-color: var(--violet); }
 .dict-bar { display: flex; gap: 8px; margin-bottom: 10px; }
 .dict-search { flex: 1; min-width: 0; padding: 6px 8px; border-radius: 7px; border: 1px solid var(--line); background: Canvas; color: inherit; font: inherit; }
 .dict-sheet { border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-bottom: 10px; display: flex; flex-direction: column; gap: 10px; }
