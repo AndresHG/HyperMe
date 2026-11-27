@@ -289,3 +289,42 @@ async fn a_replay_of_saved_transcripts_is_paced_and_reports_missing_ones() {
     assert!(start.elapsed() >= Duration::from_secs(3));
     assert!(start.elapsed() < Duration::from_secs(4));
 }
+
+/// Slice C: a fallback after a cleanup error says why, so a rate limit is not mistaken for a
+/// slow model.
+#[tokio::test(start_paused = true)]
+async fn a_fallback_after_a_cleanup_error_says_why() {
+    struct Limited;
+    impl CleanupProvider for Limited {
+        async fn warm(&self) -> Result<(), Error> {
+            Ok(())
+        }
+        async fn clean(
+            &self,
+            _raw: &str,
+            _app: Option<&str>,
+            _on_text: &mut (dyn FnMut(&str) + Send),
+        ) -> Result<(), Error> {
+            Err(Error {
+                kind: ErrorKind::Other,
+                message: "groq: HTTP 429 Too Many Requests".to_owned(),
+            })
+        }
+    }
+    let raw: BTreeMap<String, String> = [("es-01", "hola equipo esto es una prueba")]
+        .into_iter()
+        .map(|(k, v)| (k.to_owned(), v.to_owned()))
+        .collect();
+    let results = replay_raw(
+        &Limited,
+        settings(),
+        &[sample("es-01", 0)],
+        &raw,
+        Duration::ZERO,
+        |_| {},
+    )
+    .await;
+    let pasted = results[0].outcome.as_ref().unwrap();
+    assert!(pasted.fallback);
+    assert!(pasted.why.as_deref().unwrap().contains("429"), "{pasted:?}");
+}

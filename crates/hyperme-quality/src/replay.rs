@@ -33,6 +33,8 @@ pub struct Pasted {
     pub text: String,
     /// The raw transcript was pasted: the cleanup missed its deadline or failed.
     pub fallback: bool,
+    /// The cleanup's error, when a fallback came from one rather than from the deadline.
+    pub why: Option<String>,
     pub stt_ms: u64,
     pub first_ms: Option<u64>,
     pub total_ms: u64,
@@ -55,6 +57,8 @@ struct Seen {
     /// The saved transcript the stand-in speech provider returns, in a cleanup-only replay.
     saved: Option<String>,
     raw: Option<String>,
+    /// The cleanup's last error.
+    error: Option<String>,
     pasted: Option<String>,
     timing: Option<TimingLine>,
 }
@@ -125,8 +129,8 @@ impl LiveSession for SavedSession {
     }
 }
 
-/// Borrows the real cleanup provider, so the caller keeps it.
-struct Borrowed<'a, C>(&'a C);
+/// Borrows the real cleanup provider, so the caller keeps it, and keeps its error.
+struct Borrowed<'a, C>(&'a C, Shared);
 
 impl<C: CleanupProvider + Sync> CleanupProvider for Borrowed<'_, C> {
     async fn warm(&self) -> Result<(), Error> {
@@ -139,7 +143,11 @@ impl<C: CleanupProvider + Sync> CleanupProvider for Borrowed<'_, C> {
         app: Option<&str>,
         on_text: &mut (dyn FnMut(&str) + Send),
     ) -> Result<(), Error> {
-        self.0.clean(raw, app, on_text).await
+        let result = self.0.clean(raw, app, on_text).await;
+        if let Err(error) = &result {
+            with(&self.1, |s| s.error = Some(error.message.clone()));
+        }
+        result
     }
 }
 
@@ -308,7 +316,7 @@ where
 {
     let parts = Parts {
         mic: NoMicrophone,
-        providers: fixed(speech, Borrowed(cleanup)),
+        providers: fixed(speech, Borrowed(cleanup, seen.clone())),
         inserter: KeepText(seen.clone()),
         focus: NoFocus,
         history: NoHistory,
@@ -343,12 +351,19 @@ where
                     None => Err("no saved transcript for this sample".to_owned()),
                 },
             };
-            let (raw, pasted, timing) =
-                with(&seen, |s| (s.raw.take(), s.pasted.take(), s.timing.take()));
+            let (raw, pasted, timing, error) = with(&seen, |s| {
+                (
+                    s.raw.take(),
+                    s.pasted.take(),
+                    s.timing.take(),
+                    s.error.take(),
+                )
+            });
             let outcome = outcome.and_then(|fallback| match (pasted, timing) {
                 (Some(text), Some(t)) => Ok(Pasted {
                     text,
                     fallback,
+                    why: error.filter(|_| fallback),
                     stt_ms: t.stt_ms,
                     first_ms: t.first_ms,
                     total_ms: t.total_ms,
