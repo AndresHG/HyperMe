@@ -74,7 +74,7 @@ EARS form. "The app" is HyperMe running on macOS.
   dictation. History is on by default, keeps 30 days (or unlimited, if the user chooses), and
   deletes the oldest items first when the total passes the size limit the user sets (default
   1 GB). The user can turn it off. The app shall offer "Paste last
-  dictation" and "Copy last dictation" in the menu-bar menu. It shall not write it to disk.
+  dictation" and "Copy last dictation" in the menu-bar menu.
 
 ### Failures
 
@@ -219,7 +219,7 @@ test servers; *(live)* ones are measured by hand on the owner's Mac and recorded
 | --- | --- | --- | --- |
 | Shell | Tauri 2, Rust core, thin web UI | Swift-only (no Linux or Windows later); Electron (weight) | Owner, `CLAUDE.md` |
 | Speech | Speechmatics `melia-1`, EU endpoint, streaming | OpenAI (914 ms median), Deepgram (language wrong on 2 of 38) ([results](../../docs/results/2026-11-25-full-benchmark.md)) | Phase 0 data; owner to confirm |
-| Cleanup | Groq `openai/gpt-oss-20b`, effort low, prompt `v1` | OpenAI `gpt-6-luna` (slower first token), prompt `v2` (slower, cuts words) | Phase 0 data; owner to confirm |
+| Cleanup | Dictionary substitution first (spec 93), then Groq `openai/gpt-oss-20b`, effort low, level `light` (prompt `v4`; `medium` uses `m2`), deadline 1500 ms, after which the raw transcript is pasted | OpenAI `gpt-6-luna` (slower first token), prompt `v1` (replaced by `v4`), prompt `v2` (slower, cuts words), deadline 1000 ms | Phase 0 data; deadline owner, 26 November 2026 |
 | Insertion | Clipboard plus paste shortcut | Typing characters (slow, breaks with input methods) | What Handy ships ([FIELD.md](../../docs/FIELD.md)) |
 | Base code | Port Speechmatics, cleanup and timing code from `spikes/flowbench` into the new crates; borrow Handy's recorder, hotkey, paste and pill code under MIT, recorded in `NOTICE.md` | Depending on flowbench (a spike, still being tuned) | Proposed |
 | Storage | Config, the optional timing log, and the dictation history: audio files written as they are captured, plus a SQLite index, under the app's data folder | No history on disk (lost the dictation when a connection dropped) | Owner, 26 November 2026 |
