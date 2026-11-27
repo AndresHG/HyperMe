@@ -123,3 +123,40 @@ first `v5` run, as a control for the network at that hour.
 - **Speed.** At the same hour `v5` is about 140 ms slower than `v4` at both the first token and
   the median total, in two runs (first rule: about 20 ms). The second rule and the longer app
   lines make the prompt longer; the cost is on the time to the first token, not on the output.
+
+## Third rule
+
+The same setup at about 00:20 CET on 28 November, after the formatting rule was cut to about
+half its length and given only to dictations that may need it (40 words or more, a colon, three
+commas or more, or a list or break word); the others get `v4`'s prompt. On the 50 samples, `v4`
+and `v5` ran alternately, back to back, so the hour's drift falls on both. 13 of the 50 raw
+transcripts get the rule (8 es, 5 en): 10 for three commas, 4 for length, 4 for a cue word, none
+for a colon (some for more than one reason).
+
+| Set | Row | es | en | All | Unchanged | Fallbacks |
+| --- | --- | --- | --- | --- | --- | --- |
+| Formatting | `v5` | 4/5, 0.2 | 3/7, 5.2 | 7/12, 3.1 | 0 | 1 |
+| Formatting | `v5` again | 5/5, 0.0 | 4/7, 0.6 | 9/12, **0.3** | 0 | 0 |
+| 50 samples | `v4` (1) | 3/25, 9.2 | 3/25, 9.2 | 6/50, 9.2 | 9 | 1 |
+| 50 samples | `v5` (1) | 4/25, 8.9 | 3/25, 9.0 | 7/50, 9.0 | 9 | 0 |
+| 50 samples | `v4` (2) | 2/25, 9.5 | 3/25, 8.7 | 5/50, 9.1 | 10 | 1 |
+| 50 samples | `v5` (2) | 3/25, 9.5 | 3/25, 8.6 | 6/50, 9.1 | 8 | 0 |
+
+| Set | Row | n | `first_ms` | `total_ms` | Fallbacks |
+| --- | --- | --- | --- | --- | --- |
+| Formatting | `v5` | 12 | 549 / 724 | 781 / 993 | 1 |
+| Formatting | `v5` again | 12 | 589 / 740 | 781 / 967 | 0 |
+| 50 samples | `v4` (1) | 50 | 564 / 721 | 749 / 964 | 1 |
+| 50 samples | `v5` (1) | 50 | 559 / 732 | 752 / 956 | 0 |
+| 50 samples | `v4` (2) | 50 | 614 / 879 | 781 / 1172 | 1 |
+| 50 samples | `v5` (2) | 50 | 561 / 790 | 760 / 995 | 0 |
+
+- **Speed.** `v5` and `v4` are now equal: 559 and 561 ms at the first token against 564 and
+  614 for `v4`, and the same median totals within 30 ms. The 140 ms of the second rule is gone.
+- **50 samples.** 9.0 and 9.1 for `v5` against 9.2 and 9.1 for `v4`: equal. No output has a
+  line break.
+- **Formatting.** 9 of 12 exact in the run without a fallback (0.3); the first run's 3.1 is
+  mostly one English list that fell back to the raw text at the deadline. Left over: a colon in
+  place of a comma in a chat message and one middle paragraph in an English mail (both rules
+  before had them too), short list items with uneven final full stops, and in one run an empty
+  line after a list's lead-in or a missing comma after a Spanish sign-off.
