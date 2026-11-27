@@ -13,6 +13,8 @@ auth_url = "https://accounts.google.com/o/oauth2/v2/auth"
 token_url = "https://oauth2.googleapis.com/token"
 revoke_url = "https://oauth2.googleapis.com/revoke"
 extra_auth_params = { access_type = "offline", prompt = "consent" }
+# Email is draft-only (CLAUDE.md, R-23): a tool that sends never runs, whatever is switched on.
+forbidden_tools = ["send_*", "*_send", "*_send_*"]
 # R-14: never asked for, whatever is switched on.
 forbidden_scopes = ["https://www.googleapis.com/auth/gmail.send",
                     "https://www.googleapis.com/auth/gmail.modify",
@@ -83,3 +85,10 @@ body_path = "messages.-1.body"
 mirror = true
 into = "mail"
 
+# R-23: what the preview card shows before a draft is saved; drafts need their switch (G-2).
+[[actions]]
+tool = "create_draft"
+title = "New draft"
+enter = "Save draft"
+needs = "gmail.drafts"
+fields = [["to", "To"], ["cc", "Cc"], ["subject", "Subject"], ["body", "Text"]]

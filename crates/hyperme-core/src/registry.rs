@@ -79,7 +79,7 @@ impl ToolLists {
 }
 
 /// `*` matches any run of characters, including none; everything else matches itself.
-fn glob(pattern: &str, name: &str) -> bool {
+pub(crate) fn glob(pattern: &str, name: &str) -> bool {
     let mut parts = pattern.split('*');
     let first = parts.next().unwrap_or_default();
     let Some(mut rest) = name.strip_prefix(first) else {
@@ -210,6 +210,27 @@ pub struct Connector {
     /// Scopes this connector never asks for, whatever is switched on (R-14).
     pub forbidden_scopes: Vec<String>,
     pub setup: Option<Setup>,
+    /// Tool patterns that never run, whatever the user switches (Google: anything that sends
+    /// mail, since email is draft-only).
+    pub forbidden_tools: Vec<String>,
+    /// How each "ask before" tool is previewed (R-23).
+    pub actions: Vec<Action>,
+}
+
+/// The preview of an "ask before" tool (R-23), from the preset.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Action {
+    pub tool: String,
+    /// The card's title, such as "New draft".
+    pub title: String,
+    /// The Enter button's words, such as "Save draft".
+    pub enter: String,
+    /// The setup switch the tool needs, such as `gmail.drafts`.
+    pub needs: Option<String>,
+    /// The arguments shown, in order, each with its label: `[["to", "To"], ...]`.
+    #[serde(default)]
+    pub fields: Vec<[String; 2]>,
 }
 
 impl Connector {
@@ -218,7 +239,11 @@ impl Connector {
     }
 
     /// The access for `tool`: the user's switch if there is one, else the default (R-5).
+    /// A tool in `forbidden_tools` is always off, whatever the user switched.
     pub fn access(&self, tool: &str) -> ToolAccess {
+        if self.forbidden_tools.iter().any(|p| glob(p, tool)) {
+            return ToolAccess::Off;
+        }
         self.user_access(tool)
             .unwrap_or_else(|| self.default_access(tool))
     }
@@ -285,6 +310,10 @@ struct PresetFile {
     #[serde(default)]
     forbidden_scopes: Vec<String>,
     setup: Option<Setup>,
+    #[serde(default)]
+    forbidden_tools: Vec<String>,
+    #[serde(default)]
+    actions: Vec<Action>,
 }
 
 #[derive(Deserialize)]
@@ -419,6 +448,8 @@ impl CustomServer {
             pulls: Vec::new(),
             forbidden_scopes: Vec::new(),
             setup: None,
+            forbidden_tools: Vec::new(),
+            actions: Vec::new(),
         }
     }
 }
@@ -601,6 +632,8 @@ fn parse_preset(text: &str, source: &str, builtin: bool) -> Result<Connector, Re
         pulls: file.pull,
         forbidden_scopes: file.forbidden_scopes,
         setup: file.setup,
+        forbidden_tools: file.forbidden_tools,
+        actions: file.actions,
     })
 }
 
