@@ -240,7 +240,7 @@ fn the_tokens_hold_the_scale() {
         "--radius-card: 10px",
         "--radius-sheet: 12px",
         "--radius-capsule: 999px",
-        "--control-height: 22px",
+        "--control-height: 24px",
         "@media (prefers-color-scheme: dark)",
         "@media (prefers-reduced-motion: reduce)",
         "@media (prefers-reduced-transparency: reduce)",
