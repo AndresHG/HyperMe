@@ -206,7 +206,7 @@ fn roles_view(config: &Config, keys: &dyn SecretStore) -> Vec<RoleView> {
                     name: entry.name.clone(),
                     recommended: id == recommended,
                     key_required: entry.key_required,
-                    has_key: matches!(keys.get(id), Ok(Some(_))),
+                    has_key: matches!(keys.get(config.key_account(id)), Ok(Some(_))),
                     has_key_page: entry.key_url.is_some(),
                     key_note: entry.key_note.clone(),
                     models: entry
@@ -233,9 +233,14 @@ pub fn settings_view(app: AppHandle) -> View {
     let path = config_path(&app);
     let loaded = load(&path);
     let keys = KeychainStore::new();
-    let has_key =
-        |provider: Option<&str>| provider.is_some_and(|p| matches!(keys.get(p), Ok(Some(_))));
     let config = loaded.as_ref().ok();
+    // A provider that shares another's key (D-2) reads that one.
+    let has_key = |provider: Option<&str>| {
+        provider.is_some_and(|p| {
+            let account = config.map_or(p, |c| c.key_account(p));
+            matches!(keys.get(account), Ok(Some(_)))
+        })
+    };
     View {
         keys: KeysView {
             speech: has_key(config.map(|c| c.speech.provider.as_str())),
@@ -583,7 +588,13 @@ pub fn key_set(
     if config.provider(&provider).is_none() {
         return Err(format!("{provider} is not in the provider catalogue"));
     }
-    save_key(&app, &KeychainStore::new(), &provider, &key)?;
+    // One key per provider (D-2): OpenAI speech saves the OpenAI key.
+    save_key(
+        &app,
+        &KeychainStore::new(),
+        config.key_account(&provider),
+        &key,
+    )?;
     // Another key may offer other models.
     model_cache()
         .lock()

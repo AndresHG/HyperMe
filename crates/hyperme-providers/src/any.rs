@@ -14,18 +14,21 @@ use hyperme_core::traits::{
 };
 
 use crate::cleanup::ChatCleanup;
+use crate::openai_rt::{OpenAiRealtime, OpenAiSession};
 use crate::speechmatics::{Speechmatics, SpeechmaticsSession};
 
 /// A speech provider of any protocol the app has.
 #[derive(Debug)]
 pub enum AnySpeech {
     Speechmatics(Speechmatics),
+    OpenAi(OpenAiRealtime),
 }
 
 /// A live session of any speech protocol.
 #[derive(Debug)]
 pub enum AnySession {
     Speechmatics(SpeechmaticsSession),
+    OpenAi(OpenAiSession),
 }
 
 /// A cleanup provider of any protocol the app has. Every cleanup host today speaks the
@@ -41,6 +44,7 @@ impl SpeechProvider for AnySpeech {
     async fn open(&self) -> Result<AnySession, Error> {
         match self {
             AnySpeech::Speechmatics(p) => p.open().await.map(AnySession::Speechmatics),
+            AnySpeech::OpenAi(p) => p.open().await.map(AnySession::OpenAi),
         }
     }
 }
@@ -49,12 +53,14 @@ impl LiveSession for AnySession {
     async fn send_audio(&mut self, pcm: &[i16]) -> Result<(), Error> {
         match self {
             AnySession::Speechmatics(s) => s.send_audio(pcm).await,
+            AnySession::OpenAi(s) => s.send_audio(pcm).await,
         }
     }
 
     async fn finish(self) -> Result<Transcript, Error> {
         match self {
             AnySession::Speechmatics(s) => s.finish().await,
+            AnySession::OpenAi(s) => s.finish().await,
         }
     }
 }
@@ -100,10 +106,12 @@ impl AnyCleanup {
     }
 }
 
-/// The key a provider needs, or `None` for one the catalogue marks as needing none (R-14).
-/// A missing key that is needed fails, naming the provider.
+/// The key a provider needs, or empty for one the catalogue marks as needing none (R-14). A
+/// provider that shares another's key reads that one (D-2). A missing key that is needed
+/// fails, naming the keychain entry.
 fn key_for(config: &Config, provider: &str, keys: &dyn SecretStore) -> Result<String, Error> {
     let needed = config.provider(provider).is_none_or(|p| p.key_required);
+    let provider = config.key_account(provider);
     match keys.get(provider) {
         Ok(Some(key)) => Ok(key),
         Ok(None) if !needed => Ok(String::new()),
@@ -131,6 +139,7 @@ pub fn speech(config: &Config, keys: &dyn SecretStore) -> Result<AnySpeech, Erro
     let key = key_for(config, &s.provider, keys)?;
     match protocol(config, &s.provider)? {
         Protocol::SpeechmaticsRt => Ok(AnySpeech::Speechmatics(Speechmatics::new(s, key))),
+        Protocol::OpenaiRealtime => Ok(AnySpeech::OpenAi(OpenAiRealtime::new(s, key))),
         other => Err(wrong_role(&s.provider, other, "speech")),
     }
 }
