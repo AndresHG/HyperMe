@@ -117,6 +117,15 @@ pub fn consent_scopes(connector: &Connector, on: &[String]) -> Result<Vec<String
 }
 
 /// A label as stored: trimmed and lowercased, one short word (letters, digits, `-`, `_`).
+/// The label a new account gets, checked before the sign-in opens the browser (#216): an empty
+/// field becomes "personal", the sheet's placeholder; anything else must be a usable label.
+pub fn account_label(input: &str) -> Result<String, String> {
+    if input.trim().is_empty() {
+        return Ok("personal".to_owned());
+    }
+    label_of(input)
+}
+
 fn label_of(label: &str) -> Result<String, String> {
     let label = label.trim().to_lowercase();
     let valid = !label.is_empty()

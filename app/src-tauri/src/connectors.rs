@@ -487,10 +487,12 @@ pub async fn connectors_sign_in(
         testing: false,
         fix_url: None,
     };
+    // The label is settled before the browser opens, so a sign-in is never stored under an
+    // empty or unusable label (#216).
+    let label = setup_core::account_label(&label).map_err(fail)?;
     let preset = connector_of(&app, &connector).map_err(fail)?;
     let store = std::sync::Arc::new(KeychainStore::with_service(KEYCHAIN_SERVICE));
     let oauth = std::sync::Arc::new(setup::oauth_client(&preset, &*store).map_err(sign_in_error)?);
-    let label = label.trim().to_lowercase();
     let (sender, receiver) = tokio::sync::oneshot::channel();
     let task = {
         let (preset, store, oauth, label, features) = (
