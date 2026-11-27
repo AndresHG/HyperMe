@@ -167,12 +167,8 @@ fn wire(app: &AppHandle, history: Arc<Mutex<HistoryInner>>) -> Result<(), String
     let dir = data_dir(app);
     let config =
         Config::load_or_create(&dir.join("config.toml")).map_err(|e| format!("Config: {e}"))?;
-    let dictionary_file = crate::dictionary::file(&dir, Some(&config));
-    let (dictionary, unread) = crate::dictionary::read(&dictionary_file);
-    // An unreadable dictionary leaves dictation working without it; Settings shows why.
-    if let Some(why) = unread {
-        eprintln!("HyperMe: {why}");
-    }
+    // An unreadable dictionary store leaves dictation working without it; Settings shows why.
+    let dictionary = crate::dictionary::current(app);
     let providers = with_dictionary(
         any::resolve(&config, &KeychainStore::new()).map_err(|e| e.message)?,
         &dictionary,
@@ -224,8 +220,7 @@ pub fn reload_providers(app: &AppHandle) -> Result<(), String> {
     };
     let config = Config::load_or_create(&data_dir(app).join("config.toml"))
         .map_err(|e| format!("Config: {e}"))?;
-    let (dictionary, _) =
-        crate::dictionary::read(&crate::dictionary::file(&data_dir(app), Some(&config)));
+    let dictionary = crate::dictionary::current(app);
     let providers = with_dictionary(
         any::resolve(&config, &KeychainStore::new()).map_err(|e| e.message)?,
         &dictionary,

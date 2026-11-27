@@ -93,9 +93,55 @@ fn folded(text: &str) -> Vec<char> {
     text.chars().map(fold).collect()
 }
 
+/// Whether a word is one of the frequent words a heard form should not be without a yes (R-17).
+pub fn is_common_word(word: &str) -> bool {
+    is_common(word.trim())
+}
+
 fn is_common(written: &str) -> bool {
     let word: String = written.chars().map(fold).collect();
     COMMON.iter().any(|c| c.chars().map(fold).eq(word.chars()))
+}
+
+/// The form two words are compared in: lower case, accents folded (as the matcher compares).
+pub fn key(text: &str) -> String {
+    text.trim().chars().map(fold).collect()
+}
+
+/// Splits CSV text into rows of cells: commas, double-quoted cells with `""` for a quote, and
+/// `\n` or `\r\n` line ends.
+fn csv_rows(text: &str) -> Result<Vec<Vec<String>>, String> {
+    let mut rows = Vec::new();
+    let mut row = Vec::new();
+    let mut cell = String::new();
+    let mut quoted = false;
+    let mut chars = text.chars().peekable();
+    while let Some(c) = chars.next() {
+        match (quoted, c) {
+            (true, '"') if chars.peek() == Some(&'"') => {
+                chars.next();
+                cell.push('"');
+            }
+            (true, '"') => quoted = false,
+            (true, c) => cell.push(c),
+            (false, '"') if cell.is_empty() => quoted = true,
+            (false, ',') => row.push(std::mem::take(&mut cell)),
+            (false, '\r') => {}
+            (false, '\n') => {
+                row.push(std::mem::take(&mut cell));
+                rows.push(std::mem::take(&mut row));
+            }
+            (false, c) => cell.push(c),
+        }
+    }
+    if quoted {
+        return Err("The CSV has a quote that is never closed.".to_owned());
+    }
+    if !cell.is_empty() || !row.is_empty() {
+        row.push(cell);
+        rows.push(row);
+    }
+    Ok(rows)
 }
 
 /// `LangChain` -> `lang chain`, `Next.js` -> `next js`; `None` for a single plain word.
@@ -269,6 +315,82 @@ impl Dictionary {
         }
         Self::check(&terms)?;
         Ok(Corrected::Added(Dictionary::new(terms)))
+    }
+
+    /// An import (R-13): new entries go at the end, new heard forms join the entry already
+    /// there, and what is there stays as written. The result must pass the check (R-15).
+    pub fn merged(&self, incoming: &[Term]) -> Result<Dictionary, String> {
+        let mut terms = self.terms.clone();
+        for new in incoming {
+            let written = new.written.trim();
+            if written.is_empty() {
+                continue;
+            }
+            let at = match terms.iter().position(|t| key(&t.written) == key(written)) {
+                Some(at) => at,
+                None => {
+                    terms.push(Term {
+                        written: written.to_owned(),
+                        heard: Vec::new(),
+                    });
+                    terms.len() - 1
+                }
+            };
+            for heard in new.heard.iter().map(|h| h.trim()).filter(|h| !h.is_empty()) {
+                if !terms[at].heard.iter().any(|h| key(h) == key(heard)) {
+                    terms[at].heard.push(heard.to_owned());
+                }
+            }
+        }
+        Self::check(&terms)?;
+        Ok(Dictionary::new(terms))
+    }
+
+    /// The CSV export (R-13): a header, then the word and its heard forms, comma separated in
+    /// one quoted cell.
+    pub fn to_csv(&self) -> String {
+        let cell = |text: &str| {
+            if text.contains([',', '"', '\n', '\r']) {
+                format!("\"{}\"", text.replace('"', "\"\""))
+            } else {
+                text.to_owned()
+            }
+        };
+        let mut out = String::from("word,heard as\n");
+        for term in &self.terms {
+            out.push_str(&cell(&term.written));
+            out.push(',');
+            out.push_str(&cell(&term.heard.join(", ")));
+            out.push('\n');
+        }
+        out
+    }
+
+    /// Reads a CSV (R-13): the first column is the word, the second, if any, its heard forms,
+    /// comma separated. A first row that starts with "word" is a header. Blank rows are skipped.
+    pub fn parse_csv(text: &str) -> Result<Vec<Term>, String> {
+        let mut terms = Vec::new();
+        for (n, row) in csv_rows(text)?.into_iter().enumerate() {
+            let written = row.first().map(|c| c.trim()).unwrap_or_default();
+            if written.is_empty() || (n == 0 && written.eq_ignore_ascii_case("word")) {
+                continue;
+            }
+            let heard = row
+                .get(1)
+                .map(|c| {
+                    c.split(',')
+                        .map(str::trim)
+                        .filter(|h| !h.is_empty())
+                        .map(str::to_owned)
+                        .collect()
+                })
+                .unwrap_or_default();
+            terms.push(Term {
+                written: written.to_owned(),
+                heard,
+            });
+        }
+        Ok(terms)
     }
 
     /// The text format, as [`Dictionary::parse`] reads it, for saving.
@@ -551,6 +673,52 @@ mod tests {
                 .unwrap_err()
                 .contains("colon")
         );
+    }
+
+    /// AC-10 (R-13): the CSV export reads back as the same entries; a header row, quotes and
+    /// a one-column file import too.
+    #[test]
+    fn csv_round_trips_and_imports() {
+        let d = Dictionary::parse("Zentrix: zen trix, sun trix\nLangChain\nAna \"Ani\" Ruiz\n");
+        let csv = d.to_csv();
+        assert!(csv.starts_with("word,heard as\n"), "{csv}");
+        assert!(csv.contains("Zentrix,\"zen trix, sun trix\"\n"), "{csv}");
+        assert!(csv.contains("\"Ana \"\"Ani\"\" Ruiz\",\n"), "{csv}");
+        assert_eq!(Dictionary::new(Dictionary::parse_csv(&csv).unwrap()), d);
+
+        let one_column = "Word\r\nKubernetes\r\n\r\nNext.js\r\n";
+        let terms = Dictionary::parse_csv(one_column).unwrap();
+        assert_eq!(
+            terms.iter().map(|t| t.written.as_str()).collect::<Vec<_>>(),
+            ["Kubernetes", "Next.js"]
+        );
+        assert!(Dictionary::parse_csv("\"open quote,x\n").is_err());
+    }
+
+    /// AC-10 (R-13, R-15): an import adds new entries and new heard forms to the ones there,
+    /// keeps what is there, and refuses what breaks the limits.
+    #[test]
+    fn an_import_merges_into_the_list() {
+        let d = Dictionary::parse("Zentrix: zen trix\nLangChain\n");
+        let incoming =
+            Dictionary::parse("zentrix: Zen Trix, sun trix\nKubernetes: cube net ease\n");
+        let merged = d.merged(incoming.terms()).unwrap();
+        assert_eq!(
+            merged.to_text(),
+            Dictionary::parse(
+                "Zentrix: zen trix, sun trix\nLangChain\nKubernetes: cube net ease\n"
+            )
+            .to_text()
+        );
+        let many: Vec<Term> = (0..MAX_ENTRIES)
+            .map(|i| Term {
+                written: format!("w{i}"),
+                heard: vec![],
+            })
+            .collect();
+        assert!(merged.merged(&many).unwrap_err().contains("At most 1000"));
+        assert_eq!(key("Árbol"), key("arbol"));
+        assert!(is_common_word(" Mesa ") && !is_common_word("Zentrix"));
     }
 
     /// AC-6 (rough bound; release-mode timing is slice D3): 1,000 entries over a long

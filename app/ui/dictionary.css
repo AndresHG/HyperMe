@@ -1,0 +1,25 @@
+/* The Dictionary page (dictionary.js), in Settings and in Home. Uses the page's --violet, --line
+   and --muted. */
+.dict-bar { display: flex; gap: 8px; margin-bottom: 10px; }
+.dict-search { flex: 1; min-width: 0; padding: 6px 8px; border-radius: 7px; border: 1px solid var(--line); background: Canvas; color: inherit; font: inherit; }
+.dict-sheet { border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-bottom: 10px; display: flex; flex-direction: column; gap: 10px; }
+.dict-switch { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; width: fit-content; }
+.dict-switch input { appearance: none; width: 30px; height: 18px; border-radius: 9px; background: var(--line); position: relative; margin: 0; cursor: pointer; transition: background .15s; }
+.dict-switch input::after { content: ''; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: white; box-shadow: 0 1px 2px rgb(0 0 0 / .3); transition: left .15s; }
+.dict-switch input:checked { background: var(--violet); }
+.dict-switch input:checked::after { left: 14px; }
+.dict-fields { display: flex; align-items: center; gap: 8px; }
+.dict-fields input { flex: 1; min-width: 0; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--line); background: Canvas; color: inherit; font: inherit; }
+.dict-arrow { color: var(--muted); }
+.dict-hint { margin: 0; color: var(--warn, #f59e0b); font-size: 12px; }
+.dict-hint:empty { display: none; }
+.dict-buttons { display: flex; justify-content: flex-end; gap: 8px; }
+.dict-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.dict-what { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.dict-word { font-weight: 600; }
+.dict-wrong-word { color: var(--muted); text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--muted) 60%, transparent); }
+.dict-actions { white-space: nowrap; }
+.dict-empty { color: var(--muted); }
+.dict-foot { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 14px; color: var(--muted); }
+.dict-where { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dict-foot > span { white-space: nowrap; flex-shrink: 0; }

@@ -215,17 +215,19 @@ section; Settings keeps its entry. One page, two doors, so it is easy to find fr
 - A search field, **Add word** (keycap N) and a `⋯` menu with Import and Export.
 - **Suggested** block on top, only while something waits: one line each,
   `next js → Next.js · fixed once in Slack`, with the keycaps `↵ Add` and `⌫ Dismiss`.
-- The list: one line per entry. The written form, then "heard as sun trix, zen trix" in grey,
-  a mark for learned ones, and the use count on the right. Hover or ⌘K: Edit, Delete. Sorted by
-  most used; search matches the entry and its heard forms.
+- The list, like Wispr Flow's: one line per word (`LangChain`), and one line per misspelling
+  (`zen trix → Zentrix`, the misspelling struck through in grey). A mark for learned ones and the
+  use count on the right. Hover or ⌘K: Edit, Delete. Sorted by most used; search matches both
+  sides. Underneath it is still one entry with its heard forms; the page splits and groups them.
 - At the bottom, a switch: **Learn from my edits** ("After a dictation, HyperMe notices when you
   fix a word. What it reads stays on your Mac.").
 - Empty state: "No words yet. Add names, products and jargon, or fix a word from History."
 
-**Add or edit**, a small sheet: **Word** (`Zentrix`), **Heard as** (optional, comma separated,
-"How it comes out wrong. Leave empty if HyperMe only needs the spelling."). A common heard form
-shows, inline: "'sun' is a common word. HyperMe will replace it everywhere." and the button
-becomes **Add anyway**.
+**Add or edit**, a small sheet, as in Wispr Flow (owner, 27 November 2026): one field, **Word**
+(`Zentrix`), and a switch, **Correct a misspelling**. With the switch on, the sheet shows two
+fields, the misspelling and the correct spelling (`zen trix → Zentrix`). One misspelling per row.
+A common misspelling shows, inline: "'sun' is a common word. HyperMe will replace it everywhere."
+and the button becomes **Add anyway**.
 
 **History → Fix** (⌘D): select words in a dictation, press Fix, type the right form, ↵. It is
 added at once, and the row offers **Paste again** with the corrected text. The Home window and
