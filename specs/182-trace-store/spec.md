@@ -1,6 +1,6 @@
 # Trace store: local traces of every dictation
 
-**Status:** draft, for the owner's approval. One open question (TS-1).
+**Status:** draft, for the owner's approval. TS-1 answered by the owner, 27 November 2026.
 **Issue:** [#182](https://github.com/AndresHG/hyperme/issues/182). **Size:** L (new crates, core
 and platform, changes spec 25 R-30).
 **Traces to:** [telemetry research](../../docs/research/2026-11-27-telemetry-and-tracing.md)
@@ -78,7 +78,10 @@ EARS form. "The app" is HyperMe on macOS.
 - R-8. The trace store shall keep every dictation's trace, whether or not it pasted, and link it
   to its history item when one exists.
 - R-9. When a history item is deleted, the app shall delete its trace. Traces shall follow the
-  history's retention days and be counted in its size limit. (With history off: TS-1.)
+  history's retention days and be counted in its size limit.
+- R-9a. With history off, the app shall still keep traces, 30 days, under the history's size
+  limit, unless the user turns off **Keep timing traces** (on by default) under Settings →
+  History; with it off, no trace is written. (TS-1)
 - R-10. The trace store shall offer, to the rest of the app, the spans of one trace by history id,
   and the median and 90th percentile of each stage over a time window, by provider and model.
 - R-11. A write failure in the trace store shall never fail or slow a dictation; it shall be
@@ -130,7 +133,8 @@ EARS form. "The app" is HyperMe on macOS.
   A span created with an undeclared text field stores nothing for it. Extends spec 25 AC-18.
   (R-5, R-14)
 - AC-4 *(fake)*: Deleting a history item deletes its trace; retention and the size limit remove
-  traces with their items. (R-9)
+  traces with their items. With history off, traces are kept 30 days; with Keep timing traces
+  off, none is written. (R-9, R-9a)
 - AC-5 *(fake)*: The trace store returns one trace's spans by history id, and the median and p90
   per stage over a window, matching a hand-computed fixture. (R-10)
 - AC-6 *(fake)*: With the store failing every write, dictations still paste and the failure is a
@@ -178,11 +182,11 @@ Details go in `design.md` after approval.
 - Any telemetry or crash report sent from a user's Mac (PRD Q-18; roadmap Later).
 - Crash capture (a panic hook writing a local file): the follow-up spec, with the bundle.
 
-## Open question for the owner
+## Decisions
 
-| ID | Question | Recommendation |
+| ID | Question | Answer |
 | --- | --- | --- |
-| TS-1 | With history off, does the app still keep traces? | Yes: traces hold no text, only numbers and provider names, and Diagnostics needs them. Keep 30 days, with the history's size limit, and a switch "Keep timing traces" (on) under Settings → History, so a user who wants nothing kept can turn it off |
+| TS-1 | With history off, does the app still keep traces? | Decided 27 November 2026, as recommended. Yes: traces hold no text, only numbers and provider names, and Diagnostics needs them. Keep 30 days, with the history's size limit, and a switch "Keep timing traces" (on) under Settings → History, so a user who wants nothing kept can turn it off |
 
 ## Risks
 
