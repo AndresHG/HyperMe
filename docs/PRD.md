@@ -215,6 +215,8 @@ commands (owner, Q-6). Meetings follow daily tasks and email, or run in parallel
 | Two tracks: me (microphone) and them (system audio) | 5 | P0 | Visible indicator always on |
 | Notes, action points and proposed tickets with owner and quote | 5 | P0 | Tickets go through the preview |
 | Diarization after the meeting | 5+ | P2 | FluidAudio (Apache-2.0) |
+| A "Transcribe?" card when a call is detected; nothing records without a yes | 5 | P0 | Owner, N-1. [ROADMAP](ROADMAP.md#notes-memory-and-contexts) |
+| One Meetings page, with or without a calendar event (attached by time overlap) | 5 | P0 | Owner, 27 November 2026 |
 
 ### 7.5 Memory and learning (J-8)
 
@@ -228,12 +230,18 @@ designed: a design proposal will compare how other assistants build memory, befo
   preferences, facts), readable and editable in any editor and usable as an Obsidian vault, shown
   as a graph. SQLite is only a search index over the files. The folder is the user's data: never
   in any repository and never sent anywhere except as context to the user's own providers.
+- **Contexts.** Two levels of tags (Customers > Amazon, Family > Mother), each context a file in
+  the memory folder with its facts and aliases. Tasks, facts and meetings share them, so "for
+  Amazon" files a to-do or a fact in one place (owner, N-2 to N-4,
+  [research](research/2026-11-27-notes-memory-tags.md)).
 - **The dictionary** learns from corrections and can be edited by hand.
 
 | Feature | Phase | Priority | Notes |
 | --- | --- | --- | --- |
 | Dictionary learned from corrections, editable by hand | 2 | P0 | See 7.1 |
 | "Hyper, remember …", the approval list, the Markdown folder | 3 | P0 | Answers and actions use it for people and projects |
+| Contexts in two levels, as files in the memory folder; matched by name and alias | 3 | P0 | Owner, N-3 and N-4 |
+| Contexts on tasks and a filter by context | 4 | P1 | Owner, N-4 |
 | Proposed facts from use (dictations, meetings, mail) | 4, 5 | P1 | Always through the approval list |
 | Graph view of the knowledge base | 5+ | P2 | Or open the folder in Obsidian |
 
@@ -331,7 +339,12 @@ Asked in the interview of 26 November 2026. Recommendations first.
 | M-1 to M-3 | Memory: how it learns, where it lives, when | | Decided 26 November 2026: see 7.5 |
 | D-1 to D-3 | Daily tasks: whose list, how the day arrives, when | | Decided 26 November 2026: see 7.3 |
 | Q-15 | Quick notes ("Hyper, note that …"): a note in the memory folder, an item on the task list, or both | Into the task list when it has an action, into the memory folder otherwise | Open; decide with the phase 3 spec |
-| Q-16 | How self-learning memory works | A design proposal comparing how other assistants build memory | Open; research before the memory spec |
+| Q-16 | How self-learning memory works | A design proposal comparing how other assistants build memory | Storage and linking researched 27 November 2026 ([research](research/2026-11-27-notes-memory-tags.md)): files plus a SQLite index, deterministic linking, new things through the approval list. How Hyper notices facts is still open, before the memory spec |
+| N-1 | What HyperMe does when it notices a call | Ask every time | Decided 27 November 2026: ask every time, never record without a yes |
+| N-2 | Link facts and to-dos to a meeting | Through contexts only | Decided 27 November 2026: contexts only; a direct link stays in Later |
+| N-3 | Shape of tags | Two levels, each context a memory file | Decided 27 November 2026: as recommended |
+| N-4 | When contexts and the meeting prompt arrive | Phases 3 to 5 | Decided 27 November 2026: memory in 3, tasks in 4, meetings in 5 |
+| N-5 | Memory storage and linking | Markdown files plus a SQLite index, deterministic linking | Decided 27 November 2026: as recommended. Embeddings and an AI knowledge graph go to Later, to evaluate again with an interview of the owner first |
 | G-1 | Whose Google sign-in client | Bring your own Google Cloud client now; a shared one later if non-developers ask | Decided 26 November 2026: as recommended ([spec](../specs/97-google-connectors/spec.md)) |
 | G-2 | Gmail access in the first version | Read plus drafts, never send | Decided 26 November 2026: as recommended |
 | G-3 | Mail and calendar content to the model | To the user's own model provider, only when a job or question needs it | Decided 26 November 2026: as recommended. Also: Google must never sign the user out in normal use |
