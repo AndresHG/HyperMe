@@ -84,6 +84,15 @@ impl CleanupProvider for AnyCleanup {
     }
 }
 
+impl AnyCleanup {
+    /// Adds the user's dictionary to the prompt (spec 93, R-4): `line` is
+    /// `Dictionary::prompt_line()`.
+    pub fn with_dictionary(self, line: &str) -> Self {
+        self.set_dictionary(line);
+        self
+    }
+}
+
 /// The key a provider needs, or `None` for one the catalogue marks as needing none (R-14).
 /// A missing key that is needed fails, naming the provider.
 fn key_for(config: &Config, provider: &str, keys: &dyn SecretStore) -> Result<String, Error> {
