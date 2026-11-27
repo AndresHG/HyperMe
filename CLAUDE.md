@@ -37,6 +37,8 @@ itself; a later version may hand a task to Claude Code ([docs/PRD.md](docs/PRD.m
   elicitation), first for Gmail (approved 27 November 2026)
 - `specs/182-trace-store/`: draft phase 2 spec for local traces of every dictation (the `tracing`
   crate, a SQLite trace store, the timing log on spans; nothing leaves the Mac)
+- `specs/200-diagnostics/`: draft spec for the Diagnostics view in Settings, stage bars on History
+  items, the Report a problem bundle the user previews and attaches to an issue, and local crash files
 - `docs/RELEASING.md`: how a release is built, signed, notarised and published, and how updates work
 - `docs/FIELD.md`: existing projects and what to borrow from each
 - `docs/research/2026-11-27-telemetry-and-tracing.md`: local tracing, what other users' copies may
