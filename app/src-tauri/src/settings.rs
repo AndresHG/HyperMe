@@ -61,6 +61,8 @@ pub struct View {
     keys: KeysView,
     /// Settings → Providers' table of roles (specs/96-provider-settings, R-6).
     roles: Vec<RoleView>,
+    /// Every provider dictation may send to, fallbacks included, for Privacy (R-29).
+    destinations: Vec<config::Destination>,
     setup: SetupView,
     version: &'static str,
 }
@@ -271,6 +273,7 @@ pub fn settings_view(app: AppHandle) -> View {
             cleanup: has_key(config.map(|c| c.cleanup.provider.as_str())),
         },
         roles: config.map_or_else(Vec::new, |c| roles_view(c, &keys)),
+        destinations: config.map_or_else(Vec::new, Config::destinations),
         config: config.map(config_view),
         config_error: loaded.err(),
         config_path: path.display().to_string(),

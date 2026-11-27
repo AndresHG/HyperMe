@@ -198,7 +198,8 @@
 
   <section id="privacy">
     <h1>Privacy</h1>
-    <p class="lead">Audio and text go only to the speech and cleanup providers above, under your keys. Connected accounts follow the rules at the bottom of this page. There is no telemetry. A dictation's audio stays on this Mac so a dropped connection never loses it.</p>
+    <p class="lead">Audio and text go only to the providers listed here, under your keys. Connected accounts follow the rules at the bottom of this page. There is no telemetry. A dictation's audio stays on this Mac so a dropped connection never loses it.</p>
+    <div id="privacy-providers" data-words="providers speech cleanup fallback where audio text goes privacy"></div>
     <div class="row" data-words="history dictation audio keep"><div class="what">Dictation history<small>Keeps each dictation's audio and text on this Mac.</small></div><input type="checkbox" data-section="history" data-key="enabled"></div>
     <div class="row" data-words="history retention days unlimited"><div class="what">Keep for<small>Older dictations are deleted.</small></div><select id="retention"><option value="30">30 days</option><option value="unlimited">Unlimited</option></select></div>
     <div class="row" data-words="history size limit"><div class="what">Size limit (MB)<small>The oldest dictations go first.</small></div><input type="number" min="10" data-section="history" data-key="size_limit_mb"></div>
@@ -276,6 +277,13 @@
     mark($('setup-input'), view.setup.input_monitoring, 'Allowed', 'Not allowed');
     mark($('setup-speech'), view.keys.speech, 'Key saved', 'No key');
     mark($('setup-cleanup'), view.keys.cleanup, 'Key saved', 'No key');
+    // specs/96, R-29: every provider set, fallbacks included, and what each one receives.
+    const sent = { speech: 'Your audio', cleanup: 'The transcript, the app name and your dictionary' };
+    $('privacy-providers').replaceChildren(...(view.destinations || []).map((d) => {
+      const what = d.on_this_mac ? 'Stays on this Mac' : sent[d.role] + ' go' + (d.role === 'speech' ? 'es' : '') + ' to ' + d.name;
+      const when = d.fallback_for ? 'Only if ' + d.fallback_for + ' fails' : (d.role === 'speech' ? 'Dictation speech' : 'Dictation cleanup');
+      return el('div', { className: 'row' }, el('div', { className: 'what' }, d.name + (d.fallback_for ? ' (fallback)' : ''), el('small', {}, when + ' · ' + d.model)), el('span', { className: 'faint' }, what));
+    }));
     // specs/96, R-24a: a fallback whose key went missing is skipped, and its row turns red.
     const fallbacks = $('setup-fallbacks');
     fallbacks.textContent = '';

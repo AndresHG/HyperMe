@@ -111,7 +111,7 @@ impl Protocol {
 }
 
 /// One job a model does (spec.md, "Requirements"). Answers and meeting cleanup join later.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Role {
     Speech,
@@ -365,6 +365,19 @@ pub struct Cleanup {
     /// after its Test passes (R-24a).
     #[serde(default)]
     pub fallback: Option<FallbackChoice>,
+}
+
+/// One provider dictation may send to (R-29), for the Privacy section.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct Destination {
+    pub role: Role,
+    /// As people write it: "Speechmatics".
+    pub name: String,
+    pub model: String,
+    /// The main provider's name, when this is its fallback.
+    pub fallback_for: Option<String>,
+    /// A server on this Mac: nothing leaves it.
+    pub on_this_mac: bool,
 }
 
 /// A role's fallback: `fallback = { provider = "openai", model = "gpt-6-luna" }` (R-3).
@@ -816,6 +829,53 @@ impl Config {
             free_credit_usd: entry.free_credit_usd,
             fallback: None,
         })
+    }
+
+    /// Every provider dictation can send to, fallbacks included, in the order the Privacy
+    /// section lists them (R-29).
+    pub fn destinations(&self) -> Vec<Destination> {
+        let name = |id: &str| {
+            self.provider(id)
+                .map_or_else(|| id.to_owned(), |p| p.name.clone())
+        };
+        let mut out = Vec::new();
+        let roles = [
+            (
+                Role::Speech,
+                &self.speech.provider,
+                &self.speech.model,
+                &self.speech.endpoint,
+                self.speech_fallback()
+                    .map(|s| (s.provider, s.model, s.endpoint)),
+            ),
+            (
+                Role::Cleanup,
+                &self.cleanup.provider,
+                &self.cleanup.model,
+                &self.cleanup.endpoint,
+                self.cleanup_fallback()
+                    .map(|c| (c.provider, c.model, c.endpoint)),
+            ),
+        ];
+        for (role, provider, model, endpoint, fallback) in roles {
+            out.push(Destination {
+                role,
+                name: name(provider),
+                model: model.clone(),
+                fallback_for: None,
+                on_this_mac: on_this_mac(endpoint),
+            });
+            if let Some((f_provider, f_model, f_endpoint)) = fallback {
+                out.push(Destination {
+                    role,
+                    name: name(&f_provider),
+                    model: f_model,
+                    fallback_for: Some(name(provider)),
+                    on_this_mac: on_this_mac(&f_endpoint),
+                });
+            }
+        }
+        out
     }
 
     /// A provider in the catalogue.

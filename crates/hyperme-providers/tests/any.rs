@@ -34,7 +34,10 @@ fn with_server(base: &str, key_required: bool) -> Config {
 #[test]
 fn resolves_the_recommended_pair_by_protocol() {
     let providers = resolve(&Config::default(), &keys(&["speechmatics", "groq"])).unwrap();
-    assert!(matches!(**providers.speech.main(), AnySpeech::Speechmatics(_)));
+    assert!(matches!(
+        **providers.speech.main(),
+        AnySpeech::Speechmatics(_)
+    ));
     assert!(matches!(providers.cleanup.main(), AnyCleanup::Chat(_)));
 }
 
