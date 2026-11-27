@@ -228,17 +228,18 @@ designed: a design proposal will compare how other assistants build memory, befo
   corrected twice, a person mentioned often) and proposes them as facts. Proposals wait in an
   approval list on the Home page of the Home window; nothing is learned silently.
 - **Where it lives.** A folder of plain Markdown files on the user's Mac (people, projects,
-  preferences, facts), readable and editable in any editor and usable as an Obsidian vault.
-  SQLite is only a search index over the files. The folder is the user's data: never
+  preferences, facts), readable and editable in any editor and usable as an Obsidian vault, shown
+  as a graph. SQLite is only a search index over the files. The folder is the user's data: never
   in any repository and never sent anywhere except as context to the user's own providers.
 - **Contexts.** Two levels of tags (Customers > Amazon, Family > Mother), each context a file in
   the memory folder with its facts and aliases. Tasks, facts and meetings share them, so "for
   Amazon" files a to-do or a fact in one place (owner, N-2 to N-4,
   [research](research/2026-11-27-notes-memory-tags.md)).
 - **The dictionary** learns from corrections and can be edited by hand.
-- **Assistant memory, not a knowledge base.** The folder holds what Hyper needs to act for the
-  user. HyperMe builds no graph view, notes app or knowledge base over it; anyone who wants a
-  graph opens the folder in Obsidian (owner, 27 November 2026).
+- **HyperMe is the one that learns.** Learning, facts, notes and the growing memory belong to
+  HyperMe: it is about growing, working and getting things done. Searching what the user already
+  has (files, documents, bookmarks) and asking questions over it is out of scope (section 8).
+  Other tools may read this memory through HyperMe's MCP server (owner, 27 November 2026).
 
 | Feature | Phase | Priority | Notes |
 | --- | --- | --- | --- |
@@ -247,6 +248,7 @@ designed: a design proposal will compare how other assistants build memory, befo
 | Contexts in two levels, as files in the memory folder; matched by name and alias | 3 | P0 | Owner, N-3 and N-4 |
 | Contexts on tasks and a filter by context | 4 | P1 | Owner, N-4 |
 | Proposed facts from use (dictations, meetings, mail) | 4, 5 | P1 | Always through the approval list |
+| Graph view of the knowledge base | 5+ | P2 | Or open the folder in Obsidian |
 
 ### 7.6 Later
 
@@ -353,7 +355,7 @@ Asked in the interview of 26 November 2026. Recommendations first.
 | N-2 | Link facts and to-dos to a meeting | Through contexts only | Decided 27 November 2026: contexts only; a direct link stays in Later |
 | N-3 | Shape of tags | Two levels, each context a memory file | Decided 27 November 2026: as recommended |
 | N-4 | When contexts and the meeting prompt arrive | Phases 3 to 5 | Decided 27 November 2026: memory in 3, tasks in 4, meetings in 5 |
-| N-5 | Memory storage and linking | Markdown files plus a SQLite index, deterministic linking | Decided 27 November 2026: as recommended. Embeddings go to Later, to evaluate again with an interview of the owner first. 27 November 2026: no knowledge graph or graph view in HyperMe (section 7.5) |
+| N-5 | Memory storage and linking | Markdown files plus a SQLite index, deterministic linking | Decided 27 November 2026: as recommended. Embeddings and an AI knowledge graph go to Later, to evaluate again with an interview of the owner first |
 | G-1 | Whose Google sign-in client | Bring your own Google Cloud client now; a shared one later if non-developers ask | Decided 26 November 2026: as recommended ([spec](../specs/97-google-connectors/spec.md)) |
 | G-2 | Gmail access in the first version | Read plus drafts, never send | Decided 26 November 2026: as recommended |
 | G-3 | Mail and calendar content to the model | To the user's own model provider, only when a job or question needs it | Decided 26 November 2026: as recommended. Also: Google must never sign the user out in normal use |
