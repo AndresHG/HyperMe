@@ -33,8 +33,8 @@ pub struct ChoiceView {
     pub deny: bool,
 }
 
-/// What the card shows (R-10).
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+/// What the card shows (R-10). Its `Debug` leaves out the title and message (R-20).
+#[derive(Clone, Serialize, PartialEq, Eq)]
 pub struct CardView {
     pub id: u64,
     /// "Google · personal · Mail"
@@ -46,6 +46,16 @@ pub struct CardView {
     pub default: Option<usize>,
     /// "Background updates need an Always allow choice." for a read pull (R-14).
     pub note: Option<String>,
+}
+
+impl std::fmt::Debug for CardView {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CardView")
+            .field("id", &self.id)
+            .field("who", &self.who)
+            .field("choices", &self.choices)
+            .finish_non_exhaustive()
+    }
 }
 
 /// The card for `ask`. `read` is true for a read pull, which picks the broadest "Always
@@ -75,6 +85,9 @@ pub fn card_view(id: u64, ask: &ApprovalAsk, who: &str, read: bool) -> CardView 
 pub struct Pending {
     next: AtomicU64,
     waiting: Mutex<HashMap<u64, oneshot::Sender<Option<String>>>>,
+    /// One card at a time: a second ask waits until the first is answered, so no card is ever
+    /// replaced on screen and left waiting unseen.
+    one: tokio::sync::Mutex<()>,
 }
 
 impl Pending {
@@ -87,6 +100,7 @@ impl Pending {
         show: impl FnOnce(&CardView),
         close: impl FnOnce(u64),
     ) -> Approval {
+        let _one = self.one.lock().await;
         let id = self.next.fetch_add(1, Ordering::Relaxed) + 1;
         let (sender, receiver) = oneshot::channel();
         self.lock().insert(id, sender);
@@ -111,12 +125,24 @@ impl Pending {
         }
     }
 
+    /// Answers nothing to every waiting card, as when the window that shows them closes.
+    pub fn cancel_all(&self) {
+        for (_, sender) in self.lock().drain() {
+            let _ = sender.send(None);
+        }
+    }
+
     fn lock(&self) -> std::sync::MutexGuard<'_, HashMap<u64, oneshot::Sender<Option<String>>>> {
         self.waiting.lock().unwrap_or_else(|p| p.into_inner())
     }
 }
 
 static PENDING: LazyLock<Pending> = LazyLock::new(Pending::default);
+
+/// The Settings window closed: its cards can no longer be answered, so they answer nothing.
+pub fn window_closed() {
+    PENDING.cancel_all();
+}
 
 /// The interactive approver: the card in the Settings window (R-6).
 pub struct UiApprover {
@@ -132,6 +158,15 @@ pub struct UiApprover {
 impl Approver for UiApprover {
     fn answer(&self, ask: ApprovalAsk) -> ApprovalFuture<'_> {
         Box::pin(async move {
+            use tauri::Manager;
+            // Nobody can see a card without the Settings window: answer nothing at once.
+            if self
+                .app
+                .get_webview_window(crate::settings::SETTINGS)
+                .is_none()
+            {
+                return Approval::NoAnswer;
+            }
             let who = format!("{} · {}", self.who, self.what);
             PENDING
                 .ask(
@@ -257,9 +292,53 @@ mod tests {
                     .await
             })
         };
-        tokio::task::yield_now().await;
-        assert!(pending.answer(2, None));
+        while pending.lock().is_empty() {
+            tokio::task::yield_now().await;
+        }
+        let id = *pending.lock().keys().next().unwrap();
+        assert!(pending.answer(id, None));
         assert_eq!(esc.await.unwrap(), Approval::NoAnswer);
+        assert_eq!(
+            closed.lock().unwrap().len(),
+            1,
+            "Esc does not close as a timeout"
+        );
+    }
+
+    /// R-9: closing the window answers nothing to the waiting card; a second ask waits for the
+    /// first instead of replacing it.
+    #[tokio::test]
+    async fn closing_answers_nothing_and_cards_come_one_at_a_time() {
+        let pending = Arc::new(Pending::default());
+        let shown = Arc::new(Mutex::new(Vec::new()));
+        let spawn = |pending: Arc<Pending>, shown: Arc<Mutex<Vec<u64>>>| {
+            tokio::spawn(async move {
+                pending
+                    .ask(
+                        |id| card_view(id, &ask(), "w", true),
+                        WAIT,
+                        |view| shown.lock().unwrap().push(view.id),
+                        |_| {},
+                    )
+                    .await
+            })
+        };
+        let first = spawn(pending.clone(), shown.clone());
+        let second = spawn(pending.clone(), shown.clone());
+        while shown.lock().unwrap().is_empty() {
+            tokio::task::yield_now().await;
+        }
+        for _ in 0..10 {
+            tokio::task::yield_now().await;
+        }
+        assert_eq!(shown.lock().unwrap().len(), 1, "the second card waits");
+        pending.cancel_all();
+        assert_eq!(first.await.unwrap(), Approval::NoAnswer);
+        while shown.lock().unwrap().len() < 2 {
+            tokio::task::yield_now().await;
+        }
+        pending.cancel_all();
+        assert_eq!(second.await.unwrap(), Approval::NoAnswer);
     }
 
     use std::sync::Arc;

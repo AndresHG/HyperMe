@@ -764,6 +764,41 @@ fn local_day(now: UtcDateTime) -> time::Date {
         .date()
 }
 
+/// The account servers whose pulls the user is running now (Review, the setup check).
+static CHECKING: std::sync::LazyLock<
+    std::sync::Mutex<std::collections::HashSet<(String, String)>>,
+> = std::sync::LazyLock::new(Default::default);
+
+/// Marks one account's server as being checked, until dropped.
+struct Checking((String, String));
+
+impl Checking {
+    fn start(account: &str, server: &str) -> Self {
+        let key = (account.to_owned(), server.to_owned());
+        CHECKING
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .insert(key.clone());
+        Checking(key)
+    }
+
+    fn running(account: &str, server: &str) -> bool {
+        CHECKING
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .contains(&(account.to_owned(), server.to_owned()))
+    }
+}
+
+impl Drop for Checking {
+    fn drop(&mut self) {
+        CHECKING
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .remove(&self.0);
+    }
+}
+
 /// One account's client for one remote server, with its keychain sign-in and request counter;
 /// `None` for a server that is not remote.
 fn remote_server(
@@ -870,7 +905,7 @@ pub async fn review(
     server_id: &str,
     approver: Arc<dyn hyperme_core::approval::Approver>,
 ) -> Result<String, String> {
-    use hyperme_core::health::after_pull;
+    use hyperme_core::health::after_review;
     use hyperme_providers::mcp::McpCaller;
     use tauri::Manager;
     let store = app
@@ -902,9 +937,12 @@ pub async fn review(
         .collect();
     let caller = McpCaller::new(vec![remote], allowlist).with_approver(approver);
     let now = UtcDateTime::now();
+    // While the user answers, the scheduler leaves this server alone, so it cannot raise
+    // "Needs your OK" over the card or overwrite the outcome (specs/166, R-14).
+    let _checking = Checking::start(account, &server.id);
     let pulled = pull_server(&caller, &store, connector, server, account, now).await;
     // A Review never raises the alert: the user is already looking.
-    after_pull(&*store, account, &server.id, pulled.end, local_day(now))?;
+    after_review(&*store, account, &server.id, pulled.end, local_day(now))?;
     Ok(check_line(connector, server, &pulled))
 }
 
@@ -1162,6 +1200,9 @@ impl Syncer for McpSyncer {
             let account = entry.id();
             if self.store.sign_in_needed(&account).unwrap_or(false) {
                 continue; // Settings shows "Sign in again" (specs/97, R-10).
+            }
+            if Checking::running(&account, &server.id) {
+                continue; // The user is answering its approval card now (specs/166).
             }
             // "Not allowed" and "Blocked" wait for the user; "Needs your OK" is tried once a
             // day (specs/166, R-8, R-15, R-16).
@@ -1755,6 +1796,100 @@ mod tests {
                 .connectors;
         let registry = hyperme_core::connector_settings::registry(None, &connectors).unwrap();
         (registry, connectors)
+    }
+
+    /// A mail server that answers with three synthetic threads, or with a waiting state.
+    struct FakeMail(Option<hyperme_core::health::ServerState>);
+
+    impl hyperme_core::sync::ToolCaller for FakeMail {
+        async fn call(
+            &self,
+            _server: &str,
+            _tool: &str,
+            _args: serde_json::Value,
+        ) -> Result<serde_json::Value, hyperme_core::sync::SyncError> {
+            if let Some(state) = self.0 {
+                return Err(hyperme_core::sync::SyncError::NeedsUser(state));
+            }
+            let thread = |id: &str| {
+                serde_json::json!({"id": id, "messages": [{"subject": "Synthetic", "sender": "a@example.test",
+                    "snippet": "s", "internalDate": "1795716000000", "labelIds": ["INBOX"]}]})
+            };
+            Ok(
+                serde_json::json!({"threads": [thread("t1"), thread("t2"), thread("t3")],
+                "omittedContent": [{"id": "t4"}]}),
+            )
+        }
+    }
+
+    /// specs/166 AC-4, AC-13 (app part): a Review or check that gets through stores the threads,
+    /// counts what was held back and reads "Mail · works, 3 threads"; one the user refused reads
+    /// "not allowed: mail pulls are skipped"; neither is a job failure (R-16b).
+    #[test]
+    fn a_server_pull_reports_its_check_line() {
+        use hyperme_core::health::{PullEnd, ServerState};
+        use hyperme_core::sync::MailStore;
+        let (registry, _) = google_with(&["personal"]);
+        let google = registry.get("google").unwrap();
+        let gmail = google.server("gmail").unwrap();
+        let store = store("server-pull");
+        let now = local(27, 9, 0);
+
+        let pulled = block_on(pull_server(
+            &FakeMail(None),
+            &store,
+            google,
+            gmail,
+            "google:personal",
+            now,
+        ));
+        assert_eq!(pulled.end, PullEnd::Done { held_back: 1 });
+        assert!(pulled.failures.is_empty());
+        assert_eq!(
+            check_line(google, gmail, &pulled),
+            "Mail · works, 3 threads"
+        );
+        assert_eq!(store.all(Some("google:personal")).unwrap().len(), 3);
+
+        let refused = FakeMail(Some(ServerState::NotAllowed));
+        let pulled = block_on(pull_server(
+            &refused,
+            &store,
+            google,
+            gmail,
+            "google:personal",
+            now,
+        ));
+        assert_eq!(pulled.end, PullEnd::NeedsUser(ServerState::NotAllowed));
+        assert!(pulled.failures.is_empty(), "never a job failure");
+        assert_eq!(
+            check_line(google, gmail, &pulled),
+            "Mail · not allowed: mail pulls are skipped"
+        );
+        let waiting = FakeMail(Some(ServerState::NeedsOk));
+        let pulled = block_on(pull_server(
+            &waiting,
+            &store,
+            google,
+            gmail,
+            "google:personal",
+            now,
+        ));
+        assert_eq!(
+            check_line(google, gmail, &pulled),
+            "Mail · not approved yet: mail pulls wait for your OK"
+        );
+    }
+
+    /// specs/166 R-14: the scheduler leaves a server alone while the user checks it.
+    #[test]
+    fn a_server_being_checked_is_left_to_the_user() {
+        assert!(!Checking::running("google:personal", "gmail"));
+        let checking = Checking::start("google:personal", "gmail");
+        assert!(Checking::running("google:personal", "gmail"));
+        assert!(!Checking::running("google:personal", "calendar"));
+        drop(checking);
+        assert!(!Checking::running("google:personal", "gmail"));
     }
 
     /// specs/166 AC-3, R-8: the "Needs your OK" alert names the service and account, and

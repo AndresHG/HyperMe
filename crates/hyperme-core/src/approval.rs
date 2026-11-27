@@ -183,7 +183,11 @@ fn inline(text: &str, out: &mut Vec<Span>) {
             '*' if rest.starts_with("**") => {
                 closed(&rest[2..], "**").map(|(t, r)| (Span::Bold(t), r))
             }
-            '*' | '_' => closed(&rest[1..], &rest[..1]).map(|(t, r)| (Span::Italic(t), r)),
+            '*' => closed(&rest[1..], "*").map(|(t, r)| (Span::Italic(t), r)),
+            // `_` marks italics only at word edges, so `search_threads` stays one word.
+            '_' if !plain.ends_with(char::is_alphanumeric) => closed(&rest[1..], "_")
+                .filter(|(_, after)| !after.starts_with(char::is_alphanumeric))
+                .map(|(t, r)| (Span::Italic(t), r)),
             '`' => closed(&rest[1..], "`").map(|(t, r)| (Span::Code(t), r)),
             '[' => link(rest),
             _ => None,
@@ -267,7 +271,7 @@ pub fn default_choice(choices: &[Choice], read: bool) -> Option<usize> {
         for scope in ["TOOL", "OWNER", "RESOURCE", "AUDIENCE"] {
             if let Some(i) = choices
                 .iter()
-                .position(|c| c.value.contains("ALWAYS") && c.value.contains(scope))
+                .position(|c| !c.is_deny() && c.value.contains("ALWAYS") && c.value.contains(scope))
             {
                 return Some(i);
             }

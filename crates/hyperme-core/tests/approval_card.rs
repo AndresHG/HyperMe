@@ -74,6 +74,35 @@ fn enter_picks_the_broadest_always_for_reads() {
     let deny_first = choices(&["DENY_ONCE", "ALLOW_ONCE"]);
     assert_eq!(default_choice(&deny_first, true), Some(1));
     assert_eq!(default_choice(&choices(&["DENY_ONCE"]), true), None);
+    let deny_always = choices(&["ALLOW_ONCE", "DENY_TOOL_ALWAYS", "ALLOW_TOOL_ALWAYS"]);
+    assert_eq!(default_choice(&deny_always, true), Some(2));
     let other = choices(&["yes", "no"]);
     assert_eq!(default_choice(&other, true), Some(0));
+}
+
+/// R-11: tool names and addresses with underscores stay words; `_x_` at word edges is italic;
+/// accented text is safe.
+#[test]
+fn underscores_inside_words_stay_text() {
+    assert_eq!(
+        spans("search_threads and list_drafts"),
+        vec![Span::Text("search_threads and list_drafts".into())]
+    );
+    assert_eq!(
+        spans("an _important_ note"),
+        vec![
+            Span::Text("an ".into()),
+            Span::Italic("important".into()),
+            Span::Text(" note".into())
+        ]
+    );
+    assert_eq!(
+        spans("¿Qué **más**? — `ñ`"),
+        vec![
+            Span::Text("¿Qué ".into()),
+            Span::Bold("más".into()),
+            Span::Text("? — ".into()),
+            Span::Code("ñ".into())
+        ]
+    );
 }

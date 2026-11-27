@@ -547,7 +547,11 @@ pub async fn connectors_sign_in(
         };
         // A server with a pull is checked by running it, with the approval card answering
         // what the server asks, so background updates work from the start (specs/166, R-14).
-        if preset.pulls.iter().any(|p| p.server == server.id) {
+        let tasks_on = {
+            use tauri::Manager;
+            app.try_state::<crate::tasks::Tasks>().is_some()
+        };
+        if tasks_on && preset.pulls.iter().any(|p| p.server == server.id) {
             let line = match ui_approver(&app, &account, &server.id) {
                 Ok(approver) => crate::tasks::review(&app, &account, &server.id, approver).await,
                 Err(e) => Err(e),

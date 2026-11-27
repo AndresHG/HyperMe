@@ -4,6 +4,8 @@
 (() => {
   let data = null;
   let current = null;
+  // The last Review line per account and server, kept across redraws (specs/166).
+  const reviewed = new Map();
 
   const el = (tag, attrs = {}, ...children) => {
     const node = document.createElement(tag);
@@ -98,19 +100,26 @@
       if (!line.action) {
         return el('div', { class: 'row', 'data-words': words }, el('div', { class: 'what' }, el('small', {}, line.text)));
       }
-      const result = el('small', {});
+      const key = page.id + ' ' + line.server;
+      const result = el('small', {}, reviewed.get(key) || '');
       const button = el('button', {}, line.action);
       button.addEventListener('click', async () => {
         button.disabled = true;
         result.textContent = 'Checking…';
-        try { result.textContent = await invoke('connectors_review', { account: page.id, server: line.server }); }
-        catch (e) { result.textContent = String(e); }
-        button.disabled = false;
+        try { reviewed.set(key, await invoke('connectors_review', { account: page.id, server: line.server })); }
+        catch (e) { reviewed.set(key, String(e)); }
         await refresh();
       });
       return el('div', { class: 'row', 'data-words': words },
         el('div', { class: 'what' }, line.text, result), button);
     }));
+    // A Review that cleared its state leaves no row: show its result on its own.
+    for (const [key, text] of reviewed) {
+      const [account, server] = key.split(' ');
+      if (account === page.id && !(page.approvals || []).some((l) => l.server === server)) {
+        $('page-approvals').append(el('div', { class: 'row', 'data-words': 'review result' }, el('div', { class: 'what' }, el('small', {}, text))));
+      }
+    }
     $('page-requests').replaceChildren(...(page.requests || []).map((line) =>
       el('div', { class: 'row', 'data-words': 'requests quota today' }, el('div', { class: 'what' }, el('small', {}, line)))));
     $('page-oauth-row').classList.toggle('hidden', !(page.account && page.oauth));
@@ -160,12 +169,17 @@
     if (!card || (id !== undefined && card.id !== id)) return;
     card = null;
     $('approval-card').classList.add('hidden');
+    // The message lives only while the card does (R-20).
+    $('approval-message').replaceChildren();
+    $('approval-title').textContent = '';
   }
   function answerCard(value) {
     if (!card) return;
     const id = card.id;
     closeCard();
-    invoke('connectors_answer', { id, value }).catch(fail);
+    invoke('connectors_answer', { id, value })
+      .then((waiting) => { if (!waiting) fail('Took too long: Review to ask again.'); })
+      .catch(fail);
   }
   function showCard(view) {
     card = view;
@@ -179,11 +193,15 @@
       return el('button', { class: main ? 'main' : '', onclick: () => answerCard(c.value) },
         el('kbd', {}, main ? '↵' : String(i + 1)), c.label);
     }), el('button', { onclick: () => answerCard(null) }, el('kbd', {}, 'Esc'), 'Later'));
+    cardShownAt = Date.now();
     $('approval-card').classList.remove('hidden');
     $('approval-card').scrollIntoView({ block: 'nearest' });
   }
+  let cardShownAt = 0;
   document.addEventListener('keydown', (e) => {
-    if (!card || (e.target instanceof Element && e.target.matches('input, select, textarea'))) return;
+    if (!card || e.repeat || Date.now() - cardShownAt < 300) return;
+    // A focused field or button keeps its own Enter: a refusal the user tabbed to stays one.
+    if (e.target instanceof Element && e.target.closest('input, select, textarea, button')) return;
     if (e.key === 'Escape') { e.preventDefault(); answerCard(null); }
     else if (e.key === 'Enter' && card.default != null) { e.preventDefault(); answerCard(card.choices[card.default].value); }
     else if (/^[1-9]$/.test(e.key) && card.choices[Number(e.key) - 1]) { e.preventDefault(); answerCard(card.choices[Number(e.key) - 1].value); }

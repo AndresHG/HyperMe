@@ -298,6 +298,27 @@ impl PullEnd {
     }
 }
 
+/// [`after_pull`] for a pull the user ran (Review, the setup check): a waiting state is
+/// recorded, but today's background try and alert are left as they were, so pressing Later
+/// does not silence the day's alert (specs/166, R-8).
+pub fn after_review(
+    store: &dyn ServerStatusStore,
+    account: &str,
+    server: &str,
+    end: PullEnd,
+    today: Date,
+) -> Result<(), String> {
+    let before = store.status(account, server)?;
+    after_pull(store, account, server, end, today)?;
+    if let PullEnd::NeedsUser(_) = end {
+        let mut status = store.status(account, server)?;
+        status.last_try = before.last_try;
+        status.last_alert = before.last_alert;
+        store.save(account, server, &status)?;
+    }
+    Ok(())
+}
+
 /// Records how a pull ended and says whether the "Needs your OK" alert is due: a pull that
 /// works clears the state (R-16a); a higher state replaces a lower one; the alert comes at most
 /// once a day per account and server (R-8), and never for "Not allowed" or "Blocked" (R-15,
