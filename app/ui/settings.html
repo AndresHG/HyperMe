@@ -37,6 +37,12 @@
   #banner { display: none; position: sticky; top: 0; margin: -22px -28px 16px; padding: 10px 28px; background: color-mix(in srgb, var(--violet) 14%, Canvas); border-bottom: 1px solid var(--line); align-items: center; justify-content: space-between; }
   #banner.on { display: flex; }
   .hidden { display: none !important; }
+  /* Spec 93, R-10: Settings → Dictionary. */
+  .dict-add { display: flex; gap: 8px; margin-bottom: 6px; }
+  .dict-add input { flex: 1; min-width: 0; }
+  #dict-search { width: 100%; margin: 12px 0 4px; padding: 6px 8px; border-radius: 7px; border: 1px solid var(--line); background: Canvas; color: inherit; font: inherit; }
+  .dict-word { font-weight: 600; }
+  .dict-heard { color: var(--muted); margin-left: 10px; }
   code { font-size: 12px; }
 </style>
 </head>
@@ -47,6 +53,7 @@
   <div class="group">Everyday</div>
   <a href="#general">General</a>
   <a href="#shortcuts">Shortcuts</a>
+  <a href="#dictionary">Dictionary</a>
   <div class="group">Setup</div>
   <a href="#providers">Providers</a>
   <a href="#connectors">Connectors</a>
@@ -147,6 +154,22 @@
       <p class="lead" style="margin-top:14px">Tools<span id="page-unverified" class="warn hidden"> · names not checked against the live server yet</span></p>
       <div id="page-tools"></div>
     </div>
+  </section>
+
+  <section id="dictionary">
+    <h1>Dictionary</h1>
+    <p class="lead">Words HyperMe should always get right: names, products and jargon. Changes apply from your next dictation.</p>
+    <div class="dict-add">
+      <input type="text" id="dict-word" placeholder="Word, as it should be written" maxlength="60" aria-label="Word">
+      <input type="text" id="dict-heard" placeholder="Heard as (optional): zen trix, sun trix" aria-label="Heard as">
+      <button id="dict-cancel" class="hidden">Cancel</button>
+      <button class="main" id="dict-add">Add</button>
+    </div>
+    <p class="lead" style="margin:0"><small>Heard as: how it comes out wrong, separated by commas. Leave it empty if HyperMe only needs the spelling.</small></p>
+    <input type="search" id="dict-search" placeholder="Search your words" aria-label="Search your words">
+    <div id="dict-rows"></div>
+    <p class="lead hidden" id="dict-empty">No words yet. Add names, products and jargon.</p>
+    <p class="lead"><small>Saved in <code id="dict-path"></code></small></p>
   </section>
 
   <section id="privacy">
@@ -308,6 +331,82 @@
     });
     document.querySelectorAll('section').forEach((s) => s.classList.toggle('on', q ? !!s.querySelector('.row:not(.hidden)') : s.id === (location.hash || '#setup').slice(1)));
   });
+
+  // Spec 93, R-10, R-10a, R-11: Settings → Dictionary. The whole list is saved on each change.
+  let dictEntries = [];
+  let dictEditing = -1;
+  const heardList = (text) => text.split(',').map((h) => h.trim()).filter(Boolean);
+  function dictRender() {
+    const q = $('dict-search').value.trim().toLowerCase();
+    const rows = $('dict-rows');
+    rows.textContent = '';
+    dictEntries.forEach((entry, i) => {
+      const text = (entry.written + ' ' + entry.heard.join(' ')).toLowerCase();
+      if (q && !text.includes(q)) return;
+      const row = document.createElement('div');
+      row.className = 'row';
+      row.dataset.words = 'dictionary word ' + text;
+      const what = document.createElement('div');
+      const word = document.createElement('span');
+      word.className = 'dict-word';
+      word.textContent = entry.written;
+      const heard = document.createElement('span');
+      heard.className = 'dict-heard';
+      heard.textContent = entry.heard.length ? 'heard as ' + entry.heard.join(', ') : 'spelling only';
+      what.append(word, heard);
+      const actions = document.createElement('span');
+      const edit = document.createElement('button');
+      edit.textContent = 'Edit';
+      edit.addEventListener('click', () => dictEdit(i));
+      const remove = document.createElement('button');
+      remove.textContent = 'Remove';
+      remove.addEventListener('click', () => dictSave(dictEntries.filter((_, j) => j !== i)));
+      actions.append(edit, ' ', remove);
+      row.append(what, actions);
+      rows.append(row);
+    });
+    $('dict-empty').classList.toggle('hidden', dictEntries.length > 0);
+  }
+  function dictShow(v) {
+    dictEntries = v.entries;
+    $('dict-path').textContent = v.path;
+    if (v.error) $('error').textContent = v.error;
+    dictRender();
+  }
+  function dictEdit(i) {
+    dictEditing = i;
+    $('dict-word').value = i < 0 ? '' : dictEntries[i].written;
+    $('dict-heard').value = i < 0 ? '' : dictEntries[i].heard.join(', ');
+    $('dict-add').textContent = i < 0 ? 'Add' : 'Save';
+    $('dict-cancel').classList.toggle('hidden', i < 0);
+    if (i >= 0) $('dict-word').focus();
+  }
+  async function dictSave(entries) {
+    try {
+      dictShow(await invoke('dictionary_save', { entries }));
+      $('error').textContent = '';
+      return true;
+    } catch (e) {
+      $('error').textContent = String(e);
+      return false;
+    }
+  }
+  async function dictSubmit() {
+    const written = $('dict-word').value.trim();
+    if (!written) { $('dict-word').focus(); return; }
+    const entry = { written, heard: heardList($('dict-heard').value) };
+    const entries = dictEntries.slice();
+    if (dictEditing >= 0) entries[dictEditing] = entry; else entries.unshift(entry);
+    if (await dictSave(entries)) { dictEdit(-1); $('dict-word').focus(); }
+  }
+  $('dict-add').addEventListener('click', dictSubmit);
+  $('dict-cancel').addEventListener('click', () => dictEdit(-1));
+  ['dict-word', 'dict-heard'].forEach((id) => $(id).addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') dictSubmit();
+    if (e.key === 'Escape') dictEdit(-1);
+  }));
+  $('dict-search').addEventListener('input', dictRender);
+  invoke('dictionary_view').then(dictShow).catch((e) => { $('error').textContent = String(e); });
 
   showSection();
   refresh().catch((e) => { $('error').textContent = String(e); });

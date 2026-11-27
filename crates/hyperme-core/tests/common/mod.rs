@@ -199,6 +199,10 @@ impl FakeCleanup {
 }
 
 impl CleanupProvider for FakeCleanup {
+    fn set_dictionary(&mut self, line: &str) {
+        self.log.push(format!("dictionary:{line}"));
+    }
+
     async fn warm(&self) -> Result<(), Error> {
         self.log.push("warm start");
         if !self.warm_delay.is_zero() {
@@ -414,6 +418,8 @@ pub fn settings() -> Settings {
 /// A running engine: send events, read statuses.
 pub struct Harness {
     pub events: mpsc::Sender<Event>,
+    /// Where a changed dictionary goes (spec 93, R-10a).
+    pub dictionary: hyperme_core::dictation::DictionaryUpdates,
     pub status: mpsc::UnboundedReceiver<Status>,
     pub log: Log,
 }
@@ -493,10 +499,12 @@ impl Harness {
             timing,
         };
         let engine = Engine::new(parts, settings, status_tx);
+        let dictionary = engine.dictionary_updates();
         // Spawned on the runtime, which proves the engine's future is Send.
         tokio::spawn(engine.run(events_rx));
         Harness {
             events,
+            dictionary,
             status,
             log: log.clone(),
         }

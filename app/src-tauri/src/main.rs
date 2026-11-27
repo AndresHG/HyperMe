@@ -6,6 +6,8 @@
 
 #[cfg(target_os = "macos")]
 mod connectors;
+#[cfg(target_os = "macos")]
+mod dictionary;
 // Pure and tested everywhere; only the macOS app uses them until Linux and Windows follow.
 #[cfg(any(target_os = "macos", test))]
 mod geometry;
@@ -77,6 +79,8 @@ fn main() {
             settings::key_test,
             settings::settings_open,
             settings::app_restart,
+            dictionary::dictionary_view,
+            dictionary::dictionary_save,
             connectors::connectors_view,
             connectors::connectors_set_tool,
             connectors::connectors_set_enabled,
@@ -163,6 +167,8 @@ fn tray(app: &AppHandle) -> tauri::Result<Tray> {
     let copy_last = MenuItem::with_id(app, "copy-last", "Copy last dictation", true, None::<&str>)?;
     let retry = MenuItem::with_id(app, "retry", "Retry last dictation", false, None::<&str>)?;
     let settings = MenuItem::with_id(app, "settings", "Settings…", true, Some("CmdOrCtrl+,"))?;
+    // Spec 93, R-10: the dictionary one click from the menu.
+    let dictionary = MenuItem::with_id(app, "dictionary", "Dictionary…", true, None::<&str>)?;
     #[cfg(target_os = "macos")]
     let update = {
         let line = update::line(&update::State::Idle);
@@ -182,6 +188,7 @@ fn tray(app: &AppHandle) -> tauri::Result<Tray> {
             &copy_last,
             &retry,
             &separator()?,
+            &dictionary,
             &settings,
             #[cfg(target_os = "macos")]
             &update,

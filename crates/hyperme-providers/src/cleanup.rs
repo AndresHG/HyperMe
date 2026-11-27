@@ -54,6 +54,8 @@ pub struct ChatCleanup {
     /// `None` leaves `reasoning_effort` out of the request.
     reasoning_effort: Option<String>,
     prompt: String,
+    /// The user's dictionary line (spec 93, R-4), between the prompt and the app line.
+    dictionary: String,
     /// The `Authorization` header, marked sensitive.
     auth: HeaderValue,
 }
@@ -107,6 +109,7 @@ impl ChatCleanup {
             reasoning_effort: (config.reasoning_effort != "off")
                 .then(|| config.reasoning_effort.clone()),
             prompt,
+            dictionary: String::new(),
             auth,
         })
     }
@@ -146,14 +149,14 @@ impl ChatCleanup {
     /// `Dictionary::prompt_line()`. It goes after the fixed prompt and before the app line, so
     /// the prompt's start stays the same from one dictation to the next.
     pub fn with_dictionary(mut self, line: &str) -> Self {
-        self.prompt.push_str(line);
+        self.set_dictionary(line);
         self
     }
 
     /// The request body. The fixed prompt comes first so a provider's prompt cache keeps the
     /// first token fast; the app name (R-11) is its last line.
     fn request_body(&self, raw: &str, app: Option<&str>) -> Value {
-        let mut system = self.prompt.clone();
+        let mut system = format!("{}{}", self.prompt, self.dictionary);
         if let Some(app) = app.filter(|a| !a.trim().is_empty()) {
             system.push_str(&format!("\n\nThe text will be pasted into {app}."));
         }
@@ -180,6 +183,10 @@ fn provider_error(provider: &str, kind: ErrorKind, what: impl fmt::Display) -> E
 }
 
 impl CleanupProvider for ChatCleanup {
+    fn set_dictionary(&mut self, line: &str) {
+        line.clone_into(&mut self.dictionary);
+    }
+
     /// R-2: opens the connection on key-down, so the cleanup call finds it ready.
     async fn warm(&self) -> Result<(), Error> {
         let response = self
