@@ -51,6 +51,9 @@ pub struct Page {
     features: Vec<String>,
     /// "31 requests today · 310 of 5000 units", per server (R-20).
     requests: Vec<String>,
+    /// "Mail · Needs your OK", "Mail · Google held back 12 items", per server waiting for the
+    /// user or holding items back (specs/166, R-8, R-15 to R-17).
+    approvals: Vec<String>,
 }
 
 /// The setup sheet for one OAuth preset.
@@ -84,6 +87,8 @@ pub struct View {
 pub struct Local<'a> {
     status: &'a dyn hyperme_core::health::AccountStatusStore,
     log: &'a dyn hyperme_core::connectors::RequestLog,
+    /// Why a server waits for the user, and what it held back (specs/166).
+    servers: &'a dyn hyperme_core::health::ServerStatusStore,
 }
 
 /// Works out an account's health: "Sign in again" when its refresh was refused (R-10), else
@@ -141,6 +146,30 @@ fn build_view(
                 enabled: entry.is_none_or(|a| a.enabled),
                 tools_verified: connector.tools_verified,
                 tools: cs::tool_rows(connector),
+                approvals: connector
+                    .servers
+                    .iter()
+                    .flat_map(|server| {
+                        let status = local
+                            .servers
+                            .status(&row.id, &server.id)
+                            .unwrap_or_default();
+                        let what = server
+                            .label
+                            .as_deref()
+                            .and_then(|l| l.split(':').next())
+                            .unwrap_or(&server.id)
+                            .to_owned();
+                        let state = status.state.map(|s| format!("{what} · {}", s.words()));
+                        let held = (status.held_back > 0).then(|| {
+                            format!(
+                                "{what} · {} held back {} items",
+                                connector.name, status.held_back
+                            )
+                        });
+                        state.into_iter().chain(held)
+                    })
+                    .collect(),
                 requests: connector
                     .servers
                     .iter()
@@ -222,6 +251,7 @@ pub fn connectors_view(app: AppHandle) -> View {
                 &Local {
                     status: &data,
                     log: &data,
+                    servers: &data,
                 },
                 UtcDateTime::now(),
             ),
@@ -451,6 +481,8 @@ pub async fn connectors_sign_in(
     // A new sign-in clears "Sign in again" (R-10).
     let data = account_data(&app).map_err(fail)?;
     hyperme_core::health::AccountStatusStore::clear(&data, &account).map_err(fail)?;
+    // A new sign-in starts the account's servers afresh (specs/166, R-16a).
+    hyperme_core::health::ServerStatusStore::clear_account(&data, &account).map_err(fail)?;
 
     let auth = std::sync::Arc::new(
         hyperme_providers::mcp::AccountAuth::new(oauth, store, &account).with_token(token),
@@ -558,9 +590,12 @@ mod tests {
             std::sync::LazyLock::new(Default::default);
         static LOG: std::sync::LazyLock<hyperme_core::connectors::MemoryRequestLog> =
             std::sync::LazyLock::new(Default::default);
+        static SERVERS: std::sync::LazyLock<hyperme_core::health::MemoryServerStatus> =
+            std::sync::LazyLock::new(Default::default);
         Local {
             status: &*STATUS,
             log: &*LOG,
+            servers: &*SERVERS,
         }
     }
 
@@ -650,6 +685,12 @@ mod tests {
             view.privacy.accounts[0].reads,
             ["Calendar: read your events"]
         );
+        // specs/166 AC-17, R-21: one line per account about approvals.
+        assert_eq!(
+            view.privacy.accounts[0].approvals,
+            "Google may ask for your OK before HyperMe reads some of it. Google keeps your \
+             choice, not HyperMe."
+        );
         let shown = serde_json::to_string(&view).unwrap();
         assert!(!shown.contains("fake-client-secret"), "{shown}");
     }
@@ -677,6 +718,43 @@ mod tests {
     }
 
     /// R-10, R-20: an account whose refresh was refused shows "Sign in again"; its page shows
+    /// specs/166 AC-3, AC-5, AC-9, AC-14 (page part): each server's state and held-back count
+    /// show on the account page.
+    #[test]
+    fn server_states_show_on_the_page() {
+        use hyperme_core::health::{
+            MemoryAccountStatus, MemoryServerStatus, PullEnd, ServerState, after_pull,
+        };
+        let connectors =
+            connectors("[[connectors.accounts]]\nconnector = \"google\"\nlabel = \"work\"\n");
+        let registry = cs::registry(None, &connectors).unwrap();
+        let store = MemorySecretStore::default();
+        store.set("google:work", "fake-refresh-token").unwrap();
+        let (status, log, servers) = (
+            MemoryAccountStatus::default(),
+            hyperme_core::connectors::MemoryRequestLog::default(),
+            MemoryServerStatus::default(),
+        );
+        let now = UtcDateTime::now();
+        let gmail = PullEnd::NeedsUser(ServerState::NeedsOk);
+        after_pull(&servers, "google:work", "gmail", gmail, now.date()).unwrap();
+        let calendar = PullEnd::Done { held_back: 12 };
+        after_pull(&servers, "google:work", "calendar", calendar, now.date()).unwrap();
+        let local = Local {
+            status: &status,
+            log: &log,
+            servers: &servers,
+        };
+        let view = build_view(&connectors, &registry, &store, &local, now);
+        assert_eq!(
+            view.pages[0].approvals,
+            [
+                "Calendar · Google held back 12 items",
+                "Mail · Needs your OK"
+            ]
+        );
+    }
+
     /// the day's requests against each server's quota.
     #[test]
     fn sign_in_again_and_requests_show_on_the_page() {
@@ -693,9 +771,11 @@ mod tests {
         let now = UtcDateTime::now();
         log.record("google:work", now.date(), "gmail", 10).unwrap();
         status.mark_sign_in_needed("google:work", now).unwrap();
+        let servers = hyperme_core::health::MemoryServerStatus::default();
         let local = Local {
             status: &status,
             log: &log,
+            servers: &servers,
         };
         let view = build_view(&connectors, &registry, &store, &local, now);
         assert_eq!(view.rows[0].state, "Sign in again");

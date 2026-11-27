@@ -210,6 +210,9 @@ pub struct PrivacyAccount {
     pub title: String,
     /// What Hyper reads, in the sheet's words.
     pub reads: Vec<String>,
+    /// That the service may ask before HyperMe reads, and who keeps the choice
+    /// (specs/166-gmail-approvals, R-21).
+    pub approvals: String,
 }
 
 /// Privacy → Connected accounts (R-24), in plain words.
@@ -236,6 +239,11 @@ pub fn privacy(registry: &Registry, connectors: &Connectors) -> Privacy {
             Some(PrivacyAccount {
                 title: format!("{} · {}", connector.name, account.label),
                 reads,
+                approvals: format!(
+                    "{0} may ask for your OK before HyperMe reads some of it. {0} keeps your \
+                     choice, not HyperMe.",
+                    connector.name
+                ),
             })
         })
         .collect();

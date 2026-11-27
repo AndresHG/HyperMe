@@ -12,7 +12,7 @@ use std::path::Path;
 use std::sync::{Mutex, MutexGuard};
 
 use hyperme_core::connectors::{AccountData, RequestLog, Usage};
-use hyperme_core::health::AccountStatusStore;
+use hyperme_core::health::{AccountStatusStore, ServerState, ServerStatus, ServerStatusStore};
 use hyperme_core::schedule::Schedule;
 use hyperme_core::scheduler::{Job, JobKind, JobStatus, JobStore};
 use hyperme_core::sync::{Event, EventStore, MailMeta, MailStore};
@@ -118,6 +118,17 @@ const MIGRATIONS: &[&str] = &[
     ) WITHOUT ROWID;",
     // 7: the last time the user saw Today, which clears "new" (specs/92-daily-tasks, R-21).
     "ALTER TABLE day_log ADD COLUMN seen_at INTEGER;",
+    // 8: why a connector server waits for the user, its once-a-day pull and alert, and what its
+    // last pull held back (specs/166-gmail-approvals, R-8, R-15 to R-17). Days are local dates.
+    "CREATE TABLE connector_server_status (
+        account    TEXT    NOT NULL,
+        server     TEXT    NOT NULL,
+        state      TEXT,
+        last_try   TEXT,
+        last_alert TEXT,
+        held_back  INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (account, server)
+    ) WITHOUT ROWID;",
 ];
 
 const TASK_COLUMNS: &str = "id, title, notes, status, day, due_date, due_time, source, \
@@ -1023,6 +1034,7 @@ impl AccountData for SqliteTaskStore {
             "events",
             "mail_meta",
             "connector_sign_in",
+            "connector_server_status",
         ] {
             db.execute(
                 &format!("DELETE FROM {table} WHERE account = ?1"),
@@ -1233,5 +1245,70 @@ impl AccountStatusStore for SqliteTaskStore {
             )
             .map(drop)
             .map_err(|error| format!("sign-in state: {error}"))
+    }
+}
+
+/// Why each connector server waits for the user (specs/166-gmail-approvals, R-8, R-16a).
+impl ServerStatusStore for SqliteTaskStore {
+    fn status(&self, account: &str, server: &str) -> Result<ServerStatus, String> {
+        let error = |e: rusqlite::Error| format!("server state: {e}");
+        let row = self
+            .db()
+            .query_row(
+                "SELECT state, last_try, last_alert, held_back FROM connector_server_status
+                 WHERE account = ?1 AND server = ?2",
+                params![account, server],
+                |r| {
+                    Ok((
+                        r.get::<_, Option<String>>(0)?,
+                        r.get::<_, Option<String>>(1)?,
+                        r.get::<_, Option<String>>(2)?,
+                        r.get::<_, i64>(3)?,
+                    ))
+                },
+            )
+            .optional()
+            .map_err(error)?;
+        let Some((state, last_try, last_alert, held_back)) = row else {
+            return Ok(ServerStatus::default());
+        };
+        let day = |text: Option<String>| text.and_then(|t| parse_date(&t).ok());
+        Ok(ServerStatus {
+            state: state.as_deref().and_then(ServerState::parse),
+            last_try: day(last_try),
+            last_alert: day(last_alert),
+            held_back: u32::try_from(held_back).unwrap_or(0),
+        })
+    }
+
+    fn save(&self, account: &str, server: &str, status: &ServerStatus) -> Result<(), String> {
+        self.db()
+            .execute(
+                "INSERT INTO connector_server_status
+                     (account, server, state, last_try, last_alert, held_back)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+                 ON CONFLICT (account, server) DO UPDATE SET
+                     state = ?3, last_try = ?4, last_alert = ?5, held_back = ?6",
+                params![
+                    account,
+                    server,
+                    status.state.map(ServerState::as_str),
+                    status.last_try.map(date_text),
+                    status.last_alert.map(date_text),
+                    i64::from(status.held_back),
+                ],
+            )
+            .map(drop)
+            .map_err(|e| format!("server state: {e}"))
+    }
+
+    fn clear_account(&self, account: &str) -> Result<(), String> {
+        self.db()
+            .execute(
+                "DELETE FROM connector_server_status WHERE account = ?1",
+                params![account],
+            )
+            .map(drop)
+            .map_err(|e| format!("server state: {e}"))
     }
 }

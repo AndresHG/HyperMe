@@ -72,7 +72,7 @@ fn an_older_file_gains_the_table() {
     let path = temp_db("older");
     drop(SqliteTaskStore::open(&path).unwrap());
     let db = rusqlite::Connection::open(&path).unwrap();
-    db.execute_batch("DROP TABLE connector_requests; DROP TABLE events; DROP TABLE mail_meta; DROP TABLE connector_sign_in; ALTER TABLE day_log DROP COLUMN seen_at; PRAGMA user_version = 2;")
+    db.execute_batch("DROP TABLE connector_requests; DROP TABLE events; DROP TABLE mail_meta; DROP TABLE connector_sign_in; DROP TABLE connector_server_status; ALTER TABLE day_log DROP COLUMN seen_at; PRAGMA user_version = 2;")
         .unwrap();
     drop(db);
 

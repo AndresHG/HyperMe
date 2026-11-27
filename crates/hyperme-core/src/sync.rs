@@ -73,7 +73,7 @@ pub enum SyncError {
     SignInAgain,
     /// The server waits for the user: an approval nobody gave, a refusal, or an admin block
     /// (specs/166). Not a failure: it never counts toward the job-failed alert (R-16b).
-    NeedsUser(String),
+    NeedsUser(crate::health::ServerState),
     Failed(String),
 }
 
@@ -81,7 +81,8 @@ impl std::fmt::Display for SyncError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             SyncError::SignInAgain => write!(f, "the account needs a new sign-in"),
-            SyncError::NeedsUser(reason) | SyncError::Failed(reason) => write!(f, "{reason}"),
+            SyncError::NeedsUser(state) => write!(f, "{}", state.words()),
+            SyncError::Failed(reason) => write!(f, "{reason}"),
         }
     }
 }
@@ -550,12 +551,41 @@ fn mail_date(text: &str) -> Option<UtcDateTime> {
     UtcDateTime::from_unix_timestamp_nanos(i128::from(ms) * 1_000_000).ok()
 }
 
+/// How many items an answer's `omittedContent` holds back (specs/166, R-17). Its shape is not
+/// documented: a list counts its items; an object counts a number under a key naming a count,
+/// else the items of the lists in it, else 1; anything missing or empty counts 0.
+pub fn held_back(answer: &Value) -> usize {
+    fn count(value: &Value) -> usize {
+        match value {
+            Value::Array(items) => items.len(),
+            Value::Object(map) if map.is_empty() => 0,
+            Value::Object(map) => {
+                if let Some(n) = map
+                    .iter()
+                    .find(|(k, v)| k.to_lowercase().contains("count") && v.is_u64())
+                    .and_then(|(_, v)| v.as_u64())
+                {
+                    return usize::try_from(n).unwrap_or(usize::MAX);
+                }
+                let listed: usize = map.values().filter(|v| v.is_array()).map(count).sum();
+                if listed > 0 { listed } else { 1 }
+            }
+            Value::Null => 0,
+            _ => 1,
+        }
+    }
+    answer.get("omittedContent").map_or(0, count)
+}
+
 /// What one mail pull did.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct MailReport {
     pub threads: usize,
     pub skipped: usize,
     pub to_answer: usize,
+    /// Threads the answer listed as held back (`omittedContent`), such as those that need the
+    /// user's approval (specs/166, R-17).
+    pub held_back: usize,
 }
 
 /// Runs a mail pull for one account (G-5, R-26, R-27): calls the search with the pull's
@@ -573,7 +603,10 @@ pub async fn pull_mail<C: ToolCaller, T: TaskStore>(
 ) -> Result<MailReport, SyncError> {
     let args = expand_args(&pull.args, now, zone);
     let answer = caller.call(&pull.server, &pull.tool, args).await?;
-    let mut report = MailReport::default();
+    let mut report = MailReport {
+        held_back: held_back(&answer),
+        ..MailReport::default()
+    };
     let mut threads = Vec::new();
     for item in items(&answer, pull)? {
         let field = |name: &str| text_at(item, &pull.fields, name);

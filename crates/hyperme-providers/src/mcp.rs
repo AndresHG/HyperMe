@@ -21,7 +21,9 @@ use std::time::Duration;
 
 use hyperme_core::approval::{Approval, ApprovalAsk, Approver, Choice, Unattended};
 use hyperme_core::connectors::RequestLog;
+use hyperme_core::health::ServerState;
 use hyperme_core::secrets::SecretStore;
+use hyperme_core::sync::SyncError;
 use rmcp::model::{
     CallToolRequestParams, CallToolResponse, CallToolResult, ClientConfig, ElicitRequestParams,
     ElicitResult, ElicitationCapability, EnumSchema, FormElicitationCapability, InputRequest,
@@ -530,6 +532,9 @@ struct HyperClient {
 impl ClientHandler for HyperClient {
     fn get_info(&self) -> ClientConfig {
         let mut info = ClientConfig::default();
+        // Servers show this name when they ask the user ("Allow HyperMe to use ..."); rmcp's
+        // default is its own name (live check, specs/166).
+        info.client_info = rmcp::model::Implementation::new("HyperMe", env!("CARGO_PKG_VERSION"));
         if self.declare {
             info.capabilities.elicitation =
                 Some(ElicitationCapability::new().with_form(FormElicitationCapability::new()));
@@ -744,12 +749,10 @@ impl hyperme_core::sync::ToolCaller for McpCaller {
             .call_tool_with(tool, arguments, &self.allowlist, &*self.approver)
             .await
             .map_err(|e| match e {
-                ConnectorError::SignInAgain => hyperme_core::sync::SyncError::SignInAgain,
-                ConnectorError::ApprovalNeeded(_)
-                | ConnectorError::Denied(_)
-                | ConnectorError::AdminBlocked(_) => {
-                    hyperme_core::sync::SyncError::NeedsUser(e.to_string())
-                }
+                ConnectorError::SignInAgain => SyncError::SignInAgain,
+                ConnectorError::ApprovalNeeded(_) => SyncError::NeedsUser(ServerState::NeedsOk),
+                ConnectorError::Denied(_) => SyncError::NeedsUser(ServerState::NotAllowed),
+                ConnectorError::AdminBlocked(_) => SyncError::NeedsUser(ServerState::Blocked),
                 other => other.to_string().into(),
             })?;
         if result.is_error == Some(true) {

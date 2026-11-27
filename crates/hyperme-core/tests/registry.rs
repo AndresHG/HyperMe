@@ -63,8 +63,8 @@ fn the_google_preset_is_built_in_data() {
     let gmail = google.server("gmail").unwrap();
     assert_eq!(
         gmail.transport,
-        // /mcp/v1self: the endpoint for clients without MCP form elicitation (slice 1).
-        Transport::Http("https://gmailmcp.googleapis.com/mcp/v1self".to_owned())
+        // /mcp/v1: Google's endpoint with form elicitation (specs/166, A-2).
+        Transport::Http("https://gmailmcp.googleapis.com/mcp/v1".to_owned())
     );
     assert_eq!(
         gmail.optional_scopes["drafts"],
