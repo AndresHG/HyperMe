@@ -104,7 +104,7 @@
     $('oauth-label').value = known === 'other' ? label : '';
     $('oauth-label').disabled = !!label;
     $('oauth-features').replaceChildren(...sheet.features.map((f) => {
-      const box = el('input', { type: 'checkbox', 'data-feature': f.id });
+      const box = el('input', { type: 'checkbox', class: 'ui-checkbox', 'data-feature': f.id });
       box.checked = features ? features.includes(f.id) : f.on_by_default;
       return el('label', { 'data-words': 'scope ' + f.label }, box, el('span', {}, f.label));
     }));

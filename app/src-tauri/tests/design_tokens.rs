@@ -5,9 +5,9 @@
 use std::path::{Path, PathBuf};
 
 /// Files in `app/ui` held to the tokens. Each page is added as it moves onto `tokens.css`.
-const MIGRATED: &[&str] = &["components.css", "pill.html"];
+const MIGRATED: &[&str] = &["components.css", "pill.html", "settings.html"];
 
-/// Properties whose every value must be a token (or `0`, `auto`, a CSS-wide keyword).
+/// Properties whose lengths must be tokens (`0`, `auto` and keywords pass).
 const SIZED: &[&str] = &[
     "border-radius",
     "border-top-left-radius",
@@ -54,10 +54,6 @@ const COLOURED: &[&str] = &[
     "caret-color",
     "accent-color",
     "text-decoration-color",
-];
-
-const KEYWORDS: &[&str] = &[
-    "0", "auto", "inherit", "initial", "unset", "revert", "none", "normal",
 ];
 
 const NAMED_COLOURS: &[&str] = &[
@@ -148,13 +144,21 @@ fn is_raw_colour(value: &str) -> bool {
         .any(|word| NAMED_COLOURS.contains(&word))
 }
 
-/// Each word of a sized value must be a token or a keyword.
+/// A sized value may hold tokens, keywords and plain numbers (as in `calc(-1 * var(--space-2))`),
+/// but no length or percentage of its own.
 fn is_raw_size(value: &str) -> bool {
-    value
-        .split_whitespace()
-        .flat_map(|w| w.split(','))
-        .filter(|w| !w.is_empty())
-        .any(|w| !(w.contains("var(") || KEYWORDS.contains(&w)))
+    let mut rest = value.to_owned();
+    while let Some(at) = rest.find("var(") {
+        let end = rest[at..].find(')').map_or(rest.len(), |e| at + e + 1);
+        rest.replace_range(at..end, " ");
+    }
+    let bytes = rest.as_bytes();
+    (0..bytes.len()).any(|i| {
+        bytes[i].is_ascii_digit()
+            && ["px", "em", "rem", "pt", "%", "vh", "vw", "ch"]
+                .iter()
+                .any(|u| rest[i + 1..].starts_with(u))
+    })
 }
 
 /// `property: value` declarations that use a raw value where a token belongs.
@@ -173,6 +177,8 @@ fn violations(css: &str) -> Vec<String> {
         let raw = if name == "font" {
             // `font: inherit` passes; any other shorthand must name a token for size and family.
             value != "inherit" && !(value.contains("var(--text") && value.contains("var(--font"))
+        } else if name == "font-family" {
+            !value.contains("var(--font") && value != "inherit"
         } else if SIZED.contains(&name.as_str()) {
             is_raw_size(value)
         } else if COLOURED.contains(&name.as_str()) || name.starts_with("--") {
@@ -215,6 +221,7 @@ fn the_lint_catches_raw_values() {
     assert_eq!(violations(bad).len(), 11, "{:?}", violations(bad));
     let good = "/* padding: 3px */ a:hover { padding: var(--space-1) var(--space-2); margin: 0 auto; \
                 border-radius: var(--radius-control); font: inherit; color: var(--color-label); \
+                margin: calc(-1 * var(--space-2)) 0 0; \
                 border: var(--border-width) solid var(--color-separator); gap: var(--space-2); \
                 background: transparent; font-family: var(--font-system); \
                 font: var(--weight-bold) var(--text-title3) var(--font-system); }";
