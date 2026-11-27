@@ -289,6 +289,7 @@
       </div>
       <div class="error hidden" id="cleanup-error"></div>
       <div class="hint faint">No key yet? Get a key, sign up, create an API key and paste it here.</div>
+      <div class="hint faint" id="other-keys"></div>
     </div>
 
     <div class="section-title">How much do you talk a day?</div>
@@ -452,6 +453,7 @@
       $('speech-name').textContent = k.speech;
       $('cleanup-name').textContent = k.cleanup;
       $('free-credit').textContent = k.free_credit || '';
+      $('other-keys').textContent = (k.other_keys || []).join(' ');
       $('choices').innerHTML = '';
       k.choices.forEach((c, i) => {
         const b = document.createElement('button');

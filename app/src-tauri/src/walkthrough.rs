@@ -4,7 +4,7 @@
 
 use std::sync::Mutex;
 
-use hyperme_core::config::Config;
+use hyperme_core::config::{Config, Role};
 use hyperme_core::dictation::Event;
 use hyperme_core::secrets::SecretStore;
 use hyperme_core::traits::Microphone;
@@ -280,6 +280,8 @@ pub struct KeysScreen {
     cleanup: String,
     choices: Vec<CostChoice>,
     free_credit: Option<String>,
+    /// Other cleanup providers whose plan may already pay for a key (Anthropic's credits).
+    other_keys: Vec<String>,
 }
 
 #[tauri::command]
@@ -305,6 +307,7 @@ pub fn onboarding_keys_screen(app: AppHandle) -> Result<KeysScreen, String> {
         cleanup: cost::display_name(&config.cleanup.provider),
         choices,
         free_credit: cost::free_credit_line(&config),
+        other_keys: cost::other_key_notes(&config, Role::Cleanup),
     })
 }
 

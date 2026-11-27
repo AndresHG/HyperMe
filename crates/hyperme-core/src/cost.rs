@@ -2,7 +2,7 @@
 //! recommended setup costs a month for a given amount of talking a day. Every price and estimate
 //! comes from the config file, next to the model names (R-26); none is written here.
 
-use crate::config::{Cleanup, Config, ModelEntry};
+use crate::config::{Cleanup, Config, ModelEntry, Role};
 
 /// A month for the estimate.
 const DAYS_PER_MONTH: f64 = 30.0;
@@ -110,4 +110,26 @@ pub fn free_credit_line(config: &Config) -> Option<String> {
         credit.round(),
         (credit / price).round()
     ))
+}
+
+/// For onboarding: the providers for a role other than the one in use whose catalogue entry has a
+/// key note, as "Anthropic: <note> Choose it later in Settings, Providers." The words come from
+/// the catalogue.
+pub fn other_key_notes(config: &Config, role: Role) -> Vec<String> {
+    let in_use = match role {
+        Role::Speech => &config.speech.provider,
+        Role::Cleanup => &config.cleanup.provider,
+    };
+    config
+        .providers_for(role)
+        .filter(|(id, _)| id != in_use)
+        .filter_map(|(_, entry)| {
+            entry.key_note.as_ref().map(|note| {
+                format!(
+                    "{}: {note} Choose it later in Settings, Providers.",
+                    entry.name
+                )
+            })
+        })
+        .collect()
 }

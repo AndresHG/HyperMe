@@ -8,6 +8,7 @@
 #            (an OpenAI-compatible chat completions API, for cleanup)
 # roles      the jobs it can do: "speech", "cleanup"
 # key_url    where "Get a key" goes
+# key_note   one line shown beside the key field while there is no key
 # key_required = false for a server that needs no key, such as one on this Mac
 # list_models  true when the key can list the models it offers
 # hide_models  listed models whose names contain one of these are not offered (embeddings,
@@ -146,6 +147,9 @@ order = 50
 protocol = "openai-chat"
 endpoint = "https://api.anthropic.com/v1"
 key_url = "https://platform.claude.com/settings/keys"
+# support.claude.com/en/articles/17154008, checked 2026-11-27: Max, Ultra and Team plans include
+# monthly API credits on one linked Console organisation (docs/research/2026-11-27-paid-accounts-and-agent-sessions.md).
+key_note = "Have Claude Max, Ultra or Team? Your plan includes monthly API credits: link a Console organisation under Billing on claude.ai, then make the key there."
 roles = ["cleanup"]
 
 # platform.claude.com/docs/en/about-claude/pricing

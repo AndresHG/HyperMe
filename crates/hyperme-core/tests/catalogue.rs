@@ -260,3 +260,37 @@ fn settings_can_still_override_an_endpoint() {
         "wss://global.example.com/v2"
     );
 }
+
+/// Paid accounts research (docs/research/2026-11-27-paid-accounts-and-agent-sessions.md): the
+/// Anthropic entry tells Claude Max, Ultra and Team users that their plan's monthly API credits
+/// pay for the key. The words live in the catalogue, not in code (R-1).
+#[test]
+fn the_anthropic_entry_carries_the_plan_credits_note() {
+    let config = Config::default();
+    let note = config
+        .provider("anthropic")
+        .and_then(|p| p.key_note.as_deref())
+        .expect("anthropic has a key note");
+    for word in ["Max", "Ultra", "Team", "API credits"] {
+        assert!(note.contains(word), "{word} missing from {note:?}");
+    }
+    let groq = config.provider("groq").unwrap();
+    assert_eq!(groq.key_note, None);
+}
+
+/// A hand-added entry may carry its own note; it is optional.
+#[test]
+fn a_hand_added_entry_may_carry_a_key_note() {
+    let text = format!(
+        "{DEFAULT_CONFIG}\n{}",
+        HAND_ADDED.replace(
+            "key_required = false",
+            "key_required = false\nkey_note = \"Ask IT for the key\""
+        )
+    );
+    let config = parse(&text).unwrap();
+    assert_eq!(
+        config.provider("myserver").unwrap().key_note.as_deref(),
+        Some("Ask IT for the key")
+    );
+}
