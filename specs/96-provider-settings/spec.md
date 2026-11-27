@@ -1,6 +1,6 @@
 # Choose the speech and cleanup provider
 
-**Status:** approved by the owner, 26 November 2026 (P-1 to P-3 answered the same day). Part A may start; Part B waits for Phase 2.
+**Status:** approved by the owner, 26 November 2026 (P-1 to P-3 answered the same day). Implemented: slices 1 to 12 merged, 27 November 2026 ([tasks.md](tasks.md)).
 **Issue:** [#96](https://github.com/AndresHG/hyperme/issues/96). **Size:** L.
 **Design:** [design.md](design.md). **Slices:** [tasks.md](tasks.md).
 **Traces to:** [PRD](../../docs/PRD.md) 7.1 ("Choose a provider and model per role", P1, phase 2;

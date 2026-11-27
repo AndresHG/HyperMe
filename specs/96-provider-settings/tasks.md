@@ -49,6 +49,11 @@ now, beside Phase 1; Part B waits for Phase 2 (owner, 26 November 2026, P-1 in [
   → Privacy shows each with what it receives ("Stays on this Mac" for a local server). A test
   with counting servers shows choosing, saving and rebuilding providers opens no connection;
   Test is the first request.
+- Slice 12: `hyperme-quality` builds providers with the app's own builders. Before and after
+  runs, alternating, on the owner's 50 samples showed no measurable slowdown: median key release
+  to text was 946 and 960 ms after, against 939 and 1013 ms before, with cleanup on OpenAI
+  because Groq's free daily limit was spent
+  ([results](../../docs/results/2026-11-27-provider-settings-speed.md)). Slices 1 to 12 are done.
 
 ## Later, one pull request each
 
