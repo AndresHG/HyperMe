@@ -22,8 +22,10 @@ pub struct Section {
     pub shortcut: &'static str,
 }
 
-/// The sidebar's sections in order (R-5, AC-4). The Dictionary appears only while the app holds
-/// a dictionary (R-21); Style and Meetings come with their own changes.
+/// The sidebar's sections in order (R-5, AC-4). The Home page holds the dictations, as Wispr
+/// Flow's does, and the day has its own Today section (V0.1 redesign, owner, 27 November 2026).
+/// The Dictionary appears only while the app holds a dictionary (R-21); Style and Meetings come
+/// with their own changes.
 pub fn sections(dictionary_present: bool) -> Vec<Section> {
     let mut list = vec![
         Section {
@@ -33,8 +35,8 @@ pub fn sections(dictionary_present: bool) -> Vec<Section> {
             shortcut: "⌘1",
         },
         Section {
-            id: "history",
-            title: "History",
+            id: "today",
+            title: "Today",
             page: "home.html",
             shortcut: "⌘2",
         },
@@ -57,20 +59,11 @@ pub struct Block {
     pub title: &'static str,
 }
 
-/// The Home page's blocks, in order (R-9). None ship in this change. The slots are for:
-/// - daily tasks (#92): `waiting` ("Waiting for you", every proposal that needs a yes) and
-///   `today` (the day's calendar and what is running), each shown only while it has something;
-/// - the personal dictionary (#93): its suggestion line.
-///
-/// A block that shows is listed here; the page asks for the list on load and on
-/// `home://refresh`.
+/// The Home page's blocks, in order (R-9), between Up next and the dictations. None ships: the
+/// day moved to the Today section (V0.1 redesign). A block that shows is listed here; the page
+/// asks for the list on load and on `home://refresh`.
 pub fn blocks() -> Vec<Block> {
-    // #92: the day leads Home (owner, 27 November 2026). "Waiting for you" joins when
-    // proposals exist.
-    vec![Block {
-        id: "today",
-        title: "Today",
-    }]
+    Vec::new()
 }
 
 /// Where a target opens (R-6, AC-5): a section id opens that section; a Home-page block id
@@ -858,21 +851,20 @@ mod window {
 mod tests {
     use super::*;
 
-    /// AC-4 (R-5, R-21): only sections whose feature exists, in order, with their keys; no
-    /// Dictionary while the app holds no dictionary.
+    /// AC-4 (R-5, R-21): Home, Today and, once a dictionary exists, Dictionary, in order, with
+    /// their keys. History lives on the Home page (V0.1 redesign, owner, 27 November 2026).
     #[test]
     fn sections_list_only_what_exists() {
         let ids = |list: Vec<Section>| -> Vec<(&str, &str)> {
             list.iter().map(|s| (s.id, s.shortcut)).collect()
         };
-        assert_eq!(ids(sections(false)), [("home", "⌘1"), ("history", "⌘2")]);
+        assert_eq!(ids(sections(false)), [("home", "⌘1"), ("today", "⌘2")]);
         assert_eq!(
             ids(sections(true)),
-            [("home", "⌘1"), ("history", "⌘2"), ("dictionary", "⌘3")]
+            [("home", "⌘1"), ("today", "⌘2"), ("dictionary", "⌘3")]
         );
-        assert_eq!(sections(true)[2].page, "home-dictionary.html");
-        // #92: Today leads the Home page (owner, 27 November 2026).
-        assert_eq!(blocks().iter().map(|b| b.id).collect::<Vec<_>>(), ["today"]);
+        // R-9: no Home block ships; the day has its own section.
+        assert!(blocks().is_empty());
     }
 
     /// AC-5 (R-6): a section id opens that section, a block id the Home page at that block, and
@@ -880,18 +872,19 @@ mod tests {
     #[test]
     fn targets_resolve() {
         let s = sections(false);
-        let today = [Block {
-            id: "today",
-            title: "Today",
+        let brief = [Block {
+            id: "brief",
+            title: "Brief",
         }];
-        assert_eq!(resolve("history", &s, &today), ("history", None));
-        assert_eq!(resolve("home", &s, &today), ("home", None));
-        assert_eq!(resolve("today", &s, &today), ("home", Some("today")));
-        assert_eq!(resolve("today", &s, &blocks()), ("home", Some("today")));
-        assert_eq!(resolve("dictionary", &s, &today), ("home", None));
-        assert_eq!(resolve("", &s, &today), ("home", None));
-        assert_eq!(hash(("home", Some("today"))), "home/today");
-        assert_eq!(hash(("history", None)), "history");
+        assert_eq!(resolve("today", &s, &blocks()), ("today", None));
+        assert_eq!(resolve("home", &s, &blocks()), ("home", None));
+        // Older callers and links: History is the Home page now.
+        assert_eq!(resolve("history", &s, &blocks()), ("home", None));
+        assert_eq!(resolve("brief", &s, &brief), ("home", Some("brief")));
+        assert_eq!(resolve("dictionary", &s, &brief), ("home", None));
+        assert_eq!(resolve("", &s, &brief), ("home", None));
+        assert_eq!(hash(("home", Some("brief"))), "home/brief");
+        assert_eq!(hash(("today", None)), "today");
     }
 
     /// AC-14 (R-24): the page keeps no dictation text in the web view's storage.
