@@ -3,7 +3,8 @@
 use std::path::{Path, PathBuf};
 
 use hyperme_quality::set::{
-    HistoryItem, Lang, check_location_with, import, load, read_history, read_wav, wav_bytes,
+    HistoryItem, Lang, check_location_with, import, load, read_history, read_raw, read_wav,
+    wav_bytes, write_raw,
 };
 
 fn temp_dir(name: &str) -> PathBuf {
@@ -165,4 +166,20 @@ fn import_copies_audio_and_drafts_gold() {
     assert_eq!((again.added, again.skipped), (0, 2));
     std::fs::remove_dir_all(&history).unwrap();
     std::fs::remove_dir_all(&set).unwrap();
+}
+
+/// Slice A, AC-3: a live run's raw transcripts are saved as `{sample: raw}` and read back for
+/// `--reuse-raw`; a missing file is an error, not an empty set.
+#[test]
+fn raw_transcripts_are_saved_and_read_back() {
+    let dir = temp_dir("raw");
+    let path = dir.join("raw-2026-11-27.json");
+    let raw: std::collections::BTreeMap<String, String> = [("es-01", "hola"), ("en-01", "hi")]
+        .into_iter()
+        .map(|(k, v)| (k.to_owned(), v.to_owned()))
+        .collect();
+    write_raw(&path, &raw).unwrap();
+    assert_eq!(read_raw(&path).unwrap(), raw);
+    let error = read_raw(&dir.join("none.json")).unwrap_err();
+    assert!(error.contains("none.json"), "{error}");
 }
