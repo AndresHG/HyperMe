@@ -32,6 +32,10 @@
     dictionary_suggested: 2,
     dictionary_view: { entries: [{ written: 'HyperMe', heard: ['hyper me', 'hipermi'] }, { written: 'Tauri', heard: [] }, { written: 'Kubernetes', heard: ['cooper netties'] }], suggestions: [], learning: true, path: '~/Library/Application Support/HyperMe/dictionary.toml' },
     settings_pending: null,
+    microphones_list: { ordered: false, microphones: [
+      { name: 'MacBook Pro Microphone', connected: true, default: true },
+      { name: 'Studio USB Microphone', connected: true, default: false },
+    ] },
     onboarding_checks: { accessibility: true, input_monitoring: false, host_app: null, bundled: true, speech_provider: 'groq', cleanup_provider: 'groq' },
     onboarding_can_continue: true,
     onboarding_keys_screen: { speech: 'Groq', cleanup: 'Groq', free_credit: 'Groq has a free tier.', other_keys: [], choices: [
