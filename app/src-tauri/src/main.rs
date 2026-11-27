@@ -78,6 +78,7 @@ fn main() {
             runtime::pill_card,
             runtime::card_open_today,
             runtime::card_dismiss,
+            runtime::card_fix,
             settings::settings_view,
             settings::settings_set,
             settings::key_set,
