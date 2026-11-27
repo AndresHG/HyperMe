@@ -102,6 +102,7 @@ fn settings() -> Settings {
         sounds: false,
         // The replay turns the timing log on itself.
         timing_log: false,
+        dictionary: Default::default(),
     }
 }
 

@@ -1,0 +1,50 @@
+# The providers HyperMe offers (specs/96-provider-settings, R-1). Built into the app, so each
+# release brings its current prices and providers to every user.
+#
+# To add a provider of your own, or point a built-in one at another host, copy an entry into
+# config.toml. An entry there with the same name replaces the built-in one. Keys never go here.
+#
+# protocol   how HyperMe talks to it: "speechmatics-rt" (streaming speech) or "openai-chat"
+#            (an OpenAI-compatible chat completions API, for cleanup)
+# roles      the jobs it can do: "speech", "cleanup"
+# key_url    where "Get a key" goes
+# key_required = false for a server that needs no key, such as one on this Mac
+# list_models  true when the key can list the models it offers
+#
+# Each model: its prices with the date they were checked against the provider's page, and the
+# latency this project measured, with the result it comes from. Check prices before each release.
+
+[providers.speechmatics]
+name = "Speechmatics"
+protocol = "speechmatics-rt"
+# The EU region. wss://global.rt.speechmatics.com/v2 is the global one.
+endpoint = "wss://eu.rt.speechmatics.com/v2"
+key_url = "https://portal.speechmatics.com/signup"
+roles = ["speech"]
+# USD 100 of credit for new accounts; it lasts 12 months.
+free_credit_usd = 100
+
+# From speechmatics.com/pricing: real-time Melia 1 at USD 0.40 an hour.
+[[providers.speechmatics.models]]
+id = "melia-1"
+price_per_hour_usd = 0.40
+prices_checked = "2026-11-26"
+measured = { release_to_text_ms = 426, p90_ms = 587, source = "docs/results/2026-11-25-eu-speech.md" }
+
+[providers.groq]
+name = "Groq"
+protocol = "openai-chat"
+endpoint = "https://api.groq.com/openai/v1"
+key_url = "https://console.groq.com/keys"
+roles = ["cleanup"]
+list_models = true
+
+# From Groq's openai/gpt-oss-20b page: USD 0.075 per million input tokens and USD 0.30 per
+# million output tokens. The measurement is key release to cleaned text with Speechmatics.
+[[providers.groq.models]]
+id = "openai/gpt-oss-20b"
+price_input_per_million_usd = 0.075
+price_output_per_million_usd = 0.30
+prices_checked = "2026-11-26"
+reasoning_effort = ["low", "medium", "high"]
+measured = { release_to_text_ms = 426, p90_ms = 587, source = "docs/results/2026-11-25-eu-speech.md" }
