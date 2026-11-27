@@ -298,6 +298,12 @@ pub struct Dictation {
     /// the ones relevant to the dictation. Optional: an older file takes the default.
     #[serde(default = "default_prompt_cap")]
     pub dictionary_prompt_cap: u32,
+    /// #221, AC-7: mute the output while recording. Optional: an older file takes the default.
+    #[serde(default = "yes")]
+    pub mute_while_dictating: bool,
+    /// #221, AC-2: preferred microphones by name, first first. Empty is the system default.
+    #[serde(default)]
+    pub microphones: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -1415,9 +1421,19 @@ pub fn set_value(text: &str, section: &str, key: &str, value: &str) -> Result<St
                 .iter()
                 .position(|l| l.trim_start().strip_prefix('#').is_some_and(&sets_key))
         })
-        .map(|i| start + 1 + i)
-        .ok_or_else(|| unknown(format!("{full} is not a setting")))?;
-    lines[index] = format!("{key} = {value}");
+        .map(|i| start + 1 + i);
+    match index {
+        Some(index) => lines[index] = format!("{key} = {value}"),
+        // A setting added after the file was written (#221): it goes at the end of its section,
+        // and the parse below refuses a key that is not a setting at all.
+        None => {
+            let last = lines[start..end]
+                .iter()
+                .rposition(|l| !l.trim().is_empty())
+                .map_or(start, |i| start + i);
+            lines.insert(last + 1, format!("{key} = {value}"));
+        }
+    }
     let mut out = lines.join("\n");
     if text.ends_with('\n') {
         out.push('\n');
