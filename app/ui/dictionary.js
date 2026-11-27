@@ -1,5 +1,5 @@
-/* The Dictionary page (spec 93, R-10 to R-13, R-15, R-17), shared by Settings → Dictionary and
-   the Dictionary page in Home. It works like Wispr Flow's: one field for a word; the
+/* The Dictionary page (spec 93, R-10 to R-13, R-15, R-17), in Home only (V0.1 redesign, owner,
+   27 November 2026; it was also in Settings). It works like Wispr Flow's: one field for a word; the
    "Correct a misspelling" switch turns it into two fields, the misspelling and the right word.
    Each misspelling is its own row ("zen trix → Zentrix"); a word with no misspelling is a row of
    its own. The whole list is saved on each change through `dictionary_save`.
@@ -30,6 +30,17 @@
       if (r.wrong && !entry.heard.some((h) => key(h) === key(r.wrong))) entry.heard.push(r.wrong);
     }
     return entries;
+  }
+
+  const PENCIL = '<path d="M10.5 2.5l3 3-8 8H2.5v-3z"/>';
+  const TRASH = '<path d="M2.5 4.5h11M6 4.5V3h4v1.5M4 4.5l.7 9h6.6l.7-9"/>';
+  function iconButton(label, paths) {
+    const b = el('button', 'dict-icon');
+    b.type = 'button';
+    b.title = label;
+    b.setAttribute('aria-label', label);
+    b.innerHTML = '<svg aria-hidden="true" width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">' + paths + '</svg>';
+    return b;
   }
 
   function mount(root, { invoke, onError }) {
@@ -66,22 +77,25 @@
 
     const search = el('input', 'dict-search');
     search.type = 'search';
-    search.placeholder = 'Filter the list';
-    search.setAttribute('aria-label', 'Filter your words');
+    search.placeholder = 'Search your words';
+    search.setAttribute('aria-label', 'Search your words');
 
     // R-18: fixes HyperMe noticed in the user's edits, waiting for a yes.
     const suggested = el('div', 'dict-suggested hidden');
 
+    // A list in Wispr Flow's layout: the word, what it is often heard as, and its tools on hover.
+    const head = el('div', 'dict-row dict-head');
+    head.append(el('span', '', 'Word'), el('span', '', 'Often heard as'), el('span'));
     const list = el('div', 'dict-rows');
-    const empty = el('p', 'dict-empty hidden', 'No words yet. Add names, products and jargon, or fix a word from History.');
+    const empty = el('p', 'dict-empty hidden', 'No words yet. Add names, products and jargon, or fix a word from a dictation on Home.');
 
     const foot = el('div', 'dict-foot');
     const where = el('small', 'dict-where');
-    const tools = el('span');
+    const tools = el('span', 'dict-tools');
     const importButton = el('button', '', 'Import…');
-    const exportCsv = el('button', '', 'Export CSV');
-    const exportText = el('button', '', 'Export text');
-    tools.append(importButton, ' ', exportCsv, ' ', exportText);
+    const exportCsv = el('button', 'dict-link', 'Export CSV');
+    const exportText = el('button', 'dict-link', 'Export text');
+    tools.append(importButton, exportCsv, exportText);
     const file = el('input');
     file.type = 'file';
     file.accept = '.txt,.csv,text/plain,text/csv';
@@ -100,7 +114,7 @@
     });
 
     root.classList.add('dict');
-    root.replaceChildren(sheet, suggested, search, list, empty, foot, learnLabel, learnNote);
+    root.replaceChildren(suggested, sheet, search, head, list, empty, learnLabel, learnNote, foot);
     let learned = [];
     const isLearned = (r) => learned.some((l) => key(l.written) === key(r.word) && key(l.heard) === key(r.wrong));
 
@@ -135,15 +149,15 @@
         if (q && !key(r.word + ' ' + r.wrong).includes(q)) return;
         const row = el('div', 'dict-row');
         const what = el('div', 'dict-what');
-        if (r.wrong) what.append(el('span', 'dict-wrong-word', r.wrong), el('span', 'dict-arrow', '→'));
         what.append(el('span', 'dict-word', r.word));
         const mine = isLearned(r);
         if (mine) what.append(el('span', 'dict-learned', 'learned'));
+        const heard = el('span', 'dict-heard', r.wrong || '—');
         const actions = el('span', 'dict-actions');
-        const edit = el('button', '', 'Edit');
+        const edit = iconButton('Edit', PENCIL);
         edit.addEventListener('click', () => open(i));
         // R-18, R-19: undoing a learned row removes it, and it is never learned again.
-        const remove = el('button', '', mine ? 'Undo' : 'Remove');
+        const remove = mine ? el('button', 'dict-undo', 'Undo') : iconButton('Remove', TRASH);
         remove.addEventListener('click', () => {
           // Undoing the last learned misspelling of a word the user added keeps the word.
           const last = !rows.some((o, j) => j !== i && key(o.word) === key(r.word));
@@ -152,23 +166,23 @@
             ? rows.map((o, j) => (j === i ? { word: r.word, wrong: '' } : o))
             : rows.filter((_, j) => j !== i));
         });
-        actions.append(edit, ' ', remove);
-        row.append(what, actions);
+        actions.append(edit, remove);
+        row.append(what, heard, actions);
         list.append(row);
       });
+      head.classList.toggle('hidden', rows.length === 0);
       empty.classList.toggle('hidden', rows.length > 0);
     }
     function showSuggested(list) {
       suggested.replaceChildren();
       suggested.classList.toggle('hidden', !list.length);
       if (!list.length) return;
-      suggested.append(el('h3', '', 'Suggested'));
       for (const s of list) {
-        const row = el('div', 'dict-row');
+        const row = el('div', 'dict-suggestion');
         const what = el('div', 'dict-what');
-        const times = s.seen > 1 ? 'fixed ' + s.seen + ' times' : 'fixed once';
-        what.append(el('span', 'dict-wrong-word', s.heard), el('span', 'dict-arrow', '→'), el('span', 'dict-word', s.written),
-          el('span', 'dict-seen', '· ' + times + (s.app ? ' in ' + s.app : '')));
+        const times = s.seen > 1 ? s.seen + ' times' : 'once';
+        what.append('You fixed ', el('span', 'dict-wrong-word', s.heard), ' to ', el('span', 'dict-word', s.written),
+          ' ' + times + (s.app ? ' in ' + s.app : '') + '. Add it?');
         let warned = false;
         const act = (add) => async () => {
           // R-17: a common misspelling would be replaced everywhere, so it needs a second press.
@@ -183,9 +197,9 @@
         const actions = el('span', 'dict-actions');
         const addButton = el('button', 'main', 'Add');
         addButton.addEventListener('click', act(true));
-        const dismiss = el('button', '', 'Dismiss');
+        const dismiss = el('button', '', 'Not now');
         dismiss.addEventListener('click', act(false));
-        actions.append(addButton, ' ', dismiss);
+        actions.append(addButton, dismiss);
         row.append(what, actions);
         suggested.append(row);
       }

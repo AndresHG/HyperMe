@@ -74,7 +74,6 @@
   td.local { padding-top: 0; }
   a.link { color: var(--violet); cursor: pointer; text-decoration: none; }
 </style>
-<link rel="stylesheet" href="dictionary.css">
 </head>
 <body>
 <nav>
@@ -83,7 +82,6 @@
   <div class="group">Everyday</div>
   <a href="#general">General</a>
   <a href="#shortcuts">Shortcuts</a>
-  <a href="#dictionary">Dictionary</a>
   <div class="group">Setup</div>
   <a href="#providers">Providers</a>
   <a href="#connectors">Connectors</a>
@@ -203,11 +201,6 @@
     </div>
   </section>
 
-  <section id="dictionary">
-    <h1>Dictionary</h1>
-    <p class="lead">Words HyperMe should always get right: names, products and jargon. Turn on "Correct a misspelling" to fix a word that keeps coming out wrong. Changes apply from your next dictation.</p>
-    <div id="dict-root"></div>
-  </section>
 
   <section id="privacy">
     <h1>Privacy</h1>
@@ -273,7 +266,6 @@
   </section>
   <p id="error" class="bad"></p>
 </main>
-<script src="dictionary.js"></script>
 <script>
   const invoke = window.__TAURI__.core.invoke;
   const $ = (id) => document.getElementById(id);
@@ -713,8 +705,6 @@
     document.querySelectorAll('section').forEach((s) => s.classList.toggle('on', q ? !!s.querySelector('.row:not(.hidden)') : s.id === (location.hash || '#setup').slice(1)));
   });
 
-  // Spec 93, R-10 to R-13: Settings → Dictionary, the page shared with Home (dictionary.js).
-  HyperDictionary.mount($('dict-root'), { invoke, onError: (m) => { $('error').textContent = m; } });
 
   // Settings → Diagnostics (specs/200-diagnostics, R-1 to R-9): read when the section opens and
   // on Refresh, never in the background.

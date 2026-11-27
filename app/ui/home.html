@@ -301,7 +301,7 @@
   // Spec 200, R-12: Report a problem from Help, and from a failed item (its trace leads the issue).
   $('open-report').addEventListener('click', (e) => { e.preventDefault(); openSettings('diagnostics/report'); });
   // ⌘, opens Settings at the section closest to where you are (docs/UX.md).
-  const settingsSection = () => (location.hash.startsWith('#dictionary') ? 'dictionary' : location.hash.startsWith('#today') ? 'connectors' : 'general');
+  const settingsSection = () => (location.hash.startsWith('#today') ? 'connectors' : 'general');
 
   document.addEventListener('keydown', (e) => {
     if (!e.metaKey || e.altKey || e.ctrlKey) return;
@@ -1166,7 +1166,7 @@
     }
   });
 
-  // Spec 93, D4: the Dictionary page, the same as Settings → Dictionary (dictionary.js).
+  // Spec 93, D4: the Dictionary page lives only here, as in Wispr Flow (V0.1 redesign).
   const dictionary = HyperDictionary.mount($('dict-root'), { invoke, onError: (m) => { $('dict-error').textContent = m; } });
 
   window.addEventListener('hashchange', route);
