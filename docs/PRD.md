@@ -161,6 +161,7 @@ to the next release; **P2** is nice to have. The phase is from [ROADMAP.md](ROAD
 | Snippets (a spoken shortcut expands to saved text) | 2 | P2 | *Proposed* |
 | Import dictionary and snippets from Wispr Flow and Superwhisper, where their exports allow | 2 | P1 | Owner, 26 November 2026, from the [competitor research](research/2026-11-26-competitors-and-plan-sign-in.md). Raycast does this to win switchers |
 | Microphone handling: pause or lower playing media while recording, a microphone priority list, keep the input warm | 2 | P1 | Owner, 26 November 2026, from the [competitor research](research/2026-11-26-competitors-and-plan-sign-in.md) |
+| Anthropic as a key provider for cleanup and answers in provider settings, with onboarding and Settings copy telling Claude Max, Ultra and Team users that their plan's monthly API credits pay for the key | 2 | P1 | Owner, 27 November 2026 ([paid accounts research](research/2026-11-27-paid-accounts-and-agent-sessions.md)). The allowed way to use a Claude plan: no Claude sign-in exists for third-party apps. Measure cleanup latency before marking it recommended for cleanup ([spec 96](../specs/96-provider-settings/spec.md)) |
 
 ### 7.2 Questions and commands (J-2, J-3)
 
@@ -173,7 +174,7 @@ to the next release; **P2** is nice to have. The phase is from [ROADMAP.md](ROAD
 | One MCP client; GitHub as the first connector | 3 | P0 | Owner, 25 November 2026 |
 | Voice edit of selected text ("Hyper, make this shorter", "translate this"): the edit replaces the selection | 3 | P0 | Owner, 26 November 2026. The most common feature after dictation (Wispr Flow Command Mode, Raycast, OpenWhispr). Uses the cleanup path, no tool call, so it can ship before MCP actions ([competitor research](research/2026-11-26-competitors-and-plan-sign-in.md); [spec](../specs/151-voice-edits/spec.md)) |
 | Context of the frontmost app and selected text | 3 | P1 | Within the privacy boundary (section 9) |
-| "Continue with ChatGPT" as a provider for the answers model: a Plus or Pro user connects their plan instead of a key, through OpenAI's official Sign in with ChatGPT for open-source apps | 3 | P1 | Owner, 26 November 2026. Text only, so speech still needs its key; cleanup stays on its own model. Measure latency first. No Claude equivalent: Anthropic forbids third-party Claude.ai login ([competitor research](research/2026-11-26-competitors-and-plan-sign-in.md)). See Q-17 |
+| "Continue with ChatGPT" as a provider for the answers model: a Plus or Pro user connects their plan instead of a key, through OpenAI's official Sign in with ChatGPT for open-source apps | 3 | P1 | Owner, 26 November 2026. Text only, so speech still needs its key; cleanup stays on its own model. Measure latency first. No Claude equivalent: Anthropic forbids third-party Claude.ai login ([competitor research](research/2026-11-26-competitors-and-plan-sign-in.md)). Built as a provider whose `auth` is `chatgpt` in provider settings, reusing the Google connector's sign-in; also offered for voice edits and commands, and for cleanup only behind "Show advanced" after a latency measurement ([paid accounts research](research/2026-11-27-paid-accounts-and-agent-sessions.md)). See Q-17 |
 | HyperMe as an MCP server: tasks, dictation history, memory and later meeting notes, readable from Claude, ChatGPT, Claude Code and Cursor | 3 or 4 | P1 | Owner, 26 November 2026. The allowed way for a Claude subscriber to use their plan with HyperMe's data ([competitor research](research/2026-11-26-competitors-and-plan-sign-in.md)). Read-only first; any write goes through the preview |
 | Dot at the bottom centre with a quick sheet (Ask, Now, top 3 waiting, last dictation); cards for answers and previews | 3 | P0 | Owner, U-8 and U-10 |
 | Linear connector, after GitHub Projects | 3+ | P1 | Owner, Q-4. Any MCP server the user adds works without code |
@@ -249,7 +250,7 @@ designed: a design proposal will compare how other assistants build memory, befo
 
 A free local mode with speech and cleanup models you download in the app, so no key is
 needed (owner, Q-5); handing a task to Claude Code by voice ("Hyper, create this and send it to
-Claude Code"), a trigger and nothing more, through MCP or the agent's own interface (owner, Q-6); Linux and Windows; a wake word; spoken answers (text-to-speech), not for now, maybe in the future
+Claude Code"), a trigger and nothing more, through MCP or the agent's own interface (owner, Q-6). Not urgent: it waits until the first-wave commands (tasks, reminders, email drafts) are working; then it is one action that starts Claude Code (cloud or this Mac) or Codex through their own command line on the user's own login, behind the preview card, then shows an Open link; no embedded interface (owner, 27 November 2026, [research](research/2026-11-27-paid-accounts-and-agent-sessions.md)); Linux and Windows; a wake word; spoken answers (text-to-speech), not for now, maybe in the future
 (owner, Q-14). Jira is not on the roadmap; it may come later, and an MCP server the user
 adds already works (owner, 26 November 2026).
 

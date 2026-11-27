@@ -110,6 +110,11 @@ passes, update this section and record the evidence in `docs/results/`.
   every time and never records without a yes; tags are two-level contexts (Customers > Amazon),
   each a file in the memory folder; facts and to-dos link to meetings only through contexts. See
   `docs/ROADMAP.md`, "Notes, memory and contexts".
+- Paid accounts (owner, 27 November 2026): no sign-in replaces the speech key. "Continue with ChatGPT"
+  is the only plan sign-in; there is no Claude sign-in, so Claude subscribers use an Anthropic key, paid
+  by their plan's monthly API credits on Max, Ultra and Team. Launching a Claude Code or Codex task by
+  voice uses their own command line on the user's login, never an embedded interface; it stays in Later, after the first-wave commands. See
+  `docs/research/2026-11-27-paid-accounts-and-agent-sessions.md`.
 - Meetings run on device first: Apple's on-device recognizer for the live transcript, and a
   cleanup setting of cloud (Groq, default), local model, or off (owner, 26 November 2026). See
   `docs/ROADMAP.md`, "Meetings on device". Dictation stays on cloud speech.
