@@ -23,6 +23,10 @@ pub struct AccountEntry {
     /// Off keeps the account and its sign-in but stops using it (R-3).
     #[serde(default = "yes", skip_serializing_if = "is_true")]
     pub enabled: bool,
+    /// The setup sheet's switches that were on at sign-in (`calendar`, `gmail.drafts`).
+    /// Empty means the connector's defaults.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub features: Vec<String>,
 }
 
 fn yes() -> bool {
@@ -168,6 +172,7 @@ fn custom_row(
         connector: connector.id.clone(),
         label: String::new(),
         enabled: true,
+        features: Vec::new(),
     };
     let (state, tone) = account_state(&entry, health(&connector.id, ""), now);
     Row {
@@ -383,11 +388,18 @@ pub fn add_choices(registry: &Registry, connectors: &Connectors) -> Vec<Choice> 
         .connectors()
         .iter()
         .filter(|connector| !is_custom(connectors, &connector.id))
-        .map(|connector| Choice {
-            id: connector.id.clone(),
-            name: connector.name.clone(),
-            ready: false,
-            note: "Sign-in is not ready yet".to_owned(),
+        .map(|connector| {
+            let oauth = matches!(connector.auth, crate::registry::Auth::OAuth(_));
+            Choice {
+                id: connector.id.clone(),
+                name: connector.name.clone(),
+                ready: oauth,
+                note: if oauth {
+                    "Your own OAuth client, then sign in".to_owned()
+                } else {
+                    "Added in config.toml for now".to_owned()
+                },
+            }
         })
         .collect();
     choices.push(Choice {

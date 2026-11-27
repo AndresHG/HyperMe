@@ -9,9 +9,11 @@ use hyperme_core::config::{Config, Connectors};
 use hyperme_core::connector_settings::{
     self as cs, AccountHealth, Choice, CustomForm, Row, ToolRow,
 };
+use hyperme_core::connector_setup as setup_core;
 use hyperme_core::registry::{Auth, Registry, ToolAccess};
 use hyperme_core::secrets::SecretStore;
 use hyperme_platform::keychain::KeychainStore;
+use hyperme_providers::setup::{self, ClientCredentials, SetupError};
 use serde::Serialize;
 use tauri::AppHandle;
 use time::UtcDateTime;
@@ -41,6 +43,28 @@ pub struct Page {
     enabled: bool,
     tools_verified: bool,
     tools: Vec<ToolRow>,
+    /// Signs in with OAuth, so the page offers Sign in again and Disconnect.
+    oauth: bool,
+    /// The account's label, for Sign in again.
+    label: String,
+    /// The switches that were on at sign-in.
+    features: Vec<String>,
+    /// "31 requests today · 310 of 5000 units", per server (R-20).
+    requests: Vec<String>,
+}
+
+/// The setup sheet for one OAuth preset.
+#[derive(Debug, Serialize)]
+pub struct SetupSheet {
+    connector: String,
+    name: String,
+    /// A client ID is in the keychain (the secret is never sent).
+    client_saved: bool,
+    client_id: Option<String>,
+    client_url: Option<String>,
+    production_url: Option<String>,
+    commands: Vec<String>,
+    features: Vec<setup_core::Feature>,
 }
 
 /// What the Connectors section and its Setup check rows show.
@@ -50,14 +74,24 @@ pub struct View {
     setup: Vec<Row>,
     choices: Vec<Choice>,
     pages: Vec<Page>,
+    sheets: Vec<SetupSheet>,
+    privacy: setup_core::Privacy,
     error: Option<String>,
 }
 
-/// Works out an account's health from the keychain. Sync times arrive with the pulls
-/// (slice 7), and "Sign in again" with the refresh alerts (slice 10).
+/// What the app keeps about accounts besides the keychain: the "Sign in again" marks and the
+/// request counts, both in the app's SQLite file.
+pub struct Local<'a> {
+    status: &'a dyn hyperme_core::health::AccountStatusStore,
+    log: &'a dyn hyperme_core::connectors::RequestLog,
+}
+
+/// Works out an account's health: "Sign in again" when its refresh was refused (R-10), else
+/// from the keychain. Sync times arrive with the pulls' wiring in the app.
 fn health(
     registry: &Registry,
     store: &dyn SecretStore,
+    local: &Local<'_>,
     connector: &str,
     label: &str,
 ) -> AccountHealth {
@@ -69,6 +103,9 @@ fn health(
     } else {
         format!("{connector}:{label}")
     };
+    if matches!(local.status.sign_in_needed(&key), Ok(true)) {
+        return AccountHealth::SignInAgain;
+    }
     if !needs_token || matches!(store.get(&key), Ok(Some(_))) {
         AccountHealth::Works { synced: None }
     } else {
@@ -80,9 +117,10 @@ fn build_view(
     connectors: &Connectors,
     registry: &Registry,
     store: &dyn SecretStore,
+    local: &Local<'_>,
     now: UtcDateTime,
 ) -> View {
-    let health = |connector: &str, label: &str| health(registry, store, connector, label);
+    let health = |connector: &str, label: &str| health(registry, store, local, connector, label);
     let rows = cs::list_rows(registry, connectors, &health, now);
     let pages = rows
         .iter()
@@ -90,6 +128,11 @@ fn build_view(
             let connector = registry.get(&row.connector)?;
             let entry = connectors.accounts.iter().find(|a| a.id() == row.id);
             Some(Page {
+                oauth: matches!(connector.auth, Auth::OAuth(_)),
+                label: entry.map(|a| a.label.clone()).unwrap_or_default(),
+                features: entry
+                    .map(|a| setup_core::features_on(connector, a))
+                    .unwrap_or_default(),
                 id: row.id.clone(),
                 title: row.title.clone(),
                 state: row.state.clone(),
@@ -98,12 +141,48 @@ fn build_view(
                 enabled: entry.is_none_or(|a| a.enabled),
                 tools_verified: connector.tools_verified,
                 tools: cs::tool_rows(connector),
+                requests: connector
+                    .servers
+                    .iter()
+                    .filter_map(|server| {
+                        let usage = local.log.usage(&row.id, now.date(), &server.id).ok()?;
+                        let quota = server
+                            .daily_units
+                            .map(|daily_units| hyperme_core::health::Quota { daily_units });
+                        let label = server.label.as_deref().unwrap_or(&server.id);
+                        Some(format!(
+                            "{label} · {}",
+                            hyperme_core::health::requests_line(usage, quota)
+                        ))
+                    })
+                    .collect(),
             })
+        })
+        .collect();
+    let sheets = registry
+        .connectors()
+        .iter()
+        .filter(|c| matches!(c.auth, Auth::OAuth(_)) && c.setup.is_some())
+        .map(|c| {
+            let client = setup::load_client(store, &c.id).ok().flatten();
+            let help = c.setup.clone().unwrap_or_default();
+            SetupSheet {
+                connector: c.id.clone(),
+                name: c.name.clone(),
+                client_saved: client.is_some(),
+                client_id: client.map(|c| c.client_id),
+                client_url: Some(help.client_url),
+                production_url: help.production_url,
+                commands: help.commands,
+                features: setup_core::features(c),
+            }
         })
         .collect();
     View {
         setup: cs::setup_rows(registry, connectors, &health, now),
         choices: cs::add_choices(registry, connectors),
+        privacy: setup_core::privacy(registry, connectors),
+        sheets,
         rows,
         pages,
         error: None,
@@ -123,6 +202,11 @@ pub fn connectors_view(app: AppHandle) -> View {
         setup: Vec::new(),
         choices: Vec::new(),
         pages: Vec::new(),
+        sheets: Vec::new(),
+        privacy: setup_core::privacy(
+            &cs::registry(None, &Connectors::default()).expect("built-in presets load"),
+            &Connectors::default(),
+        ),
         error: Some(error),
     };
     let (_, config) = match load(&config_path(&app)) {
@@ -130,12 +214,19 @@ pub fn connectors_view(app: AppHandle) -> View {
         Err(error) => return empty(error),
     };
     match cs::registry(presets_dir(&app).as_deref(), &config.connectors) {
-        Ok(registry) => build_view(
-            &config.connectors,
-            &registry,
-            &KeychainStore::with_service(KEYCHAIN_SERVICE),
-            UtcDateTime::now(),
-        ),
+        Ok(registry) => match account_data(&app) {
+            Ok(data) => build_view(
+                &config.connectors,
+                &registry,
+                &KeychainStore::with_service(KEYCHAIN_SERVICE),
+                &Local {
+                    status: &data,
+                    log: &data,
+                },
+                UtcDateTime::now(),
+            ),
+            Err(error) => empty(error),
+        },
         Err(error) => empty(error.to_string()),
     }
 }
@@ -220,6 +311,225 @@ pub fn connectors_set_token(
         .map_err(|e| e.to_string())
 }
 
+/// The connector store: the app's SQLite file, which holds the request counts and, with the
+/// pulls, the cached events and mail.
+fn account_data(app: &AppHandle) -> Result<hyperme_platform::task_store::SqliteTaskStore, String> {
+    let path = crate::runtime::data_dir(app).join("hyperme.sqlite3");
+    hyperme_platform::task_store::SqliteTaskStore::open(&path).map_err(|e| e.to_string())
+}
+
+fn connector_of(app: &AppHandle, id: &str) -> Result<hyperme_core::registry::Connector, String> {
+    let (_, config) = load(&config_path(app))?;
+    let registry =
+        cs::registry(presets_dir(app).as_deref(), &config.connectors).map_err(|e| e.to_string())?;
+    registry
+        .get(id)
+        .cloned()
+        .ok_or_else(|| format!("{id} is not a connector"))
+}
+
+/// Step 1 of the sheet: saves the user's client in the keychain and checks it against the
+/// provider, without a sign-in. Returns the time the check took in ms.
+#[tauri::command]
+pub async fn connectors_save_client(
+    app: AppHandle,
+    connector: String,
+    client_id: String,
+    client_secret: String,
+) -> Result<u64, String> {
+    let preset = connector_of(&app, &connector)?;
+    let store = KeychainStore::with_service(KEYCHAIN_SERVICE);
+    let secret = Some(client_secret).filter(|s| !s.trim().is_empty());
+    setup::save_client(
+        &store,
+        &connector,
+        &ClientCredentials {
+            client_id,
+            client_secret: secret,
+        },
+    )
+    .map_err(|e| e.to_string())?;
+    let started = std::time::Instant::now();
+    setup::oauth_client(&preset, &store)
+        .map_err(|e| e.to_string())?
+        .check_client()
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(started.elapsed().as_millis() as u64)
+}
+
+/// What a finished sign-in shows (the sheet's Done step).
+#[derive(Debug, Serialize)]
+pub struct SignInResult {
+    account: String,
+    /// One line per server: "Calendar: read your events · 12 tools" or the error.
+    checks: Vec<String>,
+}
+
+/// Why a sign-in stopped, for the sheet: `testing` shows the fix step.
+#[derive(Debug, Serialize)]
+pub struct SignInError {
+    message: String,
+    testing: bool,
+    fix_url: Option<String>,
+}
+
+fn sign_in_error(error: SetupError) -> SignInError {
+    match error {
+        SetupError::ClientInTesting { fix_url } => SignInError {
+            message: SetupError::ClientInTesting { fix_url: None }.to_string(),
+            testing: true,
+            fix_url,
+        },
+        other => SignInError {
+            message: other.to_string(),
+            testing: false,
+            fix_url: None,
+        },
+    }
+}
+
+/// The sign-in waiting in the browser, so Cancel can stop it.
+static SIGN_IN: std::sync::Mutex<Option<tauri::async_runtime::JoinHandle<()>>> =
+    std::sync::Mutex::new(None);
+
+/// Step 2: signs the account in through the system browser (R-7), with only the switched-on
+/// scopes, and adds it to the config. Then calls `tools/list` on each switched-on server.
+#[tauri::command]
+pub async fn connectors_sign_in(
+    app: AppHandle,
+    connector: String,
+    label: String,
+    features: Vec<String>,
+) -> Result<SignInResult, SignInError> {
+    let fail = |message: String| SignInError {
+        message,
+        testing: false,
+        fix_url: None,
+    };
+    let preset = connector_of(&app, &connector).map_err(fail)?;
+    let store = std::sync::Arc::new(KeychainStore::with_service(KEYCHAIN_SERVICE));
+    let oauth = std::sync::Arc::new(setup::oauth_client(&preset, &*store).map_err(sign_in_error)?);
+    let label = label.trim().to_lowercase();
+    let (sender, receiver) = tokio::sync::oneshot::channel();
+    let task = {
+        let (preset, store, oauth, label, features) = (
+            preset.clone(),
+            store.clone(),
+            oauth.clone(),
+            label.clone(),
+            features.clone(),
+        );
+        tauri::async_runtime::spawn(async move {
+            let signed = setup::sign_in_account(
+                &oauth,
+                &preset,
+                &hyperme_providers::oauth::SystemBrowser,
+                &*store,
+                &label,
+                &features,
+                hyperme_providers::oauth::DEFAULT_LISTEN_TIMEOUT,
+            )
+            .await;
+            let _ = sender.send(signed);
+        })
+    };
+    *SIGN_IN.lock().unwrap_or_else(|p| p.into_inner()) = Some(task);
+    let token = match receiver.await {
+        Ok(signed) => signed.map_err(sign_in_error)?,
+        Err(_) => return Err(fail("Sign-in cancelled".to_owned())),
+    };
+    let mut account = String::new();
+    save(&app, |connectors, _| {
+        account = setup_core::add_account(connectors, &connector, &label, &features)?;
+        Ok(())
+    })
+    .map_err(fail)?;
+    // A new sign-in clears "Sign in again" (R-10).
+    let data = account_data(&app).map_err(fail)?;
+    hyperme_core::health::AccountStatusStore::clear(&data, &account).map_err(fail)?;
+
+    let auth = std::sync::Arc::new(
+        hyperme_providers::mcp::AccountAuth::new(oauth, store, &account).with_token(token),
+    );
+    let mut checks = Vec::new();
+    for feature in setup_core::features(&preset) {
+        let Some(server) = preset.server(&feature.id) else {
+            continue;
+        };
+        if !features.contains(&feature.id) {
+            continue;
+        }
+        let hyperme_core::registry::Transport::Http(url) = &server.transport else {
+            continue;
+        };
+        let remote = hyperme_providers::mcp::RemoteServer::new(
+            &server.id,
+            url,
+            auth.clone(),
+            std::sync::Arc::new(hyperme_core::connectors::MemoryRequestLog::default()),
+            std::sync::Arc::new(|| UtcDateTime::now().date()),
+        );
+        checks.push(match remote.list_tools().await {
+            Ok(tools) => format!("{} · works, {} tools", feature.label, tools.len()),
+            Err(error) => format!("{} · {error}", feature.label),
+        });
+    }
+    Ok(SignInResult { account, checks })
+}
+
+/// Cancel in the "Finish in your browser" step: stops waiting and closes the listener.
+#[tauri::command]
+pub fn connectors_cancel_sign_in() {
+    if let Some(task) = SIGN_IN.lock().unwrap_or_else(|p| p.into_inner()).take() {
+        task.abort();
+    }
+}
+
+/// Disconnect (R-12): revokes the token at the provider, removes it from the keychain,
+/// deletes what HyperMe kept from the account and removes it from the config. When the
+/// provider cannot be reached the account is still removed here, and the error says so.
+#[tauri::command]
+pub async fn connectors_disconnect(app: AppHandle, account: String) -> Result<(), String> {
+    let connector = account.split(':').next().unwrap_or_default().to_owned();
+    let preset = connector_of(&app, &connector)?;
+    let store = KeychainStore::with_service(KEYCHAIN_SERVICE);
+    let data = account_data(&app)?;
+    let revoked = match setup::oauth_client(&preset, &store) {
+        Ok(oauth) => setup::disconnect(&oauth, &store, &data, &account).await,
+        Err(_) => {
+            // No client any more: nothing to revoke with, so forget the token and the data.
+            let _ = store.delete(&account);
+            hyperme_core::connectors::AccountData::delete_account(&data, &account)
+                .map_err(SetupError::Data)
+        }
+    };
+    save(&app, |connectors, _| {
+        setup_core::remove_account(connectors, &account)
+    })?;
+    revoked.map_err(|e| {
+        format!("Removed from HyperMe, but {e}; check your Google account's connected apps")
+    })
+}
+
+/// Opens a page the setup sheet links to (the client setup or the production setting).
+#[tauri::command]
+pub fn connectors_open_url(app: AppHandle, connector: String, which: String) -> Result<(), String> {
+    let preset = connector_of(&app, &connector)?;
+    let help = preset.setup.ok_or("no setup help for this connector")?;
+    let url = match which.as_str() {
+        "client" => Some(help.client_url),
+        "production" => help.production_url,
+        _ => None,
+    }
+    .ok_or_else(|| format!("{which} is not a setup page"))?;
+    std::process::Command::new("open")
+        .arg(url)
+        .status()
+        .map(drop)
+        .map_err(|e| e.to_string())
+}
+
 /// Opens a `hyperme://settings/...` link, such as an expired account's alert or a Setup check
 /// row (UX rule 5, R-6). Anything else is refused.
 pub fn open_link(app: &AppHandle, url: &str) -> Result<(), String> {
@@ -240,6 +550,17 @@ mod tests {
     use hyperme_core::config::DEFAULT_CONFIG;
     use hyperme_core::secrets::MemorySecretStore;
 
+    fn local() -> Local<'static> {
+        static STATUS: std::sync::LazyLock<hyperme_core::health::MemoryAccountStatus> =
+            std::sync::LazyLock::new(Default::default);
+        static LOG: std::sync::LazyLock<hyperme_core::connectors::MemoryRequestLog> =
+            std::sync::LazyLock::new(Default::default);
+        Local {
+            status: &*STATUS,
+            log: &*LOG,
+        }
+    }
+
     fn connectors(extra: &str) -> Connectors {
         Config::parse(&format!("{DEFAULT_CONFIG}\n{extra}"), Path::new("c.toml"))
             .unwrap()
@@ -256,7 +577,7 @@ mod tests {
         let store = MemorySecretStore::default();
         let now = UtcDateTime::now();
 
-        let view = build_view(&connectors, &registry, &store, now);
+        let view = build_view(&connectors, &registry, &store, &local(), now);
         assert_eq!(view.rows[0].state, "Not signed in");
         assert_eq!(
             view.setup[1].link,
@@ -264,7 +585,7 @@ mod tests {
         );
 
         store.set("google:personal", "fake-refresh-token").unwrap();
-        let view = build_view(&connectors, &registry, &store, now);
+        let view = build_view(&connectors, &registry, &store, &local(), now);
         assert_eq!(view.rows[0].state, "Works · not synced yet");
         assert_eq!(view.pages[0].id, "google:personal");
         assert!(view.pages[0].account);
@@ -285,11 +606,63 @@ mod tests {
             &connectors,
             &registry,
             &MemorySecretStore::default(),
+            &local(),
             UtcDateTime::now(),
         );
         let states: Vec<&str> = view.rows.iter().map(|r| r.state.as_str()).collect();
         assert_eq!(states, ["Works · not synced yet", "Not signed in"]);
         assert!(!view.pages[0].account);
+    }
+
+    /// G-1, R-24: the Google sheet says whether a client is saved (never the secret), the
+    /// account page offers Sign in again and Disconnect, and Privacy lists the account.
+    #[test]
+    fn the_view_has_the_setup_sheet_and_privacy() {
+        let connectors = connectors(
+            "[[connectors.accounts]]\nconnector = \"google\"\nlabel = \"work\"\nfeatures = [\"calendar\"]\n",
+        );
+        let registry = cs::registry(None, &connectors).unwrap();
+        let store = MemorySecretStore::default();
+        let view = build_view(&connectors, &registry, &store, &local(), UtcDateTime::now());
+        assert!(!view.sheets[0].client_saved);
+
+        setup::save_client(
+            &store,
+            "google",
+            &ClientCredentials {
+                client_id: "fake-id.apps.example".to_owned(),
+                client_secret: Some("fake-client-secret".to_owned()),
+            },
+        )
+        .unwrap();
+        let view = build_view(&connectors, &registry, &store, &local(), UtcDateTime::now());
+        let sheet = &view.sheets[0];
+        assert!(sheet.client_saved);
+        assert_eq!(sheet.client_id.as_deref(), Some("fake-id.apps.example"));
+        assert_eq!(sheet.features.len(), 3);
+        assert!(view.pages[0].oauth);
+        assert_eq!(view.pages[0].label, "work");
+        assert_eq!(view.pages[0].features, ["calendar"]);
+        assert_eq!(
+            view.privacy.accounts[0].reads,
+            ["Calendar: read your events"]
+        );
+        let shown = serde_json::to_string(&view).unwrap();
+        assert!(!shown.contains("fake-client-secret"), "{shown}");
+    }
+
+    /// R-10a: a client in Testing reaches the sheet as its own case, with the fix's page.
+    #[test]
+    fn a_client_in_testing_shows_the_fix() {
+        let error = sign_in_error(SetupError::ClientInTesting {
+            fix_url: Some("https://example.test/audience".to_owned()),
+        });
+        assert!(error.testing);
+        assert_eq!(
+            error.fix_url.as_deref(),
+            Some("https://example.test/audience")
+        );
+        assert!(!sign_in_error(SetupError::NoClient).testing);
     }
 
     #[test]
@@ -298,5 +671,36 @@ mod tests {
         assert_eq!(access("ask").unwrap(), ToolAccess::Ask);
         assert_eq!(access("off").unwrap(), ToolAccess::Off);
         assert!(access("on").is_err());
+    }
+
+    /// R-10, R-20: an account whose refresh was refused shows "Sign in again"; its page shows
+    /// the day's requests against each server's quota.
+    #[test]
+    fn sign_in_again_and_requests_show_on_the_page() {
+        use hyperme_core::connectors::{MemoryRequestLog, RequestLog};
+        use hyperme_core::health::{AccountStatusStore, MemoryAccountStatus};
+
+        let connectors =
+            connectors("[[connectors.accounts]]\nconnector = \"google\"\nlabel = \"work\"\n");
+        let registry = cs::registry(None, &connectors).unwrap();
+        let store = MemorySecretStore::default();
+        store.set("google:work", "fake-refresh-token").unwrap();
+        let status = MemoryAccountStatus::default();
+        let log = MemoryRequestLog::default();
+        let now = UtcDateTime::now();
+        log.record("google:work", now.date(), "gmail", 10).unwrap();
+        status.mark_sign_in_needed("google:work", now).unwrap();
+        let local = Local {
+            status: &status,
+            log: &log,
+        };
+        let view = build_view(&connectors, &registry, &store, &local, now);
+        assert_eq!(view.rows[0].state, "Sign in again");
+        assert_eq!(view.rows[0].tone, cs::Tone::Bad);
+        assert!(
+            view.pages[0]
+                .requests
+                .contains(&"Mail: read your inbox · 1 request today · 10 of 5000 units".to_owned())
+        );
     }
 }
