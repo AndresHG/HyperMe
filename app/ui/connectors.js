@@ -60,30 +60,65 @@
     $('privacy-kept').textContent = p.kept;
   }
 
-  // The setup sheet of an OAuth preset: client, then sign-in with a label and switches.
+  // The setup dialog of an OAuth preset (V0.1 redesign): step 1 the client, step 2 the account's
+  // label and what Hyper may use. The label is a choice, so it can never look filled in (#216).
   let sheet = null;
+  const PRESETS = ['personal', 'work'];
+  function labelValue() {
+    const chosen = document.querySelector('input[name="oauth-label-choice"]:checked');
+    if (!chosen) return '';
+    return chosen.value === 'other' ? $('oauth-label').value.trim() : chosen.value;
+  }
+  function showLabel() {
+    const chosen = document.querySelector('input[name="oauth-label-choice"]:checked');
+    $('oauth-label').classList.toggle('hidden', !chosen || chosen.value !== 'other');
+    const word = labelValue();
+    $('oauth-say').textContent = word ? 'You\u2019ll say it: \u201cHyper, what\u2019s on my ' + word + ' calendar?\u201d' : '';
+    $('oauth-go').disabled = !word;
+  }
+  function showStep(step) {
+    const signin = step === 2;
+    $('oauth-client').classList.toggle('hidden', signin);
+    $('oauth-signin').classList.toggle('hidden', !signin);
+    $('oauth-client-save').classList.toggle('hidden', signin);
+    $('oauth-go').classList.toggle('hidden', !signin);
+    $('oauth-step').textContent = 'Step ' + step + ' of 2';
+    $('step-client').className = signin ? 'done' : 'now';
+    $('step-signin').className = signin ? 'now' : '';
+    $('step-client').querySelector('.n').textContent = signin ? '\u2713' : '1';
+    if (signin) showLabel();
+  }
   function openSheet(connector, label = '', features = null) {
     sheet = data.sheets.find((s) => s.connector === connector);
     if (!sheet) { fail('No setup sheet for ' + connector); return; }
-    $('oauth-title').textContent = 'Add ' + sheet.name;
+    $('oauth-title').textContent = 'Connect ' + sheet.name;
+    $('oauth-glyph').textContent = sheet.name.slice(0, 1);
     $('oauth-client-id').value = sheet.client_id || '';
     $('oauth-client-secret').value = '';
     const state = $('oauth-client-state');
-    state.textContent = sheet.client_saved ? 'Client saved' : 'No client yet';
-    state.className = 'state ' + (sheet.client_saved ? 'ok' : 'warn');
-    $('oauth-label').value = label;
+    state.textContent = sheet.client_saved ? 'Saved' : '';
+    state.className = 'state ' + (sheet.client_saved ? 'ok' : '');
+    // Sign in again keeps the account's label; a new account picks one.
+    const known = PRESETS.includes(label) ? label : label ? 'other' : null;
+    document.querySelectorAll('input[name="oauth-label-choice"]').forEach((r) => { r.checked = r.value === known; r.disabled = !!label; });
+    $('oauth-label').value = known === 'other' ? label : '';
     $('oauth-label').disabled = !!label;
     $('oauth-features').replaceChildren(...sheet.features.map((f) => {
       const box = el('input', { type: 'checkbox', 'data-feature': f.id });
       box.checked = features ? features.includes(f.id) : f.on_by_default;
-      return el('div', { class: 'row', 'data-words': 'scope ' + f.label }, el('div', { class: 'what' }, f.label), box);
+      return el('label', { 'data-words': 'scope ' + f.label }, box, el('span', {}, f.label));
     }));
-    $('oauth-signin').classList.toggle('hidden', !sheet.client_saved);
     for (const id of ['oauth-testing', 'oauth-done', 'oauth-cancel']) $(id).classList.add('hidden');
     $('oauth-wait').textContent = '';
-    $('oauth-go').disabled = false;
+    $('oauth-close').textContent = 'Cancel';
+    showStep(sheet.client_saved ? 2 : 1);
     showView('connectors-oauth');
   }
+  document.querySelectorAll('input[name="oauth-label-choice"]').forEach((r) => r.addEventListener('change', () => {
+    showLabel();
+    if (r.value === 'other' && r.checked) $('oauth-label').focus();
+  }));
+  $('oauth-label').addEventListener('input', showLabel);
 
   function drawPage(page) {
     current = page;
@@ -225,6 +260,8 @@
     data = await invoke('connectors_view');
     if (data.error) fail(data.error);
     drawList();
+    // A refresh while the connect dialog is up keeps it there, so its next step or its result shows.
+    if (!$('connectors-oauth').classList.contains('hidden')) return;
     const hash = (location.hash || '').slice(1);
     if (hash.startsWith('connectors')) window.connectorsShow(hash.split('/')[1] || null);
   }
@@ -270,7 +307,7 @@
       state.className = 'state ok';
       await refresh();
       sheet = data.sheets.find((s) => s.connector === sheet.connector);
-      $('oauth-signin').classList.remove('hidden');
+      showStep(2);
     } catch (e) { state.textContent = String(e); state.className = 'state bad'; }
   });
   $('oauth-go').addEventListener('click', async () => {
@@ -280,17 +317,20 @@
     $('oauth-go').disabled = true;
     $('oauth-cancel').classList.remove('hidden');
     try {
-      const result = await invoke('connectors_sign_in', { connector: sheet.connector, label: $('oauth-label').value, features });
+      const result = await invoke('connectors_sign_in', { connector: sheet.connector, label: labelValue(), features });
       await refresh();
       $('oauth-wait').textContent = '';
       $('oauth-done').replaceChildren(el('p', { class: 'ok' }, 'Signed in as ' + result.account + '.'), ...result.checks.map((c) => el('p', { class: 'lead' }, c)));
       $('oauth-done').classList.remove('hidden');
+      $('oauth-signin').classList.add('hidden');
+      $('oauth-go').classList.add('hidden');
+      $('oauth-close').textContent = 'Done';
     } catch (e) {
       $('oauth-wait').textContent = e.message || String(e);
       $('oauth-wait').className = 'state bad';
       $('oauth-testing').classList.toggle('hidden', !e.testing);
     } finally {
-      $('oauth-go').disabled = false;
+      $('oauth-go').disabled = !labelValue();
       $('oauth-cancel').classList.add('hidden');
     }
   });

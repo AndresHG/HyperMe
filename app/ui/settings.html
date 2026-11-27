@@ -14,6 +14,8 @@
     --line: color-mix(in srgb, CanvasText 12%, transparent);
     --muted: color-mix(in srgb, CanvasText 55%, transparent);
     --side: color-mix(in srgb, CanvasText 4%, Canvas);
+    --card: color-mix(in srgb, CanvasText 2%, Canvas);
+    --line2: color-mix(in srgb, CanvasText 18%, transparent);
   }
   * { box-sizing: border-box; }
   body { margin: 0; font: 13px -apple-system, system-ui, sans-serif; background: Canvas; color: CanvasText; display: grid; grid-template-columns: 200px 1fr; height: 100vh; }
@@ -73,6 +75,52 @@
   .add select { flex: 1; min-width: 0; }
   td.local { padding-top: 0; }
   a.link { color: var(--violet); cursor: pointer; text-decoration: none; }
+  /* V0.1 redesign: rows sit in grouped cards, switches instead of checkboxes, as in macOS
+     System Settings and Wispr Flow's settings. */
+  section > .row, section .card-rows > .row { border: 1px solid var(--line); border-top: 0; padding: 10px 14px; background: var(--card); }
+  section > .row:not(.row + .row), section .card-rows > .row:first-child { border-top: 1px solid var(--line); border-radius: 10px 10px 0 0; margin-top: 8px; }
+  section > .row:not(:has(+ .row)), section .card-rows > .row:last-child { border-radius: 0 0 10px 10px; margin-bottom: 14px; }
+  section > .row:not(.row + .row):not(:has(+ .row)) { border-radius: 10px; }
+  input[type=checkbox]:not([data-feature]) { appearance: none; width: 30px; height: 18px; border-radius: 9px; background: var(--line2); position: relative; margin: 0; flex: none; transition: background .15s; }
+  input[type=checkbox]:not([data-feature])::after { content: ''; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: white; box-shadow: 0 1px 2px rgb(0 0 0 / .3); transition: left .15s; }
+  input[type=checkbox]:not([data-feature]):checked { background: var(--violet); }
+  input[type=checkbox]:not([data-feature]):checked::after { left: 14px; }
+  /* The connect dialog. */
+  #connectors-oauth { display: flex; justify-content: center; padding-top: 8px; }
+  #connectors-oauth.hidden { display: none; }
+  .dialog { width: 100%; max-width: 520px; border: 1px solid var(--line); border-radius: 14px; background: var(--card); display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 10px 40px rgb(0 0 0 / .10); }
+  .dialog-head { display: flex; align-items: center; gap: 10px; padding: 14px 18px; border-bottom: 1px solid var(--line); }
+  .dialog-head h1 { flex: 1; margin: 0; font-size: 16px; }
+  .glyph { width: 28px; height: 28px; border-radius: 8px; background: var(--line); display: flex; align-items: center; justify-content: center; font-weight: 700; }
+  .step-count { font-size: 12px; color: var(--muted); }
+  .steps { display: flex; gap: 8px; margin: 0; padding: 12px 18px 0; list-style: none; }
+  .steps li { flex: 1; display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+  .steps .n { width: 18px; height: 18px; border-radius: 999px; background: var(--line); display: flex; align-items: center; justify-content: center; font-size: 11px; color: inherit; }
+  .steps li.now { color: CanvasText; font-weight: 600; }
+  .steps li.now .n { background: var(--violet); color: #fff; }
+  .steps li.done .n { background: var(--ok); color: #fff; }
+  .dialog-body { padding: 16px 18px; display: flex; flex-direction: column; gap: 14px; }
+  .dialog-body .lead { margin: 0; }
+  .dialog-body .small { font-size: 12px; }
+  .field { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
+  .field span { font-weight: 600; }
+  .field small { font-weight: 400; color: var(--muted); }
+  .field input { min-width: 0; width: 100%; padding: 7px 10px; border-radius: 8px; }
+  .choice { border: 0; margin: 0 0 14px; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+  .choice legend { padding: 0; margin-bottom: 8px; font-weight: 600; }
+  .chips { display: flex; gap: 8px; }
+  .chips label { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; height: 34px; border-radius: 8px; border: 1.5px solid var(--line2); }
+  .chips label:has(input:checked) { border-color: var(--violet); background: color-mix(in srgb, var(--violet) 10%, transparent); font-weight: 600; }
+  .chips input { margin: 0; accent-color: var(--violet); }
+  .choice .say { color: var(--muted); }
+  .choice .say:empty { display: none; }
+  .checks { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .checks label { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-top: 1px solid var(--line); }
+  .checks label:first-child { border-top: 0; }
+  .checks input { margin: 0; accent-color: var(--violet); }
+  .dialog-foot { display: flex; align-items: center; gap: 8px; padding: 12px 18px; border-top: 1px solid var(--line); }
+  .dialog-foot .state { flex: 1; text-align: right; }
+
 </style>
 </head>
 <body>
@@ -165,27 +213,57 @@
       </div>
       <p><button id="sheet-close">Cancel</button></p>
     </div>
+    <!-- Connect a preset (V0.1 redesign): a two-step dialog, the main button always bottom
+         right, the label a choice that cannot look filled in (#216). -->
     <div id="connectors-oauth" class="hidden">
-      <h1 id="oauth-title"></h1>
-      <div id="oauth-client">
-        <p class="lead">1 · Your client. HyperMe uses your own OAuth client, so nothing passes through us.</p>
-        <div class="row" data-words="google client cloud setup"><div class="what">Create your client<small>Opens the provider's setup guide.</small></div><span><button id="oauth-open-client">Open setup</button> <button id="oauth-gcloud">Use gcloud instead</button></span></div>
-        <div class="row" data-words="client id"><div class="what">Client ID<small class="state" id="oauth-client-state"></small></div><input type="text" id="oauth-client-id" autocomplete="off"></div>
-        <div class="row" data-words="client secret"><div class="what">Client secret<small>Kept in the macOS keychain, never shown again.</small></div><span style="white-space:nowrap"><input type="password" id="oauth-client-secret" autocomplete="off"> <button id="oauth-client-save">Save and test</button></span></div>
+      <div class="dialog" role="dialog" aria-labelledby="oauth-title">
+        <header class="dialog-head">
+          <span class="glyph" aria-hidden="true" id="oauth-glyph"></span>
+          <h1 id="oauth-title"></h1>
+          <span class="step-count" id="oauth-step"></span>
+        </header>
+        <ol class="steps" aria-label="Steps">
+          <li id="step-client"><span class="n">1</span>Your client</li>
+          <li id="step-signin"><span class="n">2</span>Account and access</li>
+        </ol>
+        <div class="dialog-body">
+          <div id="oauth-client">
+            <p class="lead">HyperMe signs in with your own OAuth client, so nothing passes through us. <a class="link" id="oauth-open-client">How to create it</a></p>
+            <label class="field"><span>Client ID <small class="state" id="oauth-client-state"></small></span><input type="text" id="oauth-client-id" autocomplete="off" placeholder="Paste the client ID"></label>
+            <label class="field"><span>Client secret <small>Kept in the macOS keychain.</small></span><input type="password" id="oauth-client-secret" autocomplete="off" placeholder="Paste the client secret"></label>
+            <p class="lead small"><a class="link" id="oauth-gcloud">Prefer the command line? Copy the gcloud steps</a></p>
+          </div>
+          <div id="oauth-signin">
+            <fieldset class="choice" id="oauth-label-choice">
+              <legend>What do you call this account?</legend>
+              <div class="chips">
+                <label><input type="radio" name="oauth-label-choice" value="personal">Personal</label>
+                <label><input type="radio" name="oauth-label-choice" value="work">Work</label>
+                <label><input type="radio" name="oauth-label-choice" value="other">Other…</label>
+              </div>
+              <input type="text" id="oauth-label" class="hidden" aria-label="Account name, one word" placeholder="One word, such as school">
+              <small class="say" id="oauth-say"></small>
+            </fieldset>
+            <fieldset class="choice">
+              <legend>What can Hyper use?</legend>
+              <div class="checks" id="oauth-features"></div>
+            </fieldset>
+          </div>
+          <div id="oauth-testing" class="hidden">
+            <p class="bad">Your project is in Testing, so you would be signed out every 7 days.</p>
+            <p class="lead">Set its publishing status to In production (no review is needed for your own account), then sign in again.</p>
+            <p><button id="oauth-open-production">Open the setting</button></p>
+          </div>
+          <div id="oauth-done" class="hidden"></div>
+        </div>
+        <footer class="dialog-foot">
+          <button id="oauth-close">Cancel</button>
+          <span class="state" id="oauth-wait"></span>
+          <button id="oauth-cancel" class="hidden">Stop waiting</button>
+          <button class="main" id="oauth-client-save">Save and continue</button>
+          <button class="main" id="oauth-go">Sign in</button>
+        </footer>
       </div>
-      <div id="oauth-signin">
-        <p class="lead" style="margin-top:14px">2 · Sign in, and choose what Hyper can see.</p>
-        <div class="row" data-words="account label personal work"><div class="what">Label<small>One word you can say: "in my work calendar".</small></div><input type="text" id="oauth-label" placeholder="personal"></div>
-        <div id="oauth-features"></div>
-        <div class="row" style="border:0"><span class="state" id="oauth-wait"></span><span><button id="oauth-cancel" class="hidden">Cancel</button> <button class="main" id="oauth-go">Sign in</button></span></div>
-      </div>
-      <div id="oauth-testing" class="hidden">
-        <p class="bad">Your project is in Testing, so you would be signed out every 7 days.</p>
-        <p class="lead">Set its publishing status to In production (no review is needed for your own account), then sign in again.</p>
-        <p><button id="oauth-open-production">Open the setting</button></p>
-      </div>
-      <div id="oauth-done" class="hidden"></div>
-      <p><button id="oauth-close">Close</button></p>
     </div>
     <div id="connectors-page" class="hidden">
       <p><a href="#connectors" id="page-back">‹ Connectors</a></p>
