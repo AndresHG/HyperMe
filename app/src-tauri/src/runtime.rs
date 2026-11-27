@@ -58,8 +58,8 @@ struct Shared {
     history_enabled: bool,
     /// Where Settings → Dictionary sends a saved dictionary (spec 93, R-10a).
     dictionary: Option<DictionaryUpdates>,
-    /// The morning card on screen, while it is (#92, R-19).
-    card: Option<pill::CardView>,
+    /// The card on screen, while it is: the morning card or an alert (#92, R-19, R-36).
+    card: Option<pill::Card>,
 }
 
 type State = Mutex<Shared>;
@@ -369,10 +369,11 @@ fn show(app: &AppHandle, view: View) {
 /// become key, so the card is answered with a click. An `update` (a sync filled in a part,
 /// R-18) replaces only a card still on screen. A dictation in progress is never interrupted;
 /// the day stays in Home's Today. Unanswered, it shrinks back into the dot.
-pub fn show_card(app: &AppHandle, card: pill::CardView, update: bool) {
+pub fn show_card(app: &AppHandle, card: pill::Card, update: bool) {
     let generation = {
         let mut shared = lock(app);
-        if (update && shared.card.is_none()) || shared.busy {
+        let morning_on_screen = matches!(shared.card, Some(pill::Card::Morning(_)));
+        if (update && !morning_on_screen) || shared.busy {
             return;
         }
         shared.generation += 1;
@@ -385,7 +386,7 @@ pub fn show_card(app: &AppHandle, card: pill::CardView, update: bool) {
         shared.card = Some(card.clone());
         shared.generation
     };
-    let (width, height) = pill::card_size(&card);
+    let (width, height) = card.size();
     if let Some(window) = app.get_webview_window(PILL) {
         let (x, y) = card_origin(app, (width, height));
         let _ = window.set_size(Size::Logical(LogicalSize::new(width, height)));
@@ -423,7 +424,7 @@ fn card_origin(app: &AppHandle, size: (f64, f64)) -> (f64, f64) {
 /// The card on screen, for the page once it has loaded (a card sent at launch can come before
 /// its listeners).
 #[tauri::command]
-pub fn pill_card(app: AppHandle) -> Option<pill::CardView> {
+pub fn pill_card(app: AppHandle) -> Option<pill::Card> {
     lock(&app).card.clone()
 }
 
@@ -432,6 +433,27 @@ pub fn pill_card(app: AppHandle) -> Option<pill::CardView> {
 pub fn card_open_today(app: AppHandle) {
     settle(&app);
     crate::home::open(&app, "today");
+}
+
+/// The main button of an alert: Fix opens Settings where the fix is (R-36), Join a meeting's
+/// web link, Open Today Home at Today (R-22). The card goes back into the dot.
+#[tauri::command]
+pub fn card_action(app: AppHandle) {
+    let link = match &lock(&app).card {
+        Some(pill::Card::Alert(alert)) => alert.link.clone(),
+        _ => None,
+    };
+    settle(&app);
+    match link.as_deref() {
+        Some(crate::tasks::TODAY_LINK) => crate::home::open(&app, "today"),
+        Some(url) if url.starts_with("https://") => {
+            let _ = crate::tasks::tasks_open_meeting(url.to_owned());
+        }
+        Some(link) => {
+            let _ = crate::connectors::open_link(&app, link);
+        }
+        None => crate::settings::open(&app, "connectors"),
+    }
 }
 
 /// "Later" on the card.
