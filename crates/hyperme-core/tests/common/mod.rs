@@ -11,13 +11,17 @@ use std::time::Duration;
 use std::collections::BTreeMap;
 
 use hyperme_core::dictation::{Engine, Event, Parts, Providers, Settings, Status};
+use hyperme_core::trace::{FinishedTrace, TimingSink, TraceLayer, TraceSink};
 use hyperme_core::traits::{
     Added, CleanupProvider, Correction, DictationId, Dictionary, Error, ErrorKind, FocusInfo,
     History, Inserter, LiveSession, Microphone, Sound, Sounds, SpeechProvider, TimingLine,
     TimingLog, Transcript,
 };
+use std::sync::atomic::AtomicBool;
 use tokio::sync::{mpsc, watch};
 use tokio::time::{Instant, sleep};
+use tracing::instrument::WithSubscriber;
+use tracing_subscriber::layer::SubscriberExt;
 
 /// What happened, in order, with when.
 #[derive(Clone)]
@@ -369,6 +373,24 @@ pub struct FakeTiming {
     pub lines: Arc<Mutex<Vec<TimingLine>>>,
 }
 
+/// Collects every finished trace (spec 182).
+#[derive(Clone, Default)]
+pub struct FakeTraces {
+    pub traces: Arc<Mutex<Vec<FinishedTrace>>>,
+}
+
+impl FakeTraces {
+    pub fn all(&self) -> Vec<FinishedTrace> {
+        self.traces.lock().unwrap().clone()
+    }
+}
+
+impl TraceSink for FakeTraces {
+    fn finished(&self, trace: &FinishedTrace) {
+        self.traces.lock().unwrap().push(trace.clone());
+    }
+}
+
 impl TimingLog for FakeTiming {
     fn record(&mut self, line: &TimingLine) {
         self.lines.lock().unwrap().push(line.clone());
@@ -424,6 +446,8 @@ pub struct Harness {
     pub log: Log,
     /// Replaces the providers, as Settings does (specs/96-provider-settings, R-8).
     pub switch: watch::Sender<Arc<Providers<FakeSpeech, FakeCleanup>>>,
+    /// Every finished trace of this engine (spec 182).
+    pub traces: FakeTraces,
 }
 
 impl Harness {
@@ -447,6 +471,7 @@ impl Harness {
         cleanup: FakeCleanup,
         settings: Settings,
         timing: FakeTiming,
+        timing_on: bool,
     ) -> Self {
         Self::start_parts(
             log,
@@ -455,7 +480,7 @@ impl Harness {
             settings,
             FakeFocus::textedit(),
             FakeHistory::new(log),
-            timing,
+            (timing, timing_on),
         )
     }
 
@@ -474,7 +499,7 @@ impl Harness {
             settings,
             focus,
             history,
-            FakeTiming::default(),
+            (FakeTiming::default(), false),
         )
     }
 
@@ -486,7 +511,7 @@ impl Harness {
         settings: Settings,
         focus: FakeFocus,
         history: FakeHistory,
-        timing: FakeTiming,
+        (timing, timing_on): (FakeTiming, bool),
     ) -> Self {
         let (events, events_rx) = mpsc::channel(256);
         let (status_tx, status) = mpsc::unbounded_channel();
@@ -498,18 +523,28 @@ impl Harness {
             focus,
             history,
             sounds: FakeSounds { log: log.clone() },
-            timing,
         };
         let engine = Engine::new(parts, settings, status_tx);
         let dictionary = engine.dictionary_updates();
+        // Spec 182: the engine's spans go to a timing sink and a trace collector, as in the app.
+        let traces = FakeTraces::default();
+        let sinks: Vec<Arc<dyn TraceSink>> = vec![
+            Arc::new(TimingSink::new(
+                Arc::new(AtomicBool::new(timing_on)),
+                timing,
+            )),
+            Arc::new(traces.clone()),
+        ];
+        let subscriber = tracing_subscriber::registry().with(TraceLayer::new(sinks));
         // Spawned on the runtime, which proves the engine's future is Send.
-        tokio::spawn(engine.run(events_rx));
+        tokio::spawn(engine.run(events_rx).with_subscriber(subscriber));
         Harness {
             events,
             dictionary,
             status,
             log: log.clone(),
             switch,
+            traces,
         }
     }
 

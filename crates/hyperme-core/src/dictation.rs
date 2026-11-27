@@ -22,9 +22,10 @@ use tokio::time::{Instant, sleep_until, timeout};
 
 use crate::config::{CleanupLevel, Config};
 use crate::dictionary::Dictionary;
+use crate::trace::{DictationTrace, Outcome};
 use crate::traits::{
     CleanupProvider, DictationId, Error, FocusInfo, History, Inserter, LiveSession, Microphone,
-    Sound, Sounds, SpeechProvider, TimingLine, TimingLog,
+    Sound, Sounds, SpeechProvider,
 };
 
 /// The numbers the state machine needs from the config.
@@ -42,8 +43,6 @@ pub struct Settings {
     pub cleanup_deadline: Duration,
     /// R-32: the start and stop sounds.
     pub sounds: bool,
-    /// R-30: write one line of stage timings per dictation.
-    pub timing_log: bool,
     /// Spec 93, R-1: the user's dictionary, applied to every final transcript. The app loads it
     /// from the `dictation.dictionary` file; empty by default.
     pub dictionary: Dictionary,
@@ -64,7 +63,6 @@ impl Settings {
             },
             cleanup_deadline: Duration::from_millis(config.cleanup.deadline_ms),
             sounds: config.dictation.sounds,
-            timing_log: config.timing.log,
             dictionary: Dictionary::default(),
         }
     }
@@ -160,18 +158,17 @@ pub fn fixed<S, C>(speech: S, cleanup: C) -> ProviderSwitch<S, C> {
 
 /// Everything the state machine drives, one implementation per trait.
 #[derive(Debug)]
-pub struct Parts<M, S, C, I, F, H, N, T> {
+pub struct Parts<M, S, C, I, F, H, N> {
     pub mic: M,
     pub providers: ProviderSwitch<S, C>,
     pub inserter: I,
     pub focus: F,
     pub history: H,
     pub sounds: N,
-    pub timing: T,
 }
 
-pub struct Engine<M, S, C, I, F, H, N, T> {
-    parts: Parts<M, S, C, I, F, H, N, T>,
+pub struct Engine<M, S, C, I, F, H, N> {
+    parts: Parts<M, S, C, I, F, H, N>,
     settings: Settings,
     status: mpsc::UnboundedSender<Status>,
     /// The last dictation that failed with its audio saved, for Retry (R-31).
@@ -199,7 +196,7 @@ impl DictionaryUpdates {
     }
 }
 
-impl<M, S, C, I, F, H, N, T> std::fmt::Debug for Engine<M, S, C, I, F, H, N, T> {
+impl<M, S, C, I, F, H, N> std::fmt::Debug for Engine<M, S, C, I, F, H, N> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Engine")
             .field("settings", &self.settings)
@@ -237,19 +234,15 @@ enum NoText {
     Closed,
 }
 
-/// The text to insert, and when each stage finished (R-30).
+/// The text to insert. Stage timings are on the dictation's trace (spec 182, R-13).
 struct Text {
     text: String,
     /// The raw transcript, after a cleanup failure or the deadline.
     raw: bool,
     language: Option<String>,
-    words: usize,
-    transcript_at: Instant,
-    first_token_at: Option<Instant>,
-    ready_at: Instant,
 }
 
-impl<M, S, C, I, F, H, N, T> Engine<M, S, C, I, F, H, N, T>
+impl<M, S, C, I, F, H, N> Engine<M, S, C, I, F, H, N>
 where
     M: Microphone + Send,
     S: SpeechProvider + Send + Sync,
@@ -258,10 +251,9 @@ where
     F: FocusInfo + Send,
     H: History + Send,
     N: Sounds + Send,
-    T: TimingLog + Send,
 {
     pub fn new(
-        parts: Parts<M, S, C, I, F, H, N, T>,
+        parts: Parts<M, S, C, I, F, H, N>,
         settings: Settings,
         status: mpsc::UnboundedSender<Status>,
     ) -> Self {
@@ -323,7 +315,6 @@ where
             focus,
             history,
             sounds,
-            timing,
         } = parts;
         let emit = |s: Status| {
             // The pill may be gone while the app quits; the dictation goes on regardless.
@@ -335,6 +326,8 @@ where
             return Flow::Ended;
         }
         let start = Instant::now();
+        // Spec 182: the trace starts with the dictation; its spans replace the stage timings.
+        let mut trace = DictationTrace::dictation();
         // R-8, R-9: the providers set at key-down serve this dictation start to end.
         let current = Arc::clone(&providers.borrow());
         let Providers { speech, cleanup } = &*current;
@@ -346,6 +339,7 @@ where
         // the app lookup and the history entry, so neither adds to key-down latency (AC-2);
         // frames wait in the event channel until the loop below appends them.
         if let Err(error) = mic.start() {
+            trace.fail("microphone");
             emit(Status::Failed {
                 message: format!("Microphone: {error}"),
                 retry: false,
@@ -362,13 +356,17 @@ where
         // R-18, R-31: audio goes to disk as it is captured. A history that cannot be written
         // does not stop the dictation; it only loses the retry.
         let id = history.begin(app.as_deref()).ok();
+        if let Some(id) = id {
+            trace.history_id(id);
+        }
         let stop_mic = |mic: &mut M| {
             mic.stop();
             if settings.sounds {
                 sounds.play(Sound::Stop);
             }
         };
-        let mut fail_speech = |history: &mut H, error: &Error| {
+        let mut fail_speech = |history: &mut H, trace: &mut DictationTrace, error: &Error| {
+            trace.fail("speech");
             let retry = match id {
                 Some(id) => {
                     let kept = history.failed(id, &error.message).is_ok();
@@ -403,7 +401,7 @@ where
         // Audio captured before the session opens, sent when it does.
         let mut buffer: Vec<i16> = Vec::new();
         let mut max_length = pin!(sleep_until(start + settings.max_length));
-        let mut first_audio: Option<Instant> = None;
+        let mut first_audio = false;
         let mut hold = Hold::Held;
 
         loop {
@@ -419,7 +417,10 @@ where
                         return Flow::Closed;
                     }
                     Some(Event::Audio(pcm)) => {
-                        first_audio.get_or_insert_with(Instant::now);
+                        if !first_audio {
+                            first_audio = true;
+                            trace.first_audio();
+                        }
                         if let Some(id) = id {
                             let _ = history.append(id, &pcm);
                         }
@@ -427,7 +428,7 @@ where
                             Some(live) => {
                                 if let Err(error) = live.send_audio(&pcm).await {
                                     stop_mic(mic);
-                                    fail_speech(history, &error);
+                                    fail_speech(history, &mut trace, &error);
                                     return Flow::Ended;
                                 }
                             }
@@ -478,7 +479,7 @@ where
                             if !buffer.is_empty() {
                                 if let Err(error) = live.send_audio(&buffer).await {
                                     stop_mic(mic);
-                                    fail_speech(history, &error);
+                                    fail_speech(history, &mut trace, &error);
                                     return Flow::Ended;
                                 }
                                 buffer.clear();
@@ -488,7 +489,7 @@ where
                         // R-19, R-31: the audio so far is kept for a retry.
                         Err(error) => {
                             stop_mic(mic);
-                            fail_speech(history, &error);
+                            fail_speech(history, &mut trace, &error);
                             return Flow::Ended;
                         }
                     }
@@ -499,7 +500,7 @@ where
             }
         }
 
-        let released = Instant::now();
+        trace.released();
         stop_mic(mic);
         emit(Status::Transcribing);
         let live = match session {
@@ -507,7 +508,7 @@ where
             None => match wait(open.as_mut(), events, warm.as_mut(), &mut warming, &emit).await {
                 Waited::Done(Ok(live)) => live,
                 Waited::Done(Err(error)) => {
-                    fail_speech(history, &error);
+                    fail_speech(history, &mut trace, &error);
                     return Flow::Ended;
                 }
                 Waited::Cancelled => {
@@ -528,12 +529,13 @@ where
             warm.as_mut(),
             &mut warming,
             &emit,
+            &mut trace,
         )
         .await;
         let text = match text {
             Ok(text) => text,
             Err(NoText::Speech(error)) => {
-                fail_speech(history, &error);
+                fail_speech(history, &mut trace, &error);
                 return Flow::Ended;
             }
             Err(NoText::Cancelled | NoText::NothingHeard) => {
@@ -545,31 +547,17 @@ where
 
         emit(Status::Pasting);
         if let Err(error) = inserter.paste(&text.text).await {
+            trace.fail("paste");
             emit(Status::Failed {
                 message: format!("Paste: {error}"),
                 retry: false,
             });
             return Flow::Ended;
         }
-        let pasted = Instant::now();
+        trace.inserted();
+        trace.end(Outcome::Pasted);
         if let Some(id) = id {
             let _ = history.done(id, &text.text, text.language.as_deref());
-        }
-        // R-30: numbers only, and only when the timing log is on.
-        if settings.timing_log {
-            let ms =
-                |from: Instant, to: Instant| to.saturating_duration_since(from).as_millis() as u64;
-            timing.record(&TimingLine {
-                first_audio_ms: first_audio.map(|at| ms(start, at)),
-                release_ms: ms(start, released),
-                stt_ms: ms(released, text.transcript_at),
-                first_ms: text.first_token_at.map(|at| ms(released, at)),
-                total_ms: ms(released, text.ready_at),
-                paste_ms: ms(released, pasted),
-                language: text.language.clone(),
-                words: text.words,
-                fallback: text.raw,
-            });
         }
         emit(Status::Done { raw: text.raw });
         Flow::Ended
@@ -612,9 +600,12 @@ where
                 retry: true,
             });
         };
+        let mut trace = DictationTrace::retry(Some(failed.id));
+        trace.history_id(failed.id);
         let audio = match history.audio(failed.id) {
             Ok(audio) => audio,
             Err(error) => {
+                trace.fail("history");
                 emit(Status::Failed {
                     message: format!("Retry: {error}"),
                     retry: false,
@@ -630,6 +621,7 @@ where
         let live = match wait(open, events, warm.as_mut(), &mut warming, &emit).await {
             Waited::Done(Ok(live)) => live,
             Waited::Done(Err(error)) => {
+                trace.fail("speech");
                 keep_for_retry(&error);
                 return Flow::Ended;
             }
@@ -650,11 +642,13 @@ where
             warm.as_mut(),
             &mut warming,
             &emit,
+            &mut trace,
         )
         .await;
         let text = match text {
             Ok(text) => text,
             Err(NoText::Speech(error)) => {
+                trace.fail("speech");
                 keep_for_retry(&error);
                 return Flow::Ended;
             }
@@ -676,6 +670,7 @@ where
             inserter.copy(&text.text).await
         };
         if let Err(error) = inserted {
+            trace.fail("paste");
             *slot = Some(failed.clone());
             emit(Status::Failed {
                 message: format!("Paste: {error}"),
@@ -683,6 +678,12 @@ where
             });
             return Flow::Ended;
         }
+        trace.inserted();
+        trace.end(if same_app {
+            Outcome::Pasted
+        } else {
+            Outcome::Copied
+        });
         let _ = history.done(failed.id, &text.text, text.language.as_deref());
         emit(if same_app {
             Status::Done { raw: text.raw }
@@ -693,7 +694,7 @@ where
     }
 }
 
-impl<M, S, C, I, F, H, N, T> Engine<M, S, C, I, F, H, N, T>
+impl<M, S, C, I, F, H, N> Engine<M, S, C, I, F, H, N>
 where
     M: Microphone + Send,
     S: SpeechProvider + Sync,
@@ -702,7 +703,6 @@ where
     F: FocusInfo + Send,
     H: History + Send,
     N: Sounds + Send,
-    T: TimingLog + Send,
 {
     /// #98 R-16: sends one dictation's saved audio again, copies the new text and replaces the
     /// item's text. On any failure the old text stays. The last failed dictation, which the
@@ -738,9 +738,12 @@ where
                 retry: slot.is_some(),
             });
         };
+        let mut trace = DictationTrace::retry(Some(id));
+        trace.history_id(id);
         let (audio, app) = match history.audio(id).and_then(|a| Ok((a, history.app(id)?))) {
             Ok(found) => found,
             Err(error) => {
+                trace.fail("history");
                 fail(format!("Retry: {error}"));
                 return Flow::Ended;
             }
@@ -752,6 +755,7 @@ where
         let live = match wait(open, events, warm.as_mut(), &mut warming, &emit).await {
             Waited::Done(Ok(live)) => live,
             Waited::Done(Err(error)) => {
+                trace.fail("speech");
                 fail(format!("Speech: {error}"));
                 return Flow::Ended;
             }
@@ -771,11 +775,13 @@ where
             warm.as_mut(),
             &mut warming,
             &emit,
+            &mut trace,
         )
         .await;
         let text = match text {
             Ok(text) => text,
             Err(NoText::Speech(error)) => {
+                trace.fail("speech");
                 fail(format!("Speech: {error}"));
                 return Flow::Ended;
             }
@@ -785,9 +791,12 @@ where
         };
         emit(Status::Pasting);
         if let Err(error) = inserter.copy(&text.text).await {
+            trace.fail("paste");
             fail(format!("Copy: {error}"));
             return Flow::Ended;
         }
+        trace.inserted();
+        trace.end(Outcome::Copied);
         let _ = history.replace_text(id, &text.text, text.language.as_deref());
         if slot.as_ref().is_some_and(|f| f.id == id) {
             *slot = None;
@@ -810,6 +819,7 @@ async fn transcribe_and_clean<L: LiveSession, C: CleanupProvider>(
     mut warm: Pin<&mut impl Future<Output = ()>>,
     warming: &mut bool,
     emit: &impl Fn(Status),
+    trace: &mut DictationTrace,
 ) -> Result<Text, NoText> {
     if !unsent.is_empty() {
         live.send_audio(unsent).await.map_err(NoText::Speech)?;
@@ -824,37 +834,40 @@ async fn transcribe_and_clean<L: LiveSession, C: CleanupProvider>(
         }
         Waited::Closed => return Err(NoText::Closed),
     };
-    let transcript_at = Instant::now();
+    trace.transcript(transcript.language.as_deref());
     let language = transcript.language.clone();
     // Spec 93, R-1: the dictionary fixes the raw transcript once, so the short path, the
     // cleanup and the raw fallback all get the user's words.
-    let (substituted, _) = settings.dictionary.apply(transcript.text.trim());
+    let (substituted, applied) = settings.dictionary.apply(transcript.text.trim());
+    trace.dictionary(applied);
     let raw = substituted.as_str();
     let words = raw.split_whitespace().count();
+    trace.words(words);
     // R-14.
     if words == 0 {
+        trace.end(Outcome::NothingHeard);
         emit(Status::NothingHeard);
         return Err(NoText::NothingHeard);
     }
     if words < settings.short_words {
         // R-13: no cleanup for short dictations.
+        let text = format_short(raw);
+        trace.ready(false);
         return Ok(Text {
-            text: format_short(raw),
+            text,
             raw: false,
             language,
-            words,
-            transcript_at,
-            first_token_at: None,
-            ready_at: Instant::now(),
         });
     }
     emit(Status::Cleaning);
+    trace.cleanup_started();
     let mut cleaned = String::new();
-    let mut first_token_at: Option<Instant> = None;
+    let mut first_token = false;
     let outcome = {
         let mut on_text = |piece: &str| {
-            if !piece.is_empty() {
-                first_token_at.get_or_insert_with(Instant::now);
+            if !piece.is_empty() && !first_token {
+                first_token = true;
+                trace.first_token();
             }
             cleaned.push_str(piece);
         };
@@ -865,25 +878,23 @@ async fn transcribe_and_clean<L: LiveSession, C: CleanupProvider>(
         wait(clean, events, warm, warming, emit).await
     };
     match outcome {
-        Waited::Done(Ok(Ok(()))) if !cleaned.trim().is_empty() => Ok(Text {
-            text: cleaned.trim().to_owned(),
-            raw: false,
-            language,
-            words,
-            transcript_at,
-            first_token_at,
-            ready_at: Instant::now(),
-        }),
+        Waited::Done(Ok(Ok(()))) if !cleaned.trim().is_empty() => {
+            trace.ready(false);
+            Ok(Text {
+                text: cleaned.trim().to_owned(),
+                raw: false,
+                language,
+            })
+        }
         // R-12 (deadline), R-20 (error) and an empty answer: the raw transcript.
-        Waited::Done(_) => Ok(Text {
-            text: raw.to_owned(),
-            raw: true,
-            language,
-            words,
-            transcript_at,
-            first_token_at: None,
-            ready_at: Instant::now(),
-        }),
+        Waited::Done(_) => {
+            trace.ready(true);
+            Ok(Text {
+                text: raw.to_owned(),
+                raw: true,
+                language,
+            })
+        }
         Waited::Cancelled => {
             emit(Status::Cancelled);
             Err(NoText::Cancelled)
