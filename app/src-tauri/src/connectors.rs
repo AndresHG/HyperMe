@@ -245,7 +245,10 @@ fn save(
     // Write beside the file, then rename, so a crash never leaves half a config.
     let temp = path.with_extension("toml.new");
     std::fs::write(&temp, updated).map_err(|e| format!("{}: {e}", temp.display()))?;
-    std::fs::rename(&temp, &path).map_err(|e| format!("{}: {e}", path.display()))
+    std::fs::rename(&temp, &path).map_err(|e| format!("{}: {e}", path.display()))?;
+    // An account added, removed or switched brings or takes its sync jobs (#92).
+    crate::tasks::jobs_changed(app);
+    Ok(())
 }
 
 fn access(text: &str) -> Result<ToolAccess, String> {

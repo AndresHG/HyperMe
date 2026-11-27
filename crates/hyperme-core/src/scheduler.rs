@@ -154,6 +154,11 @@ pub enum Command {
     Run {
         job: String,
     },
+    /// Replaces the job table, as when an account is added or removed: the app passes
+    /// [`seed`]'s result. Jobs that stay keep their retry; new ones get their next run now.
+    SetJobs {
+        jobs: Vec<Job>,
+    },
 }
 
 /// What the scheduler tells the app.
@@ -535,7 +540,33 @@ impl<C: Clock, P: Presence, R: Runner, S: JobStore> Scheduler<C, P, R, S> {
                     self.jobs[i].next = self.next_for(i, now);
                 }
             }
+            Command::SetJobs { jobs } => self.set_jobs(jobs, now),
         }
+    }
+
+    fn set_jobs(&mut self, jobs: Vec<Job>, now: UtcDateTime) {
+        let held: Vec<String> = self
+            .held
+            .iter()
+            .map(|&i| self.jobs[i].job.name.clone())
+            .collect();
+        let old = std::mem::take(&mut self.jobs);
+        self.jobs = jobs
+            .into_iter()
+            .map(|job| Entry {
+                retry_after: old
+                    .iter()
+                    .find(|e| e.job.name == job.name)
+                    .and_then(|e| e.retry_after),
+                job,
+                next: None,
+            })
+            .collect();
+        self.held = held
+            .iter()
+            .filter_map(|name| self.jobs.iter().position(|e| &e.job.name == name))
+            .collect();
+        self.recompute(now);
     }
 
     /// Ends a pause: the held cards collapse into one, the latest morning or evening card.

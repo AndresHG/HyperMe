@@ -659,3 +659,32 @@ fn built_in_jobs_come_from_the_config_and_keep_their_state() {
     assert!(jobs.contains(&prompt));
     assert_eq!(jobs.len(), builtin.len() + 1);
 }
+
+// --- A new job list ------------------------------------------------------------------------
+
+/// Slice 7 (app), "rebuild the job list when connectors change": an account added while
+/// HyperMe runs brings its sync job, which runs at once while the user is present; an account
+/// removed takes its job away, and the jobs that stay keep their state and timer.
+#[tokio::test(start_paused = true)]
+async fn a_new_job_list_adds_and_removes_jobs() {
+    let rollover = at_job("rollover", JobKind::RollOver, 4, 0);
+    let h = Harness::start(local(THU, 9, 0), vec![rollover.clone()]);
+    h.send(PresenceEvent::Launched).await;
+
+    h.command(Command::SetJobs {
+        jobs: vec![rollover.clone(), google_sync_job()],
+    })
+    .await;
+    assert_eq!(names(&h.runs()), ["sync:google-calendar"], "runs at once");
+
+    h.command(Command::SetJobs {
+        jobs: vec![rollover],
+    })
+    .await;
+    h.pass(SignedDuration::hours(20)).await;
+    assert_eq!(
+        names(&h.runs()),
+        ["sync:google-calendar", "rollover"],
+        "the removed sync never runs again; roll-over still fires at 04:00"
+    );
+}

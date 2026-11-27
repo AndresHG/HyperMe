@@ -494,3 +494,21 @@ async fn the_day_log_keeps_one_line_of_counters_per_day() {
     );
     assert_eq!(store.day_log(day(FRI)).unwrap().done, 4);
 }
+
+/// R-15, R-21 (slice 7, app): the day log records when the morning card showed, once per day;
+/// a second write that day keeps the first time, so "new" counts from the card the user saw.
+#[tokio::test]
+async fn the_day_log_records_when_the_morning_card_showed() {
+    let store = open("morning_at");
+    assert_eq!(store.morning_at(day(THU)).unwrap(), None);
+    store.mark_morning(day(THU), 1_000).unwrap();
+    store.mark_morning(day(THU), 2_000).unwrap();
+    assert_eq!(store.morning_at(day(THU)).unwrap(), Some(1_000));
+    assert_eq!(store.morning_at(day(FRI)).unwrap(), None);
+    store.count(day(THU), DayCounter::Done, 1).unwrap();
+    assert_eq!(
+        store.day_log(day(THU)).unwrap().done,
+        1,
+        "counters untouched"
+    );
+}
