@@ -6,6 +6,20 @@ All notable changes to HyperMe are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Microphone handling (#221). Settings → General lists the microphones; move one up to prefer
+  it. Each dictation uses the first preferred microphone that is connected, else the system
+  default, and a remembered microphone that is not connected waits in the list. If the
+  microphone in use goes away mid-dictation, recording moves to the next one and the dictation
+  goes on. "Mute audio while dictating" (on by default) mutes the Mac's output while you talk,
+  after the start sound, and gives it back as it was before the stop sound. Nothing polls.
+
+### Changed
+
+- The first dictation after launch no longer starts Core Audio on key-down, about 89 ms on the
+  owner's Mac: HyperMe starts it on a short-lived thread at launch (#250).
+
 ## [0.1.0-alpha.1] - 2026-11-27
 
 ### Fixed

@@ -151,6 +151,9 @@
     <h1>General</h1>
     <p class="lead">Everyday preferences.</p>
     <div class="row" data-words="sounds start stop"><div class="what">Start and stop sounds<small>A soft sound when recording starts and stops.</small></div><input type="checkbox" data-section="dictation" data-key="sounds"></div>
+    <div class="row" data-words="mute audio music media sound video while dictating"><div class="what">Mute audio while dictating<small>Music and videos go quiet while you talk and come back when you stop.</small></div><input type="checkbox" data-section="dictation" data-key="mute_while_dictating"></div>
+    <div class="row" data-words="microphone mic input airpods usb order priority default"><div class="what">Microphone<small id="mic-note"></small></div><button id="mic-reset" class="hidden">Use system default</button></div>
+    <div id="mic-list"></div>
     <div class="row" data-words="bead dot idle show while idle bottom"><div class="what">Show while idle<small>A small still bead at the bottom centre; it grows into the pill when you dictate.</small></div><input type="checkbox" data-section="dictation" data-key="show_while_idle"></div>
     <div class="row" data-words="advanced"><div class="what">Show advanced<small>Deadlines, thresholds, endpoints and the config file.</small></div><input type="checkbox" id="show-advanced"></div>
   </section>
@@ -430,7 +433,7 @@
     $('speech-name').textContent = c.speech_provider + ' · used by dictation';
     $('cleanup-name').textContent = c.cleanup_provider + ' · used by dictation cleanup';
     const values = {
-      'dictation.sounds': c.sounds, 'dictation.show_while_idle': c.show_while_idle, 'dictation.min_hold_ms': c.min_hold_ms, 'dictation.max_length_s': c.max_length_s,
+      'dictation.sounds': c.sounds, 'dictation.mute_while_dictating': c.mute_while_dictating, 'dictation.show_while_idle': c.show_while_idle, 'dictation.min_hold_ms': c.min_hold_ms, 'dictation.max_length_s': c.max_length_s,
       'dictation.short_dictation_words': c.short_dictation_words, 'speech.model': c.speech_model, 'speech.endpoint': c.speech_endpoint,
       'cleanup.model': c.cleanup_model, 'cleanup.endpoint': c.cleanup_endpoint, 'cleanup.reasoning_effort': c.reasoning_effort,
       'cleanup.deadline_ms': c.deadline_ms, 'history.enabled': c.history, 'history.size_limit_mb': c.size_limit_mb, 'history.keep_traces': c.keep_traces, 'timing.log': c.timing_log,
@@ -448,6 +451,41 @@
     }
     $('retention').value = c.retention_days === null ? 'unlimited' : String(c.retention_days);
     renderRoles();
+    renderMics();
+  }
+
+  // ---- Microphones (#221): the user's order, first connected wins, else the system default ----
+  async function saveMics(names) {
+    try {
+      await invoke('microphones_set', { names });
+      $('error').textContent = '';
+    } catch (e) { $('error').textContent = String(e); }
+    renderMics();
+  }
+
+  async function renderMics() {
+    let v;
+    try { v = await invoke('microphones_list'); } catch (e) { return; }
+    const names = v.microphones.map((m) => m.name);
+    $('mic-reset').classList.toggle('hidden', !v.ordered);
+    $('mic-note').textContent = v.ordered
+      ? 'Each dictation uses the first connected microphone in this order.'
+      : 'The system default. Move a microphone up to prefer it.';
+    $('mic-list').replaceChildren(...v.microphones.map((m, i) => {
+      const move = (to) => {
+        const order = names.slice();
+        order.splice(to, 0, order.splice(i, 1)[0]);
+        saveMics(order);
+      };
+      const up = el('button', { textContent: '↑', title: 'Prefer', disabled: i === 0, onclick: () => move(i - 1) });
+      const down = el('button', { textContent: '↓', title: 'Prefer less', disabled: i === names.length - 1, onclick: () => move(i + 1) });
+      const buttons = el('span', {}, up, ' ', down);
+      if (!m.connected) buttons.prepend(el('button', { textContent: 'Forget', onclick: () => saveMics(names.filter((n) => n !== m.name)) }), ' ');
+      const note = !m.connected ? 'Not connected' : (m.default ? 'System default' : '');
+      const row = el('div', { className: 'row' }, el('div', { className: 'what' }, m.name, el('small', {}, note)), buttons);
+      row.dataset.words = 'microphone mic input order';
+      return row;
+    }));
   }
 
   // ---- The providers table (specs/96-provider-settings, R-6 to R-14) ----
@@ -732,7 +770,9 @@
       await invoke('settings_set', { section, key, value });
       $('error').textContent = '';
       // Provider settings reach the next dictation at once (R-8); the rest need a restart.
-      if (section !== 'speech' && section !== 'cleanup') $('banner').classList.add('on');
+      // So does muting while dictating (#221).
+      const live = section === 'speech' || section === 'cleanup' || key === 'mute_while_dictating';
+      if (!live) $('banner').classList.add('on');
     } catch (e) {
       $('error').textContent = String(e);
       refresh();
@@ -761,6 +801,7 @@
   }
   $('show-advanced').addEventListener('change', (e) => showAdvanced(e.target.checked));
   $('restart').addEventListener('click', () => invoke('app_restart'));
+  $('mic-reset').addEventListener('click', () => saveMics([]));
 
   document.querySelectorAll('[data-key-save]').forEach((button) => button.addEventListener('click', async () => {
     const role = button.dataset.keySave;
