@@ -65,3 +65,48 @@ pub fn diagnostics_view(app: AppHandle) -> DiagnosticsView {
         error,
     }
 }
+
+/// One stage bar of a History item (R-10), in milliseconds from key-down.
+#[derive(Debug, Serialize)]
+pub struct BarView {
+    stage: String,
+    start_ms: f64,
+    duration_ms: f64,
+}
+
+/// A History item's trace for its stage bars (R-10): the bars, the providers and models that
+/// answered, and the outcome.
+#[derive(Debug, Serialize)]
+pub struct TraceView {
+    bars: Vec<BarView>,
+    speech: Option<(String, String)>,
+    cleanup: Option<(String, String)>,
+    outcome: String,
+}
+
+/// The trace of one History item, or none: traces off, or older than their retention (R-11).
+#[tauri::command]
+pub fn history_trace(app: AppHandle, id: i64) -> Result<Option<TraceView>, String> {
+    let Some(store) = runtime::trace_store(&app) else {
+        return Ok(None);
+    };
+    let trace = store.trace_for(id).map_err(|e| e.to_string())?;
+    Ok(trace.map(|trace| {
+        let row = trace.row();
+        let ms = |us: u64| us as f64 / 1000.0;
+        TraceView {
+            bars: trace
+                .bars()
+                .into_iter()
+                .map(|b| BarView {
+                    stage: b.stage,
+                    start_ms: ms(b.start_us),
+                    duration_ms: ms(b.duration_us),
+                })
+                .collect(),
+            speech: row.speech,
+            cleanup: row.cleanup,
+            outcome: row.outcome,
+        }
+    }))
+}
