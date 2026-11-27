@@ -23,13 +23,15 @@ In conversation, "version 3" means 0.3.
 | Version | Phase | Features | Gate (from ROADMAP.md) | Target |
 | --- | --- | --- | --- | --- |
 | **0.1** | 1 and 2 | Dictation as good as Wispr Flow: hold or hands-free, cleanup levels, personal dictionary with Wispr Flow import, provider settings with any key or a local server, Home and History, local traces and **Report a problem**, in-app updates. First public release | Edits per 100 characters at or below Wispr Flow's 11.6, internal names right, a week of daily use | mid-December 2026 |
-| **0.2** | 3 | Smart routing and actions: one key for dictation, questions and commands; the first tracker connector (GitHub); voice edits of selected text; answers in a card; memory ("Hyper, remember …") and contexts | Commands every day for two weeks | late January 2027 |
-| **0.3** | 4 | Daily tasks and email: Google calendar and mail, the task list with dependencies, the morning card and nudges, triage and draft-only replies, approvals from connector servers | A week of daily planning and mail drafts | late February 2027 |
+| **0.2** | 3 and 4 (tasks) | Voice commands and the to-do list: one key for dictation, questions and commands; "Hyper, remind me to …"; the task list with dependencies, the morning card and nudges, with calendar events; voice edits of selected text; answers in a card; GitHub tickets | Commands and the to-do list every day for two weeks | late January 2027 |
+| **0.3** | 4 (email) | Email: Google mail triage, draft-only replies, approvals from connector servers | A week of daily mail drafts | late February 2027 |
 | **0.4** | 5 | Meetings: on-device live transcript, "Transcribe?" on a call, notes to proposed tickets, the Meetings page | Tickets from a real meeting accepted with few edits | April 2027 |
 | **1.0** | | The four above, stable | A month with no breaking change | after 0.4 |
-| Later | | Memory graph, a Claude Code or Codex hand-off, local speech models, Linux and Windows, Microsoft 365 | | |
+| Later | | Memory ("Hyper, remember …"), self-learning facts, the graph view and contexts; a Claude Code or Codex hand-off, local speech models, Linux and Windows, Microsoft 365 | | |
 
-Work that is merged before its version (much of 0.3 already is) stays off or hidden in the
+Order set by the owner on 27 November 2026: dictation first, then voice commands and the to-do list, then email and meetings; memory, facts, the graph and contexts after 1.0.
+
+Work that is merged before its version (much of 0.2 and 0.3 already is) stays off or hidden in the
 releases before it, and ships with its version.
 
 ```mermaid
@@ -41,13 +43,13 @@ gantt
   Wispr-level quality, dictionary, providers :a1, 2026-11-20, 2026-12-08
   Traces, Report a problem, first public build :a2, 2026-11-27, 2026-12-15
   0.1.0 release :milestone, 2026-12-15, 0d
-  section 0.2 Routing and actions
+  section 0.2 Commands and to-do list
   One key routes, commands, GitHub tickets :b1, 2026-12-15, 2027-01-20
-  Voice edits, answers card, memory and contexts :b2, 2026-12-22, 2027-01-27
+  To-do list, morning card, nudges, calendar :b2, 2026-11-26, 2027-01-27
+  Voice edits, answers card :b3, 2026-12-22, 2027-01-27
   0.2.0 release :milestone, 2027-01-28, 0d
-  section 0.3 Tasks and email
-  Google calendar and mail, tasks, morning card :c1, 2026-11-26, 2027-02-15
-  Mail triage, draft replies, approvals :c2, 2027-01-28, 2027-02-24
+  section 0.3 Email
+  Mail triage, draft replies, approvals :c1, 2026-11-27, 2027-02-24
   0.3.0 release :milestone, 2027-02-25, 0d
   section 0.4 Meetings
   On-device transcript, notes to tickets :d1, 2027-02-25, 2027-04-15
@@ -83,8 +85,8 @@ recommendation.
 | A second speech provider as fallback: latency and accuracy on the owner's samples | 0.1 | ROADMAP phase 2 |
 | Tone per app: how others pick it, and what it costs in latency | 0.1 | ROADMAP phase 2 |
 | Cleaning text while the user speaks | 0.1 | ROADMAP phase 2 |
-| Quick notes: memory folder, task list or both | 0.2 | PRD Q-15 |
-| How Hyper notices facts to remember | 0.2 | PRD Q-16 |
+| Quick notes: memory folder, task list or both | 0.2 (task side), Later (memory) | PRD Q-15 |
+| How Hyper notices facts to remember | Later | PRD Q-16 |
 | "Continue with ChatGPT" in onboarding: latency of answers | 0.2 | PRD Q-17 |
 | HyperMe as an MCP server: what to expose | 0.2 or 0.3 | ROADMAP phase 3 |
 | Microsoft 365 mail and calendar through MCP | Later | PRD Q-7 |

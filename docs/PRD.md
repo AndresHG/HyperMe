@@ -221,7 +221,7 @@ commands (owner, Q-6). Meetings follow daily tasks and email, or run in parallel
 
 ### 7.5 Memory and learning (J-8)
 
-Decided by the owner on 26 November 2026 (M-1 to M-3). How the learning works is still to be
+Decided by the owner on 26 November 2026 (M-1 to M-3); scheduled after 1.0, not phase 3 (owner, 27 November 2026, [RELEASES.md](RELEASES.md)). How the learning works is still to be
 designed: a design proposal will compare how other assistants build memory, before a spec.
 
 - **How it learns.** "Hyper, remember that …" saves at once. Hyper also notices things (a name
@@ -240,11 +240,11 @@ designed: a design proposal will compare how other assistants build memory, befo
 | Feature | Phase | Priority | Notes |
 | --- | --- | --- | --- |
 | Dictionary learned from corrections, editable by hand | 2 | P0 | See 7.1 |
-| "Hyper, remember …", the approval list, the Markdown folder | 3 | P0 | Answers and actions use it for people and projects |
-| Contexts in two levels, as files in the memory folder; matched by name and alias | 3 | P0 | Owner, N-3 and N-4 |
-| Contexts on tasks and a filter by context | 4 | P1 | Owner, N-4 |
-| Proposed facts from use (dictations, meetings, mail) | 4, 5 | P1 | Always through the approval list |
-| Graph view of the knowledge base | 5+ | P2 | Or open the folder in Obsidian |
+| "Hyper, remember …", the approval list, the Markdown folder | Later | P0 | Answers and actions use it for people and projects |
+| Contexts in two levels, as files in the memory folder; matched by name and alias | Later | P0 | Owner, N-3 and N-4 |
+| Contexts on tasks and a filter by context | Later | P1 | Owner, N-4 |
+| Proposed facts from use (dictations, meetings, mail) | Later | P1 | Always through the approval list |
+| Graph view of the knowledge base | Later | P2 | Or open the folder in Obsidian |
 
 ### 7.6 Later
 
