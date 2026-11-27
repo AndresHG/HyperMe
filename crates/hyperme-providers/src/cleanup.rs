@@ -142,6 +142,14 @@ impl ChatCleanup {
         Err(self.error(ErrorKind::Other, format!("HTTP {status}: {}", body.trim())))
     }
 
+    /// Adds the user's dictionary to the prompt (spec 93, R-4): `line` is
+    /// `Dictionary::prompt_line()`. It goes after the fixed prompt and before the app line, so
+    /// the prompt's start stays the same from one dictation to the next.
+    pub fn with_dictionary(mut self, line: &str) -> Self {
+        self.prompt.push_str(line);
+        self
+    }
+
     /// The request body. The fixed prompt comes first so a provider's prompt cache keeps the
     /// first token fast; the app name (R-11) is its last line.
     fn request_body(&self, raw: &str, app: Option<&str>) -> Value {
@@ -309,6 +317,32 @@ mod tests {
         let off = cleanup("off", "v4").unwrap().request_body("hi", None);
         assert!(off.get("reasoning_effort").is_none());
         assert_eq!(off["messages"][0]["content"], prompt_named("v4").unwrap());
+    }
+
+    /// Spec 93, AC-4: the dictionary line sits between the fixed prompt and the app line, so
+    /// two apps share the same prompt start.
+    #[test]
+    fn the_dictionary_goes_before_the_app_line() {
+        let line = "\n\nThe speaker's dictionary: LangChain, Zentrix.";
+        let with = cleanup("low", "v4").unwrap().with_dictionary(line);
+        let system = |app| {
+            with.request_body("hola", Some(app))["messages"][0]["content"]
+                .as_str()
+                .unwrap()
+                .to_owned()
+        };
+        let start = format!("{}{line}", prompt_named("v4").unwrap());
+        assert_eq!(
+            system("Slack"),
+            format!("{start}\n\nThe text will be pasted into Slack.")
+        );
+        assert!(system("Mail").starts_with(&start));
+        // An empty dictionary leaves the prompt as it was.
+        let none = cleanup("low", "v4").unwrap().with_dictionary("");
+        assert_eq!(
+            none.request_body("hi", None)["messages"][0]["content"],
+            prompt_named("v4").unwrap()
+        );
     }
 
     #[test]
