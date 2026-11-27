@@ -431,7 +431,34 @@ fn spans_of(db: &Connection, trace_id: i64) -> Result<Vec<StoredSpan>, Error> {
         .map_err(error)
 }
 
+/// One stage of a trace as a bar on a shared axis from key-down (spec 200 R-10).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StageBar {
+    pub stage: String,
+    pub start_us: u64,
+    pub duration_us: u64,
+}
+
 impl StoredTrace {
+    /// The stages Diagnostics names, as bars from the root's start (key-down), in the order
+    /// they started (spec 200 R-10).
+    pub fn bars(&self) -> Vec<StageBar> {
+        let origin = self.spans.first().map_or(0, |root| root.start_us);
+        let mut bars: Vec<StageBar> = self
+            .spans
+            .iter()
+            .skip(1)
+            .filter(|s| hyperme_core::diagnostics::STAGES.contains(&s.name.as_str()))
+            .map(|s| StageBar {
+                stage: s.name.clone(),
+                start_us: s.start_us.saturating_sub(origin),
+                duration_us: s.duration_us,
+            })
+            .collect();
+        bars.sort_by_key(|b| b.start_us);
+        bars
+    }
+
     fn span(&self, name: &str) -> Option<&StoredSpan> {
         self.spans.iter().skip(1).find(|s| s.name == name)
     }

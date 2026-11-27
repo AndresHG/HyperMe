@@ -81,6 +81,7 @@ fn main() {
             home::home_fix_word,
             runtime::pill_view,
             diagnostics::diagnostics_view,
+            diagnostics::history_trace,
             runtime::pill_card,
             runtime::card_open_today,
             runtime::card_dismiss,

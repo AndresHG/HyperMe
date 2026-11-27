@@ -106,6 +106,13 @@
   .bar button:hover { border-color: var(--violet); }
   .bar button kbd { font: 11px -apple-system, sans-serif; color: var(--faint); margin-left: 4px; }
   .bar .say { color: var(--muted); }
+  /* Stage bars of an open item (specs/200-diagnostics, R-10): one bar per stage from key-down. */
+  .row .stages { grid-column: 1 / -1; display: none; padding-top: 8px; font-size: 11px; color: var(--muted); }
+  .row.sel .stages { display: grid; grid-template-columns: 110px 1fr 64px; gap: 3px 8px; align-items: center; }
+  .stages .track { position: relative; height: 8px; }
+  .stages .fill { position: absolute; top: 0; height: 8px; min-width: 2px; border-radius: 3px; background: var(--violet); opacity: 0.7; }
+  .stages .ms { text-align: right; font-variant-numeric: tabular-nums; }
+  .stages .via { grid-column: 1 / -1; }
   .bar .say.bad { color: var(--bad); }
   .bar .say.warn { color: var(--warn); }
   .bar .ask { color: CanvasText; }
@@ -422,6 +429,7 @@
       bar.className = 'bar';
       drawBar(bar, item);
       div.append(bar);
+      if (isSelected(item.id)) drawStages(div, item);
     }
     div.addEventListener('mousedown', (e) => { if (!e.target.closest('.bar')) select(item.id, false); });
     text.addEventListener('mouseup', () => offerFix(item.id));
@@ -483,6 +491,37 @@
   const span = (cls, ...parts) => { const e = document.createElement('span'); e.className = cls; e.append(...parts); return e; };
 
   // The bar under a selected row: its actions, or the step in progress (R-13, R-16 to R-18).
+  // Spec 200, R-10 and R-11: the open item's trace as one bar per stage on a shared axis from
+  // key-down; nothing for an item without a trace. Read once per item, when it opens.
+  const STAGE_NAMES = { mic_start: 'Microphone start', speech: 'Speech', dictionary: 'Dictionary', cleanup: 'Cleanup', insert: 'Paste', history_write: 'History write' };
+  function drawStages(row, item) {
+    const state = stateOf(item.id);
+    if (state.trace === undefined) {
+      state.trace = null;
+      invoke('history_trace', { id: item.id }).then((t) => { state.trace = t || false; refresh(item.id); }).catch(() => { state.trace = false; });
+      return;
+    }
+    const t = state.trace;
+    if (!t || !t.bars.length) return;
+    const end = Math.max(...t.bars.map((b) => b.start_ms + b.duration_ms)) || 1;
+    const box = document.createElement('div');
+    box.className = 'stages';
+    for (const b of t.bars) {
+      const name = span('', STAGE_NAMES[b.stage] || b.stage);
+      const track = document.createElement('div');
+      track.className = 'track';
+      const fill = document.createElement('div');
+      fill.className = 'fill';
+      fill.style.left = (100 * b.start_ms / end) + '%';
+      fill.style.width = (100 * b.duration_ms / end) + '%';
+      track.append(fill);
+      box.append(name, track, span('ms', Math.round(b.duration_ms) + ' ms'));
+    }
+    const via = [t.speech && 'Speech: ' + t.speech.join(' · '), t.cleanup && 'Cleanup: ' + t.cleanup.join(' · '), 'Outcome: ' + t.outcome.replaceAll('_', ' ')].filter(Boolean).join('  ·  ');
+    box.append(span('via', via));
+    row.append(box);
+  }
+
   function drawBar(bar, item) {
     const state = stateOf(item.id);
     const mode = state.mode;
@@ -967,6 +1006,7 @@
     if (state === 'working') { setWorking(id, true); return; }
     stateOf(id).working = false;
     if (state === 'done') {
+      stateOf(id).trace = undefined;
       const item = await invoke('home_item', { id });
       if (item) updateItem(id, item);
       say(id, 'Retried · new text copied');
