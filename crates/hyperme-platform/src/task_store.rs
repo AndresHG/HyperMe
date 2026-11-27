@@ -116,6 +116,8 @@ const MIGRATIONS: &[&str] = &[
         account TEXT    PRIMARY KEY,
         since   INTEGER NOT NULL
     ) WITHOUT ROWID;",
+    // 7: the last time the user saw Today, which clears "new" (specs/92-daily-tasks, R-21).
+    "ALTER TABLE day_log ADD COLUMN seen_at INTEGER;",
 ];
 
 const TASK_COLUMNS: &str = "id, title, notes, status, day, due_date, due_time, source, \
@@ -444,6 +446,42 @@ impl SqliteTaskStore {
             )
             .optional())?;
         Ok(at.flatten())
+    }
+
+    /// Records that the user saw Today at `at_ms` (Unix ms); the latest look wins (R-21).
+    pub fn mark_seen(&self, day: Date, at_ms: i64) -> Result<(), TaskError> {
+        sql(self.db().execute(
+            "INSERT INTO day_log (day, seen_at) VALUES (?1, ?2)
+             ON CONFLICT (day) DO UPDATE SET seen_at = max(coalesce(seen_at, 0), excluded.seen_at)",
+            params![date_text(day), at_ms],
+        ))?;
+        Ok(())
+    }
+
+    /// When the user last saw `day`'s Today, Unix ms.
+    pub fn seen_at(&self, day: Date) -> Result<Option<i64>, TaskError> {
+        let at = sql(self
+            .db()
+            .query_row(
+                "SELECT seen_at FROM day_log WHERE day = ?1",
+                [date_text(day)],
+                |r| r.get::<_, Option<i64>>(0),
+            )
+            .optional())?;
+        Ok(at.flatten())
+    }
+
+    /// "Keep" on a stale task: plans it for `today` and starts its roll-over count again, so
+    /// the question is asked once (R-14).
+    pub fn keep(&self, id: TaskId, today: Date) -> Result<(), TaskError> {
+        let changed = sql(self.db().execute(
+            "UPDATE task SET day = ?2, rolled = 0 WHERE id = ?1",
+            params![id, date_text(today)],
+        ))?;
+        if changed == 0 {
+            return Err(TaskError::NotFound(id));
+        }
+        Ok(())
     }
 
     /// `day`'s line of the day log; zeros for a day with none.

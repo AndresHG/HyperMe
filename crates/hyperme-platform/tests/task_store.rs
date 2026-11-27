@@ -101,8 +101,8 @@ async fn the_store_uses_wal_and_a_schema_version_and_survives_reopening() {
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
     // 1 tasks, 2 jobs, 3 connector requests, 4 events, 5 mail, 6 sign-in state
-    // (specs/97-google-connectors).
-    assert_eq!(version, 6);
+    // (specs/97-google-connectors), 7 when Today was seen.
+    assert_eq!(version, 7);
 
     let store = SqliteTaskStore::open(&path).unwrap();
     let snapshot = store.snapshot(day(WED), 0).await.unwrap();
@@ -511,4 +511,35 @@ async fn the_day_log_records_when_the_morning_card_showed() {
         1,
         "counters untouched"
     );
+}
+
+/// R-21 (slice 8, app): the day log records the last time the user saw Today, which clears
+/// "new"; a later look moves it on.
+#[tokio::test]
+async fn the_day_log_records_when_today_was_seen() {
+    let store = open("seen_at");
+    assert_eq!(store.seen_at(day(THU)).unwrap(), None);
+    store.mark_seen(day(THU), 1_000).unwrap();
+    store.mark_seen(day(THU), 3_000).unwrap();
+    assert_eq!(store.seen_at(day(THU)).unwrap(), Some(3_000));
+    store.mark_morning(day(THU), 500).unwrap();
+    assert_eq!(store.morning_at(day(THU)).unwrap(), Some(500));
+    assert_eq!(store.seen_at(day(THU)).unwrap(), Some(3_000));
+}
+
+/// AC-7, R-14 (slice 8, app): "keep" on a stale task plans it for today and starts its
+/// roll-over count again, so the question is asked once.
+#[tokio::test]
+async fn keep_plans_a_stale_task_for_today_and_resets_its_count() {
+    let store = open("keep");
+    let id = store.add(planned("Renew the passport", WED)).await.unwrap();
+    for _ in 0..3 {
+        store.roll_over(day(FRI)).await.unwrap();
+    }
+    store.keep(id, day(FRI)).unwrap();
+    let snapshot = store.snapshot(day(FRI), THU_BEGAN).await.unwrap();
+    let task = snapshot.iter().find(|t| t.id == id).unwrap();
+    assert_eq!(task.rolled, 0);
+    assert_eq!(task.day, Some(day(FRI)));
+    assert_eq!(store.keep(9_999, day(FRI)), Err(TaskError::NotFound(9_999)));
 }

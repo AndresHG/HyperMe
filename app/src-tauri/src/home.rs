@@ -65,7 +65,12 @@ pub struct Block {
 /// A block that shows is listed here; the page asks for the list on load and on
 /// `home://refresh`.
 pub fn blocks() -> Vec<Block> {
-    Vec::new()
+    // #92: the day leads Home (owner, 27 November 2026). "Waiting for you" joins when
+    // proposals exist.
+    vec![Block {
+        id: "today",
+        title: "Today",
+    }]
 }
 
 /// Where a target opens (R-6, AC-5): a section id opens that section; a Home-page block id
@@ -304,7 +309,6 @@ mod window {
     /// The page emits this with a block's id once the block has been on screen (R-22). Other
     /// modules (#92's Waiting for you, for example) listen with `app.listen_any(BLOCK_VIEWED,
     /// ...)`; Home itself does nothing with it.
-    #[allow(dead_code)] // A hook for #92 and #93; nothing listens yet.
     pub const BLOCK_VIEWED: &str = "home://block-viewed";
 
     const DEFAULT_SIZE: (f64, f64) = (900.0, 600.0);
@@ -861,7 +865,8 @@ mod tests {
             [("home", "⌘1"), ("history", "⌘2"), ("dictionary", "⌘3")]
         );
         assert_eq!(sections(true)[2].page, "home-dictionary.html");
-        assert!(blocks().is_empty(), "no blocks ship in this change (R-9)");
+        // #92: Today leads the Home page (owner, 27 November 2026).
+        assert_eq!(blocks().iter().map(|b| b.id).collect::<Vec<_>>(), ["today"]);
     }
 
     /// AC-5 (R-6): a section id opens that section, a block id the Home page at that block, and
@@ -876,7 +881,7 @@ mod tests {
         assert_eq!(resolve("history", &s, &today), ("history", None));
         assert_eq!(resolve("home", &s, &today), ("home", None));
         assert_eq!(resolve("today", &s, &today), ("home", Some("today")));
-        assert_eq!(resolve("today", &s, &blocks()), ("home", None));
+        assert_eq!(resolve("today", &s, &blocks()), ("home", Some("today")));
         assert_eq!(resolve("dictionary", &s, &today), ("home", None));
         assert_eq!(resolve("", &s, &today), ("home", None));
         assert_eq!(hash(("home", Some("today"))), "home/today");
