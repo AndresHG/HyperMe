@@ -22,6 +22,8 @@ mod pill;
 mod runtime;
 #[cfg(target_os = "macos")]
 mod settings;
+#[cfg(target_os = "macos")]
+mod tasks;
 #[cfg(any(target_os = "macos", test))]
 mod update;
 #[cfg(target_os = "macos")]
@@ -132,6 +134,9 @@ fn main() {
             pill(app.handle())?;
             #[cfg(target_os = "macos")]
             runtime::start(app.handle(), menu);
+            // Daily tasks: roll-over, the morning card and the connectors' syncs (#92).
+            #[cfg(target_os = "macos")]
+            tasks::start(app.handle());
             #[cfg(target_os = "macos")]
             walkthrough::open_if_needed(app.handle());
             // For measuring and checking Home by eye during development (spec 98, AC-2):

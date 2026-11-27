@@ -422,6 +422,30 @@ impl SqliteTaskStore {
         Ok(())
     }
 
+    /// Records when `day`'s morning card showed (Unix ms); a later write that day keeps the
+    /// first (R-15).
+    pub fn mark_morning(&self, day: Date, at_ms: i64) -> Result<(), TaskError> {
+        sql(self.db().execute(
+            "INSERT INTO day_log (day, morning_at) VALUES (?1, ?2)
+             ON CONFLICT (day) DO UPDATE SET morning_at = coalesce(morning_at, excluded.morning_at)",
+            params![date_text(day), at_ms],
+        ))?;
+        Ok(())
+    }
+
+    /// When `day`'s morning card showed, Unix ms.
+    pub fn morning_at(&self, day: Date) -> Result<Option<i64>, TaskError> {
+        let at = sql(self
+            .db()
+            .query_row(
+                "SELECT morning_at FROM day_log WHERE day = ?1",
+                [date_text(day)],
+                |r| r.get::<_, Option<i64>>(0),
+            )
+            .optional())?;
+        Ok(at.flatten())
+    }
+
     /// `day`'s line of the day log; zeros for a day with none.
     pub fn day_log(&self, day: Date) -> Result<DayLog, TaskError> {
         let log = sql(self
