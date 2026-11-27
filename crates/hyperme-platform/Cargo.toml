@@ -11,6 +11,9 @@ rust-version.workspace = true
 hyperme-core.workspace = true
 cpal.workspace = true
 rusqlite.workspace = true
+# The trace store's span fields and events, as small JSON objects (trace_store.rs). Already in
+# the workspace.
+serde_json.workspace = true
 # The task store's local dates (task_store.rs), as in hyperme-core.
 time.workspace = true
 # time: the macOS clock's timer (presence.rs).
@@ -27,8 +30,8 @@ objc2-foundation = { version = "0.3.2", default-features = false, features = ["s
 objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "libc", "NSApplication", "NSEvent", "NSGraphicsContext", "NSPasteboard", "NSPasteboardItem", "NSResponder", "NSRunningApplication", "NSSound", "NSWorkspace"] }
 
 [dev-dependencies]
-# The mail pull test's synthetic tool answers. Already in the workspace.
-serde_json.workspace = true
+# Runs the core's spans under a subscriber in the trace store tests. Already in the tree.
+tracing = { version = "0.1.44", default-features = false, features = ["std"] }
 tokio = { workspace = true, features = ["macros", "rt", "sync", "time"] }
 
 [lints]

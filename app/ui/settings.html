@@ -186,6 +186,7 @@
     <div class="row" data-words="history dictation audio keep"><div class="what">Dictation history<small>Keeps each dictation's audio and text on this Mac.</small></div><input type="checkbox" data-section="history" data-key="enabled"></div>
     <div class="row" data-words="history retention days unlimited"><div class="what">Keep for<small>Older dictations are deleted.</small></div><select id="retention"><option value="30">30 days</option><option value="unlimited">Unlimited</option></select></div>
     <div class="row" data-words="history size limit"><div class="what">Size limit (MB)<small>The oldest dictations go first.</small></div><input type="number" min="10" data-section="history" data-key="size_limit_mb"></div>
+    <div class="row" data-words="timing traces stages measure keep"><div class="what">Keep timing traces<small>Stage timings of each dictation for 30 days, even with history off. Numbers only, never text.</small></div><input type="checkbox" data-section="history" data-key="keep_traces"></div>
     <div class="row" data-words="timing log measure"><div class="what">Timing log<small>One line of stage timings per dictation, numbers only.</small></div><input type="checkbox" data-section="timing" data-key="log"></div>
     <div id="privacy-connectors" class="hidden" data-words="connected accounts google calendar mail privacy">
       <p class="lead" style="margin:16px 0 4px">Connected accounts</p>
@@ -264,7 +265,7 @@
       'dictation.sounds': c.sounds, 'dictation.show_while_idle': c.show_while_idle, 'dictation.min_hold_ms': c.min_hold_ms, 'dictation.max_length_s': c.max_length_s,
       'dictation.short_dictation_words': c.short_dictation_words, 'speech.model': c.speech_model, 'speech.endpoint': c.speech_endpoint,
       'cleanup.model': c.cleanup_model, 'cleanup.endpoint': c.cleanup_endpoint, 'cleanup.reasoning_effort': c.reasoning_effort,
-      'cleanup.deadline_ms': c.deadline_ms, 'history.enabled': c.history, 'history.size_limit_mb': c.size_limit_mb, 'timing.log': c.timing_log,
+      'cleanup.deadline_ms': c.deadline_ms, 'history.enabled': c.history, 'history.size_limit_mb': c.size_limit_mb, 'history.keep_traces': c.keep_traces, 'timing.log': c.timing_log,
     };
     document.querySelectorAll('[data-key]').forEach((el) => {
       const v = values[el.dataset.section + '.' + el.dataset.key];

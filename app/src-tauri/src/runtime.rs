@@ -24,6 +24,7 @@ use hyperme_platform::paste::macos::{CmdV, MacFocus, MacPasteboard};
 use hyperme_platform::paste::{ClipboardInserter, RESTORE_AFTER};
 use hyperme_platform::sounds::SystemSounds;
 use hyperme_platform::timing::{FileTimingLog, Names};
+use hyperme_platform::trace_store::{Labels, TraceSettings, TraceStore};
 use hyperme_providers::any::{self, AnyCleanup, AnySpeech};
 use hyperme_providers::speechmatics::SAMPLE_RATE;
 use tauri::{AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, Position, Size};
@@ -54,6 +55,8 @@ struct Shared {
     timing: Arc<Mutex<FileTimingLog>>,
     /// Timing is on in the config (R-30); the trace layer's timing sink reads it.
     timing_on: Arc<AtomicBool>,
+    /// Every dictation's trace, next to the history (spec 182). `None` if it could not open.
+    traces: Option<Arc<TraceStore>>,
     /// A dictation or retry is in progress: from its first status until Idle.
     busy: bool,
     /// The dictation Home asked to retry, while that retry runs (spec 98, R-16).
@@ -104,10 +107,22 @@ pub fn start(app: &AppHandle, menu: TrayMenu) {
     // log (R-30) while timing is on. Nothing here leaves the Mac.
     let timing = Arc::new(Mutex::new(timing_log(&Config::default())));
     let timing_on = Arc::new(AtomicBool::new(false));
-    let sinks: Vec<Arc<dyn TraceSink>> = vec![Arc::new(TimingSink::new(
+    let mut sinks: Vec<Arc<dyn TraceSink>> = vec![Arc::new(TimingSink::new(
         timing_on.clone(),
         SharedTiming(timing.clone()),
     ))];
+    // The trace store shares the history's file; one that cannot open only loses traces.
+    let config = Config::load_or_create(&data_dir(app).join("config.toml")).unwrap_or_default();
+    let traces = TraceStore::open(
+        &data_dir(app).join("history").join("history.sqlite3"),
+        TraceSettings::from_config(&config.history),
+    )
+    .ok()
+    .map(Arc::new);
+    if let Some(store) = &traces {
+        store.set_labels(labels(&config));
+        sinks.push(store.clone());
+    }
     trace::install(sinks);
     app.manage::<State>(Mutex::new(Shared {
         events: None,
@@ -121,6 +136,7 @@ pub fn start(app: &AppHandle, menu: TrayMenu) {
         providers: None,
         timing,
         timing_on,
+        traces,
         busy: false,
         home_retry: None,
         history_enabled: Config::load_or_create(&data_dir(app).join("config.toml"))
@@ -178,12 +194,20 @@ fn wire(app: &AppHandle, history: Arc<Mutex<HistoryInner>>) -> Result<(), String
         &dictionary,
     );
     let (switch, providers) = watch::channel(Arc::new(providers));
-    let (timing, timing_on) = {
+    let (timing, timing_on, traces) = {
         let shared = lock(app);
-        (shared.timing.clone(), shared.timing_on.clone())
+        (
+            shared.timing.clone(),
+            shared.timing_on.clone(),
+            shared.traces.clone(),
+        )
     };
     *timing.lock().unwrap_or_else(PoisonError::into_inner) = timing_log(&config);
     timing_on.store(config.timing.log, Ordering::Relaxed);
+    if let Some(store) = traces {
+        store.set_labels(labels(&config));
+        store.set_settings(TraceSettings::from_config(&config.history));
+    }
     open_history(&history, &dir, &config);
 
     let (events, events_rx) = mpsc::channel(1024);
@@ -232,14 +256,42 @@ pub fn reload_providers(app: &AppHandle) -> Result<(), String> {
         any::resolve(&config, &KeychainStore::new()).map_err(|e| e.message)?,
         &dictionary,
     );
-    let (timing, timing_on) = {
+    let (timing, timing_on, traces) = {
         let shared = lock(app);
-        (shared.timing.clone(), shared.timing_on.clone())
+        (
+            shared.timing.clone(),
+            shared.timing_on.clone(),
+            shared.traces.clone(),
+        )
     };
     *timing.lock().unwrap_or_else(PoisonError::into_inner) = timing_log(&config);
     timing_on.store(config.timing.log, Ordering::Relaxed);
+    if let Some(store) = traces {
+        store.set_labels(labels(&config));
+        store.set_settings(TraceSettings::from_config(&config.history));
+    }
     switch.send_replace(Arc::new(providers));
     Ok(())
+}
+
+/// Applies the config's history settings to the trace store, and drops what they no longer
+/// keep (spec 182, R-9 and R-9a).
+pub fn refresh_traces(app: &AppHandle) {
+    let traces = lock(app).traces.clone();
+    let Some(store) = traces else { return };
+    let config = Config::load_or_create(&data_dir(app).join("config.toml")).unwrap_or_default();
+    store.set_settings(TraceSettings::from_config(&config.history));
+}
+
+/// The providers, models and cleanup level each trace is labelled with (spec 182, R-3).
+fn labels(config: &Config) -> Labels {
+    Labels {
+        speech_provider: config.speech.provider.clone(),
+        speech_model: config.speech.model.clone(),
+        cleanup_provider: config.cleanup.provider.clone(),
+        cleanup_model: config.cleanup.model.clone(),
+        cleanup_level: format!("{:?}", config.cleanup.level).to_lowercase(),
+    }
 }
 
 /// The timing log, labelled with the config's providers and models.
@@ -643,13 +695,21 @@ pub fn with_history_mut<T>(
     app: &AppHandle,
     change: impl FnOnce(&mut SqliteHistory) -> Result<T, Error>,
 ) -> Result<T, String> {
-    let history = lock(app).history.clone();
+    let (history, traces) = {
+        let shared = lock(app);
+        (shared.history.clone(), shared.traces.clone())
+    };
     let mut inner = history.lock().unwrap_or_else(PoisonError::into_inner);
     let store = inner
         .store
         .as_mut()
         .ok_or_else(|| "History is not available yet".to_owned())?;
-    change(store).map_err(|e| e.message)
+    let result = change(store).map_err(|e| e.message);
+    // A deleted item takes its trace with it (spec 182, R-9).
+    if let Some(traces) = traces {
+        traces.cleanup();
+    }
+    result
 }
 
 /// Runs `read` on the history store, for Home's commands. An error when the history is not

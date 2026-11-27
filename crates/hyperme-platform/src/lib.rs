@@ -16,3 +16,4 @@ pub mod presence;
 pub mod sounds;
 pub mod task_store;
 pub mod timing;
+pub mod trace_store;

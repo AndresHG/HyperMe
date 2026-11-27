@@ -115,6 +115,7 @@ struct ConfigView {
     history: bool,
     retention_days: Option<u32>,
     size_limit_mb: u64,
+    keep_traces: bool,
     timing_log: bool,
 }
 
@@ -169,6 +170,7 @@ fn config_view(config: &Config) -> ConfigView {
             Retention::Unlimited => None,
         },
         size_limit_mb: config.history.size_limit_mb,
+        keep_traces: config.history.keep_traces,
         timing_log: config.timing.log,
     }
 }
@@ -290,6 +292,10 @@ pub fn settings_set(
     rewrite_config(&app, |text| config::set_value(text, &section, &key, &value))?;
     if section == "speech" || section == "cleanup" {
         use_new_providers(&app);
+    }
+    if section == "history" {
+        // Turning traces off, or a new retention, applies now (spec 182, R-9a).
+        crate::runtime::refresh_traces(&app);
     }
     Ok(())
 }
