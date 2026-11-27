@@ -12,3 +12,9 @@ clippy and tests on the owner's Mac before it merges (GitHub CI is blocked by bi
 | 5 | Live: idle memory and CPU, and replay latency, before and after; numbers to `docs/results/` | AC-10, AC-11 | S | 2 |
 
 Slices 2, 3 and 4 can run in parallel once slice 1 has merged.
+
+## Status (27 November 2026)
+
+Slices 1 to 4 merged (#189, #190, #192, #193). Slice 5's numbers are in
+`docs/results/2026-11-27-trace-budgets.md`: both budgets hold. The `history_write` span of R-2 is
+not recorded yet; it is issue-tracked with the slice 5 PR.
