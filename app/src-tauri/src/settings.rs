@@ -23,31 +23,95 @@ fn config_path(app: &AppHandle) -> PathBuf {
     crate::runtime::data_dir(app).join("config.toml")
 }
 
-/// Opens Settings, or brings it to the front, at `section` (`providers`, for example).
+/// The sheet fills Home less this margin on every side, as Wispr Flow's settings do (owner,
+/// 27 November 2026: "big enough, just like Wispr Flow").
+const MARGIN: f64 = 36.0;
+/// The largest sheet, so it stays a sheet on a full-screen Home.
+const SHEET_MAX: (f64, f64) = (1040.0, 760.0);
+/// The smallest sheet; Home's own minimum is 720 × 480.
+const SHEET_MIN: (f64, f64) = (640.0, 420.0);
+/// Home's title bar, left out when centring.
+const TITLE_BAR: f64 = 28.0;
+/// Transparent room around the sheet's card for its rounded corners and the page's own shadow.
+/// The window has no native shadow: macOS draws that one square around a transparent window
+/// (the corners the owner saw, 27 November 2026; the pill's square had the same cause).
+pub const SHEET_PAD: f64 = 24.0;
+
+/// Where the Settings sheet sits over Home, in logical points: centred in Home's content area,
+/// filling it less an even margin.
+pub fn sheet_frame(home_pos: (f64, f64), home_size: (f64, f64)) -> (f64, f64, f64, f64) {
+    let w = (home_size.0 - 2.0 * MARGIN).clamp(SHEET_MIN.0, SHEET_MAX.0);
+    let h = (home_size.1 - TITLE_BAR - 2.0 * MARGIN).clamp(SHEET_MIN.1, SHEET_MAX.1);
+    let x = home_pos.0 + (home_size.0 - w) / 2.0;
+    let y = home_pos.1 + TITLE_BAR + (home_size.1 - TITLE_BAR - h) / 2.0;
+    (x, y, w, h)
+}
+
+/// Opens Settings at `section` (`providers`, for example) as a sheet over the Home window, as in
+/// Wispr Flow (V0.1 redesign, owner, 27 November 2026): Home opens first if it is closed, and the
+/// sheet is a borderless child window that moves with Home and closes with it. The menu, the
+/// walkthrough, Gmail approvals and Home itself all come here.
 pub fn open(app: &AppHandle, section: &str) {
-    let url = format!("settings.html#{section}");
     if let Some(window) = app.get_webview_window(SETTINGS) {
         let _ = window.eval(format!("location.hash = {}", serde_json::json!(section)));
         let _ = window.show();
         let _ = window.set_focus();
         return;
     }
-    let built = WebviewWindowBuilder::new(app, SETTINGS, WebviewUrl::App(url.into()))
+    if app.get_webview_window(crate::home::HOME).is_none() {
+        crate::home::open(app, "home");
+    }
+    let Some(home) = app.get_webview_window(crate::home::HOME) else {
+        return;
+    };
+    let scale = home.scale_factor().unwrap_or(1.0);
+    let (Ok(pos), Ok(size)) = (home.outer_position(), home.outer_size()) else {
+        return;
+    };
+    let (pos, size) = (pos.to_logical::<f64>(scale), size.to_logical::<f64>(scale));
+    let (x, y, w, h) = sheet_frame((pos.x, pos.y), (size.width, size.height));
+    let (x, y, w, h) = (
+        x - SHEET_PAD,
+        y - SHEET_PAD,
+        w + 2.0 * SHEET_PAD,
+        h + 2.0 * SHEET_PAD,
+    );
+    let url = format!("settings.html#{section}");
+    let Ok(builder) = WebviewWindowBuilder::new(app, SETTINGS, WebviewUrl::App(url.into()))
         .title("HyperMe Settings")
-        .inner_size(760.0, 540.0)
-        .min_inner_size(640.0, 440.0)
-        .build();
-    if let Ok(window) = built {
+        .inner_size(w, h)
+        .position(x, y)
+        .decorations(false)
+        .transparent(true)
+        .resizable(false)
+        .shadow(false)
+        .parent(&home)
+    else {
+        return;
+    };
+    if let Ok(window) = builder.build() {
+        let _ = home.eval("document.body.classList.add('sheet-open')");
         // Its page process must end when it closes, or it stays in memory while idle.
         let handle = app.clone();
         window.on_window_event(move |event| {
             if matches!(event, tauri::WindowEvent::Destroyed) {
                 // An approval card left open answers nothing (specs/166, R-9).
                 crate::approvals::window_closed();
+                if let Some(home) = handle.get_webview_window(crate::home::HOME) {
+                    let _ = home.eval("document.body.classList.remove('sheet-open')");
+                }
                 crate::home::free_closed_window(&handle);
             }
         });
         let _ = window.set_focus();
+    }
+}
+
+/// Closes the Settings sheet: its × button, Esc, or a click on Home's dimmed page.
+#[tauri::command]
+pub fn settings_close(app: AppHandle) {
+    if let Some(window) = app.get_webview_window(SETTINGS) {
+        let _ = window.close();
     }
 }
 
@@ -769,6 +833,33 @@ pub fn app_restart(app: AppHandle) {
 
 #[cfg(test)]
 mod tests {
+
+    /// Regression (owner, 27 November 2026, "corners are wrong"): the sheet window has no
+    /// native shadow, which macOS draws square, and its page leaves the transparent room the
+    /// rounded card and its shadow need.
+    #[test]
+    fn the_sheet_has_no_square_shadow() {
+        let source = include_str!("settings.rs");
+        let open = &source
+            [source.find("pub fn open(").unwrap()..source.find("pub fn settings_close").unwrap()];
+        assert!(open.contains(".shadow(false)") && open.contains(".transparent(true)"));
+        let page = include_str!("../../ui/settings.html");
+        assert!(page.contains(&format!("padding: {}px", super::SHEET_PAD as u32)));
+    }
+
+    /// V0.1 redesign: the sheet fills Home's content area less an even margin, centred, and
+    /// keeps between its minimum and maximum size.
+    #[test]
+    fn the_sheet_sits_over_home() {
+        assert_eq!(
+            super::sheet_frame((100.0, 50.0), (1000.0, 700.0)),
+            (136.0, 114.0, 928.0, 600.0)
+        );
+        let (_, _, w, h) = super::sheet_frame((0.0, 0.0), (720.0, 480.0));
+        assert_eq!((w, h), (648.0, 420.0));
+        let (_, _, w, h) = super::sheet_frame((0.0, 0.0), (2000.0, 1200.0));
+        assert_eq!((w, h), (1040.0, 760.0));
+    }
 
     /// #216 regression, V0.1 redesign: the account label is a choice (Personal, Work, Other), so
     /// no greyed placeholder can look like a value already filled in; and the Dictionary is not

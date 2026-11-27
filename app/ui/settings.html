@@ -75,6 +75,14 @@
   .add select { flex: 1; min-width: 0; }
   td.local { padding-top: 0; }
   a.link { color: var(--violet); cursor: pointer; text-decoration: none; }
+  /* Settings is a sheet over Home (V0.1 redesign): a rounded card in a transparent window, no
+     title bar, a close button and Esc. */
+  html { background: transparent; padding: 24px; height: 100vh; box-sizing: border-box; }
+  body { height: 100%; border-radius: 14px; overflow: hidden; box-shadow: 0 0 0 1px var(--line), 0 16px 44px rgb(0 0 0 / .32); box-sizing: border-box; grid-template-columns: 196px 1fr; }
+  nav { padding: 16px 10px; }
+  main { position: relative; padding: 20px 56px 20px 24px !important; }
+  #sheet-x { position: fixed; top: 36px; right: 38px; width: 28px; height: 28px; padding: 0; border-radius: 999px; border: 0; background: var(--line); font-size: 16px; line-height: 1; z-index: 5; }
+  #sheet-x:hover { background: var(--line2); }
   /* V0.1 redesign: rows sit in grouped cards, switches instead of checkboxes, as in macOS
      System Settings and Wispr Flow's settings. */
   section > .row, section .card-rows > .row { border: 1px solid var(--line); border-top: 0; padding: 10px 14px; background: var(--card); }
@@ -139,6 +147,7 @@
   <a href="#about">About</a>
 </nav>
 <main>
+  <button id="sheet-x" aria-label="Close settings" title="Close (Esc)">×</button>
   <div id="banner"><span id="banner-text">Saved. Restart HyperMe to use the new settings.</span><button class="main" id="restart">Restart HyperMe</button></div>
 
   <section id="setup">
@@ -347,6 +356,15 @@
 <script>
   const invoke = window.__TAURI__.core.invoke;
   const $ = (id) => document.getElementById(id);
+  // The sheet closes with its × or Esc, unless Esc belongs to a field or the connect dialog.
+  $('sheet-x').addEventListener('click', () => invoke('settings_close'));
+  // A click in the transparent room around the card is a click on Home's dimmed page.
+  document.documentElement.addEventListener('mousedown', (e) => { if (e.target === document.documentElement) invoke('settings_close'); });
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' || e.defaultPrevented) return;
+    if (e.target instanceof HTMLInputElement && e.target.value) return;
+    invoke('settings_close');
+  });
   let view = null;
 
   function showSection() {

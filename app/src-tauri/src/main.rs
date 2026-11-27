@@ -152,6 +152,7 @@ fn main() {
             settings::provider_hint,
             settings::result_open,
             settings::settings_open,
+            settings::settings_close,
             settings::app_restart,
             dictionary::dictionary_view,
             dictionary::dictionary_save,

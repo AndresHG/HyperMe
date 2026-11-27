@@ -158,6 +158,10 @@
   #menu div { display: flex; justify-content: space-between; gap: 18px; padding: 6px 8px; border-radius: 6px; }
   #menu div.on, #menu div:hover { background: var(--on); }
   #menu kbd { font: 11px -apple-system, sans-serif; color: var(--faint); }
+  /* Settings opens as a sheet over this window (V0.1 redesign): the page dims behind it, and a
+     click on the dimmed page closes it. */
+  #dim { display: none; position: fixed; inset: 0; background: rgba(0, 0, 0, .28); z-index: 20; }
+  body.sheet-open #dim { display: block; }
   .dict-error { color: var(--bad); margin: 8px 0 0; }
   .dict-error:empty { display: none; }
 </style>
@@ -212,6 +216,7 @@
   </section>
 </main>
 <div id="menu" role="menu" aria-label="Actions"></div>
+<div id="dim" aria-hidden="true"></div>
 <script src="dictionary.js"></script>
 <script>
   const { invoke } = window.__TAURI__.core;
@@ -285,6 +290,7 @@
   }
 
   const openSettings = (section) => invoke('home_settings', { section });
+  $('dim').addEventListener('mousedown', () => invoke('settings_close'));
   $('open-settings').addEventListener('click', (e) => { e.preventDefault(); openSettings(settingsSection()); });
   $('open-help').addEventListener('click', (e) => { e.preventDefault(); openSettings('about'); });
   // Spec 200, R-12: Report a problem from Help, and from a failed item (its trace leads the issue).
