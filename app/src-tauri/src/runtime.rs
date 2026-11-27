@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
 use hyperme_core::config::Config;
-use hyperme_core::dictation::{Engine, Event, Parts, Settings, Status};
+use hyperme_core::dictation::{DictionaryUpdates, Engine, Event, Parts, Settings, Status};
 use hyperme_core::dictionary::Dictionary;
 use hyperme_core::secrets::SecretStore;
 use hyperme_core::traits::{DictationId, Error, ErrorKind, History, Inserter};
@@ -49,6 +49,8 @@ struct Shared {
     home_retry: Option<DictationId>,
     /// History is on in the config (spec 98, R-19).
     history_enabled: bool,
+    /// Where Settings → Dictionary sends a saved dictionary (spec 93, R-10a).
+    dictionary: Option<DictionaryUpdates>,
 }
 
 type State = Mutex<Shared>;
@@ -111,6 +113,7 @@ pub fn start(app: &AppHandle, menu: TrayMenu) {
         home_retry: None,
         history_enabled: Config::load_or_create(&data_dir(app).join("config.toml"))
             .map_or(true, |config| config.history.enabled),
+        dictionary: None,
     }));
     settle(app);
     // Home shows the history even before the keys are in, or when one cannot be read.
@@ -162,7 +165,12 @@ fn wire(app: &AppHandle, history: Arc<Mutex<HistoryInner>>) -> Result<(), String
         Err(e) => Err(e.to_string()),
     };
     let speech = Speechmatics::new(&config.speech, key(&config.speech.provider)?);
-    let dictionary = load_dictionary(config.dictation.dictionary.as_deref());
+    let dictionary_file = crate::dictionary::file(&dir, Some(&config));
+    let (dictionary, unread) = crate::dictionary::read(&dictionary_file);
+    // An unreadable dictionary leaves dictation working without it; Settings shows why.
+    if let Some(why) = unread {
+        eprintln!("HyperMe: {why}");
+    }
     let cleanup = ChatCleanup::new(&config.cleanup, &key(&config.cleanup.provider)?)
         .map_err(|e| e.message)?
         .with_dictionary(&dictionary.prompt_line());
@@ -197,27 +205,22 @@ fn wire(app: &AppHandle, history: Arc<Mutex<HistoryInner>>) -> Result<(), String
         ..Settings::from_config(&config)
     };
     let engine = Engine::new(parts, settings, status_tx);
+    let dictionary_updates = engine.dictionary_updates();
     tauri::async_runtime::spawn(engine.run(events_rx));
     tauri::async_runtime::spawn(forward_audio(app.clone(), mic_rx, events.clone()));
     tauri::async_runtime::spawn(show_statuses(app.clone(), status_rx));
     let mut shared = lock(app);
     shared.events = Some(events);
     shared._hotkey = Some(hotkey);
+    shared.dictionary = Some(dictionary_updates);
     Ok(())
 }
 
-/// The dictionary file named in the config (spec 93). A missing or unreadable file leaves
-/// dictation working with no dictionary.
-fn load_dictionary(path: Option<&std::path::Path>) -> Dictionary {
-    let Some(path) = path else {
-        return Dictionary::default();
-    };
-    match std::fs::read_to_string(path) {
-        Ok(text) => Dictionary::parse(&text),
-        Err(e) => {
-            eprintln!("HyperMe: dictionary {} not read: {e}", path.display());
-            Dictionary::default()
-        }
+/// Hands a dictionary saved in Settings to the running dictation (spec 93, R-10a). Before the
+/// dictation is running there is nothing to update: it reads the file when it starts.
+pub fn update_dictionary(app: &AppHandle, dictionary: Dictionary) {
+    if let Some(updates) = lock(app).dictionary.clone() {
+        updates.send(dictionary);
     }
 }
 
@@ -519,6 +522,7 @@ pub fn menu_action(app: &AppHandle, id: &str) {
         }
         "settings" => crate::settings::open(app, "setup"),
         "open-home" => crate::home::open(app, "home"),
+        "dictionary" => crate::settings::open(app, "dictionary"),
         "retry" => {
             if let Some(events) = lock(app).events.clone() {
                 let _ = events.try_send(Event::Retry(None));

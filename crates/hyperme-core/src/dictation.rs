@@ -11,6 +11,7 @@
 
 use std::future::Future;
 use std::pin::{Pin, pin};
+use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
 use tokio::sync::mpsc;
@@ -129,6 +130,24 @@ pub struct Engine<M, S, C, I, F, H, N, T> {
     status: mpsc::UnboundedSender<Status>,
     /// The last dictation that failed with its audio saved, for Retry (R-31).
     failed: Option<FailedDictation>,
+    /// A dictionary saved in Settings, waiting for the next dictation (spec 93, R-10a).
+    dictionary: DictionaryUpdates,
+}
+
+/// Hands a changed dictionary to a running engine (spec 93, R-10a). The newest one wins; the
+/// engine picks it up when the next dictation or retry starts, so a dictation in flight keeps
+/// the dictionary it started with.
+#[derive(Debug, Clone, Default)]
+pub struct DictionaryUpdates(Arc<Mutex<Option<Dictionary>>>);
+
+impl DictionaryUpdates {
+    pub fn send(&self, dictionary: Dictionary) {
+        *self.0.lock().unwrap_or_else(PoisonError::into_inner) = Some(dictionary);
+    }
+
+    fn take(&self) -> Option<Dictionary> {
+        self.0.lock().unwrap_or_else(PoisonError::into_inner).take()
+    }
 }
 
 impl<M, S, C, I, F, H, N, T> std::fmt::Debug for Engine<M, S, C, I, F, H, N, T> {
@@ -202,12 +221,29 @@ where
             settings,
             status,
             failed: None,
+            dictionary: DictionaryUpdates::default(),
+        }
+    }
+
+    /// Where Settings sends a changed dictionary (spec 93, R-10a).
+    pub fn dictionary_updates(&self) -> DictionaryUpdates {
+        self.dictionary.clone()
+    }
+
+    /// Uses the newest saved dictionary, if one is waiting: substitution and the cleanup prompt.
+    fn apply_dictionary_update(&mut self) {
+        if let Some(dictionary) = self.dictionary.take() {
+            self.parts.cleanup.set_dictionary(&dictionary.prompt_line());
+            self.settings.dictionary = dictionary;
         }
     }
 
     /// Runs until the event channel closes.
     pub async fn run(mut self, mut events: mpsc::Receiver<Event>) {
         while let Some(event) = events.recv().await {
+            if matches!(event, Event::KeyDown | Event::Retry(_)) {
+                self.apply_dictionary_update();
+            }
             let flow = match event {
                 Event::KeyDown => self.dictate(&mut events).await,
                 Event::Retry(None) => self.retry(&mut events).await,
@@ -227,6 +263,7 @@ where
             settings,
             status,
             failed,
+            ..
         } = self;
         let Parts {
             mic,
@@ -468,6 +505,7 @@ where
             settings,
             status,
             failed: slot,
+            ..
         } = self;
         let emit = |s: Status| {
             let _ = status.send(s);
@@ -588,6 +626,7 @@ where
             settings,
             status,
             failed: slot,
+            ..
         } = self;
         let emit = |s: Status| {
             let _ = status.send(s);

@@ -952,3 +952,34 @@ async fn the_raw_fallback_gets_the_dictionary_words() {
     h.until(&Status::Done { raw: true }).await;
     assert_eq!(log.pasted(), ["the Zentrix host is down"]);
 }
+
+/// Spec 93, AC-8 (R-10a): a dictionary saved while the app runs is used from the next
+/// dictation, in the substitution and in the cleanup prompt, with no restart.
+#[tokio::test(start_paused = true)]
+async fn a_saved_dictionary_applies_from_the_next_dictation() {
+    let log = Log::new();
+    let speech = FakeSpeech::new(&log, "send the sun trix report today");
+    let cleanup = FakeCleanup::new(&log, "Send the report today.");
+    let mut h = Harness::start(&log, speech, cleanup, settings());
+
+    h.send(Event::KeyDown).await;
+    tokio::time::sleep(ms(1000)).await;
+    h.send(Event::KeyUp).await;
+    h.until(&Status::Done { raw: false }).await;
+    assert!(log.has("clean: send the sun trix report today [TextEdit]"));
+
+    h.dictionary
+        .send(hyperme_core::dictionary::Dictionary::parse(
+            "Zentrix: sun trix",
+        ));
+    h.send(Event::KeyDown).await;
+    tokio::time::sleep(ms(1000)).await;
+    h.send(Event::KeyUp).await;
+    h.until(&Status::Done { raw: false }).await;
+    assert!(
+        log.has("clean: send the Zentrix report today [TextEdit]"),
+        "{:?}",
+        log.entries()
+    );
+    assert!(log.has("dictionary:\n\nThe speaker's dictionary: Zentrix."));
+}
