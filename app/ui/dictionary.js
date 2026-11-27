@@ -83,6 +83,7 @@
     file.hidden = true;
     foot.append(where, tools, file);
 
+    root.classList.add('dict');
     root.replaceChildren(bar, sheet, list, empty, foot);
 
     function showMode() {
@@ -115,8 +116,7 @@
       list.replaceChildren();
       rows.forEach((r, i) => {
         if (q && !key(r.word + ' ' + r.wrong).includes(q)) return;
-        const row = el('div', 'row dict-row');
-        row.dataset.words = 'dictionary word ' + r.word + ' ' + r.wrong;
+        const row = el('div', 'dict-row');
         const what = el('div', 'dict-what');
         if (r.wrong) what.append(el('span', 'dict-wrong-word', r.wrong), el('span', 'dict-arrow', '→'));
         what.append(el('span', 'dict-word', r.word));

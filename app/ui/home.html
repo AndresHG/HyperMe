@@ -93,7 +93,10 @@
   #menu div { display: flex; justify-content: space-between; gap: 18px; padding: 6px 8px; border-radius: 6px; }
   #menu div.on, #menu div:hover { background: var(--on); }
   #menu kbd { font: 11px -apple-system, sans-serif; color: var(--faint); }
+  .dict-error { color: var(--bad); margin: 8px 0 0; }
+  .dict-error:empty { display: none; }
 </style>
+<link rel="stylesheet" href="dictionary.css">
 </head>
 <body>
 <nav aria-label="Sections">
@@ -129,8 +132,15 @@
     <div id="list"></div>
     <div class="more" id="more"></div>
   </section>
+
+  <section id="dictionary" aria-label="Dictionary">
+    <header><div><h1>Dictionary</h1><p class="lead">Words HyperMe should always get right. Turn on "Correct a misspelling" to fix a word that keeps coming out wrong.</p></div></header>
+    <p class="dict-error" id="dict-error" role="alert"></p>
+    <div id="dict-root"></div>
+  </section>
 </main>
 <div id="menu" role="menu" aria-label="Actions"></div>
+<script src="dictionary.js"></script>
 <script>
   const { invoke } = window.__TAURI__.core;
   const { listen, emit } = window.__TAURI__.event;
@@ -138,24 +148,18 @@
   const PAGE = 50;
   const DAY_MS = 24 * 60 * 60 * 1000;
   let sections = [];
-  let shown = null;
 
   // ---- Sidebar and routing (R-5, R-6) ----
   function route() {
     const [section, block] = location.hash.replace(/^#/, '').split('/');
-    // Until the Dictionary page comes to Home (spec 93, D4), its section opens Settings there.
-    if (section === 'dictionary') {
-      openSettings('dictionary');
-      history.replaceState(null, '', shown ? '#' + shown : '#home');
-      return route();
-    }
     const id = sections.some((s) => s.id === section) ? section : 'home';
-    shown = id;
     document.querySelectorAll('main > section').forEach((s) => s.classList.toggle('on', s.id === id));
     document.querySelectorAll('#sections a').forEach((a) => a.classList.toggle('on', a.dataset.id === id));
     if (id === 'home') {
       loadHome();
       if (block) document.getElementById('block-' + block)?.scrollIntoView();
+    } else if (id === 'dictionary') {
+      dictionary.reload();
     } else if (id === 'history') {
       resetHistory();
 
@@ -195,7 +199,7 @@
   $('open-settings').addEventListener('click', (e) => { e.preventDefault(); openSettings(settingsSection()); });
   $('open-help').addEventListener('click', (e) => { e.preventDefault(); openSettings('about'); });
   // ⌘, opens Settings at the section closest to where you are (docs/UX.md).
-  const settingsSection = () => (location.hash.startsWith('#history') ? 'privacy' : 'general');
+  const settingsSection = () => (location.hash.startsWith('#history') ? 'privacy' : location.hash.startsWith('#dictionary') ? 'dictionary' : 'general');
 
   document.addEventListener('keydown', (e) => {
     if (!e.metaKey || e.altKey || e.ctrlKey) return;
@@ -824,6 +828,9 @@
       refresh(id);
     }
   });
+
+  // Spec 93, D4: the Dictionary page, the same as Settings → Dictionary (dictionary.js).
+  const dictionary = HyperDictionary.mount($('dict-root'), { invoke, onError: (m) => { $('dict-error').textContent = m; } });
 
   window.addEventListener('hashchange', route);
   Promise.all([invoke('home_info').then((i) => { info = i; }), loadSections()]).then(route);
