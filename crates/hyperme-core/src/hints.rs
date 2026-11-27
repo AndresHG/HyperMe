@@ -2,13 +2,14 @@
 //! R-20): what the provider and model cost a month for the user's talking time, and how fast
 //! they are. Prices and measurements come only from the catalogue, never a pricing API (R-19).
 
-use crate::config::{Config, ModelEntry, Role};
+use crate::config::{Config, ModelEntry, Role, on_this_mac};
 use crate::cost::{cleanup_usd, shown_as, speech_usd};
 
 /// One role's hint, in parts the page lays out on one line.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Hint {
-    /// "About $6 a month for 30 min a day", or "Price not in the catalogue".
+    /// "About $6 a month for 30 min a day", "Price not in the catalogue", or for a server on
+    /// this Mac "Runs on this Mac: nothing leaves it for cleanup" (R-23).
     pub cost: String,
     /// "0.43 s from key release to text, measured", or "Speed not measured".
     pub speed: String,
@@ -44,7 +45,18 @@ pub fn hint(
                 && entry.price_output_per_million_usd.is_some()
         }
     };
-    let cost = if priced {
+    // The address in use: the config's own when this is the chosen provider (Settings keeps a
+    // found local server there), otherwise the catalogue's.
+    let endpoint = match role {
+        Role::Cleanup if config.cleanup.provider == provider => {
+            Some(config.cleanup.endpoint.as_str())
+        }
+        Role::Speech if config.speech.provider == provider => Some(config.speech.endpoint.as_str()),
+        _ => config.provider(provider).map(|p| p.endpoint.as_str()),
+    };
+    let cost = if role == Role::Cleanup && endpoint.is_some_and(on_this_mac) {
+        "Runs on this Mac: nothing leaves it for cleanup".to_owned()
+    } else if priced {
         let usd = match role {
             Role::Speech => speech_usd(&entry, minutes_per_day),
             Role::Cleanup => cleanup_usd(&entry, &config.cleanup, minutes_per_day),

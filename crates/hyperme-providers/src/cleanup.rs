@@ -60,8 +60,9 @@ pub struct ChatCleanup {
     /// The user's dictionary line (spec 93, R-4), between the prompt and the app line. Behind a
     /// lock so a saved dictionary reaches a provider the engine shares (specs/96, R-8).
     dictionary: std::sync::Mutex<String>,
-    /// The `Authorization` header, marked sensitive.
-    auth: HeaderValue,
+    /// The `Authorization` header, marked sensitive. `None` for a server that needs no key, such
+    /// as one on this Mac (R-14), so no header is sent at all.
+    auth: Option<HeaderValue>,
 }
 
 impl fmt::Debug for ChatCleanup {
@@ -87,14 +88,19 @@ impl ChatCleanup {
                 ),
             )
         })?;
-        let mut auth = HeaderValue::from_str(&format!("Bearer {key}")).map_err(|_| {
-            provider_error(
-                &provider,
-                ErrorKind::Auth,
-                "the key has characters a header cannot carry. Check it in Settings",
-            )
-        })?;
-        auth.set_sensitive(true);
+        let auth = if key.is_empty() {
+            None
+        } else {
+            let mut auth = HeaderValue::from_str(&format!("Bearer {key}")).map_err(|_| {
+                provider_error(
+                    &provider,
+                    ErrorKind::Auth,
+                    "the key has characters a header cannot carry. Check it in Settings",
+                )
+            })?;
+            auth.set_sensitive(true);
+            Some(auth)
+        };
         let http = reqwest::Client::builder()
             .connect_timeout(CONNECT_TIMEOUT)
             .build()
@@ -116,6 +122,13 @@ impl ChatCleanup {
             dictionary: std::sync::Mutex::default(),
             auth,
         })
+    }
+
+    fn authorized(&self, request: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+        match &self.auth {
+            Some(auth) => request.header(AUTHORIZATION, auth.clone()),
+            None => request,
+        }
     }
 
     fn error(&self, kind: ErrorKind, what: impl fmt::Display) -> Error {
@@ -214,9 +227,19 @@ fn provider_error(provider: &str, kind: ErrorKind, what: impl fmt::Display) -> E
 /// ids start with `models/`, which is dropped. Called only from Settings, never on the dictation
 /// path (R-15). An empty `key` sends no `Authorization` header, for a local server.
 pub async fn list_models(provider: &str, endpoint: &str, key: &str) -> Result<Vec<String>, Error> {
+    list_models_within(provider, endpoint, key, LIST_TIMEOUT).await
+}
+
+/// [`list_models`] with its own time limit, for looking on local ports (R-22).
+pub(crate) async fn list_models_within(
+    provider: &str,
+    endpoint: &str,
+    key: &str,
+    limit: Duration,
+) -> Result<Vec<String>, Error> {
     let http = reqwest::Client::builder()
-        .connect_timeout(CONNECT_TIMEOUT)
-        .timeout(LIST_TIMEOUT)
+        .connect_timeout(CONNECT_TIMEOUT.min(limit))
+        .timeout(limit)
         .build()
         .map_err(|e| {
             provider_error(
@@ -308,9 +331,7 @@ impl CleanupProvider for ChatCleanup {
     /// R-2: opens the connection on key-down, so the cleanup call finds it ready.
     async fn warm(&self) -> Result<(), Error> {
         let response = self
-            .http
-            .get(format!("{}/models", self.endpoint))
-            .header(AUTHORIZATION, self.auth.clone())
+            .authorized(self.http.get(format!("{}/models", self.endpoint)))
             .send()
             .await
             .map_err(|e| self.network(&e))?;
@@ -327,9 +348,10 @@ impl CleanupProvider for ChatCleanup {
         on_text: &mut (dyn FnMut(&str) + Send),
     ) -> Result<(), Error> {
         let response = self
-            .http
-            .post(format!("{}/chat/completions", self.endpoint))
-            .header(AUTHORIZATION, self.auth.clone())
+            .authorized(
+                self.http
+                    .post(format!("{}/chat/completions", self.endpoint)),
+            )
             .header(CONTENT_TYPE, "application/json")
             .body(self.request_body(raw, app).to_string())
             .send()

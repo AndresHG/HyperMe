@@ -57,6 +57,8 @@
   .toolbar { display: flex; justify-content: space-between; align-items: center; margin-top: 18px; }
   .add { display: flex; gap: 6px; margin-top: 8px; }
   .add input { flex: 1; min-width: 0; }
+  .add select { flex: 1; min-width: 0; }
+  td.local { padding-top: 0; }
   a.link { color: var(--violet); cursor: pointer; text-decoration: none; }
 </style>
 </head>
@@ -317,6 +319,7 @@
       if (r.role === 'cleanup') providerMenu.add(new Option('Add a custom endpoint…', '__add'));
       providerMenu.addEventListener('change', () => {
         if (providerMenu.value === '__add') { showAdd(r, providerMenu); return; }
+        if (providerMenu.value === 'local') { showLocal(providerMenu); return; }
         const p = r.providers.find((x) => x.id === providerMenu.value);
         const model = p.models.length ? p.models[0].id : '';
         if (!model) { pending[r.role] = { provider: p.id, model: '' }; renderRoles(); return; }
@@ -417,6 +420,55 @@
         await refresh();
       } catch (e) { $('error').textContent = String(e); }
     });
+  }
+
+  // R-22: Local server looks on the usual ports on this Mac and offers what answers; the user
+  // may type another address instead.
+  async function showLocal(menu) {
+    const status = el('div', { className: 'effort', textContent: 'Looking for a server on this Mac…' });
+    const found = el('div', { className: 'add' });
+    const address = el('input', { type: 'text', placeholder: 'http://127.0.0.1:11434/v1', 'aria-label': 'Server address' });
+    const model = el('input', { type: 'text', placeholder: 'Model name', 'aria-label': 'Server model' });
+    const use = el('button', { className: 'main', textContent: 'Use' });
+    const cancel = el('button', { textContent: 'Cancel' });
+    const typed = el('div', { className: 'add' }, address, model, use, cancel);
+    // A row of its own under the cleanup row, so the fields have the table's width.
+    const cell = el('td', { colSpan: 4, className: 'local' }, status, found, typed);
+    $('role-cleanup').after(el('tr', { id: 'local-form' }, cell));
+    menu.disabled = true;
+    cancel.addEventListener('click', () => renderRoles());
+    use.addEventListener('click', () => {
+      if (!address.value.trim() || !model.value.trim()) { $('error').textContent = 'Type the server address and a model name.'; return; }
+      useLocal(address.value, model.value.trim());
+    });
+    let servers = [];
+    try { servers = await invoke('local_discover'); } catch (e) { $('error').textContent = String(e); }
+    if (!servers.length) {
+      status.textContent = 'No server answered on the usual ports. Start Ollama, LM Studio or mlx_lm.server, or type its address.';
+      return;
+    }
+    status.textContent = servers.length === 1 ? 'Found a server on this Mac:' : 'Found these servers on this Mac:';
+    for (const s of servers) {
+      if (!s.models.length) {
+        found.append(el('span', { className: 'state warn', textContent: 'Port ' + s.port + ' has no models yet' }));
+        continue;
+      }
+      const pick = el('select', { 'aria-label': 'Model on port ' + s.port });
+      s.models.forEach((m) => pick.add(new Option(m)));
+      const go = el('button', { className: 'main', textContent: 'Use port ' + s.port });
+      go.addEventListener('click', () => useLocal(s.endpoint, pick.value));
+      found.append(pick, go);
+    }
+    address.value = servers[0].endpoint;
+  }
+
+  async function useLocal(endpoint, model) {
+    try {
+      await invoke('local_use', { endpoint, model });
+      delete pending.cleanup;
+      $('error').textContent = '';
+    } catch (e) { $('error').textContent = String(e); }
+    await refresh();
   }
 
   async function choose(role, provider, model) {

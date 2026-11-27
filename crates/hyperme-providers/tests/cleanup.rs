@@ -216,6 +216,10 @@ const RAW: &str = "so the deploy failed because of the cash invalidation";
 /// Runs one dictation and returns the final status, what was pasted, and the time from the
 /// final transcript to the paste.
 async fn dictate(endpoint: &str, deadline: Duration) -> (Status, String, Duration) {
+    dictate_with(cleanup(endpoint), deadline).await
+}
+
+async fn dictate_with(cleanup: ChatCleanup, deadline: Duration) -> (Status, String, Duration) {
     let marks = Marks::default();
     let (events, events_rx) = tokio::sync::mpsc::channel(16);
     let (status_tx, mut status) = tokio::sync::mpsc::unbounded_channel();
@@ -228,7 +232,7 @@ async fn dictate(endpoint: &str, deadline: Duration) -> (Status, String, Duratio
     };
     let parts = Parts {
         mic: NoMic,
-        providers: fixed(speech, cleanup(endpoint)),
+        providers: fixed(speech, cleanup),
         inserter: Paste(marks.clone()),
         focus: Notes,
         history: NoHistory,
@@ -358,4 +362,31 @@ impl TimingLog for NoTiming {
 struct Silent;
 impl Sounds for Silent {
     fn play(&self, _sound: Sound) {}
+}
+
+/// Provider settings AC-9 (R-23): a local server, which has no key, is held to the same
+/// deadline and falls back to the raw transcript when it is slow.
+#[tokio::test]
+async fn ac9_a_slow_local_server_falls_back_to_raw() {
+    let mut slow = streamed(&["never in time"]);
+    slow.delay = Duration::from_secs(3);
+    let (base, requests) = serve(models(), slow).await;
+    let mut config = config::Config::default().cleanup;
+    config.endpoint = base;
+    let keyless = ChatCleanup::new(&config, "").unwrap();
+    let deadline = Duration::from_millis(300);
+    let (status, pasted, waited) = dictate_with(keyless, deadline).await;
+    assert_eq!(status, Status::Done { raw: true });
+    assert_eq!(pasted, RAW);
+    assert!(
+        waited.abs_diff(deadline) <= Duration::from_millis(20),
+        "{waited:?}"
+    );
+    // No key, so no Authorization header at all.
+    for request in requests.lock().unwrap().iter() {
+        assert!(
+            !request.to_lowercase().contains("authorization"),
+            "{request}"
+        );
+    }
 }

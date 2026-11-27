@@ -5,6 +5,7 @@
 pub mod actions;
 pub mod any;
 pub mod cleanup;
+pub mod local;
 pub mod mcp;
 pub mod models;
 pub mod oauth;

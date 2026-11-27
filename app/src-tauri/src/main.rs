@@ -82,6 +82,8 @@ fn main() {
             settings::provider_add,
             settings::provider_key_page,
             settings::models_list,
+            settings::local_discover,
+            settings::local_use,
             settings::provider_hint,
             settings::result_open,
             settings::settings_open,

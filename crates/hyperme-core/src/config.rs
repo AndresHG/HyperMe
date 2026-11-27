@@ -129,6 +129,19 @@ fn later_in_menus() -> u32 {
     500
 }
 
+/// Whether `endpoint` is a server on this Mac: its host is `127.0.0.1`, `localhost` or `[::1]`
+/// (R-23).
+pub fn on_this_mac(endpoint: &str) -> bool {
+    let rest = endpoint.split_once("://").map_or(endpoint, |(_, r)| r);
+    let authority = rest.split('/').next().unwrap_or("");
+    let host = if authority.starts_with('[') {
+        authority.split(']').next().map(|h| &h[1..]).unwrap_or("")
+    } else {
+        authority.split(':').next().unwrap_or("")
+    };
+    matches!(host, "127.0.0.1" | "localhost" | "::1")
+}
+
 /// What a provider is (R-1).
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -162,6 +175,10 @@ pub struct ProviderEntry {
     /// The models the catalogue knows, recommended first.
     #[serde(default)]
     pub models: Vec<ModelEntry>,
+    /// Ports on this Mac where a server like it usually listens, tried in order when the user
+    /// picks it (R-22).
+    #[serde(default)]
+    pub ports: Vec<u16>,
 }
 
 /// One model of a provider: its prices and the latency this project measured (R-1, R-19).
