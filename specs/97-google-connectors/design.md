@@ -119,7 +119,12 @@ for two provider keys. A shared client can come later if non-developers ask, as 
 ## Sync and cost
 
 Defaults (R-16, agreed with #92): every 30 minutes while the user is present, once on the
-morning presence event, and on demand, per account.
+morning presence event, and on demand, per account. Each connector server with a pull has one
+job, named `sync:<connector>-<server>`: `sync:google-calendar` and `sync:google-gmail`.
+
+Quota (R-20): each server in the preset has `daily_units` and a cost per tool (`units`); the
+request counter adds those units per account and day. From 80% of the day's quota a pull runs
+at most every 2 hours, and at the quota it stops until the next day.
 
 | Call | Per day (12 present hours) | Quota units (reported) |
 | --- | --- | --- |

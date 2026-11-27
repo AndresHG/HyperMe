@@ -12,6 +12,7 @@ use std::path::Path;
 use std::sync::{Mutex, MutexGuard};
 
 use hyperme_core::connectors::{AccountData, RequestLog, Usage};
+use hyperme_core::health::AccountStatusStore;
 use hyperme_core::schedule::Schedule;
 use hyperme_core::scheduler::{Job, JobKind, JobStatus, JobStore};
 use hyperme_core::sync::{Event, EventStore, MailMeta, MailStore};
@@ -109,6 +110,11 @@ const MIGRATIONS: &[&str] = &[
         labels      TEXT    NOT NULL,
         to_answer   INTEGER NOT NULL,
         PRIMARY KEY (account, id)
+    ) WITHOUT ROWID;",
+    // 6: accounts waiting for a new sign-in (specs/97-google-connectors, R-10).
+    "CREATE TABLE connector_sign_in (
+        account TEXT    PRIMARY KEY,
+        since   INTEGER NOT NULL
     ) WITHOUT ROWID;",
 ];
 
@@ -950,7 +956,12 @@ impl RequestLog for SqliteTaskStore {
 impl AccountData for SqliteTaskStore {
     fn delete_account(&self, account: &str) -> Result<(), String> {
         let db = self.db();
-        for table in ["connector_requests", "events", "mail_meta"] {
+        for table in [
+            "connector_requests",
+            "events",
+            "mail_meta",
+            "connector_sign_in",
+        ] {
             db.execute(
                 &format!("DELETE FROM {table} WHERE account = ?1"),
                 params![account],
@@ -1125,5 +1136,40 @@ impl MailStore for SqliteTaskStore {
                 params![unix(now - hyperme_core::sync::KEEP_MAIL)],
             )
             .map_err(mail_error)
+    }
+}
+
+/// Accounts marked "Sign in again" (specs/97-google-connectors, R-10, AC-4).
+impl AccountStatusStore for SqliteTaskStore {
+    fn sign_in_needed(&self, account: &str) -> Result<bool, String> {
+        self.db()
+            .query_row(
+                "SELECT 1 FROM connector_sign_in WHERE account = ?1",
+                params![account],
+                |_| Ok(()),
+            )
+            .optional()
+            .map(|found| found.is_some())
+            .map_err(|error| format!("sign-in state: {error}"))
+    }
+
+    fn mark_sign_in_needed(&self, account: &str, at: UtcDateTime) -> Result<bool, String> {
+        self.db()
+            .execute(
+                "INSERT OR IGNORE INTO connector_sign_in (account, since) VALUES (?1, ?2)",
+                params![account, unix(at)],
+            )
+            .map(|inserted| inserted == 1)
+            .map_err(|error| format!("sign-in state: {error}"))
+    }
+
+    fn clear(&self, account: &str) -> Result<(), String> {
+        self.db()
+            .execute(
+                "DELETE FROM connector_sign_in WHERE account = ?1",
+                params![account],
+            )
+            .map(drop)
+            .map_err(|error| format!("sign-in state: {error}"))
     }
 }

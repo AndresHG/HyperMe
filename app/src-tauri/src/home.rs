@@ -7,7 +7,8 @@
 
 use serde::Serialize;
 
-/// The Home window's label.
+/// The Home window's label. Only the macOS window code uses it so far.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub const HOME: &str = "home";
 
 /// One section in the sidebar (R-5). Only sections whose feature exists are listed.

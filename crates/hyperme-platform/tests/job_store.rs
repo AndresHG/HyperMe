@@ -132,7 +132,7 @@ async fn a_version_1_file_gains_the_job_table_and_keeps_its_tasks() {
         .unwrap();
     drop(store);
     let db = rusqlite::Connection::open(&path).unwrap();
-    db.execute_batch("DROP TABLE job; DROP TABLE connector_requests; DROP TABLE events; DROP TABLE mail_meta; PRAGMA user_version = 1;")
+    db.execute_batch("DROP TABLE job; DROP TABLE connector_requests; DROP TABLE events; DROP TABLE mail_meta; DROP TABLE connector_sign_in; PRAGMA user_version = 1;")
         .unwrap();
     drop(db);
 

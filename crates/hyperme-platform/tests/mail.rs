@@ -8,7 +8,7 @@ use hyperme_core::config::Connectors;
 use hyperme_core::connector_settings as cs;
 use hyperme_core::connectors::AccountData;
 use hyperme_core::schedule::Zone;
-use hyperme_core::sync::{self, MailStore, ToolCaller};
+use hyperme_core::sync::{self, MailStore, SyncError, ToolCaller};
 use hyperme_platform::task_store::SqliteTaskStore;
 use serde_json::{Value, json};
 use time::{Date, Duration, Month, Time, UtcDateTime, UtcOffset};
@@ -27,7 +27,7 @@ const BODY_MARKER: &str = "SYNTHETIC-BODY-THAT-MUST-NOT-BE-STORED";
 struct FakeGmail;
 
 impl ToolCaller for FakeGmail {
-    async fn call(&self, _: &str, _: &str, _: Value) -> Result<Value, String> {
+    async fn call(&self, _: &str, _: &str, _: Value) -> Result<Value, SyncError> {
         let thread = |id: &str, last: &str| {
             json!({
                 "id": id, "subject": format!("Subject {id}"), "from": "sender@example.test",
