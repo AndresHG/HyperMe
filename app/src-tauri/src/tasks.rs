@@ -468,9 +468,6 @@ pub async fn act(
 
 // --- The app's wiring ----------------------------------------------------------------------
 
-/// Sent to the pill when the morning card is built (slice C draws it).
-pub const MORNING: &str = "tasks://morning";
-
 /// The scheduler's control channel and the store, kept while the app runs.
 pub struct Tasks {
     commands: tokio::sync::mpsc::UnboundedSender<hyperme_core::scheduler::Command>,
@@ -703,9 +700,8 @@ impl Ui for AppUi {
             }
         });
     }
-    fn morning(&self, _card: &MorningCard, update: bool) {
-        use tauri::Emitter;
-        let _ = self.0.emit(MORNING, update);
+    fn morning(&self, card: &MorningCard, update: bool) {
+        crate::runtime::show_card(&self.0, crate::pill::morning_view(card), update);
     }
 }
 
