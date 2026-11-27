@@ -7,10 +7,13 @@ use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
 use hyperme_core::config::Config;
-use hyperme_core::dictation::{DictionaryUpdates, Engine, Event, Parts, Settings, Status};
+use hyperme_core::dictation::{
+    DictionaryUpdates, Engine, Event, Parts, Providers, Settings, Status,
+};
 use hyperme_core::dictionary::Dictionary;
-use hyperme_core::secrets::SecretStore;
-use hyperme_core::traits::{DictationId, Error, ErrorKind, History, Inserter};
+use hyperme_core::traits::{
+    DictationId, Error, ErrorKind, History, Inserter, TimingLine, TimingLog,
+};
 use hyperme_platform::history::{HistorySettings, SqliteHistory};
 use hyperme_platform::hotkey::macos::HotkeyListener;
 use hyperme_platform::keychain::KeychainStore;
@@ -19,11 +22,11 @@ use hyperme_platform::paste::macos::{CmdV, MacFocus, MacPasteboard};
 use hyperme_platform::paste::{ClipboardInserter, RESTORE_AFTER};
 use hyperme_platform::sounds::SystemSounds;
 use hyperme_platform::timing::{FileTimingLog, Names};
-use hyperme_providers::cleanup::ChatCleanup;
-use hyperme_providers::speechmatics::{SAMPLE_RATE, Speechmatics};
+use hyperme_providers::any::{self, AnyCleanup, AnySpeech};
+use hyperme_providers::speechmatics::SAMPLE_RATE;
 use tauri::{AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, Position, Size};
 use tauri_nspanel::ManagerExt;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, watch};
 
 use crate::pill::{self, Change, View};
 use crate::{PILL, TrayMenu, geometry};
@@ -43,6 +46,10 @@ struct Shared {
     show_while_idle: bool,
     /// Hotkey listening must live as long as the app.
     _hotkey: Option<HotkeyListener>,
+    /// Replaces the providers the next dictation uses (specs/96-provider-settings, R-8).
+    providers: Option<watch::Sender<Arc<Providers<AnySpeech, AnyCleanup>>>>,
+    /// The timing log, whose provider and model names follow a switch.
+    timing: Arc<Mutex<FileTimingLog>>,
     /// A dictation or retry is in progress: from its first status until Idle.
     busy: bool,
     /// The dictation Home asked to retry, while that retry runs (spec 98, R-16).
@@ -109,6 +116,8 @@ pub fn start(app: &AppHandle, menu: TrayMenu) {
         show_while_idle: Config::load_or_create(&data_dir(app).join("config.toml"))
             .map_or(true, |config| config.dictation.show_while_idle),
         _hotkey: None,
+        providers: None,
+        timing: Arc::new(Mutex::new(timing_log(&Config::default()))),
         busy: false,
         home_retry: None,
         history_enabled: Config::load_or_create(&data_dir(app).join("config.toml"))
@@ -158,22 +167,19 @@ fn wire(app: &AppHandle, history: Arc<Mutex<HistoryInner>>) -> Result<(), String
     let dir = data_dir(app);
     let config =
         Config::load_or_create(&dir.join("config.toml")).map_err(|e| format!("Config: {e}"))?;
-    let keys = KeychainStore::new();
-    let key = |provider: &str| match keys.get(provider) {
-        Ok(Some(key)) => Ok(key),
-        Ok(None) => Err(format!("No {provider} key yet")),
-        Err(e) => Err(e.to_string()),
-    };
-    let speech = Speechmatics::new(&config.speech, key(&config.speech.provider)?);
     let dictionary_file = crate::dictionary::file(&dir, Some(&config));
     let (dictionary, unread) = crate::dictionary::read(&dictionary_file);
     // An unreadable dictionary leaves dictation working without it; Settings shows why.
     if let Some(why) = unread {
         eprintln!("HyperMe: {why}");
     }
-    let cleanup = ChatCleanup::new(&config.cleanup, &key(&config.cleanup.provider)?)
-        .map_err(|e| e.message)?
-        .with_dictionary(&dictionary.prompt_line());
+    let providers = with_dictionary(
+        any::resolve(&config, &KeychainStore::new()).map_err(|e| e.message)?,
+        &dictionary,
+    );
+    let (switch, providers) = watch::channel(Arc::new(providers));
+    let timing = lock(app).timing.clone();
+    *timing.lock().unwrap_or_else(PoisonError::into_inner) = timing_log(&config);
     open_history(&history, &dir, &config);
 
     let (events, events_rx) = mpsc::channel(1024);
@@ -183,21 +189,12 @@ fn wire(app: &AppHandle, history: Arc<Mutex<HistoryInner>>) -> Result<(), String
         HotkeyListener::start(&config.dictation.hotkey, events.clone()).map_err(|e| e.message)?;
     let parts = Parts {
         mic: CpalMicrophone::new(mic_tx, SAMPLE_RATE),
-        speech,
-        cleanup,
+        providers,
         inserter: ClipboardInserter::new(Arc::new(MacPasteboard), CmdV, RESTORE_AFTER),
         focus: MacFocus,
         history: SharedHistory(history),
         sounds: SystemSounds,
-        timing: FileTimingLog::new(
-            timing_path(),
-            Names {
-                speech_provider: config.speech.provider.clone(),
-                speech_model: config.speech.model.clone(),
-                cleanup_provider: config.cleanup.provider.clone(),
-                cleanup_model: config.cleanup.model.clone(),
-            },
-        ),
+        timing: SharedTiming(timing),
     };
     let (status_tx, status_rx) = mpsc::unbounded_channel();
     let settings = Settings {
@@ -212,8 +209,67 @@ fn wire(app: &AppHandle, history: Arc<Mutex<HistoryInner>>) -> Result<(), String
     let mut shared = lock(app);
     shared.events = Some(events);
     shared._hotkey = Some(hotkey);
+    shared.providers = Some(switch);
     shared.dictionary = Some(dictionary_updates);
     Ok(())
+}
+
+/// Builds the providers the config names now and hands them to the next dictation, without a
+/// restart (R-8). A dictation in progress keeps its own (R-9). If they cannot be built, a key
+/// missing for example, the providers in use stay and the reason is returned (R-12). Does
+/// nothing before dictation has started; it reads the config when it does.
+pub fn reload_providers(app: &AppHandle) -> Result<(), String> {
+    let Some(switch) = lock(app).providers.clone() else {
+        return Ok(());
+    };
+    let config = Config::load_or_create(&data_dir(app).join("config.toml"))
+        .map_err(|e| format!("Config: {e}"))?;
+    let (dictionary, _) =
+        crate::dictionary::read(&crate::dictionary::file(&data_dir(app), Some(&config)));
+    let providers = with_dictionary(
+        any::resolve(&config, &KeychainStore::new()).map_err(|e| e.message)?,
+        &dictionary,
+    );
+    let timing = lock(app).timing.clone();
+    *timing.lock().unwrap_or_else(PoisonError::into_inner) = timing_log(&config);
+    switch.send_replace(Arc::new(providers));
+    Ok(())
+}
+
+/// The timing log, labelled with the config's providers and models.
+fn timing_log(config: &Config) -> FileTimingLog {
+    FileTimingLog::new(
+        timing_path(),
+        Names {
+            speech_provider: config.speech.provider.clone(),
+            speech_model: config.speech.model.clone(),
+            cleanup_provider: config.cleanup.provider.clone(),
+            cleanup_model: config.cleanup.model.clone(),
+        },
+    )
+}
+
+/// The timing log behind a lock, so a provider switch can relabel it.
+struct SharedTiming(Arc<Mutex<FileTimingLog>>);
+
+impl TimingLog for SharedTiming {
+    fn record(&mut self, line: &TimingLine) {
+        self.0
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .record(line);
+    }
+}
+
+/// The cleanup provider with the user's dictionary in its prompt (spec 93, R-4).
+fn with_dictionary(
+    providers: Providers<AnySpeech, AnyCleanup>,
+    dictionary: &Dictionary,
+) -> Providers<AnySpeech, AnyCleanup> {
+    Providers {
+        cleanup: providers.cleanup.with_dictionary(&dictionary.prompt_line()),
+        ..providers
+    }
 }
 
 /// Hands a dictionary saved in Settings to the running dictation (spec 93, R-10a). Before the

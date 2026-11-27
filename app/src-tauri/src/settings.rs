@@ -11,8 +11,7 @@ use hyperme_core::secrets::SecretStore;
 use hyperme_core::traits::{CleanupProvider, SpeechProvider};
 use hyperme_platform::keychain::KeychainStore;
 use hyperme_platform::permissions;
-use hyperme_providers::cleanup::ChatCleanup;
-use hyperme_providers::speechmatics::Speechmatics;
+use hyperme_providers::any;
 use serde::Serialize;
 use serde_json::Value;
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
@@ -188,7 +187,8 @@ fn toml_string(s: &str) -> String {
     out
 }
 
-/// Saves one setting. Changes take effect after a restart; the page offers one.
+/// Saves one setting. A provider or model change reaches the next dictation at once (specs/96-
+/// provider-settings, R-8); other changes take effect after a restart, which the page offers.
 #[tauri::command]
 pub fn settings_set(
     app: AppHandle,
@@ -206,6 +206,11 @@ pub fn settings_set(
     std::fs::rename(&temp, &path).map_err(|e| format!("{}: {e}", path.display()))?;
     if section == "speech" || section == "cleanup" {
         providers_changed(&app);
+        // The setting is saved either way; a provider that cannot be built yet (no key) leaves
+        // the one in use running until it can (R-12).
+        if let Err(why) = crate::runtime::reload_providers(&app) {
+            eprintln!("HyperMe: providers unchanged: {why}");
+        }
     }
     Ok(())
 }
@@ -231,7 +236,12 @@ fn provider_for(app: &AppHandle, role: &str) -> Result<(Config, String), String>
 #[tauri::command]
 pub fn key_set(app: AppHandle, role: String, key: String) -> Result<(), String> {
     let (_, provider) = provider_for(&app, &role)?;
-    save_key(&app, &KeychainStore::new(), &provider, &key)
+    save_key(&app, &KeychainStore::new(), &provider, &key)?;
+    // A new key reaches the next dictation without a restart.
+    if let Err(why) = crate::runtime::reload_providers(&app) {
+        eprintln!("HyperMe: providers unchanged: {why}");
+    }
+    Ok(())
 }
 
 /// Stores the key, then tells a waiting walkthrough to test it (U-12).
@@ -250,20 +260,19 @@ fn save_key<R: tauri::Runtime>(
 /// cleanup connection. Returns the time it took in ms.
 #[tauri::command]
 pub async fn key_test(app: AppHandle, role: String) -> Result<u64, String> {
-    let (config, provider) = provider_for(&app, &role)?;
-    let key = KeychainStore::new()
-        .get(&provider)
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| format!("No {provider} key yet"))?;
+    // The same path the runtime builds its providers with, so Test and dictation agree.
+    let (config, _) = provider_for(&app, &role)?;
+    let keys = KeychainStore::new();
     let start = Instant::now();
     if role == "speech" {
-        let session = Speechmatics::new(&config.speech, key)
+        let session = any::speech(&config, &keys)
+            .map_err(|e| e.message)?
             .open()
             .await
             .map_err(|e| e.message)?;
         drop(session);
     } else {
-        ChatCleanup::new(&config.cleanup, &key)
+        any::cleanup(&config, &keys)
             .map_err(|e| e.message)?
             .warm()
             .await

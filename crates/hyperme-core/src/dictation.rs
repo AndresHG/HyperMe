@@ -14,7 +14,7 @@ use std::pin::{Pin, pin};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, watch};
 use tokio::time::{Instant, sleep_until, timeout};
 
 use crate::config::Config;
@@ -111,12 +111,29 @@ pub enum Status {
     },
 }
 
+/// The speech and cleanup providers one dictation uses.
+#[derive(Debug)]
+pub struct Providers<S, C> {
+    pub speech: S,
+    pub cleanup: C,
+}
+
+/// The providers in use, which Settings can replace while the app runs (specs/96-provider-
+/// settings, R-8). The engine reads it once on key-down and keeps that pair for the whole
+/// dictation, so a change never reaches one in progress (R-9).
+pub type ProviderSwitch<S, C> = watch::Receiver<Arc<Providers<S, C>>>;
+
+/// Providers that never change, for tools and tests with no Settings window.
+pub fn fixed<S, C>(speech: S, cleanup: C) -> ProviderSwitch<S, C> {
+    // The receiver keeps the last value after the sender is dropped.
+    watch::channel(Arc::new(Providers { speech, cleanup })).1
+}
+
 /// Everything the state machine drives, one implementation per trait.
 #[derive(Debug)]
 pub struct Parts<M, S, C, I, F, H, N, T> {
     pub mic: M,
-    pub speech: S,
-    pub cleanup: C,
+    pub providers: ProviderSwitch<S, C>,
     pub inserter: I,
     pub focus: F,
     pub history: H,
@@ -132,6 +149,9 @@ pub struct Engine<M, S, C, I, F, H, N, T> {
     failed: Option<FailedDictation>,
     /// A dictionary saved in Settings, waiting for the next dictation (spec 93, R-10a).
     dictionary: DictionaryUpdates,
+    /// The dictionary line of the last saved dictionary, given to the cleanup provider of each
+    /// dictation, so it holds across a provider switch (spec 93, R-10a; specs/96, R-8).
+    dictionary_line: Option<String>,
 }
 
 /// Hands a changed dictionary to a running engine (spec 93, R-10a). The newest one wins; the
@@ -203,8 +223,8 @@ struct Text {
 impl<M, S, C, I, F, H, N, T> Engine<M, S, C, I, F, H, N, T>
 where
     M: Microphone + Send,
-    S: SpeechProvider + Sync,
-    C: CleanupProvider + Sync,
+    S: SpeechProvider + Send + Sync,
+    C: CleanupProvider + Send + Sync,
     I: Inserter + Send,
     F: FocusInfo + Send,
     H: History + Send,
@@ -222,6 +242,7 @@ where
             status,
             failed: None,
             dictionary: DictionaryUpdates::default(),
+            dictionary_line: None,
         }
     }
 
@@ -233,7 +254,7 @@ where
     /// Uses the newest saved dictionary, if one is waiting: substitution and the cleanup prompt.
     fn apply_dictionary_update(&mut self) {
         if let Some(dictionary) = self.dictionary.take() {
-            self.parts.cleanup.set_dictionary(&dictionary.prompt_line());
+            self.dictionary_line = Some(dictionary.prompt_line());
             self.settings.dictionary = dictionary;
         }
     }
@@ -263,12 +284,12 @@ where
             settings,
             status,
             failed,
+            dictionary_line,
             ..
         } = self;
         let Parts {
             mic,
-            speech,
-            cleanup,
+            providers,
             inserter,
             focus,
             history,
@@ -285,6 +306,12 @@ where
             return Flow::Ended;
         }
         let start = Instant::now();
+        // R-8, R-9: the providers set at key-down serve this dictation start to end.
+        let current = Arc::clone(&providers.borrow());
+        let Providers { speech, cleanup } = &*current;
+        if let Some(line) = dictionary_line.as_deref() {
+            cleanup.set_dictionary(line);
+        }
         // R-11: the app the user is dictating into.
         let app = focus.frontmost_app();
         // R-18, R-31: audio goes to disk as it is captured. A history that cannot be written
@@ -505,19 +532,25 @@ where
             settings,
             status,
             failed: slot,
+            dictionary_line,
             ..
         } = self;
         let emit = |s: Status| {
             let _ = status.send(s);
         };
         let Parts {
-            speech,
-            cleanup,
+            providers,
             inserter,
             focus,
             history,
             ..
         } = parts;
+        // R-9: this retry uses the providers set now, start to end.
+        let current = Arc::clone(&providers.borrow());
+        let Providers { speech, cleanup } = &*current;
+        if let Some(line) = dictionary_line.as_deref() {
+            cleanup.set_dictionary(line);
+        }
         let mut keep_for_retry = |error: &Error| {
             *slot = Some(failed.clone());
             emit(Status::Failed {
@@ -626,18 +659,24 @@ where
             settings,
             status,
             failed: slot,
+            dictionary_line,
             ..
         } = self;
         let emit = |s: Status| {
             let _ = status.send(s);
         };
         let Parts {
-            speech,
-            cleanup,
+            providers,
             inserter,
             history,
             ..
         } = parts;
+        // specs/96, R-9: this retry uses the providers set now, start to end.
+        let current = Arc::clone(&providers.borrow());
+        let Providers { speech, cleanup } = &*current;
+        if let Some(line) = dictionary_line.as_deref() {
+            cleanup.set_dictionary(line);
+        }
         // The pill and menu keep offering Retry for the last failed dictation, if any.
         let fail = |message: String| {
             emit(Status::Failed {

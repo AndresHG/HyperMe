@@ -10,7 +10,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
 use hyperme_core::audio::frame_samples;
-use hyperme_core::dictation::{Engine, Event, Parts, Settings, Status};
+use hyperme_core::dictation::{Engine, Event, Parts, Settings, Status, fixed};
 use hyperme_core::traits::{
     CleanupProvider, DictationId, Error, ErrorKind, FocusInfo, History, Inserter, LiveSession,
     Microphone, Sound, Sounds, SpeechProvider, TimingLine, TimingLog, Transcript,
@@ -213,17 +213,19 @@ pub async fn replay<S, C>(
     mut each: impl FnMut(&Replayed),
 ) -> Vec<Replayed>
 where
-    S: SpeechProvider + Sync,
+    S: SpeechProvider + Send + Sync,
     C: CleanupProvider + Sync,
 {
     let seen = Shared::default();
     let parts = Parts {
         mic: NoMicrophone,
-        speech: KeepRaw {
-            inner: speech,
-            seen: seen.clone(),
-        },
-        cleanup: Borrowed(cleanup),
+        providers: fixed(
+            KeepRaw {
+                inner: speech,
+                seen: seen.clone(),
+            },
+            Borrowed(cleanup),
+        ),
         inserter: KeepText(seen.clone()),
         focus: NoFocus,
         history: NoHistory,

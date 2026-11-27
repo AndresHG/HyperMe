@@ -64,7 +64,7 @@ pub trait LiveSession {
 pub trait CleanupProvider {
     /// Replaces the dictionary line the cleanup prompt carries (spec 93, R-4, R-10a). The line
     /// is `Dictionary::prompt_line()`. Providers that build no prompt ignore it.
-    fn set_dictionary(&mut self, _line: &str) {}
+    fn set_dictionary(&self, _line: &str) {}
 
     /// Opens the connection ahead of time, on key-down (R-2).
     fn warm(&self) -> impl Future<Output = Result<(), Error>> + Send;
