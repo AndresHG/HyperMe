@@ -365,6 +365,9 @@
         page.addEventListener('click', () => invoke('provider_key_page', { provider: chosen.id }));
         row.append(page);
       }
+      if (needsKey && chosen.key_note) {
+        keyCell.append(el('div', { className: 'faint key-note' }, chosen.key_note));
+      }
 
       body.append(el('tr', { id: 'role-' + r.role },
         el('td', {}, r.label), el('td', {}, providerMenu), modelCell, keyCell));

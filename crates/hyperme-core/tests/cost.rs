@@ -4,8 +4,8 @@
 
 use std::path::Path;
 
-use hyperme_core::config::{Config, DEFAULT_CONFIG, DEFAULT_PROVIDERS};
-use hyperme_core::cost::{CHOICES, free_credit_line, monthly_cost, shown_as};
+use hyperme_core::config::{Config, DEFAULT_CONFIG, DEFAULT_PROVIDERS, Role};
+use hyperme_core::cost::{CHOICES, free_credit_line, monthly_cost, other_key_notes, shown_as};
 
 /// The defaults reproduce UX.md's table: about USD 2, 6 and 12 of speech and 0.05, 0.15 and
 /// 0.30 of cleanup a month for 10 minutes, 30 minutes and 1 hour a day.
@@ -140,4 +140,20 @@ fn key_pages_and_prices_are_checked() {
             .to_string();
         assert!(err.contains(key), "{err}");
     }
+}
+
+/// Onboarding's keys screen names the cleanup providers it does not use whose catalogue entry has
+/// a key note, such as Anthropic's plan credits, so a Claude Max user knows their key is covered
+/// (docs/research/2026-11-27-paid-accounts-and-agent-sessions.md).
+#[test]
+fn onboarding_lists_other_cleanup_providers_with_a_key_note() {
+    let config = Config::default();
+    let notes = other_key_notes(&config, Role::Cleanup);
+    assert_eq!(notes.len(), 1, "{notes:?}");
+    assert!(
+        notes[0].starts_with("Anthropic: Have Claude Max"),
+        "{notes:?}"
+    );
+    assert!(notes[0].ends_with("Choose it later in Settings, Providers."));
+    assert!(other_key_notes(&config, Role::Speech).is_empty());
 }

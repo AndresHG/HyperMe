@@ -78,6 +78,8 @@ struct ProviderView {
     key_required: bool,
     has_key: bool,
     has_key_page: bool,
+    /// One line beside the key field while there is no key, from the catalogue.
+    key_note: Option<String>,
     models: Vec<ModelView>,
 }
 
@@ -195,6 +197,7 @@ fn roles_view(config: &Config, keys: &dyn SecretStore) -> Vec<RoleView> {
                     key_required: entry.key_required,
                     has_key: matches!(keys.get(id), Ok(Some(_))),
                     has_key_page: entry.key_url.is_some(),
+                    key_note: entry.key_note.clone(),
                     models: entry
                         .models
                         .iter()

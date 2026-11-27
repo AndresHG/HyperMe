@@ -153,6 +153,10 @@ pub struct ProviderEntry {
     /// Where "Get a key" goes.
     #[serde(default)]
     pub key_url: Option<String>,
+    /// One line shown beside the key field while there is no key, such as a plan whose credits
+    /// pay for it.
+    #[serde(default)]
+    pub key_note: Option<String>,
     /// The roles it is offered for; each must be one its protocol can fill.
     pub roles: Vec<Role>,
     /// False for a server that needs no key, such as one on this Mac (R-14).
