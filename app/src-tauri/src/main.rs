@@ -1,4 +1,5 @@
-//! HyperMe: a menu-bar app with no Dock icon and no main window (spec R-22), and the pill, a
+//! HyperMe: a menu-bar app with no Dock icon while no window is open (spec R-22; spec 98, R-3)
+//! and no main window, and the pill, a
 //! non-activating panel at the bottom centre that never takes focus and shows above full-screen
 //! apps (R-23). The dictation runs in `hyperme-core`'s state machine; this file wires the real
 //! providers and devices to it and shows its states in the pill and the menu.
@@ -8,6 +9,8 @@ mod connectors;
 // Pure and tested everywhere; only the macOS app uses them until Linux and Windows follow.
 #[cfg(any(target_os = "macos", test))]
 mod geometry;
+#[cfg(any(target_os = "macos", test))]
+mod home;
 mod icon;
 #[cfg(any(target_os = "macos", test))]
 mod onboarding;
@@ -42,6 +45,22 @@ fn main() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             runtime::pill_clicked,
+            home::home_sections,
+            home::home_blocks,
+            home::home_attention,
+            home::home_refresh,
+            home::home_settings,
+            home::home_stats,
+            home::home_page,
+            home::home_search,
+            home::home_info,
+            home::home_failed,
+            home::home_item,
+            home::home_copy,
+            home::home_paste,
+            home::home_retry,
+            home::home_delete,
+            home::home_fix_word,
             runtime::pill_view,
             settings::settings_view,
             settings::settings_set,
@@ -73,9 +92,11 @@ fn main() {
         ]);
     builder
         .setup(|app| {
-            // R-22: a menu-bar app, no Dock icon.
+            // R-22: a menu-bar app, no Dock icon until a window such as Home opens.
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+            #[cfg(target_os = "macos")]
+            home::init(app.handle());
             #[cfg(target_os = "macos")]
             let menu = tray(app.handle())?;
             #[cfg(not(target_os = "macos"))]
@@ -85,13 +106,20 @@ fn main() {
             runtime::start(app.handle(), menu);
             #[cfg(target_os = "macos")]
             walkthrough::open_if_needed(app.handle());
+            // For measuring and checking Home by eye during development (spec 98, AC-2):
+            // `HYPERME_OPEN_HOME=history` opens Home at that target on launch.
+            #[cfg(target_os = "macos")]
+            if let Some(target) = std::env::var_os("HYPERME_OPEN_HOME") {
+                home::open(app.handle(), &target.to_string_lossy());
+            }
             Ok(())
         })
         .build(tauri::generate_context!())
         .expect("HyperMe could not start")
         .run(|_app, _event| {
             // Opening HyperMe while it runs (`open`, a double-click in Finder) brings up the
-            // walkthrough or Settings, so a menu-bar app with no window is never invisible.
+            // walkthrough until it is done, then Home (spec 98, R-1), so a menu-bar app with no
+            // window is never invisible.
             #[cfg(target_os = "macos")]
             if let tauri::RunEvent::Reopen { .. } = _event {
                 walkthrough::reopen(_app);
@@ -107,7 +135,8 @@ pub(crate) struct TrayMenu {
 }
 
 /// The menu-bar icon and its menu (docs/UX.md, "Menu-bar icon"): status, Paste last and Copy
-/// last dictation (R-18), Retry (R-31), Settings, Check for updates, Quit.
+/// last dictation (R-18), Open HyperMe (spec 98, R-1), Retry (R-31), Settings, Check for
+/// updates, Quit.
 fn tray(app: &AppHandle) -> tauri::Result<Tray> {
     let status = MenuItem::with_id(app, "status", "Starting…", false, None::<&str>)?;
     let paste_last = MenuItem::with_id(
@@ -117,6 +146,7 @@ fn tray(app: &AppHandle) -> tauri::Result<Tray> {
         true,
         None::<&str>,
     )?;
+    let open_home = MenuItem::with_id(app, "open-home", "Open HyperMe", true, None::<&str>)?;
     let copy_last = MenuItem::with_id(app, "copy-last", "Copy last dictation", true, None::<&str>)?;
     let retry = MenuItem::with_id(app, "retry", "Retry last dictation", false, None::<&str>)?;
     let settings = MenuItem::with_id(app, "settings", "Settings…", true, Some("CmdOrCtrl+,"))?;
@@ -135,6 +165,7 @@ fn tray(app: &AppHandle) -> tauri::Result<Tray> {
             &status,
             &separator()?,
             &paste_last,
+            &open_home,
             &copy_last,
             &retry,
             &separator()?,

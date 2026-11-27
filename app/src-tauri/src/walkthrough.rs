@@ -62,7 +62,7 @@ pub fn reopen(app: &AppHandle) {
     if onboarding::should_open(&at_launch(app)) {
         open(app, onboarding::Step::Welcome);
     } else {
-        crate::settings::open(app, "setup");
+        crate::home::open(app, "home");
     }
 }
 
