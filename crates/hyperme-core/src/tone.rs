@@ -190,6 +190,7 @@ impl AppStyle {
         while lines.last().is_some_and(String::is_empty) {
             lines.pop();
         }
+        even_lists(&mut lines);
         match self {
             AppStyle::Terminal => {
                 let line = lines
@@ -230,6 +231,54 @@ impl AppStyle {
             }
             _ => lines.join("\n"),
         }
+    }
+}
+
+/// The list item a line holds, after its `- ` or `1.` marker, if it is one.
+fn item(line: &str) -> Option<&str> {
+    let line = line.trim_start();
+    if let Some(rest) = line.strip_prefix("- ") {
+        return Some(rest);
+    }
+    let digits = line.chars().take_while(char::is_ascii_digit).count();
+    (digits > 0)
+        .then(|| line[digits..].strip_prefix(". "))
+        .flatten()
+}
+
+/// Lists made even, which the model does not always do: no blank line between a lead-in and
+/// its first item, and one ending for every item of a list. Items of three words or fewer end
+/// with nothing; longer ones end with a full stop when any of them has one.
+fn even_lists(lines: &mut Vec<String>) {
+    let mut at = 1;
+    while at + 1 < lines.len() {
+        if lines[at].is_empty() && lines[at - 1].ends_with(':') && item(&lines[at + 1]).is_some() {
+            lines.remove(at);
+        } else {
+            at += 1;
+        }
+    }
+    let mut start = 0;
+    while start < lines.len() {
+        let end = (start..lines.len())
+            .find(|&i| item(&lines[i]).is_none())
+            .unwrap_or(lines.len());
+        if end > start + 1 {
+            let block = &mut lines[start..end];
+            let short = block
+                .iter()
+                .all(|l| item(l).is_some_and(|i| i.split_whitespace().count() <= 3));
+            let stop = !short && block.iter().any(|l| l.ends_with('.') && !l.ends_with(".."));
+            for line in block {
+                let open = !line.ends_with(['.', '!', '?', '…']);
+                if short && line.ends_with('.') && !line.ends_with("..") {
+                    line.pop();
+                } else if stop && open {
+                    line.push('.');
+                }
+            }
+        }
+        start = end.max(start + 1);
     }
 }
 
@@ -284,7 +333,8 @@ mod tests {
         assert_eq!(AppStyle::Chat.finish("Done? Sure!"), "Done? Sure!");
         let long = "One. Two. Three.";
         assert_eq!(AppStyle::Chat.finish(long), long);
-        let list = "Need:\n- milk\n- eggs.";
+        // A list keeps its last item's ending (here none, as its items are short).
+        let list = "Need:\n- milk\n- eggs";
         assert_eq!(AppStyle::Chat.finish(list), list);
         assert_eq!(AppStyle::Mail.finish("Thanks."), "Thanks.");
     }
@@ -313,13 +363,31 @@ mod tests {
         assert_eq!(AppStyle::Mail.finish(sentence), sentence);
     }
 
+    /// Formatting, AC-9 (harness run 3): no blank line after a lead-in, and one ending for
+    /// every item: none for short items, a full stop for longer ones when any has one.
+    #[test]
+    fn list_items_end_alike() {
+        let short = "Things to buy:\n\n- Milk\n- Eggs\n- Tomatoes.";
+        assert_eq!(
+            AppStyle::Notes.finish(short),
+            "Things to buy:\n- Milk\n- Eggs\n- Tomatoes"
+        );
+        let steps = "Los pasos son:\n1. Hacer merge a master\n2. Esperar a que pase el build.";
+        assert_eq!(
+            AppStyle::Chat.finish(steps),
+            "Los pasos son:\n1. Hacer merge a master.\n2. Esperar a que pase el build."
+        );
+        let plain = "Hecho.\n\nAhora lo otro.";
+        assert_eq!(AppStyle::Notes.finish(plain), plain);
+    }
+
     /// Formatting, AC-5: list markers become `- `, bold and extra blank lines go.
     #[test]
     fn markers_are_made_plain_and_blank_lines_kept_single() {
         let text = "Three things:\n\n\n* **milk**\n• eggs\n  * bread\n\n";
         assert_eq!(
             AppStyle::Notes.finish(text),
-            "Three things:\n\n- milk\n- eggs\n  - bread"
+            "Three things:\n- milk\n- eggs\n  - bread"
         );
         assert_eq!(AppStyle::Other.finish("1. one\n2. two"), "1. one\n2. two");
     }
