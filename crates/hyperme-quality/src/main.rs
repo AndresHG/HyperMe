@@ -16,7 +16,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use hyperme_core::config::{CleanupLevel, Config};
 use hyperme_core::dictation::Settings;
 use hyperme_core::dictionary::Dictionary;
-use hyperme_providers::cleanup::{ChatCleanup, prompt_version};
+use hyperme_providers::cleanup::prompt_version;
 use hyperme_quality::replay::{Replayed, replay, replay_raw};
 use hyperme_quality::report::{gold_draft, markdown, summarise, table, texts};
 use hyperme_quality::set::{self, Lang};
@@ -257,7 +257,9 @@ fn run(o: &Options) -> Result<(), String> {
         ),
         None => Dictionary::default(),
     };
-    let cleanup = ChatCleanup::new(&config.cleanup, &key(&config.cleanup.provider)?)
+    // The app's own builders, fallbacks included, so a replay times the path a dictation takes
+    // (specs/96, AC-15).
+    let cleanup = hyperme_providers::any::cleanup_with_fallback(&config, &EnvOrKeychain(&config))
         .map_err(|e| e.message)?
         .with_dictionary(&dictionary.prompt_line());
     let settings = Settings {
@@ -298,8 +300,9 @@ fn run(o: &Options) -> Result<(), String> {
         None => {
             // The same path the app builds its speech provider with, so any speech protocol in
             // the catalogue can be replayed (specs/96, slice 8).
-            let speech = hyperme_providers::any::speech(&config, &EnvOrKeychain(&config))
-                .map_err(|e| e.message)?;
+            let speech =
+                hyperme_providers::any::speech_with_fallback(&config, &EnvOrKeychain(&config))
+                    .map_err(|e| e.message)?;
             eprintln!(
                 "Replaying {} samples ({:.0} s of audio, in real time) from {}",
                 set.samples.len(),
