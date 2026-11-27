@@ -49,6 +49,7 @@
   <a href="#shortcuts">Shortcuts</a>
   <div class="group">Setup</div>
   <a href="#providers">Providers</a>
+  <a href="#connectors">Connectors</a>
   <a href="#privacy">Privacy</a>
   <a href="#advanced" id="nav-advanced" class="hidden">Advanced</a>
   <a href="#about">About</a>
@@ -65,6 +66,7 @@
     <div class="row" data-words="microphone permission"><div class="what">Microphone<small>macOS asks the first time you dictate.</small></div><button data-open="microphone">Open</button></div>
     <div class="row" data-words="speech key speechmatics"><div class="what">Speech key<small id="setup-speech-name"></small></div><span class="state" id="setup-speech"></span></div>
     <div class="row" data-words="cleanup key groq"><div class="what">Cleanup key<small id="setup-cleanup-name"></small></div><span class="state" id="setup-cleanup"></span></div>
+    <div id="setup-connectors"></div>
   </section>
 
   <section id="general">
@@ -93,13 +95,72 @@
     <div class="row" data-words="cleanup key groq test"><div class="what">Cleanup key<small class="state" id="cleanup-state"></small></div><span><input type="password" id="cleanup-key" placeholder="Paste a new key" autocomplete="off"> <button data-key-save="cleanup">Save</button> <button data-key-test="cleanup">Test</button></span></div>
   </section>
 
+  <section id="connectors">
+    <div id="connectors-list">
+      <div class="row" style="border:0;padding-top:0"><div><h1>Connectors</h1><p class="lead" style="margin:0">MCP servers Hyper reads from and acts in, each with its accounts and tools.</p></div><button class="main" id="connectors-add" style="white-space:nowrap">+ Add connector</button></div>
+      <div id="connectors-rows"></div>
+      <p class="lead hidden" id="connectors-empty">No connectors yet. Add one to let Hyper read your calendar, mail or tracker.</p>
+    </div>
+    <div id="connectors-sheet" class="hidden">
+      <h1>Add connector</h1>
+      <p class="lead">A preset, or your own MCP server.</p>
+      <div id="connectors-choices"></div>
+      <div id="connectors-custom" class="hidden">
+        <div class="row" data-words="custom mcp server name"><div class="what">Name</div><input type="text" id="custom-name" placeholder="Team wiki"></div>
+        <div class="row" data-words="custom mcp server url"><div class="what">URL<small>https://, or http:// to this Mac</small></div><input type="text" id="custom-url" placeholder="https://wiki.example.com/mcp"></div>
+        <div class="row" data-words="custom mcp server command stdio"><div class="what">Or a command<small>Servers started by a command are not supported yet.</small></div><input type="text" id="custom-command" placeholder="my-mcp-server" disabled></div>
+        <div class="row" data-words="custom mcp server bearer token sign in"><div class="what">Sign-in</div><select id="custom-auth"><option value="none">None</option><option value="bearer">Bearer token</option></select></div>
+        <div class="row" style="border:0"><span></span><span><button id="custom-cancel">Cancel</button> <button class="main" id="custom-add">Add</button></span></div>
+      </div>
+      <p><button id="sheet-close">Cancel</button></p>
+    </div>
+    <div id="connectors-oauth" class="hidden">
+      <h1 id="oauth-title"></h1>
+      <div id="oauth-client">
+        <p class="lead">1 · Your client. HyperMe uses your own OAuth client, so nothing passes through us.</p>
+        <div class="row" data-words="google client cloud setup"><div class="what">Create your client<small>Opens the provider's setup guide.</small></div><span><button id="oauth-open-client">Open setup</button> <button id="oauth-gcloud">Use gcloud instead</button></span></div>
+        <div class="row" data-words="client id"><div class="what">Client ID<small class="state" id="oauth-client-state"></small></div><input type="text" id="oauth-client-id" autocomplete="off"></div>
+        <div class="row" data-words="client secret"><div class="what">Client secret<small>Kept in the macOS keychain, never shown again.</small></div><span style="white-space:nowrap"><input type="password" id="oauth-client-secret" autocomplete="off"> <button id="oauth-client-save">Save and test</button></span></div>
+      </div>
+      <div id="oauth-signin">
+        <p class="lead" style="margin-top:14px">2 · Sign in, and choose what Hyper can see.</p>
+        <div class="row" data-words="account label personal work"><div class="what">Label<small>One word you can say: "in my work calendar".</small></div><input type="text" id="oauth-label" placeholder="personal"></div>
+        <div id="oauth-features"></div>
+        <div class="row" style="border:0"><span class="state" id="oauth-wait"></span><span><button id="oauth-cancel" class="hidden">Cancel</button> <button class="main" id="oauth-go">Sign in</button></span></div>
+      </div>
+      <div id="oauth-testing" class="hidden">
+        <p class="bad">Your project is in Testing, so you would be signed out every 7 days.</p>
+        <p class="lead">Set its publishing status to In production (no review is needed for your own account), then sign in again.</p>
+        <p><button id="oauth-open-production">Open the setting</button></p>
+      </div>
+      <div id="oauth-done" class="hidden"></div>
+      <p><button id="oauth-close">Close</button></p>
+    </div>
+    <div id="connectors-page" class="hidden">
+      <p><a href="#connectors" id="page-back">‹ Connectors</a></p>
+      <h1 id="page-title"></h1>
+      <p class="lead"><span class="state" id="page-state"></span></p>
+      <div class="row" id="page-enabled-row" data-words="connector account on off"><div class="what">Use this account<small>Off keeps the sign-in but stops using it.</small></div><input type="checkbox" id="page-enabled"></div>
+      <div class="row hidden" id="page-token-row" data-words="connector bearer token"><div class="what">Bearer token<small>Kept in the macOS keychain, never shown again.</small></div><span><input type="password" id="page-token" placeholder="Paste a token" autocomplete="off"> <button id="page-token-save">Save</button></span></div>
+      <div class="row hidden" id="page-oauth-row" data-words="sign in again disconnect account"><div class="what">Account<small id="page-disconnect-note">Disconnect removes access and deletes what HyperMe cached from this account.</small></div><span style="white-space:nowrap"><button id="page-sign-in">Sign in again</button> <button id="page-disconnect">Disconnect</button></span></div>
+      <p class="lead" style="margin-top:14px">Tools<span id="page-unverified" class="warn hidden"> · names not checked against the live server yet</span></p>
+      <div id="page-tools"></div>
+    </div>
+  </section>
+
   <section id="privacy">
     <h1>Privacy</h1>
-    <p class="lead">Audio and text go only to the speech and cleanup providers above, under your keys. Nothing else leaves this Mac, and there is no telemetry. A dictation's audio stays on this Mac so a dropped connection never loses it.</p>
+    <p class="lead">Audio and text go only to the speech and cleanup providers above, under your keys. Connected accounts follow the rules at the bottom of this page. There is no telemetry. A dictation's audio stays on this Mac so a dropped connection never loses it.</p>
     <div class="row" data-words="history dictation audio keep"><div class="what">Dictation history<small>Keeps each dictation's audio and text on this Mac.</small></div><input type="checkbox" data-section="history" data-key="enabled"></div>
     <div class="row" data-words="history retention days unlimited"><div class="what">Keep for<small>Older dictations are deleted.</small></div><select id="retention"><option value="30">30 days</option><option value="unlimited">Unlimited</option></select></div>
     <div class="row" data-words="history size limit"><div class="what">Size limit (MB)<small>The oldest dictations go first.</small></div><input type="number" min="10" data-section="history" data-key="size_limit_mb"></div>
     <div class="row" data-words="timing log measure"><div class="what">Timing log<small>One line of stage timings per dictation, numbers only.</small></div><input type="checkbox" data-section="timing" data-key="log"></div>
+    <div id="privacy-connectors" class="hidden" data-words="connected accounts google calendar mail privacy">
+      <p class="lead" style="margin:16px 0 4px">Connected accounts</p>
+      <div id="privacy-accounts"></div>
+      <p class="lead" id="privacy-where" style="margin:8px 0 0"></p>
+      <p class="lead" id="privacy-kept" style="margin:4px 0 0"></p>
+    </div>
   </section>
 
   <section id="advanced">
@@ -127,6 +188,10 @@
 
   function showSection() {
     let id = (location.hash || '#setup').slice(1);
+    // hyperme://settings/connectors/<id> opens Connectors at that row (connectors.js).
+    const item = id.includes('/') ? id.slice(id.indexOf('/') + 1) : null;
+    id = id.split('/')[0];
+    if (window.connectorsShow) window.connectorsShow(id === 'connectors' ? item : undefined);
     // From the walkthrough's "Use other providers" (U-12): Providers, with Advanced showing.
     if (id === 'providers-advanced') {
       id = 'providers';
@@ -246,5 +311,6 @@
   showSection();
   refresh().catch((e) => { $('error').textContent = String(e); });
 </script>
+<script src="connectors.js"></script>
 </body>
 </html>

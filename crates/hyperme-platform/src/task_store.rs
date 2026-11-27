@@ -11,12 +11,17 @@ use std::fmt;
 use std::path::Path;
 use std::sync::{Mutex, MutexGuard};
 
+use hyperme_core::connectors::{AccountData, RequestLog, Usage};
+use hyperme_core::schedule::Schedule;
+use hyperme_core::scheduler::{Job, JobKind, JobStatus, JobStore};
+use hyperme_core::sync::{Event, EventStore, MailMeta, MailStore};
 use hyperme_core::tasks::{
     Due, Finish, NewTask, Source, Status, Task, TaskError, TaskId, TaskStore, TaskUpdate,
+    WeekdaySet,
 };
 use hyperme_core::traits::{Error, ErrorKind};
 use rusqlite::{Connection, OptionalExtension, Row, Transaction, params};
-use time::{Date, Month, Time};
+use time::{Date, Month, SignedDuration, Time, UtcDateTime, Weekday};
 
 /// One entry per schema version: entry n takes `user_version` from n to n + 1.
 const MIGRATIONS: &[&str] = &[
@@ -52,6 +57,58 @@ const MIGRATIONS: &[&str] = &[
         captured INTEGER NOT NULL DEFAULT 0, done INTEGER NOT NULL DEFAULT 0,
         moved INTEGER NOT NULL DEFAULT 0,    dropped INTEGER NOT NULL DEFAULT 0,
         morning_at INTEGER, evening_at INTEGER, closed_at INTEGER
+    ) WITHOUT ROWID;",
+    // 2: the scheduler's jobs (R-31). The schedule is text: `at HH:MM 1111100`,
+    // `every 30` or `presence HH:MM HH:MM 1111100`, weekdays Monday first.
+    "CREATE TABLE job (
+        name         TEXT PRIMARY KEY,
+        kind         TEXT NOT NULL,
+        schedule     TEXT NOT NULL,
+        enabled      INTEGER NOT NULL DEFAULT 1,
+        catch_up_min INTEGER NOT NULL,
+        allowlist    TEXT,
+        prompt       TEXT,
+        last_run     INTEGER,
+        last_status  TEXT,
+        fails_today  INTEGER NOT NULL DEFAULT 0,
+        fails_day    TEXT
+    ) WITHOUT ROWID;",
+    // 3: the connector request counter (specs/97-google-connectors, design.md, "Storage").
+    "CREATE TABLE connector_requests (
+        account TEXT    NOT NULL,
+        day     TEXT    NOT NULL,
+        server  TEXT    NOT NULL,
+        calls   INTEGER NOT NULL DEFAULT 0,
+        units   INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (account, day, server)
+    ) WITHOUT ROWID;",
+    // 4: the calendar cache (specs/97-google-connectors, design.md, "Storage"). Times are
+    // Unix seconds, UTC.
+    "CREATE TABLE events (
+        account   TEXT    NOT NULL,
+        id        TEXT    NOT NULL,
+        calendar  TEXT,
+        title     TEXT    NOT NULL,
+        starts_at INTEGER NOT NULL,
+        ends_at   INTEGER NOT NULL,
+        all_day   INTEGER NOT NULL DEFAULT 0,
+        url       TEXT,
+        status    TEXT,
+        PRIMARY KEY (account, id)
+    ) WITHOUT ROWID;
+    CREATE INDEX events_start ON events (starts_at);",
+    // 5: inbox metadata (specs/97-google-connectors, design.md, "Storage"): never a body
+    // (R-18). Labels are one per line; received_at is Unix seconds, UTC.
+    "CREATE TABLE mail_meta (
+        account     TEXT    NOT NULL,
+        id          TEXT    NOT NULL,
+        subject     TEXT    NOT NULL,
+        sender      TEXT    NOT NULL,
+        snippet     TEXT    NOT NULL,
+        received_at INTEGER NOT NULL,
+        labels      TEXT    NOT NULL,
+        to_answer   INTEGER NOT NULL,
+        PRIMARY KEY (account, id)
     ) WITHOUT ROWID;",
 ];
 
@@ -629,5 +686,444 @@ impl TaskStore for SqliteTaskStore {
 
     async fn snapshot(&self, today: Date, day_began_ms: i64) -> Result<Vec<Task>, TaskError> {
         self.snapshot_now(today, day_began_ms)
+    }
+}
+
+// --- The job table ----------------------------------------------------------------------------
+
+const WEEK: [Weekday; 7] = [
+    Weekday::Monday,
+    Weekday::Tuesday,
+    Weekday::Wednesday,
+    Weekday::Thursday,
+    Weekday::Friday,
+    Weekday::Saturday,
+    Weekday::Sunday,
+];
+
+fn weekdays_text(days: WeekdaySet) -> String {
+    WEEK.iter()
+        .map(|d| if days.contains(*d) { '1' } else { '0' })
+        .collect()
+}
+
+fn parse_weekdays(text: &str) -> Result<WeekdaySet, TaskError> {
+    if text.len() != 7 || !text.bytes().all(|b| b == b'0' || b == b'1') {
+        return Err(store_error(format!("bad weekdays {text:?}")));
+    }
+    let mut days = WeekdaySet::EMPTY;
+    for (day, bit) in WEEK.iter().zip(text.bytes()) {
+        if bit == b'1' {
+            days.insert(*day);
+        }
+    }
+    Ok(days)
+}
+
+fn schedule_text(schedule: &Schedule) -> String {
+    match *schedule {
+        Schedule::At { time, weekdays } => {
+            format!("at {} {}", time_text(time), weekdays_text(weekdays))
+        }
+        Schedule::EveryWhilePresent { minutes } => format!("every {minutes}"),
+        Schedule::OnPresenceAfter {
+            from,
+            latest,
+            weekdays,
+        } => format!(
+            "presence {} {} {}",
+            time_text(from),
+            time_text(latest),
+            weekdays_text(weekdays)
+        ),
+    }
+}
+
+fn parse_schedule(text: &str) -> Result<Schedule, TaskError> {
+    let parts: Vec<&str> = text.split(' ').collect();
+    match parts.as_slice() {
+        ["at", time, days] => Ok(Schedule::At {
+            time: parse_time(time)?,
+            weekdays: parse_weekdays(days)?,
+        }),
+        ["every", minutes] => Ok(Schedule::EveryWhilePresent {
+            minutes: minutes.parse().map_err(store_error)?,
+        }),
+        ["presence", from, latest, days] => Ok(Schedule::OnPresenceAfter {
+            from: parse_time(from)?,
+            latest: parse_time(latest)?,
+            weekdays: parse_weekdays(days)?,
+        }),
+        _ => Err(store_error(format!("bad schedule {text:?}"))),
+    }
+}
+
+fn kind_text(kind: &JobKind) -> String {
+    match kind {
+        JobKind::RollOver => "rollover".into(),
+        JobKind::Morning => "morning".into(),
+        JobKind::Evening => "evening".into(),
+        JobKind::Nudge => "nudge".into(),
+        JobKind::Sync(connector) => format!("sync:{connector}"),
+        JobKind::Prompt => "prompt".into(),
+    }
+}
+
+fn parse_kind(text: &str) -> Result<JobKind, TaskError> {
+    Ok(match text {
+        "rollover" => JobKind::RollOver,
+        "morning" => JobKind::Morning,
+        "evening" => JobKind::Evening,
+        "nudge" => JobKind::Nudge,
+        "prompt" => JobKind::Prompt,
+        other => match other.strip_prefix("sync:") {
+            Some(connector) => JobKind::Sync(connector.to_owned()),
+            None => return Err(store_error(format!("bad job kind {other:?}"))),
+        },
+    })
+}
+
+fn status_text_of(status: &JobStatus) -> String {
+    match status {
+        JobStatus::Ok => "ok".into(),
+        JobStatus::Failed(message) => format!("failed: {message}"),
+    }
+}
+
+fn parse_status(text: &str) -> JobStatus {
+    match text.strip_prefix("failed: ") {
+        Some(message) => JobStatus::Failed(message.to_owned()),
+        None => JobStatus::Ok,
+    }
+}
+
+fn unix_ms(at: UtcDateTime) -> i64 {
+    (at.unix_timestamp_nanos() / 1_000_000) as i64
+}
+
+fn from_unix_ms(ms: i64) -> Result<UtcDateTime, TaskError> {
+    UtcDateTime::from_unix_timestamp_nanos(i128::from(ms) * 1_000_000).map_err(store_error)
+}
+
+/// A job row as stored, before its text is parsed.
+type RawJob = (
+    String,
+    String,
+    String,
+    bool,
+    i64,
+    Option<String>,
+    Option<String>,
+    Option<i64>,
+    Option<String>,
+    u32,
+    Option<String>,
+);
+
+fn job_from_raw(raw: RawJob) -> Result<Job, TaskError> {
+    let (
+        name,
+        kind,
+        schedule,
+        enabled,
+        catch_up_min,
+        allowlist,
+        prompt,
+        last_run,
+        status,
+        fails,
+        day,
+    ) = raw;
+    Ok(Job {
+        name,
+        kind: parse_kind(&kind)?,
+        schedule: parse_schedule(&schedule)?,
+        enabled,
+        catch_up: SignedDuration::minutes(catch_up_min),
+        allowlist: allowlist
+            .filter(|a| !a.is_empty())
+            .map(|a| a.split(',').map(str::to_owned).collect())
+            .unwrap_or_default(),
+        prompt,
+        last_run: last_run.map(from_unix_ms).transpose()?,
+        last_status: status.as_deref().map(parse_status),
+        fails_today: fails,
+        fails_day: day.as_deref().map(parse_date).transpose()?,
+    })
+}
+
+impl SqliteTaskStore {
+    fn jobs_now(&self) -> Result<Vec<Job>, TaskError> {
+        let db = self.db();
+        let mut query = sql(db.prepare(
+            "SELECT name, kind, schedule, enabled, catch_up_min, allowlist, prompt, last_run,
+                    last_status, fails_today, fails_day
+             FROM job ORDER BY name",
+        ))?;
+        let raw: Vec<RawJob> = sql(sql(query.query_map([], |r| {
+            Ok((
+                r.get(0)?,
+                r.get(1)?,
+                r.get(2)?,
+                r.get(3)?,
+                r.get(4)?,
+                r.get(5)?,
+                r.get(6)?,
+                r.get(7)?,
+                r.get(8)?,
+                r.get(9)?,
+                r.get(10)?,
+            ))
+        }))?
+        .collect())?;
+        raw.into_iter().map(job_from_raw).collect()
+    }
+
+    fn save_job_now(&self, job: &Job) -> Result<(), TaskError> {
+        sql(self.db().execute(
+            "INSERT OR REPLACE INTO job (name, kind, schedule, enabled, catch_up_min, allowlist,
+                                         prompt, last_run, last_status, fails_today, fails_day)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+            params![
+                job.name,
+                kind_text(&job.kind),
+                schedule_text(&job.schedule),
+                job.enabled,
+                job.catch_up.whole_minutes(),
+                job.allowlist.join(","),
+                job.prompt,
+                job.last_run.map(unix_ms),
+                job.last_status.as_ref().map(status_text_of),
+                job.fails_today,
+                job.fails_day.map(date_text),
+            ],
+        ))?;
+        Ok(())
+    }
+}
+
+impl JobStore for SqliteTaskStore {
+    async fn jobs(&self) -> Result<Vec<Job>, TaskError> {
+        self.jobs_now()
+    }
+
+    async fn save_job(&self, job: &Job) -> Result<(), TaskError> {
+        self.save_job_now(job)
+    }
+}
+
+/// The request counter of connectors (R-20), in the same file as the task list.
+impl RequestLog for SqliteTaskStore {
+    fn record(&self, account: &str, day: Date, server: &str, units: u32) -> Result<(), String> {
+        self.db()
+            .execute(
+                "INSERT INTO connector_requests (account, day, server, calls, units)
+                 VALUES (?1, ?2, ?3, 1, ?4)
+                 ON CONFLICT (account, day, server)
+                 DO UPDATE SET calls = calls + 1, units = units + excluded.units",
+                params![account, date_text(day), server, units],
+            )
+            .map(drop)
+            .map_err(|error| format!("connector requests: {error}"))
+    }
+
+    fn usage(&self, account: &str, day: Date, server: &str) -> Result<Usage, String> {
+        self.db()
+            .query_row(
+                "SELECT calls, units FROM connector_requests
+                 WHERE account = ?1 AND day = ?2 AND server = ?3",
+                params![account, date_text(day), server],
+                |row| {
+                    Ok(Usage {
+                        calls: row.get(0)?,
+                        units: row.get(1)?,
+                    })
+                },
+            )
+            .optional()
+            .map(Option::unwrap_or_default)
+            .map_err(|error| format!("connector requests: {error}"))
+    }
+}
+
+/// Disconnect deletes every row kept from the account (R-12, AC-6).
+impl AccountData for SqliteTaskStore {
+    fn delete_account(&self, account: &str) -> Result<(), String> {
+        let db = self.db();
+        for table in ["connector_requests", "events", "mail_meta"] {
+            db.execute(
+                &format!("DELETE FROM {table} WHERE account = ?1"),
+                params![account],
+            )
+            .map_err(|error| format!("{table}: {error}"))?;
+        }
+        Ok(())
+    }
+}
+
+fn unix(at: UtcDateTime) -> i64 {
+    (at - UtcDateTime::UNIX_EPOCH).whole_seconds()
+}
+
+fn from_unix(seconds: i64) -> rusqlite::Result<UtcDateTime> {
+    UtcDateTime::from_unix_timestamp(seconds).map_err(|e| {
+        rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Integer, Box::new(e))
+    })
+}
+
+fn events_error(error: rusqlite::Error) -> String {
+    format!("events: {error}")
+}
+
+/// The calendar cache (specs/97-google-connectors, R-19), in the app's one SQLite file.
+impl EventStore for SqliteTaskStore {
+    fn replace(
+        &self,
+        account: &str,
+        from: UtcDateTime,
+        to: UtcDateTime,
+        events: &[Event],
+    ) -> Result<(), String> {
+        let mut db = self.db();
+        let tx = db.transaction().map_err(events_error)?;
+        tx.execute(
+            "DELETE FROM events WHERE account = ?1 AND starts_at >= ?2 AND starts_at < ?3",
+            params![account, unix(from), unix(to)],
+        )
+        .map_err(events_error)?;
+        for e in events {
+            tx.execute(
+                "INSERT OR REPLACE INTO events
+                 (account, id, calendar, title, starts_at, ends_at, all_day, url, status)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                params![
+                    account,
+                    e.id,
+                    e.calendar,
+                    e.title,
+                    unix(e.start),
+                    unix(e.end),
+                    e.all_day,
+                    e.url,
+                    e.status
+                ],
+            )
+            .map_err(events_error)?;
+        }
+        tx.commit().map_err(events_error)
+    }
+
+    fn between(
+        &self,
+        account: Option<&str>,
+        from: UtcDateTime,
+        to: UtcDateTime,
+    ) -> Result<Vec<Event>, String> {
+        let db = self.db();
+        let mut statement = db
+            .prepare(
+                "SELECT account, id, calendar, title, starts_at, ends_at, all_day, url, status
+                 FROM events
+                 WHERE (?1 IS NULL OR account = ?1) AND starts_at >= ?2 AND starts_at < ?3
+                 ORDER BY starts_at, id",
+            )
+            .map_err(events_error)?;
+        let rows = statement
+            .query_map(params![account, unix(from), unix(to)], |row| {
+                Ok(Event {
+                    account: row.get(0)?,
+                    id: row.get(1)?,
+                    calendar: row.get(2)?,
+                    title: row.get(3)?,
+                    start: from_unix(row.get(4)?)?,
+                    end: from_unix(row.get(5)?)?,
+                    all_day: row.get(6)?,
+                    url: row.get(7)?,
+                    status: row.get(8)?,
+                })
+            })
+            .map_err(events_error)?;
+        rows.collect::<rusqlite::Result<Vec<_>>>()
+            .map_err(events_error)
+    }
+
+    fn retain(&self, now: UtcDateTime) -> Result<usize, String> {
+        self.db()
+            .execute(
+                "DELETE FROM events WHERE ends_at < ?1 OR starts_at >= ?2",
+                params![
+                    unix(now - hyperme_core::sync::KEEP_BEHIND),
+                    unix(now + hyperme_core::sync::KEEP_AHEAD)
+                ],
+            )
+            .map_err(events_error)
+    }
+}
+
+fn mail_error(error: rusqlite::Error) -> String {
+    format!("mail: {error}")
+}
+
+/// The inbox metadata cache (specs/97-google-connectors, R-18, R-19).
+impl MailStore for SqliteTaskStore {
+    fn upsert(&self, threads: &[MailMeta]) -> Result<(), String> {
+        let mut db = self.db();
+        let tx = db.transaction().map_err(mail_error)?;
+        for t in threads {
+            tx.execute(
+                "INSERT OR REPLACE INTO mail_meta
+                 (account, id, subject, sender, snippet, received_at, labels, to_answer)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                params![
+                    t.account,
+                    t.id,
+                    t.subject,
+                    t.sender,
+                    t.snippet,
+                    unix(t.received_at),
+                    t.labels.join("\n"),
+                    t.to_answer
+                ],
+            )
+            .map_err(mail_error)?;
+        }
+        tx.commit().map_err(mail_error)
+    }
+
+    fn all(&self, account: Option<&str>) -> Result<Vec<MailMeta>, String> {
+        let db = self.db();
+        let mut statement = db
+            .prepare(
+                "SELECT account, id, subject, sender, snippet, received_at, labels, to_answer
+                 FROM mail_meta WHERE (?1 IS NULL OR account = ?1)
+                 ORDER BY received_at DESC, id",
+            )
+            .map_err(mail_error)?;
+        let rows = statement
+            .query_map(params![account], |row| {
+                let labels: String = row.get(6)?;
+                Ok(MailMeta {
+                    account: row.get(0)?,
+                    id: row.get(1)?,
+                    subject: row.get(2)?,
+                    sender: row.get(3)?,
+                    snippet: row.get(4)?,
+                    received_at: from_unix(row.get(5)?)?,
+                    labels: labels.lines().map(str::to_owned).collect(),
+                    to_answer: row.get(7)?,
+                })
+            })
+            .map_err(mail_error)?;
+        rows.collect::<rusqlite::Result<Vec<_>>>()
+            .map_err(mail_error)
+    }
+
+    fn retain(&self, now: UtcDateTime) -> Result<usize, String> {
+        self.db()
+            .execute(
+                "DELETE FROM mail_meta WHERE received_at < ?1",
+                params![unix(now - hyperme_core::sync::KEEP_MAIL)],
+            )
+            .map_err(mail_error)
     }
 }

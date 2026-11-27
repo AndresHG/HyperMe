@@ -22,39 +22,29 @@ show_while_idle = true
 # dictionary = "/Users/you/hyperme-dictionary.txt"
 
 [speech]
-# Streaming speech-to-text. Supported providers: "speechmatics".
+# Streaming speech-to-text: a provider from the catalogue and one of its models. The catalogue
+# (endpoints, key pages, prices) is built into HyperMe; add or replace an entry by writing a
+# [providers.<name>] section here (see the comments in default-providers.toml).
 provider = "speechmatics"
 model = "melia-1"
-# The EU region. wss://global.rt.speechmatics.com/v2 is the global one.
-endpoint = "wss://eu.rt.speechmatics.com/v2"
-# Where onboarding's "Get a key" goes.
-key_url = "https://portal.speechmatics.com/signup"
-# For onboarding's cost estimate, from speechmatics.com/pricing on 26 November 2026: real-time
-# Melia 1 at USD 0.40 an hour, and USD 100 of credit for new accounts (it lasts 12 months).
-# Check them against the provider's page before each release.
-price_per_hour_usd = 0.40
-free_credit_usd = 100
+# Optional: another endpoint for this provider, such as Speechmatics' global region.
+# endpoint = "wss://global.rt.speechmatics.com/v2"
 
 [cleanup]
-# Any host with an OpenAI-compatible chat completions API. The provider name labels the
-# keychain entry and error messages.
+# Fixes the transcript: a provider from the catalogue that can clean, and one of its models.
 provider = "groq"
 model = "openai/gpt-oss-20b"
-endpoint = "https://api.groq.com/openai/v1"
+# Optional: another endpoint for this provider, such as a proxy.
+# endpoint = "https://api.groq.com/openai/v1"
 # Sent as reasoning_effort; "off" leaves the field out of the request.
 reasoning_effort = "low"
 # The cleanup prompt version.
 prompt = "v4"
 # After this many ms without cleaned text, the raw transcript is pasted. 100 to 10000.
 deadline_ms = 1500
-# Where onboarding's "Get a key" goes.
-key_url = "https://console.groq.com/keys"
-# For onboarding's cost estimate, from Groq's openai/gpt-oss-20b page on 26 November 2026:
-# USD 0.075 per million input tokens and USD 0.30 per million output tokens.
-price_input_per_million_usd = 0.075
-price_output_per_million_usd = 0.30
-# What one hour of talking sends to cleanup, from the research of 24 November 2026 (section 3):
-# about 120 dictations, each about 600 prompt tokens and 100 output tokens.
+# What one hour of talking sends to cleanup, for the cost estimate, from the research of
+# 24 November 2026 (section 3): about 120 dictations, each about 600 prompt tokens and 100
+# output tokens.
 estimate_dictations_per_hour = 120
 estimate_input_tokens = 600
 estimate_output_tokens = 100
@@ -70,3 +60,26 @@ size_limit_mb = 1024
 [timing]
 # Write one line of stage timings per dictation, numbers only, never text.
 log = false
+
+[tasks]
+# The hour the day turns over, as "HH:MM". A task done before it counts for the day before.
+day_start = "04:00"
+# The days you work: mon, tue, wed, thu, fri, sat, sun. Morning cards come on these days.
+workdays = ["mon", "tue", "wed", "thu", "fri"]
+# Roll-overs after which Today asks whether to keep a task, give it a day or drop it. 1 to 30.
+stale_after = 3
+# The morning card shows the first time you are at the Mac after this time on a workday,
+morning_from = "06:00"
+# or at this time if you are already there. Later than morning_from.
+morning_latest = "09:30"
+
+# Your own MCP servers, by URL or by command (Settings → Connectors adds them for you). A bearer
+# token or OAuth client secret is entered in Settings and kept in the keychain, never here.
+# Tools ask before running unless you list them under read; list destructive ones under off.
+#
+# [[connectors.custom]]
+# id = "wiki"
+# name = "Team wiki"
+# url = "https://wiki.example.com/mcp"
+# auth = "bearer"            # or "oauth" (with auth_url, token_url, scopes) or "none"
+# tools = { read = ["search_*", "get_*"], off = ["delete_*"] }

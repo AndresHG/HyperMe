@@ -4,7 +4,7 @@
 
 use std::path::Path;
 
-use hyperme_core::config::{Config, DEFAULT_CONFIG};
+use hyperme_core::config::{Config, DEFAULT_CONFIG, DEFAULT_PROVIDERS};
 use hyperme_core::cost::{CHOICES, free_credit_line, monthly_cost, shown_as};
 
 /// The defaults reproduce UX.md's table: about USD 2, 6 and 12 of speech and 0.05, 0.15 and
@@ -62,11 +62,14 @@ fn free_credit_line_is_worked_out_from_the_config() {
     );
 }
 
+/// A file written before the provider catalogue (specs/96-provider-settings, R-4).
+const BEFORE_CATALOGUE: &str = include_str!("fixtures/config-before-96.toml");
+
 /// Prices live in the config: changing them there changes the estimate, and no price is written
-/// in the code.
+/// in the code. An older file's prices still override the catalogue's.
 #[test]
 fn prices_come_from_the_config_not_the_code() {
-    let text = DEFAULT_CONFIG
+    let text = BEFORE_CATALOGUE
         .replacen("price_per_hour_usd = 0.40", "price_per_hour_usd = 1.00", 1)
         .replacen(
             "price_output_per_million_usd = 0.30",
@@ -77,16 +80,25 @@ fn prices_come_from_the_config_not_the_code() {
     let cost = monthly_cost(&config, 60);
     assert!((cost.speech_usd - 30.0).abs() < 1e-9);
     assert!(cost.cleanup_usd > 1.0);
+
+    // The same through a catalogue entry in the user's file.
+    let start = DEFAULT_PROVIDERS.find("[providers.speechmatics]").unwrap();
+    let end = DEFAULT_PROVIDERS.find("[providers.groq]").unwrap();
+    let entry = &DEFAULT_PROVIDERS[start..end];
+    let mine = entry.replace("price_per_hour_usd = 0.40", "price_per_hour_usd = 1.00");
+    let config = Config::parse(&format!("{DEFAULT_CONFIG}\n{mine}"), Path::new("c.toml")).unwrap();
+    assert!((monthly_cost(&config, 60).speech_usd - 30.0).abs() < 1e-9);
+
     let source = include_str!("../src/cost.rs");
     for price in ["0.40", "0.075", "0.30", "100.0", "0.4"] {
         assert!(!source.contains(price), "cost.rs holds the price {price}");
     }
 }
 
-/// An older config file without the new keys still loads, and takes the defaults for them.
+/// An older config file without the onboarding keys still loads, and takes the defaults for them.
 #[test]
 fn an_older_config_without_prices_still_loads() {
-    let old: String = DEFAULT_CONFIG
+    let old: String = BEFORE_CATALOGUE
         .lines()
         .filter(|l| {
             !l.starts_with("price_")
@@ -102,6 +114,10 @@ fn an_older_config_without_prices_still_loads() {
         monthly_cost(&Config::default(), 60)
     );
     assert_eq!(config.speech.key_url(), Config::default().speech.key_url());
+    assert_eq!(
+        free_credit_line(&config),
+        free_credit_line(&Config::default())
+    );
 }
 
 #[test]
@@ -118,8 +134,8 @@ fn key_pages_and_prices_are_checked() {
             "speech.price_per_hour_usd",
         ),
     ] {
-        assert!(DEFAULT_CONFIG.contains(from), "{from}");
-        let err = Config::parse(&DEFAULT_CONFIG.replacen(from, to, 1), Path::new("c.toml"))
+        assert!(BEFORE_CATALOGUE.contains(from), "{from}");
+        let err = Config::parse(&BEFORE_CATALOGUE.replacen(from, to, 1), Path::new("c.toml"))
             .unwrap_err()
             .to_string();
         assert!(err.contains(key), "{err}");
