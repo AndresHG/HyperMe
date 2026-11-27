@@ -325,3 +325,30 @@ fn diagnostics_reads_the_traces_of_a_window() {
         ("pasted".to_string(), 4)
     );
 }
+
+/// Spec 200 AC-4 (R-10, R-11): a history item's trace gives one bar per stage, offsets from
+/// key-down and durations from the trace, in the order the stages ran; an item without a trace
+/// gives none.
+#[test]
+fn a_history_items_trace_gives_one_bar_per_stage() {
+    let dir = temp_dir("bars");
+    let mut h = history(&dir, true);
+    let (store, _) = open(&dir, settings(true));
+    let id = h.begin(Some("TextEdit")).unwrap();
+    h.done(id, "hello", Some("en")).unwrap();
+    dictation(&store, Some(id), Outcome::Pasted);
+    let trace = store.trace_for(id).unwrap().unwrap();
+    let bars = trace.bars();
+    let names: Vec<&str> = bars.iter().map(|b| b.stage.as_str()).collect();
+    assert_eq!(
+        names,
+        ["mic_start", "speech", "dictionary", "cleanup", "insert"]
+    );
+    for bar in &bars {
+        let span = trace.spans.iter().find(|s| s.name == bar.stage).unwrap();
+        assert_eq!(bar.start_us, span.start_us - trace.spans[0].start_us);
+        assert_eq!(bar.duration_us, span.duration_us);
+    }
+    assert!(bars.windows(2).all(|w| w[0].start_us <= w[1].start_us));
+    assert!(store.trace_for(id + 1).unwrap().is_none());
+}

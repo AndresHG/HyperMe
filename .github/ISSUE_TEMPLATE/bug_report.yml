@@ -7,6 +7,9 @@ body:
       value: |
         Thanks for reporting. Please never paste API keys, audio, or what you dictated if it is
         private: describe it instead ("a 10-second Spanish sentence with two product names").
+
+        If HyperMe is running, use Report a problem in Settings → Diagnostics: it fills in this
+        form and saves a file to attach here. Read the file first; it holds no text you dictated.
   - type: textarea
     id: what
     attributes:

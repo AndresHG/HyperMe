@@ -23,6 +23,8 @@ mod onboarding;
 #[cfg(any(target_os = "macos", test))]
 mod pill;
 #[cfg(target_os = "macos")]
+mod report;
+#[cfg(target_os = "macos")]
 mod runtime;
 #[cfg(target_os = "macos")]
 mod settings;
@@ -41,8 +43,8 @@ use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::TrayIconBuilder;
 
 /// Writes a crash file to `~/Library/Logs/HyperMe/crashes/` on a panic, and keeps that folder to
-/// ten files from the last 30 days (spec 200, R-21 to R-23). The notice it leaves is read with
-/// Report a problem (slice 5).
+/// ten files from the last 30 days (spec 200, R-21 to R-23). A crash since the last start puts
+/// the notice of R-25 in the menu.
 #[cfg(target_os = "macos")]
 fn install_crash_hook() {
     use hyperme_platform::crash::LocalCrashFiles;
@@ -54,7 +56,33 @@ fn install_crash_hook() {
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |d| d.as_secs());
     files.folder().prune(now);
+    if files.folder().take_notice() {
+        CRASHED.store(true, std::sync::atomic::Ordering::Relaxed);
+    }
     files.folder().clone().install();
+}
+
+/// HyperMe crashed before this start (spec 200, R-25).
+#[cfg(target_os = "macos")]
+static CRASHED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// The menu and its crash notice, kept so a click can take the notice away (R-25).
+#[cfg(target_os = "macos")]
+static CRASH_NOTICE: std::sync::Mutex<Option<(Menu<tauri::Wry>, MenuItem<tauri::Wry>)>> =
+    std::sync::Mutex::new(None);
+
+/// The crash notice was clicked: open Report a problem and remove the notice, so it shows once
+/// per crash.
+#[cfg(target_os = "macos")]
+fn crash_notice_clicked(app: &AppHandle) {
+    settings::open(app, "diagnostics/report");
+    let taken = CRASH_NOTICE
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .take();
+    if let Some((menu, item)) = taken {
+        let _ = menu.remove(&item);
+    }
 }
 
 /// The pill window's label.
@@ -100,6 +128,10 @@ fn main() {
             home::home_fix_word,
             runtime::pill_view,
             diagnostics::diagnostics_view,
+            diagnostics::history_trace,
+            report::report_build,
+            report::report_save,
+            report::report_open_issue,
             runtime::pill_card,
             runtime::card_open_today,
             runtime::card_dismiss,
@@ -262,6 +294,20 @@ fn tray(app: &AppHandle) -> tauri::Result<Tray> {
             &quit,
         ],
     )?;
+    #[cfg(target_os = "macos")]
+    if CRASHED.load(std::sync::atomic::Ordering::Relaxed) {
+        let notice = MenuItem::with_id(
+            app,
+            "crash-notice",
+            "HyperMe quit unexpectedly · Report a problem…",
+            true,
+            None::<&str>,
+        )?;
+        menu.insert(&notice, 1)?;
+        *CRASH_NOTICE
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some((menu.clone(), notice));
+    }
     TrayIconBuilder::with_id("hyperme")
         .icon(Image::new_owned(icon::speed_pill(), icon::SIZE, icon::SIZE))
         .icon_as_template(true)
@@ -271,6 +317,8 @@ fn tray(app: &AppHandle) -> tauri::Result<Tray> {
             "quit" => app.exit(0),
             #[cfg(target_os = "macos")]
             updater::MENU_ID => updater::clicked(app),
+            #[cfg(target_os = "macos")]
+            "crash-notice" => crash_notice_clicked(app),
             #[cfg(target_os = "macos")]
             id => runtime::menu_action(app, id),
             #[cfg(not(target_os = "macos"))]
