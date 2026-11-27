@@ -51,3 +51,17 @@ Before this slice, the same Gmail call returned 0 threads, with every thread und
 The sign-in made for this check is kept in the Keychain (`google:livecheck`) and has not been
 revoked. Revoking a Google grant may end the other sign-ins of the same client, so that is left
 to the owner.
+
+## In-app check, after slice 3 (19:44 to 19:52 UTC)
+
+HyperMe.app built from master (commit 8157484) with `scripts/bundle-macos.sh`, same Mac, same
+network. The owner added the account through Settings → Connectors → Google.
+
+| Step | Result |
+| --- | --- |
+| First two sign-ins, Label field left empty (its "personal" is placeholder text) | Browser sign-in went through, the token was stored without a label, no account was added: [#216](https://github.com/AndresHG/HyperMe/issues/216) |
+| Sign-in with the label typed | Account "Google · personal" added (calendar, mail, drafts) |
+| Setup check right after (both pulls, interactive approver) | No `input_required`: Google kept the afternoon's "Always allow this tool" for this client, so no card appeared. Mail 20 threads, Calendar 7 events, nothing held back, no server state |
+
+The approval card itself was not seen live, because Google did not ask; it is covered by the
+tests and the browser check of slice 3 (PR #205).
