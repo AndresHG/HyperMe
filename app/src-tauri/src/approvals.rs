@@ -158,13 +158,8 @@ pub struct UiApprover {
 impl Approver for UiApprover {
     fn answer(&self, ask: ApprovalAsk) -> ApprovalFuture<'_> {
         Box::pin(async move {
-            use tauri::Manager;
-            // Nobody can see a card without the Settings window: answer nothing at once.
-            if self
-                .app
-                .get_webview_window(crate::settings::SETTINGS)
-                .is_none()
-            {
+            // Nobody can see a card without the Settings sheet: answer nothing at once.
+            if !crate::settings::is_open() {
                 return Approval::NoAnswer;
             }
             let who = format!("{} · {}", self.who, self.what);
@@ -173,10 +168,10 @@ impl Approver for UiApprover {
                     |id| card_view(id, &ask, &who, self.read),
                     WAIT,
                     |view| {
-                        let _ = self.app.emit_to(crate::settings::SETTINGS, ASK, view);
+                        let _ = self.app.emit_to(crate::home::HOME, ASK, view);
                     },
                     |id| {
-                        let _ = self.app.emit_to(crate::settings::SETTINGS, CLOSED, id);
+                        let _ = self.app.emit_to(crate::home::HOME, CLOSED, id);
                     },
                 )
                 .await

@@ -18,7 +18,8 @@
     --line2: color-mix(in srgb, CanvasText 18%, transparent);
   }
   * { box-sizing: border-box; }
-  body { margin: 0; font: 13px -apple-system, system-ui, sans-serif; background: Canvas; color: CanvasText; display: grid; grid-template-columns: 200px 1fr; height: 100vh; }
+  html, body { height: 100%; }
+  body { margin: 0; font: 13px -apple-system, system-ui, sans-serif; background: Canvas; color: CanvasText; display: grid; grid-template-columns: 200px 1fr; }
   nav { background: var(--side); border-right: 1px solid var(--line); padding: 14px 10px; display: flex; flex-direction: column; gap: 2px; }
   nav input { width: 100%; margin-bottom: 10px; padding: 6px 8px; border-radius: 7px; border: 1px solid var(--line); background: Canvas; color: inherit; }
   nav .group { font-size: 11px; color: var(--muted); margin: 10px 8px 4px; text-transform: uppercase; letter-spacing: 0.04em; }
@@ -75,13 +76,12 @@
   .add select { flex: 1; min-width: 0; }
   td.local { padding-top: 0; }
   a.link { color: var(--violet); cursor: pointer; text-decoration: none; }
-  /* Settings is a sheet over Home (V0.1 redesign): a rounded card in a transparent window, no
-     title bar, a close button and Esc. */
-  html { background: transparent; padding: 24px; height: 100vh; box-sizing: border-box; }
-  body { height: 100%; border-radius: 14px; overflow: hidden; box-shadow: 0 0 0 1px var(--line), 0 16px 44px rgb(0 0 0 / .32); box-sizing: border-box; grid-template-columns: 196px 1fr; }
+  /* Settings is a sheet inside Home's page (V0.1 redesign): Home draws the rounded corners and
+     shadow around this frame, so the page fills it; a close button and Esc. */
+  body { overflow: hidden; grid-template-columns: 196px 1fr; }
   nav { padding: 16px 10px; }
   main { position: relative; padding: 20px 56px 20px 24px !important; }
-  #sheet-x { position: fixed; top: 36px; right: 38px; width: 28px; height: 28px; padding: 0; border-radius: 999px; border: 0; background: var(--line); font-size: 16px; line-height: 1; z-index: 5; }
+  #sheet-x { position: fixed; top: 12px; right: 14px; width: 28px; height: 28px; padding: 0; border-radius: 999px; border: 0; background: var(--line); font-size: 16px; line-height: 1; z-index: 5; }
   #sheet-x:hover { background: var(--line2); }
   /* V0.1 redesign: rows sit in grouped cards, switches instead of checkboxes, as in macOS
      System Settings and Wispr Flow's settings. */
@@ -354,16 +354,24 @@
   <p id="error" class="bad"></p>
 </main>
 <script>
+  // This page runs in a frame inside Home (settings::open). Tauri gives only the top page its
+  // API, so the frame borrows Home's; listeners are dropped when the sheet closes, or Home would
+  // keep calling into a page that is gone.
+  (() => {
+    const T = parent.__TAURI__;
+    const unlisten = [];
+    window.__TAURI__ = { ...T, event: { ...T.event, listen: (...args) => { const p = T.event.listen(...args); unlisten.push(p); return p; } } };
+    window.teardown = () => unlisten.splice(0).forEach((p) => p.then((off) => off()));
+  })();
   const invoke = window.__TAURI__.core.invoke;
   const $ = (id) => document.getElementById(id);
+  const closeSheet = () => parent.closeSettings();
   // The sheet closes with its × or Esc, unless Esc belongs to a field or the connect dialog.
-  $('sheet-x').addEventListener('click', () => invoke('settings_close'));
-  // A click in the transparent room around the card is a click on Home's dimmed page.
-  document.documentElement.addEventListener('mousedown', (e) => { if (e.target === document.documentElement) invoke('settings_close'); });
+  $('sheet-x').addEventListener('click', closeSheet);
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape' || e.defaultPrevented) return;
     if (e.target instanceof HTMLInputElement && e.target.value) return;
-    invoke('settings_close');
+    closeSheet();
   });
   let view = null;
 

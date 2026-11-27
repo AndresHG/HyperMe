@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <title>HyperMe</title>
+<link rel="stylesheet" href="tokens.css">
 <style>
   /* docs/UX.md, "Home" and "Visual language", V0.1 redesign (owner approved the mockups,
      27 November 2026): Wispr Flow's layout in HyperMe's look. The system's light or dark colours,
@@ -39,7 +40,7 @@
   :focus-visible { outline: 2px solid var(--violet); outline-offset: 1px; }
   button { font: inherit; color: inherit; cursor: default; }
   .rounded { font-family: ui-rounded, "SF Pro Rounded", -apple-system, sans-serif; }
-  nav { background: var(--side); border-right: 1px solid var(--line); padding: 16px 10px 12px; display: flex; flex-direction: column; gap: 2px; }
+  nav { background: var(--side); border-right: 1px solid var(--line); padding: calc(var(--title-bar-height) + var(--space-3)) 10px 12px; display: flex; flex-direction: column; gap: 2px; }
   .brand { display: flex; align-items: center; gap: 8px; padding: 0 8px 16px; font: 700 15px ui-rounded, "SF Pro Rounded", -apple-system, sans-serif; }
   .brand i { width: 22px; height: 12px; border-radius: 999px; background: #111113; box-shadow: 0 0 0 2px var(--violet); }
   nav a { display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: 7px; color: inherit; text-decoration: none; cursor: default; }
@@ -158,16 +159,27 @@
   #menu div { display: flex; justify-content: space-between; gap: 18px; padding: 6px 8px; border-radius: 6px; }
   #menu div.on, #menu div:hover { background: var(--on); }
   #menu kbd { font: 11px -apple-system, sans-serif; color: var(--faint); }
-  /* Settings opens as a sheet over this window (V0.1 redesign): the page dims behind it, and a
-     click on the dimmed page closes it. */
-  #dim { display: none; position: fixed; inset: 0; background: rgba(0, 0, 0, .28); z-index: 20; }
+  /* The overlay title bar (docs/DESIGN.md, "Windows"): macOS draws the traffic lights over the
+     page; this strip drags the window. */
+  #titlebar { position: fixed; top: 0; left: 0; right: 0; height: var(--title-bar-height); z-index: 30; }
+  /* Settings opens as a sheet inside this window (V0.1 redesign): the page dims behind it, and a
+     click on the dimmed page closes it. The sheet is part of this page, inside Home's native
+     frame, so macOS never draws a square shadow around it (docs/DESIGN.md). */
+  #dim { display: none; position: fixed; inset: 0; background: var(--color-scrim); z-index: 20; }
   body.sheet-open #dim { display: block; }
+  #sheet { position: fixed; z-index: 21; left: 50%; top: calc(50% + var(--title-bar-height) / 2); transform: translate(-50%, -50%);
+    width: clamp(640px, calc(100vw - 2 * var(--space-8)), 1040px);
+    height: clamp(420px, calc(100vh - var(--title-bar-height) - 2 * var(--space-8)), 760px);
+    border-radius: var(--radius-sheet); overflow: hidden; box-shadow: var(--shadow-sheet); background: var(--color-content-bg); }
+  #sheet[hidden] { display: none; }
+  #sheet iframe { display: block; width: 100%; height: 100%; border: 0; }
   .dict-error { color: var(--bad); margin: 8px 0 0; }
   .dict-error:empty { display: none; }
 </style>
 <link rel="stylesheet" href="dictionary.css">
 </head>
 <body>
+<div id="titlebar" data-tauri-drag-region></div>
 <nav aria-label="Sections">
   <div class="brand"><i aria-hidden="true"></i>HyperMe</div>
   <div id="sections"></div>
@@ -217,6 +229,7 @@
 </main>
 <div id="menu" role="menu" aria-label="Actions"></div>
 <div id="dim" aria-hidden="true"></div>
+<div id="sheet" role="dialog" aria-modal="true" aria-label="Settings" hidden></div>
 <script src="dictionary.js"></script>
 <script>
   const { invoke } = window.__TAURI__.core;
@@ -289,8 +302,37 @@
     }
   }
 
-  const openSettings = (section) => invoke('home_settings', { section });
-  $('dim').addEventListener('mousedown', () => invoke('settings_close'));
+  // Settings is a sheet in this page (V0.1 redesign): settings.html in a frame, made when it opens
+  // and dropped when it closes, so it costs no memory while closed. The menu, ⌘, and the app
+  // open it through Rust (settings::open), which calls openSettings here.
+  window.openSettings = (section) => {
+    const sheet = $('sheet');
+    let frame = sheet.querySelector('iframe');
+    if (frame) {
+      frame.contentWindow.location.hash = section;
+    } else {
+      frame = document.createElement('iframe');
+      frame.title = 'Settings';
+      frame.src = 'settings.html#' + section;
+      sheet.append(frame);
+      sheet.hidden = false;
+      document.body.classList.add('sheet-open');
+      invoke('settings_opened');
+    }
+    frame.focus();
+  };
+  window.closeSettings = () => {
+    const sheet = $('sheet');
+    const frame = sheet.querySelector('iframe');
+    if (!frame) return;
+    try { frame.contentWindow.teardown?.(); } catch (_) { /* already gone */ }
+    frame.remove();
+    sheet.hidden = true;
+    document.body.classList.remove('sheet-open');
+    invoke('settings_closed');
+  };
+  $('dim').addEventListener('mousedown', () => closeSettings());
+  invoke('settings_pending').then((section) => { if (section) openSettings(section); });
   $('open-settings').addEventListener('click', (e) => { e.preventDefault(); openSettings(settingsSection()); });
   $('open-help').addEventListener('click', (e) => { e.preventDefault(); openSettings('about'); });
   // Spec 200, R-12: Report a problem from Help, and from a failed item (its trace leads the issue).

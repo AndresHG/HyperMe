@@ -87,6 +87,9 @@ pub fn open(app: &AppHandle, step: onboarding::Step) {
     let url = format!("onboarding.html#{}", step.name());
     let built = WebviewWindowBuilder::new(app, WALKTHROUGH, WebviewUrl::App(url.into()))
         .title("Welcome to HyperMe")
+        // Native chrome with the traffic lights over the page (docs/DESIGN.md, "Windows").
+        .title_bar_style(tauri::TitleBarStyle::Overlay)
+        .hidden_title(true)
         .inner_size(640.0, 620.0)
         .resizable(false)
         .build();

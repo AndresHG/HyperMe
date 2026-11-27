@@ -1,9 +1,10 @@
-//! The Settings window (docs/UX.md, "Settings window"; spec R-24, R-25): a normal window opened
-//! from the menu, created when opened and dropped when closed, so it costs no memory while
-//! closed. Every change saves at once to `config.toml`; keys go straight to the keychain and are
+//! Settings (docs/UX.md, "Settings window"; spec R-24, R-25): a sheet inside the Home window's
+//! page, created when opened and dropped when closed, so it costs no memory while closed. Every change saves at once to `config.toml`; keys go straight to the keychain and are
 //! never sent back to the page.
 
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Mutex, PoisonError};
 use std::time::Instant;
 
 use hyperme_core::config::{self, Config, ConfigError, Hotkey, Retention, Role};
@@ -14,104 +15,72 @@ use hyperme_platform::permissions;
 use hyperme_providers::any;
 use serde::Serialize;
 use serde_json::Value;
-use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
-
-/// The Settings window's label.
-pub const SETTINGS: &str = "settings";
+use tauri::{AppHandle, Manager};
 
 fn config_path(app: &AppHandle) -> PathBuf {
     crate::runtime::data_dir(app).join("config.toml")
 }
 
-/// The sheet fills Home less this margin on every side, as Wispr Flow's settings do (owner,
-/// 27 November 2026: "big enough, just like Wispr Flow").
-const MARGIN: f64 = 36.0;
-/// The largest sheet, so it stays a sheet on a full-screen Home.
-const SHEET_MAX: (f64, f64) = (1040.0, 760.0);
-/// The smallest sheet; Home's own minimum is 720 × 480.
-const SHEET_MIN: (f64, f64) = (640.0, 420.0);
-/// Home's title bar, left out when centring.
-const TITLE_BAR: f64 = 28.0;
-/// Transparent room around the sheet's card for its rounded corners and the page's own shadow.
-/// The window has no native shadow: macOS draws that one square around a transparent window
-/// (the corners the owner saw, 27 November 2026; the pill's square had the same cause).
-pub const SHEET_PAD: f64 = 24.0;
+/// Whether the Settings sheet is showing in Home, so an approval card has somewhere to appear
+/// (specs/166, R-9).
+static SHEET_OPEN: AtomicBool = AtomicBool::new(false);
+/// The section to open once a Home page that is still loading asks for it.
+static PENDING: Mutex<Option<String>> = Mutex::new(None);
 
-/// Where the Settings sheet sits over Home, in logical points: centred in Home's content area,
-/// filling it less an even margin.
-pub fn sheet_frame(home_pos: (f64, f64), home_size: (f64, f64)) -> (f64, f64, f64, f64) {
-    let w = (home_size.0 - 2.0 * MARGIN).clamp(SHEET_MIN.0, SHEET_MAX.0);
-    let h = (home_size.1 - TITLE_BAR - 2.0 * MARGIN).clamp(SHEET_MIN.1, SHEET_MAX.1);
-    let x = home_pos.0 + (home_size.0 - w) / 2.0;
-    let y = home_pos.1 + TITLE_BAR + (home_size.1 - TITLE_BAR - h) / 2.0;
-    (x, y, w, h)
+/// Whether the Settings sheet is open in Home.
+pub fn is_open() -> bool {
+    SHEET_OPEN.load(Ordering::SeqCst)
 }
 
-/// Opens Settings at `section` (`providers`, for example) as a sheet over the Home window, as in
-/// Wispr Flow (V0.1 redesign, owner, 27 November 2026): Home opens first if it is closed, and the
-/// sheet is a borderless child window that moves with Home and closes with it. The menu, the
-/// walkthrough, Gmail approvals and Home itself all come here.
+/// Opens Settings at `section` (`providers`, for example) as a sheet inside the Home window, as in
+/// Wispr Flow (V0.1 redesign, owner, 27 November 2026). The sheet is part of Home's page, so its
+/// rounded corners sit inside Home's native frame and no transparent window is faked
+/// (docs/DESIGN.md, "Windows"); it also costs no web view of its own. Home opens first if it is
+/// closed. The menu, the walkthrough, Gmail approvals and Home itself all come here.
 pub fn open(app: &AppHandle, section: &str) {
-    if let Some(window) = app.get_webview_window(SETTINGS) {
-        let _ = window.eval(format!("location.hash = {}", serde_json::json!(section)));
-        let _ = window.show();
-        let _ = window.set_focus();
-        return;
-    }
+    *PENDING.lock().unwrap_or_else(PoisonError::into_inner) = Some(section.to_owned());
     if app.get_webview_window(crate::home::HOME).is_none() {
+        // The page takes the pending section once it has loaded (`settings_pending`).
         crate::home::open(app, "home");
+        return;
     }
-    let Some(home) = app.get_webview_window(crate::home::HOME) else {
-        return;
-    };
-    let scale = home.scale_factor().unwrap_or(1.0);
-    let (Ok(pos), Ok(size)) = (home.outer_position(), home.outer_size()) else {
-        return;
-    };
-    let (pos, size) = (pos.to_logical::<f64>(scale), size.to_logical::<f64>(scale));
-    let (x, y, w, h) = sheet_frame((pos.x, pos.y), (size.width, size.height));
-    let (x, y, w, h) = (
-        x - SHEET_PAD,
-        y - SHEET_PAD,
-        w + 2.0 * SHEET_PAD,
-        h + 2.0 * SHEET_PAD,
-    );
-    let url = format!("settings.html#{section}");
-    let Ok(builder) = WebviewWindowBuilder::new(app, SETTINGS, WebviewUrl::App(url.into()))
-        .title("HyperMe Settings")
-        .inner_size(w, h)
-        .position(x, y)
-        .decorations(false)
-        .transparent(true)
-        .resizable(false)
-        .shadow(false)
-        .parent(&home)
-    else {
-        return;
-    };
-    if let Ok(window) = builder.build() {
-        let _ = home.eval("document.body.classList.add('sheet-open')");
-        // Its page process must end when it closes, or it stays in memory while idle.
-        let handle = app.clone();
-        window.on_window_event(move |event| {
-            if matches!(event, tauri::WindowEvent::Destroyed) {
-                // An approval card left open answers nothing (specs/166, R-9).
-                crate::approvals::window_closed();
-                if let Some(home) = handle.get_webview_window(crate::home::HOME) {
-                    let _ = home.eval("document.body.classList.remove('sheet-open')");
-                }
-                crate::home::free_closed_window(&handle);
-            }
-        });
-        let _ = window.set_focus();
+    crate::home::bring_to_front(app);
+    if let Some(home) = app.get_webview_window(crate::home::HOME) {
+        let section = serde_json::json!(section);
+        let _ = home.eval(format!("window.openSettings && openSettings({section})"));
     }
 }
 
-/// Closes the Settings sheet: its × button, Esc, or a click on Home's dimmed page.
+/// The section a freshly loaded Home page should open the sheet at, if any.
 #[tauri::command]
-pub fn settings_close(app: AppHandle) {
-    if let Some(window) = app.get_webview_window(SETTINGS) {
-        let _ = window.close();
+pub fn settings_pending() -> Option<String> {
+    PENDING
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .take()
+}
+
+/// The page tells Rust the sheet is showing.
+#[tauri::command]
+pub fn settings_opened() {
+    PENDING
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .take();
+    SHEET_OPEN.store(true, Ordering::SeqCst);
+}
+
+/// The page tells Rust the sheet closed: its × button, Esc, or a click on Home's dimmed page.
+#[tauri::command]
+pub fn settings_closed() {
+    sheet_gone();
+}
+
+/// The sheet is gone, by its own close or with Home: an approval card left open answers nothing
+/// (specs/166, R-9).
+pub fn sheet_gone() {
+    if SHEET_OPEN.swap(false, Ordering::SeqCst) {
+        crate::approvals::window_closed();
     }
 }
 
@@ -833,33 +802,6 @@ pub fn app_restart(app: AppHandle) {
 
 #[cfg(test)]
 mod tests {
-
-    /// Regression (owner, 27 November 2026, "corners are wrong"): the sheet window has no
-    /// native shadow, which macOS draws square, and its page leaves the transparent room the
-    /// rounded card and its shadow need.
-    #[test]
-    fn the_sheet_has_no_square_shadow() {
-        let source = include_str!("settings.rs");
-        let open = &source
-            [source.find("pub fn open(").unwrap()..source.find("pub fn settings_close").unwrap()];
-        assert!(open.contains(".shadow(false)") && open.contains(".transparent(true)"));
-        let page = include_str!("../../ui/settings.html");
-        assert!(page.contains(&format!("padding: {}px", super::SHEET_PAD as u32)));
-    }
-
-    /// V0.1 redesign: the sheet fills Home's content area less an even margin, centred, and
-    /// keeps between its minimum and maximum size.
-    #[test]
-    fn the_sheet_sits_over_home() {
-        assert_eq!(
-            super::sheet_frame((100.0, 50.0), (1000.0, 700.0)),
-            (136.0, 114.0, 928.0, 600.0)
-        );
-        let (_, _, w, h) = super::sheet_frame((0.0, 0.0), (720.0, 480.0));
-        assert_eq!((w, h), (648.0, 420.0));
-        let (_, _, w, h) = super::sheet_frame((0.0, 0.0), (2000.0, 1200.0));
-        assert_eq!((w, h), (1040.0, 760.0));
-    }
 
     /// #216 regression, V0.1 redesign: the account label is a choice (Personal, Work, Other), so
     /// no greyed placeholder can look like a value already filled in; and the Dictionary is not

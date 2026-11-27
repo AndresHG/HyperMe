@@ -114,7 +114,6 @@ fn main() {
             home::home_blocks,
             home::home_attention,
             home::home_refresh,
-            home::home_settings,
             home::home_stats,
             home::home_page,
             home::home_search,
@@ -152,7 +151,9 @@ fn main() {
             settings::provider_hint,
             settings::result_open,
             settings::settings_open,
-            settings::settings_close,
+            settings::settings_pending,
+            settings::settings_opened,
+            settings::settings_closed,
             settings::app_restart,
             dictionary::dictionary_view,
             dictionary::dictionary_save,
@@ -223,6 +224,11 @@ fn main() {
             #[cfg(target_os = "macos")]
             if let Some(target) = std::env::var_os("HYPERME_OPEN_HOME") {
                 home::open(app.handle(), &target.to_string_lossy());
+            }
+            // `HYPERME_OPEN_SETTINGS=general` opens Home with the Settings sheet at that section.
+            #[cfg(target_os = "macos")]
+            if let Some(section) = std::env::var_os("HYPERME_OPEN_SETTINGS") {
+                settings::open(app.handle(), &section.to_string_lossy());
             }
             Ok(())
         })
