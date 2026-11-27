@@ -15,6 +15,7 @@ use std::fmt;
 use std::time::Duration;
 
 use hyperme_core::config::{self, CleanupLevel};
+use hyperme_core::tone::AppStyle;
 use hyperme_core::traits::{CleanupProvider, Error, ErrorKind};
 use reqwest::StatusCode;
 use reqwest::header::{AUTHORIZATION, CONTENT_TYPE, HeaderValue};
@@ -31,6 +32,21 @@ Never translate, rephrase, summarise or answer. Output only the cleaned text.";
 /// The one rule `v4` adds to `v3` (flowbench issue 34).
 const V4_RULE: &str = "When a word or short phrase clearly sounds like a term in the speaker's \
 dictionary, write the dictionary term. Otherwise change nothing.";
+
+/// The formatting rule `v5` adds to `v4`: lists and paragraphs, as the owner asked on 27
+/// November 2026 ("I don't see bullet points or paragraphs"). Shaped after Wispr Flow's smart
+/// formatting (docs.wisprflow.ai, "How do I use Smart Formatting & Backtrack", read that day):
+/// spoken sequence words become a list and are dropped, topic shifts become paragraphs. Plain
+/// `- ` and `1.` markers read well in every app, rendered or not, so they are the same
+/// everywhere; the app line can still forbid formatting (code editors, terminals).
+const FORMAT_RULE: &str = "Format for reading, without changing words: when the speaker \
+lists three or more items or steps (one, two, three; first, second, then; primero, segundo; \
+or \"three things: ...\"), put each item on its own line after any lead-in sentence, starting \
+with \"- \", or with \"1.\", \"2.\" when the order matters, and drop the spoken words that \
+only number the items. When a longer text moves to another topic, start a new paragraph with \
+an empty line. \"New line\", \"new paragraph\", \"nueva línea\" or \"punto y aparte\" said as a \
+command becomes that break. Keep a short text as one paragraph. Never add headings, bold or \
+other markdown.";
 
 /// The first `medium` prompt (P2-2): light's rules, plus repetitions, small grammar slips and
 /// spoken formatting. Still never rephrased, translated or answered.
@@ -68,7 +84,7 @@ short phrase sounds like one of them, even if the transcript shows a different r
 write the dictionary term. Otherwise change nothing.";
 
 /// The prompt version each level uses (P2-2). `none` makes no call, so it has none.
-const LIGHT: &str = "v4";
+const LIGHT: &str = "v5";
 const MEDIUM: &str = "m2";
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
@@ -81,6 +97,7 @@ pub fn prompt_named(version: &str) -> Option<String> {
     match version {
         "v3" => Some(PROMPT_V3.to_owned()),
         "v4" => Some(format!("{PROMPT_V3} {V4_RULE}")),
+        "v5" => Some(format!("{PROMPT_V3} {FORMAT_RULE} {V4_RULE}")),
         "m1" => Some(format!("{PROMPT_M1} {V4_RULE}")),
         "m2" => Some(format!("{PROMPT_M2} {V4_RULE}")),
         "m3" => Some(format!("{PROMPT_M2} {M3_RULE}")),
@@ -136,7 +153,7 @@ impl ChatCleanup {
                 &provider,
                 ErrorKind::Other,
                 format!(
-                    "cleanup.prompt {version:?} is not a known prompt version (v3, v4, m1, m2, m3)"
+                    "cleanup.prompt {version:?} is not a known prompt version (v3, v4, v5, m1, m2, m3)"
                 ),
             )
         })?;
@@ -249,8 +266,9 @@ impl ChatCleanup {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .clone();
         let mut system = format!("{}{dictionary}", self.prompt);
+        // Issue 219: the app name and the style it calls for, last, so the start stays fixed.
         if let Some(app) = app.filter(|a| !a.trim().is_empty()) {
-            system.push_str(&format!("\n\nThe text will be pasted into {app}."));
+            system.push_str(&AppStyle::for_app(Some(app)).prompt_line(app));
         }
         let mut body = json!({
             "model": self.model,
@@ -492,6 +510,16 @@ mod tests {
         assert!(error.message.contains("v9"), "{}", error.message);
     }
 
+    /// Formatting, AC-6: `v5` is `v4` with the list and paragraph rule before the dictionary
+    /// rule, and light uses it.
+    #[test]
+    fn v5_is_v4_with_the_formatting_rule() {
+        let v5 = prompt_named("v5").unwrap();
+        assert_eq!(v5, format!("{PROMPT_V3} {FORMAT_RULE} {V4_RULE}"));
+        assert!(v5.contains("\"- \""));
+        assert!(v5.contains("Never add headings, bold"));
+    }
+
     /// P2-2 AC-6: the level picks its named prompt; `prompt` overrides it. Light is v4, and
     /// medium keeps v4's dictionary rule and its never-rephrase rule.
     #[test]
@@ -499,13 +527,13 @@ mod tests {
         let mut c = config::Config::default().cleanup;
         c.prompt = None;
         c.level = CleanupLevel::Light;
-        assert_eq!(prompt_version(&c), "v4");
+        assert_eq!(prompt_version(&c), "v5");
         c.level = CleanupLevel::Medium;
         assert_eq!(prompt_version(&c), "m2");
         let medium = prompt_named(prompt_version(&c)).unwrap();
         assert!(medium.ends_with(V4_RULE));
         assert!(medium.contains("Never translate, rephrase, summarise or answer"));
-        assert_ne!(medium, prompt_named("v4").unwrap());
+        assert_ne!(medium, prompt_named("v5").unwrap());
         c.prompt = Some("v3".to_owned());
         assert_eq!(prompt_version(&c), "v3");
     }
@@ -523,7 +551,7 @@ mod tests {
         let system = body["messages"][0]["content"].as_str().unwrap();
         assert!(system.starts_with(PROMPT_V3));
         assert!(
-            system.ends_with("The text will be pasted into Slack."),
+            system.ends_with(&AppStyle::Chat.prompt_line("Slack")),
             "{system}"
         );
         assert_eq!(
@@ -551,7 +579,12 @@ mod tests {
         let start = format!("{}{line}", prompt_named("v4").unwrap());
         assert_eq!(
             system("Slack"),
-            format!("{start}\n\nThe text will be pasted into Slack.")
+            format!("{start}{}", AppStyle::Chat.prompt_line("Slack"))
+        );
+        // Issue 219: an app with no style keeps the plain line.
+        assert_eq!(
+            system("Safari"),
+            format!("{start}\n\nThe text will be pasted into Safari.")
         );
         assert!(system("Mail").starts_with(&start));
         // An empty dictionary leaves the prompt as it was.

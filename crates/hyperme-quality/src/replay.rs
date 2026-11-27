@@ -58,6 +58,8 @@ pub struct Replayed {
 struct Seen {
     /// The saved transcript the stand-in speech provider returns, in a cleanup-only replay.
     saved: Option<String>,
+    /// The app in front for this sample.
+    app: Option<String>,
     raw: Option<String>,
     /// The cleanup's last error.
     error: Option<String>,
@@ -178,12 +180,13 @@ impl Inserter for KeepText {
     }
 }
 
-/// No app in front: the cleanup prompt gets no app name, the same for every sample.
-struct NoFocus;
+/// The sample's app from the set's `apps.json`, or none: then the cleanup prompt gets no app
+/// name, the same for every sample.
+struct SampleFocus(Shared);
 
-impl FocusInfo for NoFocus {
+impl FocusInfo for SampleFocus {
     fn frontmost_app(&self) -> Option<String> {
-        None
+        with(&self.0, |s| s.app.clone())
     }
     fn secure_input(&self) -> bool {
         false
@@ -254,6 +257,7 @@ pub async fn replay<S, C>(
     cleanup: &C,
     settings: Settings,
     samples: &[Sample],
+    apps: &BTreeMap<String, String>,
     each: impl FnMut(&Replayed),
 ) -> Vec<Replayed>
 where
@@ -265,7 +269,7 @@ where
         inner: speech,
         seen: seen.clone(),
     };
-    drive(speech, cleanup, settings, samples, None, seen, each).await
+    drive(speech, cleanup, settings, samples, apps, None, seen, each).await
 }
 
 /// The cleanup-only replay: each sample's transcript comes from `raw` (saved by a live run), at
@@ -276,6 +280,7 @@ pub async fn replay_raw<C>(
     cleanup: &C,
     settings: Settings,
     samples: &[Sample],
+    apps: &BTreeMap<String, String>,
     raw: &BTreeMap<String, String>,
     pace: Duration,
     each: impl FnMut(&Replayed),
@@ -298,6 +303,7 @@ where
         cleanup,
         settings,
         samples,
+        apps,
         Some((raw, pace)),
         seen,
         each,
@@ -305,11 +311,13 @@ where
     .await
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn drive<S, C>(
     speech: S,
     cleanup: &C,
     settings: Settings,
     samples: &[Sample],
+    apps: &BTreeMap<String, String>,
     saved: Option<(&BTreeMap<String, String>, Duration)>,
     seen: Shared,
     mut each: impl FnMut(&Replayed),
@@ -322,7 +330,7 @@ where
         mic: NoMicrophone,
         providers: fixed(speech, Borrowed(cleanup, seen.clone())),
         inserter: KeepText(seen.clone()),
-        focus: NoFocus,
+        focus: SampleFocus(seen.clone()),
         history: NoHistory,
         sounds: NoSounds,
     };
@@ -342,7 +350,12 @@ where
         let mut out = Vec::new();
         let mut sent = 0;
         for sample in samples {
-            with(&seen, |s| *s = Seen::default());
+            with(&seen, |s| {
+                *s = Seen {
+                    app: apps.get(&sample.name).cloned(),
+                    ..Seen::default()
+                };
+            });
             let outcome = match saved {
                 None => dictate(&events, &mut statuses, &sample.pcm).await,
                 Some((raw, pace)) => match raw.get(&sample.name) {

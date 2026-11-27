@@ -246,6 +246,50 @@ fn short_format() {
     assert_eq!(format_short("Already Capital"), "Already Capital.");
 }
 
+/// Issue 219, AC-3 and AC-4: the app in front shapes the cleaned text. Slack loses the final
+/// full stop of a short message; a terminal gets one line, even if the model broke it.
+#[tokio::test(start_paused = true)]
+async fn the_app_in_front_shapes_the_text() {
+    for (app, reply, pasted) in [
+        (
+            "Slack",
+            "Sounds good, see you there.",
+            "Sounds good, see you there",
+        ),
+        (
+            "iTerm2",
+            "git status\n- then git diff",
+            "git status then git diff",
+        ),
+        (
+            "Mail",
+            "Sounds good, see you there.",
+            "Sounds good, see you there.",
+        ),
+    ] {
+        let log = Log::new();
+        let speech = FakeSpeech::new(&log, "sounds good see you there then");
+        let focus = FakeFocus::textedit();
+        *focus.app.lock().unwrap() = app.to_owned();
+        let mut h = Harness::start_with(
+            &log,
+            speech,
+            FakeCleanup::new(&log, reply),
+            settings(),
+            focus,
+        );
+        h.send(Event::KeyDown).await;
+        tokio::time::sleep(ms(600)).await;
+        h.send(Event::KeyUp).await;
+        h.until(&Status::Done {
+            raw: false,
+            via: None,
+        })
+        .await;
+        assert_eq!(log.pasted(), [pasted], "{app}");
+    }
+}
+
 /// AC-9 (R-14): an empty transcript pastes nothing and says "Nothing heard".
 #[tokio::test(start_paused = true)]
 async fn empty_transcript_pastes_nothing() {

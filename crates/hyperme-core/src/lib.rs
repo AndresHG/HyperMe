@@ -25,6 +25,7 @@ pub mod scheduler;
 pub mod secrets;
 pub mod sync;
 pub mod tasks;
+pub mod tone;
 pub mod trace;
 pub mod traits;
 pub mod warnings;

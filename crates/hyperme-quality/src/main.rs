@@ -266,7 +266,12 @@ fn run(o: &Options) -> Result<(), String> {
         dictionary: dictionary.clone(),
         ..Settings::from_config(&config)
     };
-    let saved = match &o.reuse_raw {
+    // A text set has only its saved transcripts: always cleanup only.
+    let reuse_raw = o
+        .reuse_raw
+        .clone()
+        .or_else(|| set.text_only.then(|| set.dir.join("raw.json")));
+    let saved = match &reuse_raw {
         Some(path) => Some(set::read_raw(path)?),
         None => None,
     };
@@ -292,6 +297,7 @@ fn run(o: &Options) -> Result<(), String> {
                 &cleanup,
                 settings,
                 &set.samples,
+                &set.apps,
                 raw,
                 pace,
                 |r| eprintln!("{}", line(r)),
@@ -309,9 +315,16 @@ fn run(o: &Options) -> Result<(), String> {
                 audio_s,
                 set.dir.display()
             );
-            runtime.block_on(replay(&speech, &cleanup, settings, &set.samples, |r| {
-                eprintln!("{}", line(r));
-            }))
+            runtime.block_on(replay(
+                &speech,
+                &cleanup,
+                settings,
+                &set.samples,
+                &set.apps,
+                |r| {
+                    eprintln!("{}", line(r));
+                },
+            ))
         }
     };
 
@@ -341,7 +354,7 @@ fn run(o: &Options) -> Result<(), String> {
         ),
         (
             "Speech",
-            match &o.reuse_raw {
+            match &reuse_raw {
                 Some(path) => format!(
                     "not called: raw transcripts reused from `{}` (an earlier live run), \
                      cleanup only{}",
