@@ -55,3 +55,21 @@ at launch. Drawing time in the panel was not measured.
 Not measured: Home open on Today (spec 98, AC-2). Opening Home brings the window to the front,
 which would have taken focus from the owner's work. The app was no longer running by about
 11:43 (no crash report written); idle CPU over 10 minutes was not measured either.
+
+## Home open on Today (spec 98, AC-2), installed build 6bcc4b5
+
+Home opened at 12:35:52 local time with `open ~/Applications/HyperMe.app` (the menu-bar icon
+was hidden among others), on the Home page with the new Today block. Footprint of `hyperme` and
+its four WebKit processes, sampled every 9 s; the owner's own task list and day.
+
+| Time | `hyperme` | WebKit GPU | WebKit Networking | Pill WebContent | Home WebContent | **All** |
+| --- | --- | --- | --- | --- | --- | --- |
+| 12:36:04 | 38 MB | 14 MB | 6.4 MB | 13 MB | 23 MB | **94.4 MB** |
+| 12:36:13 | 40 MB | 20 MB | 6.4 MB | 13 MB | 32 MB | **111.4 MB** |
+| 12:36:22 | 40 MB | 23 MB | 6.4 MB | 13 MB | 41 MB | **123.4 MB** |
+| 12:36:32 | 40 MB | 22 MB | 6.4 MB | 13 MB | 33 MB | **114.4 MB** |
+
+Against AC-2 (Home open, any page, under 130 MB): passes, with 6.6 MB to spare at the peak.
+
+Idle with Home never opened, same build, three samples from 12:32:21 to 12:32:42: `hyperme`
+30 MB, GPU 11 MB, Networking 6.5 MB, pill 13 MB, **60.5 MB** in all, steady.
