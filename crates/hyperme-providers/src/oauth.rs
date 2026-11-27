@@ -105,6 +105,8 @@ pub enum OAuthError {
     SignInAgain,
     /// No refresh token is stored for the account.
     NotSignedIn,
+    /// The provider does not know the client ID and secret.
+    ClientRejected,
     /// The token response had no refresh token, so the account could not stay signed in.
     NoRefreshToken,
     /// The provider answered with an error, by HTTP status and OAuth `error` code.
@@ -132,6 +134,9 @@ impl fmt::Display for OAuthError {
             OAuthError::Denied(error) => write!(f, "sign-in was not allowed: {error}"),
             OAuthError::SignInAgain => write!(f, "the account needs a new sign-in"),
             OAuthError::NotSignedIn => write!(f, "the account is not signed in"),
+            OAuthError::ClientRejected => {
+                write!(f, "the provider does not know this client ID and secret")
+            }
             OAuthError::NoRefreshToken => {
                 write!(
                     f,
@@ -445,6 +450,16 @@ impl fmt::Debug for OAuthClient {
 struct TokenResponse {
     access: AccessToken,
     refresh: Option<String>,
+    refresh_expires_in: Option<u64>,
+}
+
+/// What a sign-in gives besides the stored refresh token.
+#[derive(Debug, Clone)]
+pub struct SignedIn {
+    pub access: AccessToken,
+    /// Seconds until the refresh token expires, when the provider says (Google does for a
+    /// project in "Testing"; R-10a). `None`: it does not expire.
+    pub refresh_expires_in: Option<u64>,
 }
 
 impl OAuthClient {
@@ -493,6 +508,20 @@ impl OAuthClient {
         scopes: &[&str],
         timeout: Duration,
     ) -> Result<AccessToken, OAuthError> {
+        self.sign_in_detailed(browser, store, account, scopes, timeout)
+            .await
+            .map(|signed| signed.access)
+    }
+
+    /// [`Self::sign_in`], also saying when the refresh token expires.
+    pub async fn sign_in_detailed(
+        &self,
+        browser: &(dyn Browser + Sync),
+        store: &(dyn SecretStore + Sync),
+        account: &str,
+        scopes: &[&str],
+        timeout: Duration,
+    ) -> Result<SignedIn, OAuthError> {
         let loopback = Loopback::bind().await?;
         let redirect_uri = loopback.redirect_uri();
         let pkce = Pkce::new()?;
@@ -510,7 +539,30 @@ impl OAuthClient {
         let tokens = self.token_request(&mut params).await?;
         let refresh = tokens.refresh.ok_or(OAuthError::NoRefreshToken)?;
         store.set(account, &refresh)?;
-        Ok(tokens.access)
+        Ok(SignedIn {
+            access: tokens.access,
+            refresh_expires_in: tokens.refresh_expires_in,
+        })
+    }
+
+    /// Checks the client ID and secret without a sign-in: a code exchange with a made-up code
+    /// is refused as `invalid_grant` by a known client and as `invalid_client` (or
+    /// `unauthorized_client`) by an unknown one (RFC 6749, 5.2).
+    pub async fn check_client(&self) -> Result<(), OAuthError> {
+        let mut params = vec![
+            ("grant_type", "authorization_code"),
+            ("code", "hyperme-client-check"),
+            ("redirect_uri", "http://127.0.0.1/"),
+        ];
+        match self.token_request(&mut params).await {
+            Err(OAuthError::Provider { error, .. })
+                if error == "invalid_client" || error == "unauthorized_client" =>
+            {
+                Err(OAuthError::ClientRejected)
+            }
+            Err(OAuthError::Provider { .. }) | Ok(_) => Ok(()),
+            Err(other) => Err(other),
+        }
     }
 
     /// A new access token from the account's refresh token. A refused refresh token gives
@@ -627,6 +679,7 @@ impl OAuthClient {
                 .as_str()
                 .filter(|token| !token.is_empty())
                 .map(str::to_owned),
+            refresh_expires_in: json["refresh_token_expires_in"].as_u64(),
         })
     }
 

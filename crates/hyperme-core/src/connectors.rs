@@ -23,10 +23,24 @@ pub trait RequestLog: Send + Sync {
     fn usage(&self, account: &str, day: Date, server: &str) -> Result<Usage, String>;
 }
 
+/// What HyperMe keeps from an account on disk, deleted when it is disconnected (R-12, AC-6).
+pub trait AccountData: Send + Sync {
+    /// Deletes every row kept from `account` (`google:work`).
+    fn delete_account(&self, account: &str) -> Result<(), String>;
+}
+
 /// An in-memory [`RequestLog`] for tests.
 #[derive(Debug, Default)]
 pub struct MemoryRequestLog {
     counts: Mutex<BTreeMap<(String, Date, String), Usage>>,
+}
+
+impl AccountData for MemoryRequestLog {
+    fn delete_account(&self, account: &str) -> Result<(), String> {
+        let mut counts = self.counts.lock().unwrap_or_else(|p| p.into_inner());
+        counts.retain(|(owner, _, _), _| owner != account);
+        Ok(())
+    }
 }
 
 impl RequestLog for MemoryRequestLog {
