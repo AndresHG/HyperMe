@@ -140,6 +140,7 @@
   <div class="bottom">
     <a href="#" id="open-settings">Settings <kbd>⌘,</kbd></a>
     <a href="#" id="open-help">Help</a>
+    <a href="#" id="open-report">Report a problem</a>
   </div>
 </nav>
 <main id="main">
@@ -231,6 +232,8 @@
   const openSettings = (section) => invoke('home_settings', { section });
   $('open-settings').addEventListener('click', (e) => { e.preventDefault(); openSettings(settingsSection()); });
   $('open-help').addEventListener('click', (e) => { e.preventDefault(); openSettings('about'); });
+  // Spec 200, R-12: Report a problem from Help, and from a failed item (its trace leads the issue).
+  $('open-report').addEventListener('click', (e) => { e.preventDefault(); openSettings('diagnostics/report'); });
   // ⌘, opens Settings at the section closest to where you are (docs/UX.md).
   const settingsSection = () => (location.hash.startsWith('#history') ? 'privacy' : location.hash.startsWith('#dictionary') ? 'dictionary' : 'general');
 
@@ -560,6 +563,12 @@
       button.append(action.label, key(action.key));
       button.addEventListener('click', () => run(item.id, action.id));
       bar.append(button);
+    }
+    if (item.state === 'failed') {
+      const report = document.createElement('button');
+      report.append('Report a problem');
+      report.addEventListener('click', () => openSettings('diagnostics/report/' + item.id));
+      bar.append(report);
     }
     if (state.say) bar.append(span('say' + (state.say.bad ? ' bad' : ''), state.say.text));
   }
