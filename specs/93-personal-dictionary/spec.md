@@ -1,6 +1,6 @@
 # Personal dictionary
 
-**Status:** draft, 26 November 2026. Needs the owner's approval before production code. It is
+**Status:** approved by the owner, 27 November 2026. It is
 Phase 2 work ([PRD](../../docs/PRD.md) 7.1 and 7.5, P0), so slices after D1 start only after
 the Phase 1 gate passes ([tasks.md](tasks.md) says which slice could go earlier).
 **Issue:** [#93](https://github.com/AndresHG/hyperme/issues/93), part of
