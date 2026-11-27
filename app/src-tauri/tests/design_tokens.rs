@@ -9,6 +9,7 @@ const MIGRATED: &[&str] = &[
     "components.css",
     "dictionary.css",
     "home.html",
+    "onboarding.html",
     "pill.html",
     "settings.html",
 ];
