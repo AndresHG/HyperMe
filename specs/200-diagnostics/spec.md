@@ -86,8 +86,15 @@ hand the project one file they have read in full. HyperMe itself still sends not
   - an optional description the user types, shown in the preview like the rest.
 - R-15. The preview shall offer **Save…**, which writes the bundle to a file the user picks, and
   **Open issue**, which saves the bundle, opens a new GitHub issue in the browser with a title and
-  a body prefilled with the version, macOS and the outcome counts only, and shows the saved file
-  in Finder so the user can attach it. **Cancel** discards it.
+  a body prefilled with the issue context (R-15a), and shows the saved file in Finder so the user
+  can attach it. **Cancel** discards it.
+- R-15a. The prefilled body shall hold the version and build, macOS, chip and memory, the
+  allowlisted settings (R-17), Diagnostics' numbers per stage, and the stage timings and outcome
+  codes of the last traces (the failed item's trace first when the report starts from one), newest
+  first, until the issue URL reaches 6,000 characters. It shall hold only numbers, names from the
+  allowlist and outcome codes: warning lines, crash files and the user's description go in the
+  attached file only, since they are free text. The browser shows the body before the user
+  submits it.
 - R-16. HyperMe shall send nothing itself: no request to GitHub or anywhere else is made by the
   app. Opening the issue page is a link the browser opens; the bundle travels only if the user
   attaches it.
@@ -113,7 +120,8 @@ hand the project one file they have read in full. HyperMe itself still sends not
 - R-23. HyperMe shall keep at most 10 crash files and none older than 30 days.
 - R-24. When macOS has written its own crash reports for HyperMe (`~/Library/Logs/
   DiagnosticReports/hyperme*.ips`), the bundle shall include the newest two from the last 30 days,
-  scrubbed of the home folder, each cut to 64 KB, and the preview shall show them like the rest.
+  scrubbed of the home folder, each cut to 64 KB, and the preview shall show them like the rest,
+  with a switch "Include macOS crash reports", on by default, that takes them out of the bundle.
 - R-25. After a crash, the next start shall show "HyperMe quit unexpectedly · Report a problem"
   in the menu's status row until the user opens it or dismisses it, and only once per crash.
 
@@ -137,14 +145,17 @@ hand the project one file they have read in full. HyperMe itself still sends not
   (R-17)
 - AC-7 *(fake)*: Report a problem makes no network request: the bundle is built, saved and the
   issue link opened with every outbound call recorded by a fake, and none is made by the app.
-  The issue link's body holds only version, macOS and counts. (R-15, R-16)
+  The issue link's body holds the context of R-15a, stays under 6,000 characters with 10,000
+  traces, and holds no warning line, crash text or description; a report started from a failed
+  item puts that item's trace first. (R-15, R-15a, R-16)
 - AC-8 *(fake)*: A store with 10,000 traces and a 5 MB warnings file give a bundle under 1 MB
   that says what was trimmed. (R-19)
 - AC-9 *(fake)*: A panic in a test thread writes one crash file with location and backtrace, a
   scrubbed message under 200 characters, and the panic still unwinds; with 12 crash files, the
   oldest 2 are deleted. (R-21 to R-23)
 - AC-10 *(fake)*: `.ips` fixtures named for HyperMe and for another app: only HyperMe's newest
-  two from 30 days enter the bundle, scrubbed and cut to 64 KB. (R-24)
+  two from 30 days enter the bundle, scrubbed and cut to 64 KB; with the switch off, none do.
+  (R-24)
 - AC-11 *(live)*: On the owner's Mac with 30 days of traces, opening Diagnostics shows its numbers
   in under 300 ms, building the bundle takes under 1 s, and idle memory and CPU are unchanged with
   Settings closed. (R-9, R-20)
@@ -183,6 +194,6 @@ It is three months later and this failed. Why?
 
 | ID | Question | Recommendation | Status |
 | --- | --- | --- | --- |
-| DG-1 | Where Diagnostics lives | A Settings section after Privacy, not a Home section: it is looked at rarely, and Home keeps five sections at most (UX). Stage bars go on History items, where a slow dictation is noticed | For the owner |
-| DG-2 | What "Open issue" prefills | Title "Problem report: HyperMe <version>", and a body with version, macOS, outcome counts and the issue template's questions. Never traces or warnings in the URL: the user attaches the file | For the owner |
-| DG-3 | Whether to include macOS `.ips` crash reports | Yes, the newest two, scrubbed and cut (R-24): a native crash (WebKit, a system framework) leaves no Rust panic file, and the `.ips` is the only record | For the owner |
+| DG-1 | Where Diagnostics lives | A Settings section after Privacy, not a Home section: it is looked at rarely, and Home keeps five sections at most (UX). Stage bars go on History items, where a slow dictation is noticed | Decided: Settings (owner, 27 November 2026) |
+| DG-2 | What "Open issue" prefills | Title "Problem report: HyperMe <version>", and a body with version, macOS, outcome counts and the issue template's questions. Never traces or warnings in the URL: the user attaches the file | Decided otherwise: prefill all the context that is not private, traces included as numbers (R-15a); free text stays in the file (owner, 27 November 2026) |
+| DG-3 | Whether to include macOS `.ips` crash reports | Yes, the newest two, scrubbed and cut (R-24): a native crash (WebKit, a system framework) leaves no Rust panic file, and the `.ips` is the only record | Decided: include them, with a switch in the preview to leave them out (R-24); the owner left the choice open (27 November 2026) |

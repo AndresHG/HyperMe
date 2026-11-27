@@ -64,7 +64,10 @@ Created: 2026-12-03 10:41 (local time zone offset only)
 `https://github.com/AndresHG/hyperme/issues/new?template=bug_report.yml&title=…&what=…`, opened in
 the default browser. GitHub issue forms take field values from the query string by field id
 ([docs](https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/syntax-for-issue-forms),
-not rechecked for this draft). The `what` field gets version, macOS and outcome counts. The
+not rechecked for this draft). The `what` field gets the context of spec R-15a as a short
+Markdown table: system and settings first, then Diagnostics per stage, then one row per recent
+trace (stage durations in ms and the outcome code), added newest first while the encoded URL stays
+under 6,000 characters, below the limits browsers and GitHub accept (not rechecked). The
 repository's `bug_report.yml` gains a short line: "If HyperMe is running, use Report a problem in
 Settings → Diagnostics and attach the file." The URL is a constant in the app, checked by a test
 against the repository in `Cargo.toml`.
