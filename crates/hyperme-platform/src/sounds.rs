@@ -17,9 +17,10 @@ pub fn sound_name(sound: Sound) -> &'static str {
     }
 }
 
-/// How long the start sound plays: "Tink" is about 0.1 s long, with a margin. Muting the output
-/// waits for it (#221).
-pub const START_SOUND: std::time::Duration = std::time::Duration::from_millis(150);
+/// How long muting the output waits for the start sound (#221). "Tink" is 0.56 s long by
+/// `afinfo`, but its click is over in the first quarter; the rest is a faint tail that the mute
+/// may cut. Waiting the whole file would let music into the first half second of a dictation.
+pub const START_SOUND: std::time::Duration = std::time::Duration::from_millis(250);
 
 /// Soft, as the owner asked (U-5).
 const VOLUME: f32 = 0.35;

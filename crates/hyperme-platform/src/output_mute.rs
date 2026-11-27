@@ -34,6 +34,7 @@ fn address(selector: u32, scope: u32, element: u32) -> AudioObjectPropertyAddres
     }
 }
 
+#[allow(unsafe_code)]
 fn default_output() -> Option<AudioObjectID> {
     let mut address = address(
         kAudioHardwarePropertyDefaultOutputDevice,
@@ -58,6 +59,7 @@ fn default_output() -> Option<AudioObjectID> {
 }
 
 /// The mute switch of `device` on `element`, if it has one that can be set.
+#[allow(unsafe_code)]
 fn settable(device: AudioObjectID, element: u32) -> bool {
     let mut address = address(
         kAudioDevicePropertyMute,
@@ -76,6 +78,7 @@ fn settable(device: AudioObjectID, element: u32) -> bool {
     }
 }
 
+#[allow(unsafe_code)]
 fn muted(device: AudioObjectID, element: u32) -> Option<bool> {
     let mut address = address(
         kAudioDevicePropertyMute,
@@ -98,6 +101,7 @@ fn muted(device: AudioObjectID, element: u32) -> Option<bool> {
     (status == 0).then_some(value != 0)
 }
 
+#[allow(unsafe_code)]
 fn set_muted(device: AudioObjectID, element: u32, on: bool) -> bool {
     let mut address = address(
         kAudioDevicePropertyMute,

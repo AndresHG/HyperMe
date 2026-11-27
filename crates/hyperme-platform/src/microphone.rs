@@ -252,16 +252,26 @@ fn device_error(what: impl fmt::Display) -> Error {
 impl Microphone for CpalMicrophone {
     fn start(&mut self) -> Result<(), Error> {
         let core = &self.core;
-        let device = choose(&core.preference.get(), None)?;
+        let preferred = core.preference.get();
         let mut state = core.lock();
-        let reusable = state.stream.as_ref().is_some_and(|built| {
-            !built.shared.broken.load(Ordering::SeqCst)
-                && built.device.is_some()
-                && built.device == device.id().ok()
-        });
-        if !reusable {
-            state.stream = None;
-            state.stream = Some(core.build(&device)?);
+        let healthy = |built: &&Built| !built.shared.broken.load(Ordering::SeqCst);
+        // Listing the devices costs 2 to 8 ms (docs/results/2026-11-27-mic-choice-cost.md), so
+        // a stream on the first preference, which nothing can beat, is reused without it.
+        let on_first = state
+            .stream
+            .as_ref()
+            .filter(healthy)
+            .is_some_and(|built| preferred.first() == Some(&built.name));
+        if !on_first {
+            let device = choose(&preferred, None)?;
+            let reusable =
+                state.stream.as_ref().filter(healthy).is_some_and(|built| {
+                    built.device.is_some() && built.device == device.id().ok()
+                });
+            if !reusable {
+                state.stream = None;
+                state.stream = Some(core.build(&device)?);
+            }
         }
         let Some(built) = &state.stream else {
             return Err(device_error("the microphone stream is missing"));
