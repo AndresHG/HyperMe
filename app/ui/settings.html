@@ -44,6 +44,20 @@
   .dict-word { font-weight: 600; }
   .dict-heard { color: var(--muted); margin-left: 10px; }
   code { font-size: 12px; }
+  /* Settings → Providers, "Show advanced": one table of roles (specs/96-provider-settings, R-6). */
+  .roles { width: 100%; border-collapse: collapse; margin-top: 8px; }
+  .roles th { text-align: left; font-weight: 500; color: var(--muted); font-size: 12px; padding: 6px 8px 6px 0; border-bottom: 1px solid var(--line); }
+  .roles td { padding: 10px 8px 2px 0; vertical-align: top; }
+  .roles td.hint { padding: 0 0 10px; color: var(--muted); font-size: 12px; border-bottom: 1px solid var(--line); }
+  .roles select, .roles input[type=text] { min-width: 0; width: 100%; }
+  .roles .key { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .roles .key input[type=password] { min-width: 140px; flex: 1; }
+  .roles .effort { margin-top: 6px; font-size: 12px; color: var(--muted); }
+  .roles .effort select { width: auto; margin-left: 4px; }
+  .toolbar { display: flex; justify-content: space-between; align-items: center; margin-top: 18px; }
+  .add { display: flex; gap: 6px; margin-top: 8px; }
+  .add input { flex: 1; min-width: 0; }
+  a.link { color: var(--violet); cursor: pointer; text-decoration: none; }
 </style>
 </head>
 <body>
@@ -95,11 +109,18 @@
   <section id="providers">
     <h1>Providers</h1>
     <p class="lead">Every model service in one place. Keys stay in the macOS keychain and are never shown again.</p>
-    <div class="row" data-words="speech provider speechmatics model"><div class="what">Speech<small id="speech-name">Used by dictation</small></div><input type="text" data-section="speech" data-key="model" aria-label="Speech model"></div>
-    <div class="row" data-words="speech key speechmatics test"><div class="what">Speech key<small class="state" id="speech-state"></small></div><span><input type="password" id="speech-key" placeholder="Paste a new key" autocomplete="off"> <button data-key-save="speech">Save</button> <button data-key-test="speech">Test</button></span></div>
-    <div class="row" data-words="cleanup provider groq model language"><div class="what">Cleanup<small id="cleanup-name">Used by dictation cleanup</small></div><input type="text" data-section="cleanup" data-key="model" aria-label="Cleanup model"></div>
-    <div class="row" data-words="reasoning effort cleanup"><div class="what">Reasoning effort<small>"off" leaves it out of the request.</small></div><select data-section="cleanup" data-key="reasoning_effort"><option>off</option><option>low</option><option>medium</option><option>high</option></select></div>
-    <div class="row" data-words="cleanup key groq test"><div class="what">Cleanup key<small class="state" id="cleanup-state"></small></div><span><input type="password" id="cleanup-key" placeholder="Paste a new key" autocomplete="off"> <button data-key-save="cleanup">Save</button> <button data-key-test="cleanup">Test</button></span></div>
+    <div id="providers-simple">
+      <div class="row" data-words="speech provider speechmatics key test"><div class="what">Speech<small id="speech-name">Used by dictation</small><small class="state" id="speech-state"></small></div><span><input type="password" id="speech-key" placeholder="Paste a new key" autocomplete="off"> <button data-key-save="speech">Save</button> <button data-key-test="speech">Test</button></span></div>
+      <div class="row" data-words="cleanup provider groq key test"><div class="what">Cleanup<small id="cleanup-name">Used by dictation cleanup</small><small class="state" id="cleanup-state"></small></div><span><input type="password" id="cleanup-key" placeholder="Paste a new key" autocomplete="off"> <button data-key-save="cleanup">Save</button> <button data-key-test="cleanup">Test</button></span></div>
+      <p class="lead" style="margin-top:12px">Turn on <a class="link" href="#general">Show advanced</a> to choose other providers and models.</p>
+    </div>
+    <div id="providers-advanced" class="hidden" data-words="provider model openai openrouter gemini anthropic local custom endpoint reasoning">
+      <table class="roles">
+        <thead><tr><th style="width:15%">Role</th><th style="width:25%">Provider</th><th style="width:27%">Model</th><th>Key / Test</th></tr></thead>
+        <tbody id="roles-body"></tbody>
+      </table>
+      <div class="toolbar"><small class="lead" style="margin:0">Changes save at once and reach the next dictation.</small><button id="reset-providers">Reset to recommended</button></div>
+    </div>
   </section>
 
   <section id="connectors">
@@ -194,8 +215,8 @@
     <div class="row" data-words="minimum hold tap"><div class="what">Minimum hold (ms)</div><input type="number" min="50" max="2000" data-section="dictation" data-key="min_hold_ms"></div>
     <div class="row" data-words="maximum length"><div class="what">Maximum length (s)</div><input type="number" min="5" max="600" data-section="dictation" data-key="max_length_s"></div>
     <div class="row" data-words="short dictation words"><div class="what">Short dictation (words)<small>Fewer words skip cleanup.</small></div><input type="number" min="0" max="50" data-section="dictation" data-key="short_dictation_words"></div>
-    <div class="row" data-words="speech endpoint url"><div class="what">Speech endpoint</div><input type="text" data-section="speech" data-key="endpoint"></div>
-    <div class="row" data-words="cleanup endpoint url"><div class="what">Cleanup endpoint</div><input type="text" data-section="cleanup" data-key="endpoint"></div>
+    <div class="row" data-words="speech endpoint url region"><div class="what">Speech endpoint<small>Overrides the provider's own address, such as another region.</small></div><input type="text" data-section="speech" data-key="endpoint"></div>
+    <div class="row" data-words="cleanup endpoint url proxy"><div class="what">Cleanup endpoint<small>Overrides the provider's own address. A new host is better added as a custom endpoint in Providers.</small></div><input type="text" data-section="cleanup" data-key="endpoint"></div>
     <div class="row" data-words="config file toml"><div class="what">Config file<small id="config-path"></small></div><button data-open="config">Open config file</button></div>
   </section>
 
@@ -219,8 +240,7 @@
     // From the walkthrough's "Use other providers" (U-12): Providers, with Advanced showing.
     if (id === 'providers-advanced') {
       id = 'providers';
-      $('show-advanced').checked = true;
-      $('nav-advanced').classList.remove('hidden');
+      showAdvanced(true);
     }
     document.querySelectorAll('section').forEach((s) => s.classList.toggle('on', s.id === id));
     document.querySelectorAll('nav a').forEach((a) => a.classList.toggle('on', a.getAttribute('href') === '#' + id));
@@ -270,13 +290,157 @@
       $('retention').add(new Option(c.retention_days + ' days', String(c.retention_days)));
     }
     $('retention').value = c.retention_days === null ? 'unlimited' : String(c.retention_days);
+    renderRoles();
   }
+
+  // ---- The providers table (specs/96-provider-settings, R-6 to R-14) ----
+  // A provider picked without a key waits here, per role, until its key passes Test (R-12).
+  const pending = {};
+  const el = (tag, props = {}, ...kids) => {
+    const node = Object.assign(document.createElement(tag), props);
+    kids.forEach((k) => node.append(k));
+    return node;
+  };
+
+  function renderRoles() {
+    const body = $('roles-body');
+    body.textContent = '';
+    for (const r of view.roles) {
+      const want = pending[r.role] || { provider: r.provider, model: r.model };
+      const chosen = r.providers.find((p) => p.id === want.provider) || { id: want.provider, name: want.provider, models: [], key_required: true, has_key: false };
+      const inUse = r.providers.find((p) => p.id === r.provider);
+
+      const providerMenu = el('select', { 'aria-label': r.label + ' provider' });
+      for (const p of r.providers) {
+        providerMenu.add(new Option(p.name + (p.recommended ? ' (Recommended)' : ''), p.id, false, p.id === chosen.id));
+      }
+      if (r.role === 'cleanup') providerMenu.add(new Option('Add a custom endpoint…', '__add'));
+      providerMenu.addEventListener('change', () => {
+        if (providerMenu.value === '__add') { showAdd(r, providerMenu); return; }
+        const p = r.providers.find((x) => x.id === providerMenu.value);
+        const model = p.models.length ? p.models[0].id : '';
+        if (!model) { pending[r.role] = { provider: p.id, model: '' }; renderRoles(); return; }
+        choose(r.role, p.id, model);
+      });
+
+      const listId = 'models-' + r.role;
+      const models = el('datalist', { id: listId });
+      chosen.models.forEach((m) => models.append(new Option(m.id)));
+      const modelField = el('input', { type: 'text', value: want.model, placeholder: 'Type a model name' });
+      modelField.setAttribute('list', listId);
+      modelField.setAttribute('aria-label', r.label + ' model');
+      modelField.addEventListener('change', () => {
+        const model = modelField.value.trim();
+        if (model) choose(r.role, chosen.id, model);
+      });
+      const modelCell = el('td', {}, modelField, models);
+      if (r.role === 'cleanup' && !pending[r.role]) {
+        const info = chosen.models.find((m) => m.id === want.model);
+        const efforts = ['off'].concat(info ? info.reasoning_effort : (r.reasoning_effort && r.reasoning_effort !== 'off' ? [r.reasoning_effort] : []));
+        const effort = el('select', { 'aria-label': 'Reasoning effort' });
+        efforts.forEach((v) => effort.add(new Option(v, v, false, v === r.reasoning_effort)));
+        effort.addEventListener('change', () => save('cleanup', 'reasoning_effort', effort.value).then(refresh));
+        modelCell.append(el('div', { className: 'effort' }, 'Reasoning effort', effort));
+      }
+
+      const state = el('span', { className: 'state', id: 'role-state-' + r.role });
+      const keyCell = el('td', {}, el('div', { className: 'key' }, state));
+      const row = keyCell.firstChild;
+      const needsKey = chosen.key_required && !chosen.has_key;
+      if (needsKey) {
+        state.textContent = pending[r.role] ? 'No key yet. Until this one works, dictation keeps using ' + (inUse ? inUse.name : r.provider) + '.' : 'No key yet';
+        state.className = 'state warn';
+        const keyField = el('input', { type: 'password', placeholder: 'Paste the key', autocomplete: 'off' });
+        const add = el('button', { className: 'main', textContent: 'Save and test' });
+        add.addEventListener('click', () => saveAndTest(r.role, chosen.id, modelField.value.trim(), keyField));
+        row.append(keyField, add);
+      } else {
+        state.textContent = chosen.key_required ? 'Key saved' : 'No key needed';
+        state.className = 'state ok';
+        const test = el('button', { textContent: 'Test' });
+        test.addEventListener('click', () => testRole(r.role, chosen.id, modelField.value.trim()));
+        row.append(test);
+      }
+      if (needsKey && chosen.has_key_page) {
+        const page = el('a', { className: 'link', textContent: 'Get a key' });
+        page.addEventListener('click', () => invoke('provider_key_page', { provider: chosen.id }));
+        row.append(page);
+      }
+
+      body.append(el('tr', { id: 'role-' + r.role },
+        el('td', {}, r.label), el('td', {}, providerMenu), modelCell, keyCell));
+      // The hint line: cost and measured speed (slice 6).
+      body.append(el('tr', {}, el('td', { className: 'hint', colSpan: 4, id: 'hint-' + r.role })));
+    }
+  }
+
+  function showAdd(r, menu) {
+    const name = el('input', { type: 'text', placeholder: 'Name, such as My server' });
+    const address = el('input', { type: 'text', placeholder: 'https://host/v1' });
+    const add = el('button', { className: 'main', textContent: 'Add' });
+    const cancel = el('button', { textContent: 'Cancel' });
+    const form = el('div', { className: 'add' }, name, address, add, cancel);
+    menu.after(form);
+    menu.disabled = true;
+    name.focus();
+    cancel.addEventListener('click', () => renderRoles());
+    add.addEventListener('click', async () => {
+      try {
+        const id = await invoke('provider_add', { name: name.value, endpoint: address.value });
+        $('error').textContent = '';
+        pending[r.role] = { provider: id, model: '' };
+        await refresh();
+      } catch (e) { $('error').textContent = String(e); }
+    });
+  }
+
+  async function choose(role, provider, model) {
+    try {
+      const result = await invoke('provider_choose', { role, provider, model });
+      $('error').textContent = '';
+      if (result === 'needs_key') pending[role] = { provider, model };
+      else delete pending[role];
+    } catch (e) { $('error').textContent = String(e); }
+    await refresh();
+  }
+
+  async function testRole(role, provider, model) {
+    const state = $('role-state-' + role);
+    state.textContent = 'Testing…';
+    state.className = 'state warn';
+    try {
+      const ms = await invoke('key_test', { role, provider, model });
+      mark(state, true, 'Works · ' + ms + ' ms', '');
+      return true;
+    } catch (e) { mark(state, false, '', String(e)); return false; }
+  }
+
+  // R-12: the key goes to the keychain, the pair is tested, and only then does the role switch.
+  async function saveAndTest(role, provider, model, field) {
+    if (!field.value.trim()) return;
+    if (!model) { $('error').textContent = 'Type a model name first.'; return; }
+    try {
+      await invoke('key_set', { role, key: field.value, provider });
+      field.value = '';
+    } catch (e) { $('error').textContent = String(e); return; }
+    if (await testRole(role, provider, model)) await choose(role, provider, model);
+  }
+
+  $('reset-providers').addEventListener('click', async () => {
+    try {
+      await invoke('providers_reset');
+      Object.keys(pending).forEach((k) => delete pending[k]);
+      $('error').textContent = '';
+    } catch (e) { $('error').textContent = String(e); }
+    await refresh();
+  });
 
   async function save(section, key, value) {
     try {
       await invoke('settings_set', { section, key, value });
       $('error').textContent = '';
-      $('banner').classList.add('on');
+      // Provider settings reach the next dictation at once (R-8); the rest need a restart.
+      if (section !== 'speech' && section !== 'cleanup') $('banner').classList.add('on');
     } catch (e) {
       $('error').textContent = String(e);
       refresh();
@@ -297,7 +461,13 @@
   });
   $('hotkey-chord').addEventListener('change', (e) => save('dictation', 'hotkey', e.target.value));
   $('retention').addEventListener('change', (e) => save('history', 'retention_days', e.target.value === 'unlimited' ? 'unlimited' : Number(e.target.value)));
-  $('show-advanced').addEventListener('change', (e) => $('nav-advanced').classList.toggle('hidden', !e.target.checked));
+  function showAdvanced(on) {
+    $('show-advanced').checked = on;
+    $('nav-advanced').classList.toggle('hidden', !on);
+    $('providers-advanced').classList.toggle('hidden', !on);
+    $('providers-simple').classList.toggle('hidden', on);
+  }
+  $('show-advanced').addEventListener('change', (e) => showAdvanced(e.target.checked));
   $('restart').addEventListener('click', () => invoke('app_restart'));
 
   document.querySelectorAll('[data-key-save]').forEach((button) => button.addEventListener('click', async () => {
@@ -307,7 +477,6 @@
     try {
       await invoke('key_set', { role, key: field.value });
       field.value = '';
-      $('banner').classList.add('on');
       refresh();
     } catch (e) { $('error').textContent = String(e); }
   }));

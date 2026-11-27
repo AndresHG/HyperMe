@@ -15,6 +15,14 @@ All notable changes to HyperMe are recorded here. The format follows
 
 ### Added
 
+- Settings → Providers, "Show advanced" (issue 125, slice 3 of `specs/96-provider-settings`):
+  one table of roles, each with a provider menu (recommended first), a model field with the
+  catalogue's models, the reasoning effort the model takes, the key state with an inline key
+  field, Test, "Get a key", and Reset to recommended. A provider picked without a key is not
+  saved: the role keeps the one it has until the new key passes Test. "Add a custom endpoint…"
+  writes an OpenAI-compatible entry to `config.toml`. New catalogue entries, each checked
+  against the provider's docs on 26 November 2026: OpenAI, OpenRouter, Google Gemini and
+  Anthropic. Mockup: `docs/ux/providers-advanced.svg`.
 - Switching providers without a restart (issue 124, slice 2 of `specs/96-provider-settings`):
   `hyperme-providers::any` has one client enum per role (`AnySpeech`, `AnyCleanup`) and one
   `resolve` path that builds the providers a config names, used at launch, after a change in

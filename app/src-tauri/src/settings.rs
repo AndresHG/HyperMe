@@ -6,7 +6,7 @@
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
-use hyperme_core::config::{self, Config, Hotkey, Retention};
+use hyperme_core::config::{self, Config, ConfigError, Hotkey, Retention, Role};
 use hyperme_core::secrets::SecretStore;
 use hyperme_core::traits::{CleanupProvider, SpeechProvider};
 use hyperme_platform::keychain::KeychainStore;
@@ -50,8 +50,41 @@ pub struct View {
     config_error: Option<String>,
     config_path: String,
     keys: KeysView,
+    /// Settings → Providers' table of roles (specs/96-provider-settings, R-6).
+    roles: Vec<RoleView>,
     setup: SetupView,
     version: &'static str,
+}
+
+/// One row of the providers table: a role, what it uses, and what it could use.
+#[derive(Debug, Serialize)]
+struct RoleView {
+    role: &'static str,
+    label: &'static str,
+    provider: String,
+    model: String,
+    /// Cleanup only.
+    reasoning_effort: Option<String>,
+    /// The providers that can fill the role, recommended first (R-7).
+    providers: Vec<ProviderView>,
+}
+
+/// A provider in a role's menu. Never holds a key: only whether one is set.
+#[derive(Debug, Serialize)]
+struct ProviderView {
+    id: String,
+    name: String,
+    recommended: bool,
+    key_required: bool,
+    has_key: bool,
+    has_key_page: bool,
+    models: Vec<ModelView>,
+}
+
+#[derive(Debug, Serialize)]
+struct ModelView {
+    id: String,
+    reasoning_effort: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -131,6 +164,52 @@ fn config_view(config: &Config) -> ConfigView {
     }
 }
 
+fn roles_view(config: &Config, keys: &dyn SecretStore) -> Vec<RoleView> {
+    [
+        (Role::Speech, "Dictation speech"),
+        (Role::Cleanup, "Dictation cleanup"),
+    ]
+    .into_iter()
+    .map(|(role, label)| {
+        let (provider, model, reasoning_effort) = match role {
+            Role::Speech => (&config.speech.provider, &config.speech.model, None),
+            Role::Cleanup => (
+                &config.cleanup.provider,
+                &config.cleanup.model,
+                Some(config.cleanup.reasoning_effort.clone()),
+            ),
+        };
+        let recommended = Config::recommended(role).0;
+        RoleView {
+            role: role.section(),
+            label,
+            provider: provider.clone(),
+            model: model.clone(),
+            reasoning_effort,
+            providers: config
+                .providers_for(role)
+                .map(|(id, entry)| ProviderView {
+                    id: id.to_owned(),
+                    name: entry.name.clone(),
+                    recommended: id == recommended,
+                    key_required: entry.key_required,
+                    has_key: matches!(keys.get(id), Ok(Some(_))),
+                    has_key_page: entry.key_url.is_some(),
+                    models: entry
+                        .models
+                        .iter()
+                        .map(|m| ModelView {
+                            id: m.id.clone(),
+                            reasoning_effort: m.reasoning_effort.clone(),
+                        })
+                        .collect(),
+                })
+                .collect(),
+        }
+    })
+    .collect()
+}
+
 fn load(path: &Path) -> Result<Config, String> {
     Config::load_or_create(path).map_err(|e| e.to_string())
 }
@@ -148,6 +227,7 @@ pub fn settings_view(app: AppHandle) -> View {
             speech: has_key(config.map(|c| c.speech.provider.as_str())),
             cleanup: has_key(config.map(|c| c.cleanup.provider.as_str())),
         },
+        roles: config.map_or_else(Vec::new, |c| roles_view(c, &keys)),
         config: config.map(config_view),
         config_error: loaded.err(),
         config_path: path.display().to_string(),
@@ -196,23 +276,104 @@ pub fn settings_set(
     key: String,
     value: Value,
 ) -> Result<(), String> {
-    let path = config_path(&app);
-    let text = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
-    let updated = config::set_value(&text, &section, &key, &toml_value(&value)?)
-        .map_err(|e| e.to_string())?;
-    // Write beside the file, then rename, so a crash never leaves half a config.
-    let temp = path.with_extension("toml.new");
-    std::fs::write(&temp, updated).map_err(|e| format!("{}: {e}", temp.display()))?;
-    std::fs::rename(&temp, &path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let value = toml_value(&value)?;
+    rewrite_config(&app, |text| config::set_value(text, &section, &key, &value))?;
     if section == "speech" || section == "cleanup" {
-        providers_changed(&app);
-        // The setting is saved either way; a provider that cannot be built yet (no key) leaves
-        // the one in use running until it can (R-12).
-        if let Err(why) = crate::runtime::reload_providers(&app) {
-            eprintln!("HyperMe: providers unchanged: {why}");
-        }
+        use_new_providers(&app);
     }
     Ok(())
+}
+
+/// Rewrites `config.toml` with `change`, which validates the result. Writes beside the file,
+/// then renames, so a crash never leaves half a config.
+fn rewrite_config(
+    app: &AppHandle,
+    change: impl FnOnce(&str) -> Result<String, ConfigError>,
+) -> Result<(), String> {
+    let path = config_path(app);
+    let text = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let updated = change(&text).map_err(|e| e.to_string())?;
+    let temp = path.with_extension("toml.new");
+    std::fs::write(&temp, updated).map_err(|e| format!("{}: {e}", temp.display()))?;
+    std::fs::rename(&temp, &path).map_err(|e| format!("{}: {e}", path.display()))
+}
+
+/// Hands the providers now in the config to the next dictation (R-8), and tells a waiting
+/// walkthrough. A provider that cannot be built yet (no key) leaves the one in use (R-12).
+fn use_new_providers(app: &AppHandle) {
+    providers_changed(app);
+    if let Err(why) = crate::runtime::reload_providers(app) {
+        eprintln!("HyperMe: providers unchanged: {why}");
+    }
+}
+
+fn role_named(role: &str) -> Result<Role, String> {
+    match role {
+        "speech" => Ok(Role::Speech),
+        "cleanup" => Ok(Role::Cleanup),
+        other => Err(format!("{other} is not a provider role")),
+    }
+}
+
+/// Picks a role's provider and model from the providers table (R-8). A provider with no key yet
+/// is not saved: the page shows the key field, and the role keeps the provider it has until the
+/// new one's key passes Test (R-12). Returns `saved` or `needs_key`.
+#[tauri::command]
+pub fn provider_choose(
+    app: AppHandle,
+    role: String,
+    provider: String,
+    model: String,
+) -> Result<&'static str, String> {
+    let role = role_named(&role)?;
+    let config = load(&config_path(&app))?;
+    if !any::key_ready(&config, &provider, &KeychainStore::new()) {
+        return Ok("needs_key");
+    }
+    rewrite_config(&app, |text| {
+        config::choose_provider(text, role, &provider, &model)
+    })?;
+    use_new_providers(&app);
+    Ok("saved")
+}
+
+/// "Reset to recommended": every role back to the recommended pair; keys stay (R-10).
+#[tauri::command]
+pub fn providers_reset(app: AppHandle) -> Result<(), String> {
+    rewrite_config(&app, config::reset_to_recommended)?;
+    use_new_providers(&app);
+    Ok(())
+}
+
+/// "Add a custom endpoint…": a new OpenAI-compatible cleanup provider in `config.toml`.
+/// Returns its name in the catalogue. Nothing is sent to it until Test or a dictation (R-30).
+#[tauri::command]
+pub fn provider_add(app: AppHandle, name: String, endpoint: String) -> Result<String, String> {
+    let mut id = String::new();
+    rewrite_config(&app, |text| {
+        let (updated, added) = config::add_provider(text, &name, &endpoint)?;
+        id = added;
+        Ok(updated)
+    })?;
+    Ok(id)
+}
+
+/// "Get a key" for any provider in the catalogue: opens its key page in the browser.
+#[tauri::command]
+pub fn provider_key_page(app: AppHandle, provider: String) -> Result<(), String> {
+    let config = load(&config_path(&app))?;
+    let url = config
+        .provider(&provider)
+        .and_then(|p| p.key_url.clone())
+        .ok_or_else(|| format!("{provider} has no key page"))?;
+    if !url.starts_with("https") {
+        return Err("the key page in the catalogue is not an https address".to_owned());
+    }
+    std::process::Command::new("open")
+        .arg(url)
+        .status()
+        .map(|_| ())
+        .map_err(|e| e.to_string())
 }
 
 /// Tells a waiting walkthrough to test the providers again (U-12).
@@ -232,10 +393,20 @@ fn provider_for(app: &AppHandle, role: &str) -> Result<(Config, String), String>
 }
 
 /// R-25: the key goes straight to the keychain; it is never returned, logged or stored
-/// elsewhere.
+/// elsewhere. `provider` is the one being picked in the providers table, when it is not yet
+/// the role's (R-12); otherwise the role's own provider gets the key.
 #[tauri::command]
-pub fn key_set(app: AppHandle, role: String, key: String) -> Result<(), String> {
-    let (_, provider) = provider_for(&app, &role)?;
+pub fn key_set(
+    app: AppHandle,
+    role: String,
+    key: String,
+    provider: Option<String>,
+) -> Result<(), String> {
+    let (config, current) = provider_for(&app, &role)?;
+    let provider = provider.unwrap_or(current);
+    if config.provider(&provider).is_none() {
+        return Err(format!("{provider} is not in the provider catalogue"));
+    }
     save_key(&app, &KeychainStore::new(), &provider, &key)?;
     // A new key reaches the next dictation without a restart.
     if let Err(why) = crate::runtime::reload_providers(&app) {
@@ -257,11 +428,24 @@ fn save_key<R: tauri::Runtime>(
 }
 
 /// Tests a key against its provider: opens a speech session (no audio is sent) or warms the
-/// cleanup connection. Returns the time it took in ms.
+/// cleanup connection. Returns the time it took in ms. With `provider` and `model`, tests the
+/// pair being picked in the providers table without saving it (R-12).
 #[tauri::command]
-pub async fn key_test(app: AppHandle, role: String) -> Result<u64, String> {
+pub async fn key_test(
+    app: AppHandle,
+    role: String,
+    provider: Option<String>,
+    model: Option<String>,
+) -> Result<u64, String> {
     // The same path the runtime builds its providers with, so Test and dictation agree.
-    let (config, _) = provider_for(&app, &role)?;
+    let (mut config, current) = provider_for(&app, &role)?;
+    if let Some(provider) = provider.filter(|p| *p != current) {
+        let text = std::fs::read_to_string(config_path(&app)).map_err(|e| e.to_string())?;
+        let model = model.unwrap_or_default();
+        let candidate = config::choose_provider(&text, role_named(&role)?, &provider, &model)
+            .map_err(|e| e.to_string())?;
+        config = Config::parse(&candidate, &config_path(&app)).map_err(|e| e.to_string())?;
+    }
     let keys = KeychainStore::new();
     let start = Instant::now();
     if role == "speech" {
