@@ -22,6 +22,7 @@ itself; a later version may hand a task to Claude Code ([docs/PRD.md](docs/PRD.m
 - `docs/SPEC.md`: requirements, architecture, budgets and safety rules
 - `docs/SPEED_TEST.md`: Phase 0, the first thing to build
 - `docs/ROADMAP.md`: the phases and their gates, and the gap to Wispr Flow (adopted 25 November 2026)
+- `docs/plans/2026-11-26-phases-1-2.md`: phases 1 and 2 cut into chunks for parallel threads
 - `docs/PITCH.md`: pitch, positioning against Wispr Flow, and the ledger of claims still to earn
 - `specs/25-dictation-core/`: draft Phase 1 spec, design and slices (not yet approved)
 - `specs/96-provider-settings/`: draft spec for choosing the speech and cleanup provider in Settings
@@ -40,10 +41,13 @@ itself; a later version may hand a task to Claude Code ([docs/PRD.md](docs/PRD.m
 
 ## Current phase
 
-**Phase 0: speed test.** It is the only committed work: the owner's gate is to show Wispr
-Flow performance first. After it come the phases in `docs/ROADMAP.md`, starting with
-the dictation core (Phase 1).
-Do not start a phase before the gate of the previous one has passed. When a gate
+**Phase 1: dictation core.** The owner approved it on 26 November 2026 (`docs/PRD.md` Q-2); its
+code is merged and its gate (a week without Wispr Flow, idle budgets) is under way. On the same
+day the owner asked to start phase 2 work, and the design of the Google connector and daily tasks,
+in parallel: `docs/plans/2026-11-26-phases-1-2.md` cuts that work into chunks. The first public
+release still waits for the phase 1 and phase 2 gates. A week of daily use in a gate is an
+important check, but development does not stop to wait for it (owner, 27 November 2026).
+Otherwise, do not start a phase before the gate of the previous one has passed. When a gate
 passes, update this section and record the evidence in `docs/results/`.
 
 ## Decisions already made
