@@ -58,6 +58,8 @@ struct Shared {
     history_enabled: bool,
     /// Where Settings → Dictionary sends a saved dictionary (spec 93, R-10a).
     dictionary: Option<DictionaryUpdates>,
+    /// The morning card on screen, while it is (#92, R-19).
+    card: Option<pill::CardView>,
 }
 
 type State = Mutex<Shared>;
@@ -88,20 +90,7 @@ pub fn timing_path() -> PathBuf {
 
 /// Where the pill's top-left corner goes for a given width.
 pub fn pill_origin(app: &AppHandle, width: f64) -> (f64, f64) {
-    match app.primary_monitor() {
-        Ok(Some(monitor)) => {
-            let scale = monitor.scale_factor();
-            let area = monitor.work_area();
-            let work = geometry::Rect {
-                x: f64::from(area.position.x) / scale,
-                y: f64::from(area.position.y) / scale,
-                width: f64::from(area.size.width) / scale,
-                height: f64::from(area.size.height) / scale,
-            };
-            geometry::bottom_centre(work, (width, geometry::PILL_SIZE.1))
-        }
-        _ => (0.0, 0.0),
-    }
+    card_origin(app, (width, geometry::PILL_SIZE.1))
 }
 
 /// Starts the dictation, or says in the menu why it cannot.
@@ -123,6 +112,7 @@ pub fn start(app: &AppHandle, menu: TrayMenu) {
         history_enabled: Config::load_or_create(&data_dir(app).join("config.toml"))
             .map_or(true, |config| config.history.enabled),
         dictionary: None,
+        card: None,
     }));
     settle(app);
     // Home shows the history even before the keys are in, or when one cannot be read.
@@ -343,6 +333,7 @@ fn show(app: &AppHandle, view: View) {
         shared.generation += 1;
         let was_pill = shared.view.as_ref().is_some_and(|v| v.kind != "idle");
         shared.view = Some(view.clone());
+        shared.card = None;
         (shared.generation, was_pill)
     };
     let width = pill::width_for(&view);
@@ -374,6 +365,81 @@ fn show(app: &AppHandle, view: View) {
     }
 }
 
+/// Shows the morning card from the dot (#92, R-15, R-19). It never takes focus: the panel cannot
+/// become key, so the card is answered with a click. An `update` (a sync filled in a part,
+/// R-18) replaces only a card still on screen. A dictation in progress is never interrupted;
+/// the day stays in Home's Today. Unanswered, it shrinks back into the dot.
+pub fn show_card(app: &AppHandle, card: pill::CardView, update: bool) {
+    let generation = {
+        let mut shared = lock(app);
+        if (update && shared.card.is_none()) || shared.busy {
+            return;
+        }
+        shared.generation += 1;
+        shared.view = Some(View {
+            kind: "card",
+            label: String::new(),
+            hide_after_ms: None,
+            retry: false,
+        });
+        shared.card = Some(card.clone());
+        shared.generation
+    };
+    let (width, height) = pill::card_size(&card);
+    if let Some(window) = app.get_webview_window(PILL) {
+        let (x, y) = card_origin(app, (width, height));
+        let _ = window.set_size(Size::Logical(LogicalSize::new(width, height)));
+        let _ = window.set_position(Position::Logical(LogicalPosition::new(x, y)));
+    }
+    let _ = app.emit_to(PILL, "card", &card);
+    on_panel(app, |panel| panel.show());
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(Duration::from_millis(pill::CARD_LINGER_MS)).await;
+        if lock(&app).generation == generation {
+            settle(&app);
+        }
+    });
+}
+
+/// Where a card of `size` goes: bottom centre, like the pill.
+fn card_origin(app: &AppHandle, size: (f64, f64)) -> (f64, f64) {
+    match app.primary_monitor() {
+        Ok(Some(monitor)) => {
+            let scale = monitor.scale_factor();
+            let area = monitor.work_area();
+            let work = geometry::Rect {
+                x: f64::from(area.position.x) / scale,
+                y: f64::from(area.position.y) / scale,
+                width: f64::from(area.size.width) / scale,
+                height: f64::from(area.size.height) / scale,
+            };
+            geometry::bottom_centre(work, size)
+        }
+        _ => (0.0, 0.0),
+    }
+}
+
+/// The card on screen, for the page once it has loaded (a card sent at launch can come before
+/// its listeners).
+#[tauri::command]
+pub fn pill_card(app: AppHandle) -> Option<pill::CardView> {
+    lock(&app).card.clone()
+}
+
+/// "Open Today" on the card: Home at Today, and the card goes back into the dot (R-19).
+#[tauri::command]
+pub fn card_open_today(app: AppHandle) {
+    settle(&app);
+    crate::home::open(&app, "today");
+}
+
+/// "Later" on the card.
+#[tauri::command]
+pub fn card_dismiss(app: AppHandle) {
+    settle(&app);
+}
+
 /// Sizes the panel for `width` and puts it at the bottom centre.
 fn place(app: &AppHandle, width: f64) {
     if let Some(window) = app.get_webview_window(PILL) {
@@ -400,6 +466,7 @@ fn hide(app: &AppHandle) {
         let mut shared = lock(app);
         shared.generation += 1;
         shared.view = None;
+        shared.card = None;
     }
     // The page stops drawing the voice, so nothing runs while the pill is hidden.
     let _ = app.emit_to(PILL, "pill-hidden", ());
