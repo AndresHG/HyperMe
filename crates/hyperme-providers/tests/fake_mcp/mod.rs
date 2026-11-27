@@ -42,6 +42,11 @@ struct Seen {
     answer: Option<String>,
     /// The arguments of each call, in order.
     arguments: Vec<serde_json::Value>,
+    /// Every JSON-RPC message received, in order, as sent (specs/166, AC-1, AC-2).
+    messages: Vec<serde_json::Value>,
+    /// Scripted answers to the read tool, used in order before the normal answer: each is a
+    /// result object, `input_required` or complete (specs/166).
+    script: std::collections::VecDeque<serde_json::Value>,
 }
 
 #[derive(Clone)]
@@ -81,6 +86,16 @@ impl ServerHandler for Tools {
         seen.arguments.push(serde_json::Value::Object(
             request.arguments.clone().unwrap_or_default(),
         ));
+        if name == READ_TOOL
+            && let Some(scripted) = seen.script.pop_front()
+        {
+            let response = if scripted["resultType"] == "input_required" {
+                CallToolResponse::InputRequired(serde_json::from_value(scripted).unwrap())
+            } else {
+                CallToolResponse::Complete(serde_json::from_value(scripted).unwrap())
+            };
+            return std::future::ready(Ok(response));
+        }
         let text = match name.as_str() {
             READ_TOOL => seen
                 .answer
@@ -93,6 +108,16 @@ impl ServerHandler for Tools {
             vec![ContentBlock::text(text)],
         ))))
     }
+}
+
+/// Which lifecycles the fake speaks.
+#[derive(Clone, Copy)]
+enum Mode {
+    Both,
+    /// Like Google: no `initialize`.
+    Stateless,
+    /// An older server: no `server/discover`.
+    Legacy,
 }
 
 /// The running server.
@@ -114,7 +139,22 @@ impl FakeMcp {
         Self::start_with(accept, true).await
     }
 
+    /// An older server: `server/discover` gets "Method not found", so only `initialize`
+    /// works (specs/166, R-1a).
+    pub async fn start_legacy(accept: Accept) -> Self {
+        Self::start_with_mode(accept, Mode::Legacy).await
+    }
+
     async fn start_with(accept: Accept, refuse_initialize: bool) -> Self {
+        let mode = if refuse_initialize {
+            Mode::Stateless
+        } else {
+            Mode::Both
+        };
+        Self::start_with_mode(accept, mode).await
+    }
+
+    async fn start_with_mode(accept: Accept, mode: Mode) -> Self {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let url = format!("http://{}/mcp", listener.local_addr().unwrap());
         let seen = Arc::new(Mutex::new(Seen::default()));
@@ -135,9 +175,7 @@ impl FakeMcp {
                     let service = service_fn(move |request: Request<Incoming>| {
                         let (mcp, seen, accept) = (mcp.clone(), seen.clone(), accept.clone());
                         async move {
-                            Ok::<_, Infallible>(
-                                answer(request, &mcp, &seen, &accept, refuse_initialize).await,
-                            )
+                            Ok::<_, Infallible>(answer(request, &mcp, &seen, &accept, mode).await)
                         }
                     });
                     let _ = http1::Builder::new()
@@ -171,6 +209,25 @@ impl FakeMcp {
         self.seen.lock().unwrap().arguments.clone()
     }
 
+    /// Queues scripted answers to the read tool (result objects, see `Seen::script`).
+    pub fn script(&self, answers: Vec<serde_json::Value>) {
+        self.seen.lock().unwrap().script.extend(answers);
+    }
+
+    /// Every JSON-RPC message received, in order.
+    pub fn messages(&self) -> Vec<serde_json::Value> {
+        self.seen.lock().unwrap().messages.clone()
+    }
+
+    /// The `params` of every `tools/call` received, in order.
+    pub fn tool_calls(&self) -> Vec<serde_json::Value> {
+        self.messages()
+            .into_iter()
+            .filter(|m| m["method"] == "tools/call")
+            .map(|m| m["params"].clone())
+            .collect()
+    }
+
     /// The tools called, in order.
     pub fn calls(&self) -> Vec<String> {
         self.seen.lock().unwrap().calls.clone()
@@ -182,7 +239,7 @@ async fn answer(
     mcp: &StreamableHttpService<Tools, LocalSessionManager>,
     seen: &Mutex<Seen>,
     accept: &Accept,
-    refuse_initialize: bool,
+    mode: Mode,
 ) -> Response<http_body_util::combinators::BoxBody<Bytes, Infallible>> {
     let header = request
         .headers()
@@ -207,9 +264,6 @@ async fn answer(
             .body(Full::new(Bytes::new()).boxed())
             .unwrap();
     }
-    if !refuse_initialize {
-        return mcp.handle(request).await;
-    }
     let (parts, body) = request.into_parts();
     let bytes = body
         .collect()
@@ -217,7 +271,15 @@ async fn answer(
         .map(|b| b.to_bytes())
         .unwrap_or_default();
     let message: serde_json::Value = serde_json::from_slice(&bytes).unwrap_or_default();
-    if message["method"] == "initialize" {
+    if !message.is_null() {
+        seen.lock().unwrap().messages.push(message.clone());
+    }
+    let refused = match mode {
+        Mode::Both => None,
+        Mode::Stateless => Some("initialize"),
+        Mode::Legacy => Some("server/discover"),
+    };
+    if refused.is_some_and(|method| message["method"] == method) {
         let error = serde_json::json!({
             "jsonrpc": "2.0",
             "id": message["id"],

@@ -2,6 +2,7 @@
 //! network code out of it. Nothing here calls the OS or the network.
 
 pub mod actions;
+pub mod approval;
 pub mod audio;
 pub mod brief;
 pub mod config;

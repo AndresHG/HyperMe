@@ -10,11 +10,20 @@
 //! Google MCP server's tools on `/mcp/v1` and `/mcp/v1self`, runs the preset's two pulls, and
 //! disconnects. It prints names, argument names, shapes (keys), counts, yes/no and timings only:
 //! never a token, an event, a mail, an address or any other content.
+//!
+//! Approvals (specs/166-gmail-approvals, slice 1, AC-15), with `KEEP=1` between runs:
+//!
+//! - `APPROVE=ask` runs the mail pull's list call on Gmail's `/mcp/v1` (or `URL=...`) and, when
+//!   Google asks, shows its question and choices in the terminal (never its message) and sends
+//!   the number typed;
+//! - `APPROVE=unattended` runs the same call answering nothing, then the calendar pull on the
+//!   preset's endpoint, as the scheduler would.
 
 use std::process::Command;
 use std::sync::Arc;
 use std::time::Instant;
 
+use hyperme_core::approval::{Approval, ApprovalAsk, ApprovalFuture, Approver, Unattended};
 use hyperme_core::config::Connectors;
 use hyperme_core::connector_settings as cs;
 use hyperme_core::connectors::MemoryRequestLog;
@@ -135,6 +144,147 @@ fn shape(value: &Value) -> String {
     }
 }
 
+/// Asks in the terminal: prints the question and the choices, never the message (it may hold
+/// mail details), and reads a number. Remembers the values offered and the one picked.
+#[derive(Default)]
+struct TerminalApprover {
+    seen: std::sync::Mutex<Vec<(Vec<String>, Option<String>)>>,
+}
+
+impl Approver for TerminalApprover {
+    fn answer(&self, ask: ApprovalAsk) -> ApprovalFuture<'_> {
+        println!("\n{} asks: {}", ask.tool, ask.title);
+        for (i, choice) in ask.choices.iter().enumerate() {
+            println!("  {}. {} ({})", i + 1, choice.label, choice.value);
+        }
+        println!("Type a number and Enter (anything else answers nothing):");
+        let mut line = String::new();
+        let _ = std::io::stdin().read_line(&mut line);
+        let picked = line
+            .trim()
+            .parse::<usize>()
+            .ok()
+            .and_then(|n| ask.choices.get(n.wrapping_sub(1)))
+            .map(|c| c.value.clone());
+        let values = ask.choices.iter().map(|c| c.value.clone()).collect();
+        self.seen.lock().unwrap().push((values, picked.clone()));
+        Box::pin(std::future::ready(
+            picked.map_or(Approval::NoAnswer, Approval::Choice),
+        ))
+    }
+}
+
+/// The approval runs of AC-15: counts, choice values and timings only.
+async fn approvals(
+    mode: &str,
+    google: &hyperme_core::registry::Connector,
+    auth: Arc<AccountAuth>,
+    log: Arc<MemoryRequestLog>,
+) {
+    let gmail = google.server("gmail").expect("gmail server");
+    let hyperme_core::registry::Transport::Http(preset_url) = &gmail.transport else {
+        return;
+    };
+    let url =
+        std::env::var("URL").unwrap_or_else(|_| preset_url.trim_end_matches("self").to_owned());
+    let pull = google
+        .pulls
+        .iter()
+        .find(|p| p.server == "gmail")
+        .expect("mail pull");
+    let args = sync::expand_args(&pull.args, UtcDateTime::now(), &Local);
+    let arguments = args.as_object().cloned();
+    let remote = RemoteServer::new(
+        "gmail",
+        &url,
+        auth.clone(),
+        log.clone(),
+        Arc::new(|| UtcDateTime::now().date()),
+    );
+    let terminal = TerminalApprover::default();
+    let approver: &dyn Approver = if mode == "ask" {
+        &terminal
+    } else {
+        &Unattended
+    };
+    let t = Instant::now();
+    let result = remote
+        .call_tool_with(
+            &pull.tool,
+            arguments,
+            std::slice::from_ref(&pull.tool),
+            approver,
+        )
+        .await;
+    let ms = t.elapsed().as_millis();
+    for (values, picked) in terminal.seen.lock().unwrap().iter() {
+        println!("choices offered: {values:?}; picked: {picked:?}");
+    }
+    match result {
+        Ok(result) => {
+            let answer = result.structured_content.clone().unwrap_or(Value::Null);
+            let threads = answer
+                .get("threads")
+                .and_then(Value::as_array)
+                .map_or(0, Vec::len);
+            let omitted = answer
+                .get("omittedContent")
+                .map(shape)
+                .unwrap_or_else(|| "none".to_owned());
+            println!(
+                "{mode} {url} {}: ok, {ms} ms, is_error {:?}, {threads} threads, omitted: {omitted}",
+                pull.tool, result.is_error
+            );
+        }
+        Err(e) => println!("{mode} {url} {}: {e} ({ms} ms)", pull.tool),
+    }
+    if mode != "unattended" {
+        return;
+    }
+    let calendar = google.server("calendar").expect("calendar server");
+    let hyperme_core::registry::Transport::Http(calendar_url) = &calendar.transport else {
+        return;
+    };
+    let remote = RemoteServer::new(
+        "calendar",
+        calendar_url,
+        auth,
+        log,
+        Arc::new(|| UtcDateTime::now().date()),
+    );
+    let pull = google
+        .pulls
+        .iter()
+        .find(|p| p.server == "calendar")
+        .expect("calendar pull");
+    let args = sync::expand_args(&pull.args, UtcDateTime::now(), &Local);
+    let t = Instant::now();
+    match remote
+        .call_tool_with(
+            &pull.tool,
+            args.as_object().cloned(),
+            std::slice::from_ref(&pull.tool),
+            &Unattended,
+        )
+        .await
+    {
+        Ok(result) => {
+            let events = result
+                .structured_content
+                .as_ref()
+                .and_then(|a| a.get("events"))
+                .and_then(Value::as_array)
+                .map_or(0, Vec::len);
+            println!(
+                "unattended {calendar_url} {}: ok, {} ms, {events} events",
+                pull.tool,
+                t.elapsed().as_millis()
+            );
+        }
+        Err(e) => println!("unattended {calendar_url} {}: {e}", pull.tool),
+    }
+}
+
 #[tokio::main]
 async fn main() {
     let registry = cs::registry(None, &Connectors::default()).expect("built-in presets");
@@ -196,6 +346,19 @@ async fn main() {
 
     let auth = Arc::new(AccountAuth::new(oauth.clone(), store.clone(), ACCOUNT).with_token(token));
     let log = Arc::new(MemoryRequestLog::default());
+    if let Ok(mode) = std::env::var("APPROVE") {
+        approvals(&mode, &google, auth, log).await;
+        if keep {
+            println!("\nsign-in kept for the next run (KEEP=1)");
+        } else {
+            let mail = MemoryMail::default();
+            match setup::disconnect(&oauth, &*store, &mail, ACCOUNT).await {
+                Ok(()) => println!("\ndisconnect (revoke + keychain): yes"),
+                Err(e) => println!("\ndisconnect: {e}"),
+            }
+        }
+        return;
+    }
     for server in &google.servers {
         let hyperme_core::registry::Transport::Http(url) = &server.transport else {
             continue;

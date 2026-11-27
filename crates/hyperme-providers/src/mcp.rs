@@ -10,24 +10,38 @@
 //! - Every request is counted per account, day and server (R-20).
 //! - A call checks the caller's tool allowlist before anything is sent, so a sync job limited
 //!   to read tools cannot call a write tool (R-22, AC-10).
+//! - A server may answer a call with "input required": an approval the user gives through a
+//!   form of choices (specs/166-gmail-approvals). Each call has an [`Approver`]; the client
+//!   sends back only the user's choice, with the server's state unchanged, and never answers
+//!   for the user (R-2, R-7). Form elicitation is declared only to stateless servers (R-1a).
 
 use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;
 
+use hyperme_core::approval::{Approval, ApprovalAsk, Approver, Choice, Unattended};
 use hyperme_core::connectors::RequestLog;
 use hyperme_core::secrets::SecretStore;
-use rmcp::model::{CallToolRequestParams, CallToolResult, JsonObject, ProtocolVersion, Tool};
-use rmcp::service::{ClientInitializeError, ClientLifecycleMode, ClientServiceExt, RunningService};
+use rmcp::model::{
+    CallToolRequestParams, CallToolResponse, CallToolResult, ClientConfig, ElicitRequestParams,
+    ElicitResult, ElicitationCapability, EnumSchema, FormElicitationCapability, InputRequest,
+    InputResponses, JsonObject, PrimitiveSchemaDefinition, ProtocolVersion, SingleSelectEnumSchema,
+    Tool,
+};
+use rmcp::service::{
+    ClientInitializeError, ClientLifecycleMode, ClientServiceExt, RequestContext, RunningService,
+};
 use rmcp::transport::StreamableHttpClientTransport;
 use rmcp::transport::streamable_http_client::StreamableHttpClientTransportConfig;
-use rmcp::{Peer, RoleClient, ServiceError};
+use rmcp::{ClientHandler, ErrorData, Peer, RoleClient, ServiceError};
 use time::Date;
 use tokio::sync::Mutex;
 
 use crate::oauth::{AccessToken, OAuthClient, OAuthError};
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+/// At most this many retries of one call after "input required" (R-3).
+const MAX_RETRIES: usize = 3;
 
 /// Why a connector request failed. Never carries a token.
 #[derive(Debug)]
@@ -46,6 +60,17 @@ pub enum ConnectorError {
     Transport(String),
     /// The request counter could not be written.
     Count(String),
+    /// The server asked for an approval and nobody answered: unattended, Esc or a timeout
+    /// (specs/166, R-7, R-9). Carries the tool's name only.
+    ApprovalNeeded(String),
+    /// The user refused the call (specs/166, R-15).
+    Denied(String),
+    /// The server's admin policy blocks the tool (specs/166, R-16).
+    AdminBlocked(String),
+    /// The server asked for input HyperMe can't show as a card (specs/166, R-12).
+    UnsupportedInput(String),
+    /// The server kept asking past the retry limit (specs/166, R-3).
+    TooManyRounds(String),
 }
 
 impl fmt::Display for ConnectorError {
@@ -64,6 +89,15 @@ impl fmt::Display for ConnectorError {
                 write!(f, "could not reach the server: {reason}")
             }
             ConnectorError::Count(reason) => write!(f, "request count: {reason}"),
+            ConnectorError::ApprovalNeeded(tool) => write!(f, "{tool} needs your OK"),
+            ConnectorError::Denied(tool) => write!(f, "{tool} was not allowed"),
+            ConnectorError::AdminBlocked(tool) => write!(f, "{tool} is blocked by your admin"),
+            ConnectorError::UnsupportedInput(tool) => {
+                write!(f, "{tool} asked for input HyperMe can't show yet")
+            }
+            ConnectorError::TooManyRounds(tool) => {
+                write!(f, "{tool} kept asking for input")
+            }
         }
     }
 }
@@ -155,7 +189,7 @@ impl AccountAuth {
 
 /// An open MCP session and the token it was opened with.
 struct Session {
-    service: RunningService<RoleClient, ()>,
+    service: RunningService<RoleClient, HyperClient>,
     token: AccessToken,
 }
 
@@ -167,7 +201,7 @@ enum Request<'a> {
 
 enum Reply {
     Tools(Vec<Tool>),
-    Called(CallToolResult),
+    Called(CallToolResponse),
 }
 
 /// How one attempt failed: an authorization failure is retried once with a new token.
@@ -195,6 +229,9 @@ pub struct RemoteServer {
     today: Today,
     http: reqwest::Client,
     session: Mutex<Option<Session>>,
+    /// Set once a server has refused `server/discover`: it then gets `initialize` with no
+    /// elicitation declared (R-1a).
+    legacy: std::sync::atomic::AtomicBool,
     /// What each tool costs in quota units; others cost 1 (R-20).
     units: std::collections::BTreeMap<String, u32>,
 }
@@ -229,6 +266,7 @@ impl RemoteServer {
             today,
             http,
             session: Mutex::new(None),
+            legacy: std::sync::atomic::AtomicBool::new(false),
             units: std::collections::BTreeMap::new(),
         }
     }
@@ -246,12 +284,27 @@ impl RemoteServer {
         }
     }
 
-    /// Calls `name` if it is in `allowlist`, the tools this caller may use.
+    /// Calls `name` if it is in `allowlist`, the tools this caller may use. Nobody is there to
+    /// answer an approval, so a call that needs one ends in
+    /// [`ConnectorError::ApprovalNeeded`].
     pub async fn call_tool(
         &self,
         name: &str,
         arguments: Option<JsonObject>,
         allowlist: &[String],
+    ) -> Result<CallToolResult, ConnectorError> {
+        self.call_tool_with(name, arguments, allowlist, &Unattended)
+            .await
+    }
+
+    /// Calls `name` if it is in `allowlist`; when the server asks for an approval, `approver`
+    /// answers it (specs/166, R-2 to R-5a).
+    pub async fn call_tool_with(
+        &self,
+        name: &str,
+        arguments: Option<JsonObject>,
+        allowlist: &[String],
+        approver: &dyn Approver,
     ) -> Result<CallToolResult, ConnectorError> {
         if !allowlist.iter().any(|allowed| allowed == name) {
             return Err(ConnectorError::NotAllowed(name.to_owned()));
@@ -260,10 +313,70 @@ impl RemoteServer {
         if let Some(arguments) = arguments {
             params = params.with_arguments(arguments);
         }
-        match self.send(Request::CallTool(&params)).await? {
-            Reply::Called(result) => Ok(result),
-            Reply::Tools(_) => Err(ConnectorError::Transport("unexpected reply".to_owned())),
+        let mut deny_sent = false;
+        let mut state_only = 0u32;
+        for round in 0..=MAX_RETRIES {
+            let response = match self.send(Request::CallTool(&params)).await? {
+                Reply::Called(response) => response,
+                Reply::Tools(_) => {
+                    return Err(ConnectorError::Transport("unexpected reply".to_owned()));
+                }
+            };
+            let asked = match response {
+                CallToolResponse::Complete(result) => return finish(name, result, deny_sent),
+                CallToolResponse::InputRequired(asked) => asked,
+                _ => return Err(ConnectorError::Server("unexpected answer".to_owned())),
+            };
+            if round == MAX_RETRIES {
+                return Err(ConnectorError::TooManyRounds(name.to_owned()));
+            }
+            let requests = asked.input_requests.unwrap_or_default();
+            if requests.is_empty() {
+                // The server sheds load: send the state back after a pause, asking nobody (R-2a).
+                let Some(state) = asked.request_state else {
+                    return Err(ConnectorError::Server(
+                        "input required, nothing asked".to_owned(),
+                    ));
+                };
+                tokio::time::sleep(Duration::from_secs(1 << state_only.min(1))).await;
+                state_only += 1;
+                params.input_responses = None;
+                params.request_state = Some(state);
+                continue;
+            }
+            let mut responses = InputResponses::new();
+            for (key, request) in requests {
+                let form = Form::read(&request, name)?;
+                let ask = ApprovalAsk {
+                    account: self.auth.account.clone(),
+                    server: self.id.clone(),
+                    tool: name.to_owned(),
+                    title: form.title,
+                    message: form.message,
+                    choices: form.choices.clone(),
+                };
+                let value = match approver.answer(ask).await {
+                    Approval::NoAnswer => {
+                        return Err(ConnectorError::ApprovalNeeded(name.to_owned()));
+                    }
+                    Approval::Choice(value) => value,
+                };
+                let Some(choice) = form.choices.iter().find(|c| c.value == value) else {
+                    return Err(ConnectorError::UnsupportedInput(name.to_owned()));
+                };
+                deny_sent |= choice.is_deny();
+                responses.insert(
+                    key,
+                    serde_json::json!({
+                        "action": "accept",
+                        "content": { form.property: value },
+                    }),
+                );
+            }
+            params.input_responses = Some(responses);
+            params.request_state = asked.request_state;
         }
+        Err(ConnectorError::TooManyRounds(name.to_owned()))
     }
 
     /// Sends `request`; on an authorization failure, renews the token and tries once more.
@@ -296,7 +409,10 @@ impl RemoteServer {
             .map_err(ConnectorError::Count)?;
         let result = match request {
             Request::ListTools => peer.list_all_tools().await.map(Reply::Tools),
-            Request::CallTool(params) => peer.call_tool((*params).clone()).await.map(Reply::Called),
+            Request::CallTool(params) => peer
+                .call_tool_once((*params).clone())
+                .await
+                .map(Reply::Called),
         };
         result.map_err(|error| {
             if error.is_authorization_required() {
@@ -330,26 +446,7 @@ impl RemoteServer {
             // Ends the old session; its DELETE may fail with the old token, which is fine.
             let _ = old.service.cancel().await;
         }
-        let config = StreamableHttpClientTransportConfig::with_uri(self.url.as_str())
-            .auth_header(token.secret());
-        let transport = StreamableHttpClientTransport::with_client(self.http.clone(), config);
-        // Google's servers answer `initialize` with "Method not supported": they speak the
-        // stateless lifecycle (`server/discover`). Auto tries that first and falls back to
-        // `initialize` for older servers.
-        let lifecycle = ClientLifecycleMode::Auto {
-            preferred_versions: vec![ProtocolVersion::LATEST],
-            legacy_version: None,
-        };
-        let service =
-            ().serve_with_lifecycle(transport, lifecycle)
-                .await
-                .map_err(|error| {
-                    if error.is_authorization_required() {
-                        Failure::Unauthorized(token.clone())
-                    } else {
-                        Failure::Other(initialize_error(error))
-                    }
-                })?;
+        let service = self.open(&token).await?;
         let peer = service.peer().clone();
         *session = Some(Session {
             service,
@@ -357,6 +454,210 @@ impl RemoteServer {
         });
         Ok((peer, token))
     }
+}
+
+impl RemoteServer {
+    /// Opens a session. Google's servers answer `initialize` with "Method not supported":
+    /// they speak the stateless lifecycle (`server/discover`), which carries the form
+    /// elicitation declaration on every request (R-1). A server that refuses
+    /// `server/discover` gets `initialize` with nothing declared, so it never asks (R-1a);
+    /// that is remembered, so it costs one extra request once.
+    async fn open(
+        &self,
+        token: &AccessToken,
+    ) -> Result<RunningService<RoleClient, HyperClient>, Failure> {
+        use std::sync::atomic::Ordering;
+        let failed = |error: ClientInitializeError| {
+            if error.is_authorization_required() {
+                Failure::Unauthorized(token.clone())
+            } else {
+                Failure::Other(initialize_error(error))
+            }
+        };
+        if !self.legacy.load(Ordering::Relaxed) {
+            let discover = ClientLifecycleMode::Discover {
+                preferred_versions: vec![ProtocolVersion::LATEST],
+            };
+            match (HyperClient { declare: true })
+                .serve_with_lifecycle(self.transport(token), discover)
+                .await
+            {
+                Ok(service) => return Ok(service),
+                Err(error) if error.is_authorization_required() => return Err(failed(error)),
+                Err(_) => self.legacy.store(true, Ordering::Relaxed),
+            }
+        }
+        (HyperClient { declare: false })
+            .serve_with_lifecycle(self.transport(token), ClientLifecycleMode::Initialize)
+            .await
+            .map_err(failed)
+    }
+
+    fn transport(&self, token: &AccessToken) -> StreamableHttpClientTransport<reqwest::Client> {
+        let config = StreamableHttpClientTransportConfig::with_uri(self.url.as_str())
+            .auth_header(token.secret());
+        StreamableHttpClientTransport::with_client(self.http.clone(), config)
+    }
+}
+
+/// HyperMe's side of a session. It declares form elicitation only when told to (stateless
+/// servers, R-1, R-1a), and answers a server-to-client `elicitation/create` with an error,
+/// never a decline: approvals come only through "input required" answers, where the call's
+/// approver decides (R-7).
+#[derive(Debug, Clone, Copy)]
+struct HyperClient {
+    declare: bool,
+}
+
+impl ClientHandler for HyperClient {
+    fn get_info(&self) -> ClientConfig {
+        let mut info = ClientConfig::default();
+        if self.declare {
+            info.capabilities.elicitation =
+                Some(ElicitationCapability::new().with_form(FormElicitationCapability::new()));
+        }
+        info
+    }
+
+    fn create_elicitation(
+        &self,
+        _request: ElicitRequestParams,
+        _context: RequestContext<RoleClient>,
+    ) -> impl Future<Output = Result<ElicitResult, ErrorData>> + Send + '_ {
+        std::future::ready(Err(ErrorData::method_not_found::<
+            rmcp::model::ElicitationCreateRequestMethod,
+        >()))
+    }
+}
+
+/// One approval form, read from an input request (R-10, R-12).
+struct Form {
+    /// The schema's one property, which the answer's `content` is keyed by.
+    property: String,
+    title: String,
+    message: String,
+    choices: Vec<Choice>,
+}
+
+impl Form {
+    /// Accepts a form whose schema has exactly one property, required, a string with `enum`
+    /// (labels from `enumNames` when there are any) or with `oneOf` of `const` and `title`.
+    /// Anything else is [`ConnectorError::UnsupportedInput`].
+    fn read(request: &InputRequest, tool: &str) -> Result<Form, ConnectorError> {
+        let unsupported = || ConnectorError::UnsupportedInput(tool.to_owned());
+        let InputRequest::Elicitation(request) = request else {
+            return Err(unsupported());
+        };
+        let ElicitRequestParams::FormElicitationParams {
+            message,
+            requested_schema,
+            ..
+        } = &request.params
+        else {
+            return Err(unsupported());
+        };
+        let mut properties = requested_schema.properties.iter();
+        let (Some((property, definition)), None) = (properties.next(), properties.next()) else {
+            return Err(unsupported());
+        };
+        let required = requested_schema
+            .required
+            .as_ref()
+            .is_some_and(|required| required.iter().any(|r| r == property));
+        if !required {
+            return Err(unsupported());
+        }
+        let PrimitiveSchemaDefinition::Enum(schema) = definition else {
+            return Err(unsupported());
+        };
+        let (title, choices): (Option<&str>, Vec<Choice>) = match schema {
+            EnumSchema::Legacy(legacy) => {
+                let names = legacy.enum_names.as_deref().unwrap_or_default();
+                let choices = legacy
+                    .enum_
+                    .iter()
+                    .enumerate()
+                    .map(|(i, value)| Choice {
+                        value: value.clone(),
+                        label: names.get(i).unwrap_or(value).clone(),
+                    })
+                    .collect();
+                (legacy.title.as_deref(), choices)
+            }
+            EnumSchema::Single(SingleSelectEnumSchema::Untitled(single)) => (
+                single.title.as_deref(),
+                single
+                    .enum_
+                    .iter()
+                    .map(|value| Choice {
+                        value: value.clone(),
+                        label: value.clone(),
+                    })
+                    .collect(),
+            ),
+            EnumSchema::Single(SingleSelectEnumSchema::Titled(single)) => (
+                single.title.as_deref(),
+                single
+                    .one_of
+                    .iter()
+                    .map(|option| Choice {
+                        value: option.const_.clone(),
+                        label: option.title.clone(),
+                    })
+                    .collect(),
+            ),
+            _ => return Err(unsupported()),
+        };
+        if choices.is_empty() {
+            return Err(unsupported());
+        }
+        let title = title
+            .or(requested_schema.title.as_deref())
+            .map(str::to_owned)
+            .unwrap_or_else(|| format!("Allow HyperMe to use {tool}?"));
+        Ok(Form {
+            property: property.clone(),
+            title,
+            message: message.clone(),
+            choices,
+        })
+    }
+}
+
+/// How a call that reached a final result ends: a refusal the user made, or one the server's
+/// error `_meta` names, becomes its own error; any other result goes back to the caller
+/// (R-15, R-16).
+fn finish(
+    tool: &str,
+    result: CallToolResult,
+    deny_sent: bool,
+) -> Result<CallToolResult, ConnectorError> {
+    if result.is_error != Some(true) {
+        return Ok(result);
+    }
+    if deny_sent {
+        return Err(ConnectorError::Denied(tool.to_owned()));
+    }
+    let reasons = result
+        .meta
+        .as_ref()
+        .and_then(|meta| meta.0.get("google.com/error"))
+        .and_then(|error| error.get("details"))
+        .and_then(|details| details.as_array())
+        .map(|details| {
+            details
+                .iter()
+                .filter_map(|detail| detail.get("reason").and_then(|r| r.as_str()))
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    if reasons.contains(&"AdminPolicyBlock") {
+        return Err(ConnectorError::AdminBlocked(tool.to_owned()));
+    }
+    if reasons.contains(&"UserDeniedAction") {
+        return Err(ConnectorError::Denied(tool.to_owned()));
+    }
+    Ok(result)
 }
 
 fn service_error(error: ServiceError) -> ConnectorError {
@@ -372,16 +673,35 @@ fn initialize_error(error: ClientInitializeError) -> ConnectorError {
 
 /// The pulls' tool caller (G-5): one account's servers by id, each call checked against the
 /// sync job's allowlist (R-22, AC-10). The answer is the tool's structured content, or its
-/// first text block read as JSON.
-#[derive(Debug)]
+/// first text block read as JSON. Approvals go to its approver: [`Unattended`] unless told
+/// otherwise, for scheduler jobs (specs/166, R-6).
 pub struct McpCaller {
     servers: Vec<RemoteServer>,
     allowlist: Vec<String>,
+    approver: Arc<dyn Approver>,
+}
+
+impl fmt::Debug for McpCaller {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("McpCaller")
+            .field("servers", &self.servers)
+            .field("allowlist", &self.allowlist)
+            .finish_non_exhaustive()
+    }
 }
 
 impl McpCaller {
     pub fn new(servers: Vec<RemoteServer>, allowlist: Vec<String>) -> Self {
-        McpCaller { servers, allowlist }
+        McpCaller {
+            servers,
+            allowlist,
+            approver: Arc::new(Unattended),
+        }
+    }
+
+    /// Lets `approver` answer approvals, such as the card when the user is watching.
+    pub fn with_approver(self, approver: Arc<dyn Approver>) -> Self {
+        McpCaller { approver, ..self }
     }
 }
 
@@ -403,7 +723,7 @@ impl hyperme_core::sync::ToolCaller for McpCaller {
             other => return Err(format!("{tool}: arguments must be an object, not {other}").into()),
         };
         let result = remote
-            .call_tool(tool, arguments, &self.allowlist)
+            .call_tool_with(tool, arguments, &self.allowlist, &*self.approver)
             .await
             .map_err(|e| match e {
                 ConnectorError::SignInAgain => hyperme_core::sync::SyncError::SignInAgain,
