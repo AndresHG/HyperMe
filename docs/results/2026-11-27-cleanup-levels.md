@@ -10,6 +10,13 @@ these samples: 9.1 to 10.7 edits per 100 characters, against 8.6 to 8.8 for ligh
 stays **`light`**. Medium keeps its best variant, `m2`, for people who want more cleanup, and
 waits for the Style page.
 
+**Against the gate (restated after issue 181).** The harness scores exactly as flowbench did, so
+its numbers compare with Wispr Flow's 11.6 edits per 100 characters on the same 50 samples and
+gold. `light` scores 9.1 live today and 6.3 on Phase 0's run 12 transcripts; both beat 11.6. All
+dictionary names are right on run 12's speech (30 of 30), but not on today's (26 of 30): four
+new mishearings are missing from the learned list. Light also wins on run 12's transcripts
+(section "Second transcript set").
+
 ## Setup
 
 | Item | Value |
@@ -81,14 +88,40 @@ The winner is the current config, so the live baseline is also the end-to-end ch
 sample past the 1.5 s deadline. The worst Spanish samples (858 ms at the 90th percentile) came
 on Wi-Fi.
 
+## Second transcript set: Phase 0's run 12
+
+Issue 181 asked why the harness gave 9.1 on "the Phase 0 transcripts" when the dictionary
+results reported 6.5 for `v4` with the learned list. The cause is the file, not the scorer:
+
+- flowbench overwrites `samples/transcripts.json` on every live run. The last live run that
+  night was option 1 (`enhanced` with `additional_vocab`, at 01:02), so the file holds option 1's
+  transcripts, not run 12's: 4 of its 50 texts match run 12. Option 1 scored 9.3 then, and the
+  harness gives it 9.1.
+- Run 12's raw transcripts are still in flowbench's private replay files. Scored with the
+  harness's definitions, flowbench's own cleaned outputs from that replay give 6.48, the 6.5
+  reported. So the scorers agree.
+- Replaying run 12's raw transcripts through the harness (app engine, `v4`, learned list) gives
+  **6.3, with 30 of 30 names**, matching Phase 0's 6.5 and 7 of 7 samples.
+
+The harness needs no fix: its live runs write a new `raw-YYYY-MM-DD.json` each time and never
+overwrite one. Cleanup-only replays of run 12's raw transcripts, paced at 2500 ms, no fallbacks:
+
+| Row | Prompt | es | en | All | Names right | Unchanged |
+| --- | --- | --- | --- | --- | --- | --- |
+| Raw transcripts, no dictionary, scored directly | none | 8.6 | 6.5 | 7.5 | not scored | - |
+| Replay, `none` | none | 2/25, 7.7 | 3/25, 5.5 | 5/50, 6.6 | 30/30 | 34 |
+| Replay, `light` | `v4` | 2/25, 7.6 | 4/25, 5.0 | 6/50, **6.3** | 30/30 | 30 |
+| Replay, `medium` | `m1` | 2/25, 7.5 | 5/25, 6.7 | 7/50, 7.1 | 30/30 | 24 |
+| Replay, `medium` | `m2` | 2/25, 7.7 | 4/25, 7.5 | 6/50, 7.6 | 28/30 | 28 |
+
+On run 12's speech light beats every medium variant again, and beats `none` by 0.3. The default
+stays `light`.
+
 ## Caveats
 
-- **Not comparable with Phase 0's 6.5.** The dictionary results scored `v4` with the learned
-  list at 6.5 edits per 100 characters. The same harness and scorer (ported from flowbench)
-  give 9.1 on the saved Phase 0 transcripts (`transcripts.json`) with the same list and gold.
-  The likeliest cause is that this file is not run 12's raw text. Until that is explained,
-  compare the rows of this file with each other, not with the 6.5 or with Wispr Flow's 11.6.
-  The follow-up is issue 181.
+- **Speech varies from run to run.** The raw transcripts alone score 9.1 today (Wi-Fi) and 7.5
+  in Phase 0's run 12 (wired), with the same model and settings. Most of the gap between today's
+  9.1 and Phase 0's 6.5 is in the speech, not in the cleanup.
 - **One set, one speaker, mostly clean speech.** A level that removes more may pay off on
   speech with more hesitation. The owner's own use decides, through the Style page.
 - **The learned list is optimistic**, as in the dictionary results: it was learned from these
