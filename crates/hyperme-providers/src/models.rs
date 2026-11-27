@@ -32,7 +32,7 @@ pub async fn model_menu(
     };
     let mut models: Vec<String> = entry.models.iter().map(|m| m.id.clone()).collect();
     let can_list = entry.list_models && entry.protocol == Protocol::OpenaiChat;
-    let key = match keys.get(provider) {
+    let key = match keys.get(config.key_account(provider)) {
         Ok(Some(key)) => Some(key),
         Ok(None) if !entry.key_required => Some(String::new()),
         _ => None,

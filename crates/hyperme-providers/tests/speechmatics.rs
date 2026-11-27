@@ -389,7 +389,7 @@ async fn engine_pastes_the_final_transcript_from_speechmatics() {
     events.send(Event::KeyUp).await.unwrap();
     loop {
         match status.recv().await.unwrap() {
-            Status::Done { raw } => {
+            Status::Done { raw, .. } => {
                 assert!(!raw);
                 break;
             }

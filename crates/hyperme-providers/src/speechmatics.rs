@@ -11,36 +11,28 @@
 use std::fmt;
 use std::time::Duration;
 
-use futures_util::stream::{SplitSink, SplitStream};
 use futures_util::{SinkExt, StreamExt};
 use hyperme_core::config;
 use hyperme_core::traits::{Error, ErrorKind, LiveSession, SpeechProvider, Transcript};
 use serde_json::{Value, json};
-use tokio::net::TcpStream;
 use tokio::task::JoinHandle;
 use tokio::time::timeout;
-use tokio_tungstenite::tungstenite::client::IntoClientRequest;
-use tokio_tungstenite::tungstenite::http::{HeaderValue, StatusCode};
 use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode;
 use tokio_tungstenite::tungstenite::{self, Message};
-use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async};
+
+use crate::ws::{self, Sink, Stream, auth_error, provider_error};
 
 /// The rate of the PCM the session expects: mono, 16-bit. Phase 0 measured at this rate.
 pub const SAMPLE_RATE: u32 = 24_000;
 /// R-3: audio goes out in chunks of at most 100 ms.
 pub const MAX_CHUNK_SAMPLES: usize = SAMPLE_RATE as usize / 10;
 
-const CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
 /// Speechmatics warns that a session can take seconds to start.
 const STARTED_TIMEOUT: Duration = Duration::from_secs(20);
 /// How long to wait for the final transcript after the end of speech.
 const FINAL_TIMEOUT: Duration = Duration::from_secs(30);
 /// Close code for `not_authorised`.
 const CLOSE_NOT_AUTHORISED: u16 = 4001;
-
-type Socket = WebSocketStream<MaybeTlsStream<TcpStream>>;
-type Sink = SplitSink<Socket, Message>;
-type Stream = SplitStream<Socket>;
 
 /// The Speechmatics provider: opens one session per dictation.
 pub struct Speechmatics {
@@ -76,55 +68,8 @@ impl Speechmatics {
     }
 
     async fn connect(&self) -> Result<(Sink, Stream), Error> {
-        let mut request =
-            self.endpoint.as_str().into_client_request().map_err(|e| {
-                self.error(ErrorKind::Other, format!("the endpoint is not valid: {e}"))
-            })?;
-        let mut auth = HeaderValue::from_str(&format!("Bearer {}", self.key)).map_err(|_| {
-            self.error(
-                ErrorKind::Auth,
-                "the key has characters a header cannot carry. Check it in Settings",
-            )
-        })?;
-        // Keeps the key out of any debug output of the request.
-        auth.set_sensitive(true);
-        request.headers_mut().insert("Authorization", auth);
-        let connected = timeout(CONNECT_TIMEOUT, connect_async(request))
-            .await
-            .map_err(|_| self.error(ErrorKind::Network, "connecting timed out"))?;
-        match connected {
-            Ok((socket, _)) => Ok(socket.split()),
-            Err(tungstenite::Error::Http(response))
-                if response.status() == StatusCode::UNAUTHORIZED =>
-            {
-                Err(auth_error(&self.provider))
-            }
-            // The response body is not shown: a 401 or 403 body can echo part of the key.
-            Err(tungstenite::Error::Http(response)) => Err(self.error(
-                ErrorKind::Other,
-                format!("the connection was refused with HTTP {}", response.status()),
-            )),
-            Err(other) => {
-                Err(self.error(ErrorKind::Network, format!("could not connect: {other}")))
-            }
-        }
+        ws::connect(&self.provider, &self.endpoint, &self.key).await
     }
-}
-
-fn provider_error(provider: &str, kind: ErrorKind, what: impl fmt::Display) -> Error {
-    Error {
-        kind,
-        message: format!("{provider}: {what}"),
-    }
-}
-
-/// R-21: which provider, and where to fix it, without the key.
-fn auth_error(provider: &str) -> Error {
-    provider_error(
-        provider,
-        ErrorKind::Auth,
-        "the key was rejected. Check it in Settings",
-    )
 }
 
 /// The `StartRecognition` message: raw 16-bit PCM at [`SAMPLE_RATE`], no partials, and no
@@ -467,6 +412,7 @@ impl Collector {
         Step::Done(Transcript {
             text: self.text.trim().to_owned(),
             language: self.language.take(),
+            via: None,
         })
     }
 }
@@ -495,6 +441,7 @@ mod tests {
             Step::Done(Transcript {
                 text: "Ok, creo que está grabando. ¿Sí?".to_owned(),
                 language: Some("es".to_owned()),
+                via: None,
             })
         );
     }

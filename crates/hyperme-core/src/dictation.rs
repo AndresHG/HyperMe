@@ -115,9 +115,11 @@ pub enum Status {
     Cleaning,
     Pasting,
     /// The text was pasted. `raw` when it is the raw transcript after a cleanup failure or the
-    /// deadline (R-12, R-20).
+    /// deadline (R-12, R-20). `via` names the fallback provider that answered, if one did
+    /// (specs/96, R-27): "Pasted · via OpenAI".
     Done {
         raw: bool,
+        via: Option<String>,
     },
     /// Short hold or Esc: nothing pasted.
     Cancelled,
@@ -274,6 +276,8 @@ struct Text {
     /// The raw transcript, after a cleanup failure or the deadline.
     raw: bool,
     language: Option<String>,
+    /// The fallback provider that answered, by name (specs/96, R-27).
+    via: Option<String>,
 }
 
 impl<M, S, C, I, F, H, N> Engine<M, S, C, I, F, H, N>
@@ -601,7 +605,10 @@ where
         if let Some(id) = id {
             let _ = trace.history_write(|| history.done(id, &text.text, text.language.as_deref()));
         }
-        emit(Status::Done { raw: text.raw });
+        emit(Status::Done {
+            raw: text.raw,
+            via: text.via,
+        });
         Flow::Ended
     }
 
@@ -733,7 +740,10 @@ where
         let _ =
             trace.history_write(|| history.done(failed.id, &text.text, text.language.as_deref()));
         emit(if same_app {
-            Status::Done { raw: text.raw }
+            Status::Done {
+                raw: text.raw,
+                via: text.via,
+            }
         } else {
             Status::Copied { raw: text.raw }
         });
@@ -883,6 +893,11 @@ async fn transcribe_and_clean<L: LiveSession, C: CleanupProvider>(
         Waited::Closed => return Err(NoText::Closed),
     };
     trace.transcript(transcript.language.as_deref());
+    // specs/96, R-27: a fallback that transcribed it is named on the pill and the timing line.
+    if let Some(via) = &transcript.via {
+        trace.speech_via(&via.provider, &via.model);
+    }
+    let speech_via = transcript.via.as_ref().map(|v| v.name.clone());
     let language = transcript.language.clone();
     // Spec 93, R-1: the dictionary fixes the raw transcript once, so the short path, the
     // cleanup and the raw fallback all get the user's words.
@@ -913,6 +928,7 @@ async fn transcribe_and_clean<L: LiveSession, C: CleanupProvider>(
             language,
             transcript: raw.to_owned(),
             used: used.clone(),
+            via: speech_via,
         });
     }
     // Spec 93, R-5: above the prompt cap, the prompt carries the entries relevant to this one.
@@ -942,6 +958,11 @@ async fn transcribe_and_clean<L: LiveSession, C: CleanupProvider>(
     };
     match outcome {
         Waited::Done(Ok(Ok(()))) if !cleaned.trim().is_empty() => {
+            // R-27: a fallback that answered is named on the pill and the timing line.
+            let via = cleanup.fallback_used();
+            if let Some(via) = &via {
+                trace.cleanup_via(&via.provider, &via.model);
+            }
             trace.ready(false);
             Ok(Text {
                 text: cleaned.trim().to_owned(),
@@ -949,6 +970,7 @@ async fn transcribe_and_clean<L: LiveSession, C: CleanupProvider>(
                 language,
                 transcript: raw.to_owned(),
                 used: used.clone(),
+                via: joined_via(speech_via, via.map(|v| v.name)),
             })
         }
         // R-12 (deadline), R-20 (error) and an empty answer: the raw transcript.
@@ -960,6 +982,7 @@ async fn transcribe_and_clean<L: LiveSession, C: CleanupProvider>(
                 language,
                 transcript: raw.to_owned(),
                 used: used.clone(),
+                via: speech_via,
             })
         }
         Waited::Cancelled => {
@@ -967,6 +990,15 @@ async fn transcribe_and_clean<L: LiveSession, C: CleanupProvider>(
             Err(NoText::Cancelled)
         }
         Waited::Closed => Err(NoText::Closed),
+    }
+}
+
+/// The names of the fallbacks that answered, for "Pasted · via …": one name when speech and
+/// cleanup fell back to the same provider.
+fn joined_via(speech: Option<String>, cleanup: Option<String>) -> Option<String> {
+    match (speech, cleanup) {
+        (Some(s), Some(c)) if s != c => Some(format!("{s} and {c}")),
+        (s, c) => s.or(c),
     }
 }
 

@@ -29,8 +29,13 @@ struct MicTest(Mutex<Option<CpalMicrophone>>);
 fn at_launch(app: &AppHandle) -> AtLaunch {
     let config = Config::load_or_create(&crate::runtime::data_dir(app).join("config.toml")).ok();
     let keys = KeychainStore::new();
-    let saved =
-        |provider: Option<&str>| provider.is_some_and(|p| matches!(keys.get(p), Ok(Some(_))));
+    // A provider that shares another's key reads that one (specs/96, D-2).
+    let saved = |provider: Option<&str>| {
+        provider.is_some_and(|p| {
+            let account = config.as_ref().map_or(p, |c| c.key_account(p));
+            matches!(keys.get(account), Ok(Some(_)))
+        })
+    };
     AtLaunch {
         accessibility: permissions::accessibility(),
         input_monitoring: input_monitoring(),

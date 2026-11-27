@@ -91,6 +91,7 @@
     <div class="row" data-words="microphone permission"><div class="what">Microphone<small>macOS asks the first time you dictate.</small></div><button data-open="microphone">Open</button></div>
     <div class="row" data-words="speech key speechmatics"><div class="what">Speech key<small id="setup-speech-name"></small></div><span class="state" id="setup-speech"></span></div>
     <div class="row" data-words="cleanup key groq"><div class="what">Cleanup key<small id="setup-cleanup-name"></small></div><span class="state" id="setup-cleanup"></span></div>
+    <div id="setup-fallbacks"></div>
     <div id="setup-connectors"></div>
   </section>
 
@@ -197,7 +198,8 @@
 
   <section id="privacy">
     <h1>Privacy</h1>
-    <p class="lead">Audio and text go only to the speech and cleanup providers above, under your keys. Connected accounts follow the rules at the bottom of this page. There is no telemetry. A dictation's audio stays on this Mac so a dropped connection never loses it.</p>
+    <p class="lead">Audio and text go only to the providers listed here, under your keys. Connected accounts follow the rules at the bottom of this page. There is no telemetry. A dictation's audio stays on this Mac so a dropped connection never loses it.</p>
+    <div id="privacy-providers" data-words="providers speech cleanup fallback where audio text goes privacy"></div>
     <div class="row" data-words="history dictation audio keep"><div class="what">Dictation history<small>Keeps each dictation's audio and text on this Mac.</small></div><input type="checkbox" data-section="history" data-key="enabled"></div>
     <div class="row" data-words="history retention days unlimited"><div class="what">Keep for<small>Older dictations are deleted.</small></div><select id="retention"><option value="30">30 days</option><option value="unlimited">Unlimited</option></select></div>
     <div class="row" data-words="history size limit"><div class="what">Size limit (MB)<small>The oldest dictations go first.</small></div><input type="number" min="10" data-section="history" data-key="size_limit_mb"></div>
@@ -246,6 +248,12 @@
       id = 'providers';
       showAdvanced(true);
     }
+    // hyperme://settings/providers/speech, from the "keeps failing" notice (specs/96, R-28):
+    // the table, with that role's row in view.
+    if (id === 'providers' && item) {
+      showAdvanced(true);
+      setTimeout(() => { const row = $('role-' + item); if (row) row.scrollIntoView({ block: 'center' }); }, 0);
+    }
     document.querySelectorAll('section').forEach((s) => s.classList.toggle('on', s.id === id));
     document.querySelectorAll('nav a').forEach((a) => a.classList.toggle('on', a.getAttribute('href') === '#' + id));
   }
@@ -269,6 +277,24 @@
     mark($('setup-input'), view.setup.input_monitoring, 'Allowed', 'Not allowed');
     mark($('setup-speech'), view.keys.speech, 'Key saved', 'No key');
     mark($('setup-cleanup'), view.keys.cleanup, 'Key saved', 'No key');
+    // specs/96, R-29: every provider set, fallbacks included, and what each one receives.
+    const sent = { speech: 'Your audio', cleanup: 'The transcript, the app name and your dictionary' };
+    $('privacy-providers').replaceChildren(...(view.destinations || []).map((d) => {
+      const what = d.on_this_mac ? 'Stays on this Mac' : sent[d.role] + ' go' + (d.role === 'speech' ? 'es' : '') + ' to ' + d.name;
+      const when = d.fallback_for ? 'Only if ' + d.fallback_for + ' fails' : (d.role === 'speech' ? 'Dictation speech' : 'Dictation cleanup');
+      return el('div', { className: 'row' }, el('div', { className: 'what' }, d.name + (d.fallback_for ? ' (fallback)' : ''), el('small', {}, when + ' · ' + d.model)), el('span', { className: 'faint' }, what));
+    }));
+    // specs/96, R-24a: a fallback whose key went missing is skipped, and its row turns red.
+    const fallbacks = $('setup-fallbacks');
+    fallbacks.textContent = '';
+    for (const r of view.roles || []) {
+      if (!r.fallback) continue;
+      const state = el('span', { className: 'state' });
+      mark(state, r.fallback.ready, 'Key saved', 'No key: skipped until you add it');
+      fallbacks.append(el('div', { className: 'row' },
+        el('div', { className: 'what' }, r.label + ' fallback', el('small', {}, r.fallback.name + ' · ' + r.fallback.model)),
+        state));
+    }
     mark($('speech-state'), view.keys.speech, 'Key saved', 'No key yet');
     mark($('cleanup-state'), view.keys.cleanup, 'Key saved', 'No key yet');
     if (!c) return;
@@ -391,7 +417,64 @@
       const hint = el('td', { className: 'hint', colSpan: 4, id: 'hint-' + r.role });
       body.append(el('tr', {}, hint));
       if (want.model) showHint(hint, r.role, chosen.id, want.model);
+      body.append(fallbackRow(r));
     }
+  }
+
+  // specs/96, R-24 to R-24a: one fallback per role, saved only once its Test passes.
+  function fallbackRow(r) {
+    const f = r.fallback;
+    const menu = el('select', { 'aria-label': r.label + ' fallback provider' });
+    menu.add(new Option('None', ''));
+    for (const p of r.providers) {
+      if (p.id !== 'local') menu.add(new Option(p.name, p.id, false, f && p.id === f.provider));
+    }
+    const model = el('input', { type: 'text', value: f ? f.model : '', placeholder: 'Model', 'aria-label': r.label + ' fallback model' });
+    const state = el('span', { className: 'state' });
+    const go = el('button', { textContent: 'Test and save' });
+    // One key per provider (D-2): a fallback with no key yet takes it here.
+    const keyField = el('input', { type: 'password', placeholder: 'Paste the key', autocomplete: 'off', 'aria-label': r.label + ' fallback key' });
+    const showKey = () => {
+      const p = r.providers.find((x) => x.id === menu.value);
+      keyField.classList.toggle('hidden', !(p && p.key_required && !p.has_key));
+    };
+    if (f) mark(state, f.ready, 'Only if ' + (r.providers.find((p) => p.id === r.provider) || { name: r.provider }).name + ' fails', 'No key: skipped');
+    const pickModel = () => {
+      const p = r.providers.find((x) => x.id === menu.value);
+      model.value = p && p.models.length ? p.models[0].id : '';
+    };
+    menu.addEventListener('change', async () => {
+      if (!menu.value) {
+        try { await invoke('fallback_clear', { role: r.role }); } catch (e) { $('error').textContent = String(e); }
+        await refresh();
+        return;
+      }
+      pickModel();
+      showKey();
+      state.textContent = 'Not saved until Test passes';
+      state.className = 'state warn';
+    });
+    go.addEventListener('click', async () => {
+      if (!menu.value || !model.value.trim()) { $('error').textContent = 'Pick a fallback provider and model.'; return; }
+      state.textContent = 'Testing…';
+      state.className = 'state warn';
+      try {
+        if (keyField.value.trim() && !keyField.classList.contains('hidden')) {
+          await invoke('key_set', { role: r.role, key: keyField.value, provider: menu.value });
+          keyField.value = '';
+        }
+        const ms = await invoke('fallback_set', { role: r.role, provider: menu.value, model: model.value.trim() });
+        $('error').textContent = '';
+        await refresh();
+        const fresh = $('fallback-state-' + r.role);
+        if (fresh) mark(fresh, true, 'Works · ' + ms + ' ms · saved', '');
+      } catch (e) { mark(state, false, '', String(e) + ' Not saved.'); }
+    });
+    state.id = 'fallback-state-' + r.role;
+    showKey();
+    return el('tr', { id: 'fallback-' + r.role },
+      el('td', { className: 'faint' }, 'Fallback'), el('td', {}, menu), el('td', {}, model),
+      el('td', {}, el('div', { className: 'key' }, state, keyField, go)));
   }
 
   async function showHint(cell, role, provider, model) {

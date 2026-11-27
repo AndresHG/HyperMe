@@ -61,6 +61,8 @@ pub struct View {
     keys: KeysView,
     /// Settings → Providers' table of roles (specs/96-provider-settings, R-6).
     roles: Vec<RoleView>,
+    /// Every provider dictation may send to, fallbacks included, for Privacy (R-29).
+    destinations: Vec<config::Destination>,
     setup: SetupView,
     version: &'static str,
 }
@@ -76,6 +78,17 @@ struct RoleView {
     reasoning_effort: Option<String>,
     /// The providers that can fill the role, recommended first (R-7).
     providers: Vec<ProviderView>,
+    /// The role's fallback, when one is set (R-24). `ready` is false when its key is missing,
+    /// which turns its row red in the Setup check (R-24a).
+    fallback: Option<FallbackView>,
+}
+
+#[derive(Debug, Serialize)]
+struct FallbackView {
+    provider: String,
+    name: String,
+    model: String,
+    ready: bool,
 }
 
 /// A provider in a role's menu. Never holds a key: only whether one is set.
@@ -193,7 +206,20 @@ fn roles_view(config: &Config, keys: &dyn SecretStore) -> Vec<RoleView> {
             ),
         };
         let recommended = Config::recommended(role).0;
+        let fallback = match role {
+            Role::Cleanup => config.cleanup.fallback.as_ref(),
+            Role::Speech => config.speech.fallback.as_ref(),
+        }
+        .map(|f| FallbackView {
+            provider: f.provider.clone(),
+            name: config
+                .provider(&f.provider)
+                .map_or_else(|| f.provider.clone(), |p| p.name.clone()),
+            model: f.model.clone(),
+            ready: any::fallback_ready(config, role, keys).unwrap_or(false),
+        });
         RoleView {
+            fallback,
             role: role.section(),
             label,
             provider: provider.clone(),
@@ -206,7 +232,7 @@ fn roles_view(config: &Config, keys: &dyn SecretStore) -> Vec<RoleView> {
                     name: entry.name.clone(),
                     recommended: id == recommended,
                     key_required: entry.key_required,
-                    has_key: matches!(keys.get(id), Ok(Some(_))),
+                    has_key: matches!(keys.get(config.key_account(id)), Ok(Some(_))),
                     has_key_page: entry.key_url.is_some(),
                     key_note: entry.key_note.clone(),
                     models: entry
@@ -233,15 +259,21 @@ pub fn settings_view(app: AppHandle) -> View {
     let path = config_path(&app);
     let loaded = load(&path);
     let keys = KeychainStore::new();
-    let has_key =
-        |provider: Option<&str>| provider.is_some_and(|p| matches!(keys.get(p), Ok(Some(_))));
     let config = loaded.as_ref().ok();
+    // A provider that shares another's key (D-2) reads that one.
+    let has_key = |provider: Option<&str>| {
+        provider.is_some_and(|p| {
+            let account = config.map_or(p, |c| c.key_account(p));
+            matches!(keys.get(account), Ok(Some(_)))
+        })
+    };
     View {
         keys: KeysView {
             speech: has_key(config.map(|c| c.speech.provider.as_str())),
             cleanup: has_key(config.map(|c| c.cleanup.provider.as_str())),
         },
         roles: config.map_or_else(Vec::new, |c| roles_view(c, &keys)),
+        destinations: config.map_or_else(Vec::new, Config::destinations),
         config: config.map(config_view),
         config_error: loaded.err(),
         config_path: path.display().to_string(),
@@ -353,6 +385,56 @@ pub fn provider_choose(
     })?;
     use_new_providers(&app);
     Ok("saved")
+}
+
+/// Sets a role's fallback (R-24a): tests the provider and model first, with the key it has,
+/// and saves only when Test passes. Returns the time Test took in ms.
+#[tauri::command]
+pub async fn fallback_set(
+    app: AppHandle,
+    role: String,
+    provider: String,
+    model: String,
+) -> Result<u64, String> {
+    let role = role_named(&role)?;
+    let path = config_path(&app);
+    let text = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let candidate =
+        config::set_fallback(&text, role, Some((&provider, &model))).map_err(|e| e.to_string())?;
+    let config = Config::parse(&candidate, &path).map_err(|e| e.to_string())?;
+    let keys = KeychainStore::new();
+    let start = Instant::now();
+    match role {
+        Role::Cleanup => any::cleanup_fallback(&config, &keys)
+            .map_err(|e| e.message)?
+            .check()
+            .await
+            .map_err(|e| e.message)?,
+        Role::Speech => {
+            // As Test does for speech: a session with the model opens, and no audio is sent.
+            let session = any::speech_fallback(&config, &keys)
+                .map_err(|e| e.message)?
+                .open()
+                .await
+                .map_err(|e| e.message)?;
+            drop(session);
+        }
+    }
+    let ms = start.elapsed().as_millis() as u64;
+    rewrite_config(&app, |text| {
+        config::set_fallback(text, role, Some((&provider, &model)))
+    })?;
+    use_new_providers(&app);
+    Ok(ms)
+}
+
+/// Removes a role's fallback.
+#[tauri::command]
+pub fn fallback_clear(app: AppHandle, role: String) -> Result<(), String> {
+    let role = role_named(&role)?;
+    rewrite_config(&app, |text| config::set_fallback(text, role, None))?;
+    use_new_providers(&app);
+    Ok(())
 }
 
 /// "Reset to recommended": every role back to the recommended pair; keys stay (R-10).
@@ -583,7 +665,13 @@ pub fn key_set(
     if config.provider(&provider).is_none() {
         return Err(format!("{provider} is not in the provider catalogue"));
     }
-    save_key(&app, &KeychainStore::new(), &provider, &key)?;
+    // One key per provider (D-2): OpenAI speech saves the OpenAI key.
+    save_key(
+        &app,
+        &KeychainStore::new(),
+        config.key_account(&provider),
+        &key,
+    )?;
     // Another key may offer other models.
     model_cache()
         .lock()

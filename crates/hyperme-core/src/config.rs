@@ -73,23 +73,30 @@ pub enum Protocol {
     SpeechmaticsRt,
     /// An OpenAI-compatible `/chat/completions` API.
     OpenaiChat,
+    /// OpenAI's Realtime API in a transcription session (slice 8).
+    OpenaiRealtime,
 }
 
 impl Protocol {
-    pub const ALL: [Protocol; 2] = [Protocol::SpeechmaticsRt, Protocol::OpenaiChat];
+    pub const ALL: [Protocol; 3] = [
+        Protocol::SpeechmaticsRt,
+        Protocol::OpenaiChat,
+        Protocol::OpenaiRealtime,
+    ];
 
     /// The name written in the catalogue.
     pub fn name(self) -> &'static str {
         match self {
             Protocol::SpeechmaticsRt => "speechmatics-rt",
             Protocol::OpenaiChat => "openai-chat",
+            Protocol::OpenaiRealtime => "openai-realtime",
         }
     }
 
     /// The roles a client of this protocol can fill.
     pub fn roles(self) -> &'static [Role] {
         match self {
-            Protocol::SpeechmaticsRt => &[Role::Speech],
+            Protocol::SpeechmaticsRt | Protocol::OpenaiRealtime => &[Role::Speech],
             Protocol::OpenaiChat => &[Role::Cleanup],
         }
     }
@@ -97,14 +104,14 @@ impl Protocol {
     /// The URL schemes its endpoint may use.
     fn schemes(self) -> &'static [&'static str] {
         match self {
-            Protocol::SpeechmaticsRt => &["wss", "ws"],
+            Protocol::SpeechmaticsRt | Protocol::OpenaiRealtime => &["wss", "ws"],
             Protocol::OpenaiChat => &["https", "http"],
         }
     }
 }
 
 /// One job a model does (spec.md, "Requirements"). Answers and meeting cleanup join later.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Role {
     Speech,
@@ -162,6 +169,10 @@ pub struct ProviderEntry {
     /// False for a server that needs no key, such as one on this Mac (R-14).
     #[serde(default = "yes")]
     pub key_required: bool,
+    /// Another catalogue entry whose key this one uses: one key per provider, whatever the
+    /// protocol (D-2). OpenAI speech and OpenAI cleanup share the OpenAI key.
+    #[serde(default)]
+    pub key_from: Option<String>,
     /// The key can list the models it offers (R-15).
     #[serde(default)]
     pub list_models: bool,
@@ -308,6 +319,10 @@ pub struct Speech {
     /// From the catalogue unless an older file sets it.
     #[serde(default)]
     free_credit_usd: Option<f64>,
+    /// Opened when the main provider fails (R-25, R-26). Settings saves it only after its Test
+    /// passes (R-24a).
+    #[serde(default)]
+    pub fallback: Option<FallbackChoice>,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -350,6 +365,31 @@ pub struct Cleanup {
     estimate_input_tokens: Option<f64>,
     #[serde(default)]
     estimate_output_tokens: Option<f64>,
+    /// Tried when the main provider fails before the deadline (R-24). Settings saves it only
+    /// after its Test passes (R-24a).
+    #[serde(default)]
+    pub fallback: Option<FallbackChoice>,
+}
+
+/// One provider dictation may send to (R-29), for the Privacy section.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct Destination {
+    pub role: Role,
+    /// As people write it: "Speechmatics".
+    pub name: String,
+    pub model: String,
+    /// The main provider's name, when this is its fallback.
+    pub fallback_for: Option<String>,
+    /// A server on this Mac: nothing leaves it.
+    pub on_this_mac: bool,
+}
+
+/// A role's fallback: `fallback = { provider = "openai", model = "gpt-6-luna" }` (R-3).
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct FallbackChoice {
+    pub provider: String,
+    pub model: String,
 }
 
 /// The default file, for keys an older file leaves out.
@@ -760,9 +800,102 @@ impl Config {
         Ok(config)
     }
 
+    /// The cleanup section for the fallback, when one is set (R-24): the main one's prompt,
+    /// level and deadline, with the fallback's provider, model and endpoint, and the fastest
+    /// reasoning effort the catalogue lists for the model ("off" when it lists none).
+    pub fn cleanup_fallback(&self) -> Option<Cleanup> {
+        let f = self.cleanup.fallback.as_ref()?;
+        let entry = self.provider(&f.provider)?;
+        let model = self.catalogue_model(&f.provider, &f.model);
+        Some(Cleanup {
+            provider: f.provider.clone(),
+            model: f.model.clone(),
+            endpoint: entry.endpoint.clone(),
+            reasoning_effort: model
+                .reasoning_effort
+                .first()
+                .map_or_else(|| "off".to_owned(), Clone::clone),
+            key_url: entry.key_url.clone(),
+            price_input_per_million_usd: None,
+            price_output_per_million_usd: None,
+            fallback: None,
+            ..self.cleanup.clone()
+        })
+    }
+
+    /// The speech section for the fallback, when one is set (R-25): its provider, model and
+    /// catalogue endpoint.
+    pub fn speech_fallback(&self) -> Option<Speech> {
+        let f = self.speech.fallback.as_ref()?;
+        let entry = self.provider(&f.provider)?;
+        Some(Speech {
+            provider: f.provider.clone(),
+            model: f.model.clone(),
+            endpoint: entry.endpoint.clone(),
+            key_url: entry.key_url.clone(),
+            price_per_hour_usd: None,
+            free_credit_usd: entry.free_credit_usd,
+            fallback: None,
+        })
+    }
+
+    /// Every provider dictation can send to, fallbacks included, in the order the Privacy
+    /// section lists them (R-29).
+    pub fn destinations(&self) -> Vec<Destination> {
+        let name = |id: &str| {
+            self.provider(id)
+                .map_or_else(|| id.to_owned(), |p| p.name.clone())
+        };
+        let mut out = Vec::new();
+        let roles = [
+            (
+                Role::Speech,
+                &self.speech.provider,
+                &self.speech.model,
+                &self.speech.endpoint,
+                self.speech_fallback()
+                    .map(|s| (s.provider, s.model, s.endpoint)),
+            ),
+            (
+                Role::Cleanup,
+                &self.cleanup.provider,
+                &self.cleanup.model,
+                &self.cleanup.endpoint,
+                self.cleanup_fallback()
+                    .map(|c| (c.provider, c.model, c.endpoint)),
+            ),
+        ];
+        for (role, provider, model, endpoint, fallback) in roles {
+            out.push(Destination {
+                role,
+                name: name(provider),
+                model: model.clone(),
+                fallback_for: None,
+                on_this_mac: on_this_mac(endpoint),
+            });
+            if let Some((f_provider, f_model, f_endpoint)) = fallback {
+                out.push(Destination {
+                    role,
+                    name: name(&f_provider),
+                    model: f_model,
+                    fallback_for: Some(name(provider)),
+                    on_this_mac: on_this_mac(&f_endpoint),
+                });
+            }
+        }
+        out
+    }
+
     /// A provider in the catalogue.
     pub fn provider(&self, id: &str) -> Option<&ProviderEntry> {
         self.providers.get(id)
+    }
+
+    /// The keychain entry that holds `provider`'s key: its own, or the one it shares (D-2).
+    pub fn key_account<'a>(&'a self, provider: &'a str) -> &'a str {
+        self.provider(provider)
+            .and_then(|p| p.key_from.as_deref())
+            .unwrap_or(provider)
     }
 
     /// The providers that can fill `role`, in menu order: the recommended one first, then by
@@ -906,9 +1039,24 @@ impl Config {
             600,
         )?;
 
+        for (id, entry) in &self.providers {
+            if let Some(from) = &entry.key_from
+                && (from == id || !self.providers.contains_key(from))
+            {
+                invalid(
+                    &format!("providers.{id}.key_from"),
+                    format!("is {from:?}: it must name another provider in the catalogue"),
+                )?;
+            }
+        }
+
         let s = &self.speech;
         let speech = self.role_provider(Role::Speech, "speech.provider", &s.provider, path)?;
         named("speech.model", &s.model)?;
+        if let Some(f) = &s.fallback {
+            self.role_provider(Role::Speech, "speech.fallback", &f.provider, path)?;
+            named("speech.fallback", &f.model)?;
+        }
         if !s.endpoint.is_empty() {
             scheme("speech.endpoint", &s.endpoint, speech.protocol.schemes())?;
         }
@@ -916,6 +1064,10 @@ impl Config {
         let c = &self.cleanup;
         let cleanup = self.role_provider(Role::Cleanup, "cleanup.provider", &c.provider, path)?;
         named("cleanup.model", &c.model)?;
+        if let Some(f) = &c.fallback {
+            self.role_provider(Role::Cleanup, "cleanup.fallback", &f.provider, path)?;
+            named("cleanup.fallback", &f.model)?;
+        }
         if !c.endpoint.is_empty() {
             scheme("cleanup.endpoint", &c.endpoint, cleanup.protocol.schemes())?;
         }
@@ -1399,6 +1551,47 @@ fn choose(
             (None, None) => "off".to_owned(),
         };
         put(&mut lines, range, "reasoning_effort", quoted(&chosen));
+    }
+    let out = joined(&lines, text);
+    Config::parse(&out, path)?;
+    Ok(out)
+}
+
+/// Sets or clears a role's fallback (R-24a: Settings calls this only after the fallback's Test
+/// passed). Keeps every other line; the result is validated, so a provider that cannot fill
+/// the role is refused and nothing changes.
+pub fn set_fallback(
+    text: &str,
+    role: Role,
+    choice: Option<(&str, &str)>,
+) -> Result<String, ConfigError> {
+    let path = Path::new("config.toml");
+    let section = role.section();
+    let mut lines: Vec<String> = text.lines().map(str::to_owned).collect();
+    let range = section_body(&lines, section).ok_or_else(|| ConfigError::Parse {
+        path: path.to_owned(),
+        message: format!("there is no [{section}] section"),
+    })?;
+    match choice {
+        Some((provider, model)) => put(
+            &mut lines,
+            range,
+            "fallback",
+            format!(
+                "{{ provider = {}, model = {} }}",
+                quoted(provider),
+                quoted(model)
+            ),
+        ),
+        None => {
+            let (start, end) = range;
+            let kept: Vec<String> = lines[start..end]
+                .iter()
+                .filter(|l| !sets(l, "fallback"))
+                .cloned()
+                .collect();
+            lines.splice(start..end, kept);
+        }
     }
     let out = joined(&lines, text);
     Config::parse(&out, path)?;

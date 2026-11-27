@@ -9,5 +9,7 @@ pub mod local;
 pub mod mcp;
 pub mod models;
 pub mod oauth;
+pub mod openai_rt;
 pub mod setup;
 pub mod speechmatics;
+mod ws;

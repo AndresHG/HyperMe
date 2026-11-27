@@ -26,6 +26,30 @@ now, beside Phase 1; Part B waits for Phase 2 (owner, 26 November 2026, P-1 in [
 | 11 | Privacy section lists every provider set, fallbacks included; request-counting test | AC-14 | S | 3, 9 |
 | 12 | Speed check: flowbench replay and timing log with the recommended pair after slices 2 and 10, written to `docs/results/` | AC-15 | S | 2, 10 |
 
+## Progress
+
+- Slices 1 to 7: merged.
+- Slice 8: OpenAI streaming speech is the catalogue entry `openai-speech` (protocol
+  `openai-realtime`, model `gpt-live-transcribe`), sharing the OpenAI key through `key_from`
+  (D-2). `hyperme-quality run` now builds speech through `any::speech`, so a config naming
+  `openai-speech` replays through it. Its measurement on the owner's samples waits for an OpenAI
+  key in the keychain (none on 27 November 2026).
+- Slice 9: `[cleanup] fallback = { provider, model }`, written by Settings only after its Test
+  passes. `hyperme_core::fallback::Fallback` wraps any cleanup: an error before the first token
+  goes to the fallback inside the engine's deadline. The pill says "Pasted · via <name>"; the
+  trace root records `cleanup_via` and the timing line names the fallback. A fallback with no
+  key is not built and shows red in the Setup check.
+- Slice 10: `[speech] fallback`, the same Settings row. `Fallback<Arc<AnySpeech>>` opens the
+  fallback when the main session cannot open (the engine's open buffer replays into it), and on
+  a drop mid-dictation keeps every frame and sends it to the fallback on release. The frames
+  are held only while a fallback is set. `Transcript.via` carries the name to the pill and the
+  timing line. `FallbackStreak` in the app shows one alert card after three in a row, linking
+  to `hyperme://settings/providers/<role>`.
+- Slice 11: `Config::destinations()` lists every provider set, fallbacks included, and Settings
+  → Privacy shows each with what it receives ("Stays on this Mac" for a local server). A test
+  with counting servers shows choosing, saving and rebuilding providers opens no connection;
+  Test is the first request.
+
 ## Later, one pull request each
 
 - A further speech provider (Soniox, AssemblyAI, ElevenLabs), each only after it gets Spanish and

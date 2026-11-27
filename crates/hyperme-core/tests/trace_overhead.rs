@@ -52,7 +52,11 @@ async fn dictation(h: &mut Harness) -> u64 {
     tokio::time::sleep(Duration::from_millis(2)).await;
     let released = Instant::now();
     h.send(Event::KeyUp).await;
-    h.until(&Status::Done { raw: false }).await;
+    h.until(&Status::Done {
+        raw: false,
+        via: None,
+    })
+    .await;
     let took = released.elapsed().as_micros() as u64;
     h.until(&Status::Idle).await;
     took

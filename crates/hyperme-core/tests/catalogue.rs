@@ -294,3 +294,34 @@ fn a_hand_added_entry_may_carry_a_key_note() {
         Some("Ask IT for the key")
     );
 }
+
+/// Slice 8 (AC-11, speech half): OpenAI streaming speech is in the speech menu, after the
+/// recommended Speechmatics, and shares the one OpenAI key with OpenAI cleanup (D-2).
+#[test]
+fn openai_speech_is_offered_and_shares_the_openai_key() {
+    let config = Config::default();
+    let speech: Vec<&str> = config
+        .providers_for(Role::Speech)
+        .map(|(id, _)| id)
+        .collect();
+    assert_eq!(speech.first(), Some(&"speechmatics"));
+    assert!(speech.contains(&"openai-speech"), "{speech:?}");
+    let entry = config.provider("openai-speech").unwrap();
+    assert_eq!(entry.protocol, Protocol::OpenaiRealtime);
+    assert!(!entry.models.is_empty());
+    assert_eq!(config.key_account("openai-speech"), "openai");
+    assert_eq!(config.key_account("openai"), "openai");
+    assert_eq!(config.key_account("groq"), "groq");
+}
+
+/// A shared key must name another provider in the catalogue.
+#[test]
+fn key_from_must_name_a_provider_in_the_catalogue() {
+    let text = format!(
+        "{DEFAULT_CONFIG}\n[providers.mine]\nname = \"Mine\"\nprotocol = \"openai-chat\"\n\
+         endpoint = \"https://x.example.com/v1\"\nroles = [\"cleanup\"]\nkey_from = \"nobody\"\n"
+    );
+    let msg = parse(&text).unwrap_err().to_string();
+    assert!(msg.contains("providers.mine.key_from"), "{msg}");
+    assert!(msg.contains("nobody"), "{msg}");
+}

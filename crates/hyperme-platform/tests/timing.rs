@@ -33,6 +33,8 @@ fn line(total: u64, fallback: bool) -> TimingLine {
         language: Some("es".into()),
         words: 12,
         fallback,
+        speech_via: None,
+        cleanup_via: None,
     }
 }
 
@@ -126,4 +128,26 @@ fn own_median_counts_the_last_fifty_on_one_provider() {
     );
     assert_eq!(own_median(&text, "cleanup_provider", "anthropic", 50), None);
     assert_eq!(own_median("", "cleanup_provider", "groq", 50), None);
+}
+
+/// specs/96, AC-10: when a fallback cleaned the dictation, the line names it, not the main one.
+#[test]
+fn a_fallback_provider_is_named_on_its_line() {
+    let path = temp_file("via.tsv");
+    let mut log = FileTimingLog::with_clock(path.clone(), names(), || 1);
+    let mut via = line(600, false);
+    via.cleanup_via = Some(("openai".into(), "gpt-6-luna".into()));
+    via.speech_via = Some(("openai-speech".into(), "gpt-live-transcribe".into()));
+    log.record(&via);
+    let text = std::fs::read_to_string(&path).unwrap();
+    let cols: Vec<&str> = text.lines().nth(1).unwrap().split('\t').collect();
+    assert_eq!(
+        &cols[10..],
+        [
+            "openai-speech",
+            "gpt-live-transcribe",
+            "openai",
+            "gpt-6-luna"
+        ]
+    );
 }

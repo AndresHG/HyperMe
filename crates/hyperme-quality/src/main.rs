@@ -17,7 +17,6 @@ use hyperme_core::config::{CleanupLevel, Config};
 use hyperme_core::dictation::Settings;
 use hyperme_core::dictionary::Dictionary;
 use hyperme_providers::cleanup::{ChatCleanup, prompt_version};
-use hyperme_providers::speechmatics::Speechmatics;
 use hyperme_quality::replay::{Replayed, replay, replay_raw};
 use hyperme_quality::report::{gold_draft, markdown, summarise, table, texts};
 use hyperme_quality::set::{self, Lang};
@@ -159,6 +158,22 @@ fn key(provider: &str) -> Result<String, String> {
     })
 }
 
+/// Keys for `any::speech`: the environment first, then the keychain, through [`key`]. A
+/// provider that shares another's key (D-2) is looked up by that one's name.
+struct EnvOrKeychain<'a>(&'a Config);
+
+impl hyperme_core::secrets::SecretStore for EnvOrKeychain<'_> {
+    fn get(&self, provider: &str) -> Result<Option<String>, hyperme_core::secrets::SecretError> {
+        Ok(key(self.0.key_account(provider)).ok())
+    }
+    fn set(&self, _: &str, _: &str) -> Result<(), hyperme_core::secrets::SecretError> {
+        Err(hyperme_core::secrets::SecretError("read only".to_owned()))
+    }
+    fn delete(&self, _: &str) -> Result<(), hyperme_core::secrets::SecretError> {
+        Err(hyperme_core::secrets::SecretError("read only".to_owned()))
+    }
+}
+
 #[cfg(target_os = "macos")]
 fn keychain_key(provider: &str) -> Result<Option<String>, String> {
     use hyperme_core::secrets::SecretStore;
@@ -281,7 +296,10 @@ fn run(o: &Options) -> Result<(), String> {
             ))
         }
         None => {
-            let speech = Speechmatics::new(&config.speech, key(&config.speech.provider)?);
+            // The same path the app builds its speech provider with, so any speech protocol in
+            // the catalogue can be replayed (specs/96, slice 8).
+            let speech = hyperme_providers::any::speech(&config, &EnvOrKeychain(&config))
+                .map_err(|e| e.message)?;
             eprintln!(
                 "Replaying {} samples ({:.0} s of audio, in real time) from {}",
                 set.samples.len(),

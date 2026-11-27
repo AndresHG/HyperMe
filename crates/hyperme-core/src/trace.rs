@@ -119,6 +119,10 @@ pub const SCHEMA: &[(&str, &[(&str, Kind)])] = &[
             ("cleanup_provider", Kind::Name),
             ("cleanup_model", Kind::Name),
             ("cleanup_level", Kind::Name),
+            ("cleanup_via", Kind::Name),
+            ("cleanup_via_model", Kind::Name),
+            ("speech_via", Kind::Name),
+            ("speech_via_model", Kind::Name),
         ],
     ),
     (MIC_START, &[("no_audio", Kind::Bool)]),
@@ -467,6 +471,14 @@ impl TimingLine {
             language: root.name("language").map(str::to_owned),
             words: root.u64("words").unwrap_or(0) as usize,
             fallback: root.bool("fallback").unwrap_or(false),
+            speech_via: root
+                .name("speech_via")
+                .zip(root.name("speech_via_model"))
+                .map(|(p, m)| (p.to_owned(), m.to_owned())),
+            cleanup_via: root
+                .name("cleanup_via")
+                .zip(root.name("cleanup_via_model"))
+                .map(|(p, m)| (p.to_owned(), m.to_owned())),
         })
     }
 }
@@ -643,6 +655,18 @@ impl DictationTrace {
         self.insert = Some(tracing::info_span!(parent: &self.root, "insert"));
     }
 
+    /// A fallback speech provider transcribed the dictation (specs/96, R-27).
+    pub fn speech_via(&self, provider: &str, model: &str) {
+        self.root.record("speech_via", provider);
+        self.root.record("speech_via_model", model);
+    }
+
+    /// A fallback cleanup provider answered (specs/96, R-27).
+    pub fn cleanup_via(&self, provider: &str, model: &str) {
+        self.root.record("cleanup_via", provider);
+        self.root.record("cleanup_via_model", model);
+    }
+
     /// The paste or copy was sent.
     pub fn inserted(&mut self) {
         self.insert = None;
@@ -675,6 +699,10 @@ fn new_root() -> Span {
         language = tracing::field::Empty,
         words = tracing::field::Empty,
         fallback = tracing::field::Empty,
+        cleanup_via = tracing::field::Empty,
+        cleanup_via_model = tracing::field::Empty,
+        speech_via = tracing::field::Empty,
+        speech_via_model = tracing::field::Empty,
     )
 }
 
