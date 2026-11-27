@@ -599,10 +599,9 @@ async fn timing_on_writes_one_line_of_numbers_per_dictation() {
     speech.finish_delay = ms(300);
     let mut cleanup = FakeCleanup::new(&log, "Please send the quarterly numbers to the team.");
     cleanup.delay = ms(120);
-    let mut settings = settings();
-    settings.timing_log = true;
+    let settings = settings();
     let timing = FakeTiming::default();
-    let mut h = Harness::start_timed(&log, speech, cleanup, settings, timing.clone());
+    let mut h = Harness::start_timed(&log, speech, cleanup, settings, timing.clone(), true);
 
     h.send(Event::KeyDown).await;
     tokio::time::sleep(ms(40)).await;
@@ -634,13 +633,19 @@ async fn timing_on_writes_one_line_of_numbers_per_dictation() {
 #[tokio::test(start_paused = true)]
 async fn timing_marks_fallbacks_and_short_dictations() {
     let log = Log::new();
-    let mut settings = settings();
-    settings.timing_log = true;
+    let settings = settings();
     let timing = FakeTiming::default();
     let mut cleanup = FakeCleanup::new(&log, "never in time");
     cleanup.delay = ms(5000);
     let speech = FakeSpeech::new(&log, "this one is long enough to clean");
-    let mut h = Harness::start_timed(&log, speech, cleanup, settings.clone(), timing.clone());
+    let mut h = Harness::start_timed(
+        &log,
+        speech,
+        cleanup,
+        settings.clone(),
+        timing.clone(),
+        true,
+    );
     h.send(Event::KeyDown).await;
     tokio::time::sleep(ms(600)).await;
     h.send(Event::KeyUp).await;
@@ -658,6 +663,7 @@ async fn timing_marks_fallbacks_and_short_dictations() {
         FakeCleanup::new(&log, "x"),
         settings,
         timing.clone(),
+        true,
     );
     h.send(Event::KeyDown).await;
     tokio::time::sleep(ms(600)).await;
@@ -677,15 +683,14 @@ async fn timing_off_records_nothing() {
     let timing = FakeTiming::default();
     let speech = FakeSpeech::new(&log, "send the report today please team");
     let cleanup = FakeCleanup::new(&log, "Send the report today, please, team.");
-    let mut h = Harness::start_timed(&log, speech, cleanup, settings(), timing.clone());
+    let mut h = Harness::start_timed(&log, speech, cleanup, settings(), timing.clone(), false);
     h.send(Event::KeyDown).await;
     tokio::time::sleep(ms(600)).await;
     h.send(Event::KeyUp).await;
     h.until(&Status::Done { raw: false }).await;
     assert!(timing.lines.lock().unwrap().is_empty());
 
-    let mut on = settings();
-    on.timing_log = true;
+    let on = settings();
     let log = Log::new();
     let mut h = Harness::start_timed(
         &log,
@@ -693,6 +698,7 @@ async fn timing_off_records_nothing() {
         FakeCleanup::new(&log, "x"),
         on,
         timing.clone(),
+        true,
     );
     h.send(Event::KeyDown).await;
     h.send(Event::Esc).await;

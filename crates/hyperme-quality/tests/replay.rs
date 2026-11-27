@@ -103,8 +103,6 @@ fn settings() -> Settings {
         short_words: 3,
         cleanup_deadline: Duration::from_millis(1500),
         sounds: false,
-        // The replay turns the timing log on itself.
-        timing_log: false,
         dictionary: Default::default(),
     }
 }

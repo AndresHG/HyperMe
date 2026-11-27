@@ -15,10 +15,12 @@ use std::time::Duration;
 
 use hyperme_core::audio::frame_samples;
 use hyperme_core::dictation::{Engine, Event, Parts, Settings, Status, fixed};
+use hyperme_core::trace::{TimingSink, TraceSink, WithSubscriber, subscriber};
 use hyperme_core::traits::{
     CleanupProvider, DictationId, Error, ErrorKind, FocusInfo, History, Inserter, LiveSession,
     Microphone, Sound, Sounds, SpeechProvider, TimingLine, TimingLog, Transcript,
 };
+use std::sync::atomic::AtomicBool;
 use tokio::sync::mpsc;
 use tokio::time::{MissedTickBehavior, interval, sleep, timeout};
 
@@ -235,6 +237,7 @@ impl Sounds for NoSounds {
     fn play(&self, _sound: Sound) {}
 }
 
+/// Keeps the timing line of the last dictation, from its trace (spec 182, R-12).
 struct KeepTiming(Shared);
 
 impl TimingLog for KeepTiming {
@@ -321,13 +324,15 @@ where
         focus: NoFocus,
         history: NoHistory,
         sounds: NoSounds,
-        timing: KeepTiming(seen.clone()),
     };
     let settings = Settings {
         sounds: false,
-        timing_log: true,
         ..settings
     };
+    let timing: Arc<dyn TraceSink> = Arc::new(TimingSink::new(
+        Arc::new(AtomicBool::new(true)),
+        KeepTiming(seen.clone()),
+    ));
     let (events, events_rx) = mpsc::channel(1024);
     let (status_tx, mut statuses) = mpsc::unbounded_channel();
     let engine = Engine::new(parts, settings, status_tx);
@@ -383,7 +388,10 @@ where
         drop(events);
         out
     };
-    let ((), out) = tokio::join!(engine.run(events_rx), drive);
+    let run = engine
+        .run(events_rx)
+        .with_subscriber(subscriber(vec![timing]));
+    let ((), out) = tokio::join!(run, drive);
     out
 }
 

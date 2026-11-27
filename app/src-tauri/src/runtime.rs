@@ -3,6 +3,7 @@
 //! the pill and the menu.
 
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
@@ -11,6 +12,7 @@ use hyperme_core::dictation::{
     DictionaryUpdates, Engine, Event, Parts, Providers, Settings, Status,
 };
 use hyperme_core::dictionary::Dictionary;
+use hyperme_core::trace::{self, TimingSink, TraceSink};
 use hyperme_core::traits::{
     DictationId, Error, ErrorKind, History, Inserter, TimingLine, TimingLog,
 };
@@ -50,6 +52,8 @@ struct Shared {
     providers: Option<watch::Sender<Arc<Providers<AnySpeech, AnyCleanup>>>>,
     /// The timing log, whose provider and model names follow a switch.
     timing: Arc<Mutex<FileTimingLog>>,
+    /// Timing is on in the config (R-30); the trace layer's timing sink reads it.
+    timing_on: Arc<AtomicBool>,
     /// A dictation or retry is in progress: from its first status until Idle.
     busy: bool,
     /// The dictation Home asked to retry, while that retry runs (spec 98, R-16).
@@ -96,6 +100,15 @@ pub fn pill_origin(app: &AppHandle, width: f64) -> (f64, f64) {
 /// Starts the dictation, or says in the menu why it cannot.
 pub fn start(app: &AppHandle, menu: TrayMenu) {
     let history = Arc::new(Mutex::new(HistoryInner::default()));
+    // Spec 182: every dictation's spans go to the trace layer; its timing sink writes the timing
+    // log (R-30) while timing is on. Nothing here leaves the Mac.
+    let timing = Arc::new(Mutex::new(timing_log(&Config::default())));
+    let timing_on = Arc::new(AtomicBool::new(false));
+    let sinks: Vec<Arc<dyn TraceSink>> = vec![Arc::new(TimingSink::new(
+        timing_on.clone(),
+        SharedTiming(timing.clone()),
+    ))];
+    trace::install(sinks);
     app.manage::<State>(Mutex::new(Shared {
         events: None,
         view: None,
@@ -106,7 +119,8 @@ pub fn start(app: &AppHandle, menu: TrayMenu) {
             .map_or(true, |config| config.dictation.show_while_idle),
         _hotkey: None,
         providers: None,
-        timing: Arc::new(Mutex::new(timing_log(&Config::default()))),
+        timing,
+        timing_on,
         busy: false,
         home_retry: None,
         history_enabled: Config::load_or_create(&data_dir(app).join("config.toml"))
@@ -164,8 +178,12 @@ fn wire(app: &AppHandle, history: Arc<Mutex<HistoryInner>>) -> Result<(), String
         &dictionary,
     );
     let (switch, providers) = watch::channel(Arc::new(providers));
-    let timing = lock(app).timing.clone();
+    let (timing, timing_on) = {
+        let shared = lock(app);
+        (shared.timing.clone(), shared.timing_on.clone())
+    };
     *timing.lock().unwrap_or_else(PoisonError::into_inner) = timing_log(&config);
+    timing_on.store(config.timing.log, Ordering::Relaxed);
     open_history(&history, &dir, &config);
 
     let (events, events_rx) = mpsc::channel(1024);
@@ -180,7 +198,6 @@ fn wire(app: &AppHandle, history: Arc<Mutex<HistoryInner>>) -> Result<(), String
         focus: MacFocus,
         history: SharedHistory(history),
         sounds: SystemSounds,
-        timing: SharedTiming(timing),
     };
     let (status_tx, status_rx) = mpsc::unbounded_channel();
     let settings = Settings {
@@ -215,8 +232,12 @@ pub fn reload_providers(app: &AppHandle) -> Result<(), String> {
         any::resolve(&config, &KeychainStore::new()).map_err(|e| e.message)?,
         &dictionary,
     );
-    let timing = lock(app).timing.clone();
+    let (timing, timing_on) = {
+        let shared = lock(app);
+        (shared.timing.clone(), shared.timing_on.clone())
+    };
     *timing.lock().unwrap_or_else(PoisonError::into_inner) = timing_log(&config);
+    timing_on.store(config.timing.log, Ordering::Relaxed);
     switch.send_replace(Arc::new(providers));
     Ok(())
 }
