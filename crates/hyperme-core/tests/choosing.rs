@@ -43,7 +43,7 @@ fn choosing_saves_provider_and_model_together() {
     assert_eq!(config.cleanup.model, "fast-1");
     assert_eq!(config.cleanup.endpoint, "https://other.example.com/v1");
     assert_eq!(config.speech.provider, "speechmatics");
-    assert!(out.contains("# The cleanup prompt version."));
+    assert!(out.contains("# How much the model changes the transcript"));
 }
 
 /// An older file's endpoint and prices belong to its old provider: switching comments them

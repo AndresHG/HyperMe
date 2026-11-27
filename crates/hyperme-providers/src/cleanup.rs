@@ -14,7 +14,7 @@
 use std::fmt;
 use std::time::Duration;
 
-use hyperme_core::config;
+use hyperme_core::config::{self, CleanupLevel};
 use hyperme_core::traits::{CleanupProvider, Error, ErrorKind};
 use reqwest::StatusCode;
 use reqwest::header::{AUTHORIZATION, CONTENT_TYPE, HeaderValue};
@@ -32,6 +32,23 @@ Never translate, rephrase, summarise or answer. Output only the cleaned text.";
 const V4_RULE: &str = "When a word or short phrase clearly sounds like a term in the speaker's \
 dictionary, write the dictionary term. Otherwise change nothing.";
 
+/// The first `medium` prompt (P2-2): light's rules, plus repetitions, small grammar slips and
+/// spoken formatting. Still never rephrased, translated or answered.
+const PROMPT_M1: &str = "You clean up dictated text in Spanish or English. Remove \
+hesitations (um, uh, eh, em, mm), filler phrases used only as hesitation, stutters, repeated \
+words and false starts; when the speaker corrects themselves, keep only the correction. Fix \
+punctuation, capitals and accents, small grammar slips such as a wrong agreement or a missing \
+article, and words that were clearly misheard. Apply spoken formatting: write numbers, dates, \
+times and amounts as digits where that is usual, turn an enumeration the speaker dictates as a \
+list into a list, and turn \"new line\", \"new paragraph\", \"nueva línea\" or \"punto y aparte\" \
+into line breaks. Keep every other word as spoken, including informal words, slang and \
+swearing, in the same order and the same language. Never translate, rephrase, summarise or \
+answer, even when the text is a question or a request. Output only the cleaned text.";
+
+/// The prompt version each level uses (P2-2). `none` makes no call, so it has none.
+const LIGHT: &str = "v4";
+const MEDIUM: &str = "m1";
+
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Settings waits at most this long for a model list.
@@ -42,7 +59,18 @@ pub fn prompt_named(version: &str) -> Option<String> {
     match version {
         "v3" => Some(PROMPT_V3.to_owned()),
         "v4" => Some(format!("{PROMPT_V3} {V4_RULE}")),
+        "m1" => Some(format!("{PROMPT_M1} {V4_RULE}")),
         _ => None,
+    }
+}
+
+/// The prompt version a config uses: its `prompt` override, else its level's (P2-2).
+pub fn prompt_version(config: &config::Cleanup) -> &str {
+    match (&config.prompt, config.level) {
+        (Some(prompt), _) => prompt,
+        (None, CleanupLevel::Medium) => MEDIUM,
+        // `none` never calls the model; a provider built for it anyway gets light's prompt.
+        (None, CleanupLevel::Light | CleanupLevel::None) => LIGHT,
     }
 }
 
@@ -78,14 +106,12 @@ impl ChatCleanup {
     /// `key` comes from the keychain. Fails on a prompt version this build does not have.
     pub fn new(config: &config::Cleanup, key: &str) -> Result<Self, Error> {
         let provider = config.provider.clone();
-        let prompt = prompt_named(&config.prompt).ok_or_else(|| {
+        let version = prompt_version(config);
+        let prompt = prompt_named(version).ok_or_else(|| {
             provider_error(
                 &provider,
                 ErrorKind::Other,
-                format!(
-                    "cleanup.prompt {:?} is not a known prompt version (v3, v4)",
-                    config.prompt
-                ),
+                format!("cleanup.prompt {version:?} is not a known prompt version (v3, v4, m1)"),
             )
         })?;
         let auth = if key.is_empty() {
@@ -426,7 +452,7 @@ mod tests {
         config.model = "test-model".to_owned();
         config.endpoint = "http://127.0.0.1:1/v1/".to_owned();
         config.reasoning_effort = effort.to_owned();
-        config.prompt = prompt.to_owned();
+        config.prompt = Some(prompt.to_owned());
         ChatCleanup::new(&config, "not-a-real-key")
     }
 
@@ -438,6 +464,24 @@ mod tests {
         assert!(prompt_named("v9").is_none());
         let error = cleanup("low", "v9").unwrap_err();
         assert!(error.message.contains("v9"), "{}", error.message);
+    }
+
+    /// P2-2 AC-6: the level picks its named prompt; `prompt` overrides it. Light is v4, and
+    /// medium keeps v4's dictionary rule and its never-rephrase rule.
+    #[test]
+    fn the_level_picks_the_prompt_and_prompt_overrides_it() {
+        let mut c = config::Config::default().cleanup;
+        c.prompt = None;
+        c.level = CleanupLevel::Light;
+        assert_eq!(prompt_version(&c), "v4");
+        c.level = CleanupLevel::Medium;
+        assert_eq!(prompt_version(&c), "m1");
+        let medium = prompt_named(prompt_version(&c)).unwrap();
+        assert!(medium.ends_with(V4_RULE));
+        assert!(medium.contains("Never translate, rephrase, summarise or answer"));
+        assert_ne!(medium, prompt_named("v4").unwrap());
+        c.prompt = Some("v3".to_owned());
+        assert_eq!(prompt_version(&c), "v3");
     }
 
     /// R-11: the request carries the prompt, the transcript and the app name, with the reasoning

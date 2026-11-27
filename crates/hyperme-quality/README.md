@@ -46,7 +46,8 @@ and `GROQ_API_KEY` (the provider name in capitals, then `_API_KEY`) take precede
 | Option | |
 | --- | --- |
 | `--only es-01,en-02` | Only these samples |
-| `--prompt v3` | Another cleanup prompt than the config's |
+| `--level medium` | Another cleanup level than the config's: `none`, `light` or `medium`, each with its own prompt |
+| `--prompt v3` | A named prompt version instead of the level's (`v3`, `v4`, `m1` ...), for experiments |
 | `--deadline-ms 1500` | Another cleanup deadline |
 | `--names FILE` | A names list other than the set's `names.txt` |
 | `--dictionary FILE` | A dictionary in the text format (`Zentrix: zen trix`), applied as in the app: substituted in the raw transcript and named in the cleanup prompt. Without it, no dictionary: the app's own dictionary store is not read |

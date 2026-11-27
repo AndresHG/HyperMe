@@ -13,10 +13,10 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use hyperme_core::config::Config;
+use hyperme_core::config::{CleanupLevel, Config};
 use hyperme_core::dictation::Settings;
 use hyperme_core::dictionary::Dictionary;
-use hyperme_providers::cleanup::ChatCleanup;
+use hyperme_providers::cleanup::{ChatCleanup, prompt_version};
 use hyperme_providers::speechmatics::Speechmatics;
 use hyperme_quality::replay::{Replayed, replay, replay_raw};
 use hyperme_quality::report::{gold_draft, markdown, summarise, table, texts};
@@ -25,7 +25,7 @@ use hyperme_quality::set::{self, Lang};
 const USAGE: &str = "\
 usage:
   hyperme-quality run --set DIR [--names FILE] [--dictionary FILE] [--only es-01,en-02]
-                      [--prompt v4] [--deadline-ms N] [--config FILE] [--network TEXT]
+                      [--level light] [--prompt v4] [--deadline-ms N] [--config FILE] [--network TEXT]
                       [--reuse-raw FILE [--pace-ms N]] [--out FILE | --no-results]
   hyperme-quality import --set DIR [--history DIR] [--days N]
 
@@ -57,6 +57,7 @@ struct Options {
     pace_ms: Option<u64>,
     only: Vec<String>,
     prompt: Option<String>,
+    level: Option<CleanupLevel>,
     deadline_ms: Option<u64>,
     config: Option<PathBuf>,
     network: Option<String>,
@@ -90,6 +91,18 @@ impl Options {
                     o.only = value()?.split(',').map(|s| s.trim().to_owned()).collect();
                 }
                 "--prompt" => o.prompt = Some(value()?),
+                "--level" => {
+                    o.level = Some(match value()?.as_str() {
+                        "none" => CleanupLevel::None,
+                        "light" => CleanupLevel::Light,
+                        "medium" => CleanupLevel::Medium,
+                        other => {
+                            return Err(format!(
+                                "--level takes none, light or medium, not {other:?}"
+                            ));
+                        }
+                    });
+                }
                 "--deadline-ms" => o.deadline_ms = Some(number(value()?)?),
                 "--config" => o.config = Some(value()?.into()),
                 "--network" => o.network = Some(value()?),
@@ -211,8 +224,13 @@ fn run(o: &Options) -> Result<(), String> {
     set::check_location(dir)?;
     let set = set::load(dir, &o.only, o.names.as_deref())?;
     let (mut config, config_from) = config(o.config.as_deref())?;
+    if let Some(level) = o.level {
+        config.cleanup.level = level;
+        // A level on the command line means its own prompt, not the config's override.
+        config.cleanup.prompt = None;
+    }
     if let Some(prompt) = &o.prompt {
-        config.cleanup.prompt.clone_from(prompt);
+        config.cleanup.prompt = Some(prompt.clone());
     }
     if let Some(ms) = o.deadline_ms {
         config.cleanup.deadline_ms = ms;
@@ -319,8 +337,17 @@ fn run(o: &Options) -> Result<(), String> {
         (
             "Cleanup",
             format!(
-                "{} `{}`, reasoning {}, prompt `{}`, deadline {} ms",
-                c.provider, c.model, c.reasoning_effort, c.prompt, c.deadline_ms
+                "{} `{}`, reasoning {}, level {}, prompt `{}`, deadline {} ms",
+                c.provider,
+                c.model,
+                c.reasoning_effort,
+                level_name(c.level),
+                if c.level == CleanupLevel::None && c.prompt.is_none() {
+                    "none: no model call"
+                } else {
+                    prompt_version(c)
+                },
+                c.deadline_ms
             ),
         ),
         (
@@ -425,6 +452,14 @@ fn run(o: &Options) -> Result<(), String> {
         None => eprintln!("No docs/results/ here: pass --out to write the results file."),
     }
     Ok(())
+}
+
+fn level_name(level: CleanupLevel) -> &'static str {
+    match level {
+        CleanupLevel::None => "none",
+        CleanupLevel::Light => "light",
+        CleanupLevel::Medium => "medium",
+    }
 }
 
 /// Where the config came from, without the user's home folder.

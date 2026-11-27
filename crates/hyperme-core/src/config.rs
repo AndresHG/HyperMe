@@ -315,8 +315,15 @@ pub struct Cleanup {
     pub endpoint: String,
     /// Sent as `reasoning_effort`; `off` leaves the field out.
     pub reasoning_effort: String,
-    /// The cleanup prompt version.
-    pub prompt: String,
+    /// How much the model may change the transcript (P2-2). Optional: an older file takes the
+    /// default file's level.
+    #[serde(default = "default_cleanup_level")]
+    pub level: CleanupLevel,
+    /// A named prompt version that replaces the level's prompt, for experiments. A file written
+    /// before levels has `prompt = "v4"`, the old default, with no level; that is read as no
+    /// override, so it gets the default level.
+    #[serde(default)]
+    pub prompt: Option<String>,
     /// R-12: after this, the raw transcript is pasted.
     pub deadline_ms: u64,
     /// Onboarding's "Get a key" page, from the catalogue unless an older file sets it.
@@ -411,6 +418,23 @@ pub struct Tasks {
 
 fn default_double_tap_ms() -> u64 {
     defaults().dictation.double_tap_ms
+}
+
+/// How much the cleanup model may change the transcript (P2-2). None of them rephrase,
+/// translate or answer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum CleanupLevel {
+    /// No model call: the transcript after dictionary substitution, as a short dictation.
+    None,
+    /// Fillers, punctuation, capitals and clear mishearings; every other word kept.
+    Light,
+    /// Light, plus repetitions, false starts, small grammar slips and spoken formatting.
+    Medium,
+}
+
+fn default_cleanup_level() -> CleanupLevel {
+    defaults().cleanup.level
 }
 
 fn default_talking_minutes() -> u32 {
@@ -698,6 +722,13 @@ impl Config {
         let table: toml::Table = toml::from_str(text).map_err(parse_error)?;
         reject_secrets(&table, "", text, path)?;
         let mut config: Config = toml::from_str(text).map_err(parse_error)?;
+        // P2-2: `prompt = "v4"` with no level is the old default line, not a choice.
+        let cleanup = table.get("cleanup").and_then(toml::Value::as_table);
+        if cleanup.is_some_and(|c| !c.contains_key("level"))
+            && config.cleanup.prompt.as_deref() == Some("v4")
+        {
+            config.cleanup.prompt = None;
+        }
         for (id, entry) in &config.providers {
             validate_provider(id, entry, path)?;
         }
@@ -863,7 +894,9 @@ impl Config {
             scheme("cleanup.endpoint", &c.endpoint, cleanup.protocol.schemes())?;
         }
         named("cleanup.reasoning_effort", &c.reasoning_effort)?;
-        named("cleanup.prompt", &c.prompt)?;
+        if let Some(prompt) = &c.prompt {
+            named("cleanup.prompt", prompt)?;
+        }
         range("cleanup.deadline_ms", c.deadline_ms, 100, 10_000)?;
 
         if let Some(url) = &s.key_url {
