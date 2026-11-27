@@ -43,8 +43,13 @@ model = "openai/gpt-oss-20b"
 # endpoint = "https://api.groq.com/openai/v1"
 # Sent as reasoning_effort; "off" leaves the field out of the request.
 reasoning_effort = "low"
-# The cleanup prompt version.
-prompt = "v4"
+# How much the model changes the transcript: "none" (no model call: the transcript after
+# dictionary substitution, with a capital and a full stop), "light" (fillers, punctuation and
+# clear mishearings only) or "medium" (also repetitions, false starts, small grammar slips and
+# spoken formatting such as numbers, lists and "new line"). It never rephrases or translates.
+level = "light"
+# Optional: a named prompt version instead of the level's, for experiments.
+# prompt = "v4"
 # After this many ms without cleaned text, the raw transcript is pasted. 100 to 10000.
 deadline_ms = 1500
 # What one hour of talking sends to cleanup, for the cost estimate, from the research of

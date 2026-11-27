@@ -3,7 +3,10 @@
 
 use std::path::{Path, PathBuf};
 
-use hyperme_core::config::{Config, ConfigError, DEFAULT_CONFIG, Hotkey, Modifier, Retention};
+use hyperme_core::config::{
+    CleanupLevel, Config, ConfigError, DEFAULT_CONFIG, Hotkey, Modifier, Retention,
+};
+use hyperme_core::dictation::Settings;
 use hyperme_core::secrets::{MemorySecretStore, SecretStore};
 
 /// A fresh, empty folder under the target directory, so tests never touch the user's files.
@@ -55,7 +58,9 @@ fn defaults_are_the_owner_decisions() {
     assert_eq!(c.model, "openai/gpt-oss-20b");
     assert_eq!(c.endpoint, "https://api.groq.com/openai/v1");
     assert_eq!(c.reasoning_effort, "low");
-    assert_eq!(c.prompt, "v4");
+    // P2-2 AC-1: a level, and no prompt override.
+    assert_eq!(c.level, CleanupLevel::Light);
+    assert_eq!(c.prompt, None);
     assert_eq!(c.deadline_ms, 1500);
 
     assert!(config.history.enabled);
@@ -225,7 +230,11 @@ fn empty_names_and_wrong_schemes_are_rejected() {
             "reasoning_effort = \"\"",
             "cleanup.reasoning_effort",
         ),
-        ("prompt = \"v4\"", "prompt = \"\"", "cleanup.prompt"),
+        (
+            "level = \"light\"",
+            "level = \"light\"\nprompt = \"\"",
+            "cleanup.prompt",
+        ),
     ];
     for (from, to, key) in cases {
         let msg = parse(&default_with(from, to)).unwrap_err().to_string();
@@ -494,4 +503,52 @@ fn the_bead_shows_while_idle_by_default() {
     assert!(parse(&older).unwrap().dictation.show_while_idle);
     let off = default_with("show_while_idle = true", "show_while_idle = false");
     assert!(!parse(&off).unwrap().dictation.show_while_idle);
+}
+
+/// P2-2 AC-2: a file written before levels, with `prompt = "v4"` (the old default) and no
+/// level, still loads and gets the default level: the owner's installed app moves to it with no
+/// hand-editing.
+#[test]
+fn an_old_file_with_the_old_default_prompt_gets_the_default_level() {
+    let old = default_with("level = \"light\"", "prompt = \"v4\"");
+    let c = parse(&old).unwrap().cleanup;
+    assert_eq!(c.level, Config::default().cleanup.level);
+    assert_eq!(c.prompt, None);
+}
+
+/// P2-2 AC-3: any other prompt, or `v4` next to a level, is a deliberate override and kept.
+#[test]
+fn a_chosen_prompt_stays_an_override() {
+    let v3 = default_with("level = \"light\"", "prompt = \"v3\"");
+    assert_eq!(parse(&v3).unwrap().cleanup.prompt.as_deref(), Some("v3"));
+    let both = default_with("level = \"light\"", "level = \"medium\"\nprompt = \"v4\"");
+    let c = parse(&both).unwrap().cleanup;
+    assert_eq!(c.level, CleanupLevel::Medium);
+    assert_eq!(c.prompt.as_deref(), Some("v4"));
+}
+
+/// P2-2 AC-4: the three levels parse; anything else is refused with the key named.
+#[test]
+fn cleanup_levels_parse_and_others_are_refused() {
+    for (text, level) in [
+        ("none", CleanupLevel::None),
+        ("light", CleanupLevel::Light),
+        ("medium", CleanupLevel::Medium),
+    ] {
+        let file = default_with("level = \"light\"", &format!("level = \"{text}\""));
+        assert_eq!(parse(&file).unwrap().cleanup.level, level);
+    }
+    let bad = default_with("level = \"light\"", "level = \"heavy\"");
+    let msg = parse(&bad).unwrap_err().to_string();
+    assert!(msg.contains("level"), "{msg}");
+}
+
+/// P2-2 AC-5: level `none` never calls the cleanup model: every dictation takes the short
+/// path (dictionary substitution, a capital and a full stop).
+#[test]
+fn level_none_sends_every_dictation_down_the_short_path() {
+    let none = parse(&default_with("level = \"light\"", "level = \"none\"")).unwrap();
+    assert_eq!(Settings::from_config(&none).short_words, usize::MAX);
+    let light = Config::default();
+    assert_eq!(Settings::from_config(&light).short_words, 4);
 }

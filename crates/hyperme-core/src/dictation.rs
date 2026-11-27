@@ -20,7 +20,7 @@ use std::time::Duration;
 use tokio::sync::{mpsc, watch};
 use tokio::time::{Instant, sleep_until, timeout};
 
-use crate::config::Config;
+use crate::config::{CleanupLevel, Config};
 use crate::dictionary::Dictionary;
 use crate::traits::{
     CleanupProvider, DictationId, Error, FocusInfo, History, Inserter, LiveSession, Microphone,
@@ -55,7 +55,13 @@ impl Settings {
             min_hold: Duration::from_millis(config.dictation.min_hold_ms),
             max_length: Duration::from_secs(config.dictation.max_length_s),
             double_tap: Duration::from_millis(config.dictation.double_tap_ms),
-            short_words: config.dictation.short_dictation_words as usize,
+            // P2-2: level `none` sends every dictation down the short path, with no model call.
+            short_words: match config.cleanup.level {
+                CleanupLevel::None => usize::MAX,
+                CleanupLevel::Light | CleanupLevel::Medium => {
+                    config.dictation.short_dictation_words as usize
+                }
+            },
             cleanup_deadline: Duration::from_millis(config.cleanup.deadline_ms),
             sounds: config.dictation.sounds,
             timing_log: config.timing.log,
