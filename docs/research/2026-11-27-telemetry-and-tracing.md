@@ -169,6 +169,9 @@ Only after the first release, and only as an explicit decision recorded in the P
   receiver). No ids, no IPs kept. This would also measure adoption better than stars (PRD
   section 10).
 
+This is common practice in open-source desktop apps that collect anything at all (section 4),
+and is on the roadmap's Later row (owner, 27 November 2026).
+
 Both change the public line "no telemetry" to "nothing leaves your Mac unless you turn it on, and
 you can see every byte". The recommendation is to start with 5.1 and decide on 5.2 with real
 issues in hand.
