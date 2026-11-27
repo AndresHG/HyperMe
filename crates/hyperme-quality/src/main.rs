@@ -15,17 +15,18 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use hyperme_core::config::Config;
 use hyperme_core::dictation::Settings;
+use hyperme_core::dictionary::Dictionary;
 use hyperme_providers::cleanup::ChatCleanup;
 use hyperme_providers::speechmatics::Speechmatics;
-use hyperme_quality::replay::{Replayed, replay};
+use hyperme_quality::replay::{Replayed, replay, replay_raw};
 use hyperme_quality::report::{gold_draft, markdown, summarise, table, texts};
 use hyperme_quality::set::{self, Lang};
 
 const USAGE: &str = "\
 usage:
-  hyperme-quality run --set DIR [--names FILE] [--only es-01,en-02] [--prompt v4]
-                      [--deadline-ms N] [--config FILE] [--network TEXT]
-                      [--out FILE | --no-results]
+  hyperme-quality run --set DIR [--names FILE] [--dictionary FILE] [--only es-01,en-02]
+                      [--prompt v4] [--deadline-ms N] [--config FILE] [--network TEXT]
+                      [--reuse-raw FILE [--pace-ms N]] [--out FILE | --no-results]
   hyperme-quality import --set DIR [--history DIR] [--days N]
 
 Keys come from SPEECHMATICS_API_KEY / GROQ_API_KEY (the provider name in capitals, then
@@ -51,6 +52,9 @@ fn main() -> ExitCode {
 struct Options {
     set: Option<PathBuf>,
     names: Option<PathBuf>,
+    dictionary: Option<PathBuf>,
+    reuse_raw: Option<PathBuf>,
+    pace_ms: Option<u64>,
     only: Vec<String>,
     prompt: Option<String>,
     deadline_ms: Option<u64>,
@@ -79,6 +83,9 @@ impl Options {
             match flag.as_str() {
                 "--set" => o.set = Some(value()?.into()),
                 "--names" => o.names = Some(value()?.into()),
+                "--dictionary" => o.dictionary = Some(value()?.into()),
+                "--reuse-raw" => o.reuse_raw = Some(value()?.into()),
+                "--pace-ms" => o.pace_ms = Some(number(value()?)?),
                 "--only" => {
                     o.only = value()?.split(',').map(|s| s.trim().to_owned()).collect();
                 }
@@ -210,29 +217,64 @@ fn run(o: &Options) -> Result<(), String> {
     if let Some(ms) = o.deadline_ms {
         config.cleanup.deadline_ms = ms;
     }
-    let speech = Speechmatics::new(&config.speech, key(&config.speech.provider)?);
+    let dictionary = match &o.dictionary {
+        Some(path) => Dictionary::parse(
+            &std::fs::read_to_string(path)
+                .map_err(|e| format!("reading {}: {e}", path.display()))?,
+        ),
+        None => Dictionary::default(),
+    };
     let cleanup = ChatCleanup::new(&config.cleanup, &key(&config.cleanup.provider)?)
-        .map_err(|e| e.message)?;
-    let settings = Settings::from_config(&config);
+        .map_err(|e| e.message)?
+        .with_dictionary(&dictionary.prompt_line());
+    let settings = Settings {
+        dictionary: dictionary.clone(),
+        ..Settings::from_config(&config)
+    };
+    let saved = match &o.reuse_raw {
+        Some(path) => Some(set::read_raw(path)?),
+        None => None,
+    };
 
     let audio_s: f64 = set
         .samples
         .iter()
         .map(|s| s.pcm.len() as f64 / f64::from(set::SAMPLE_RATE))
         .sum();
-    eprintln!(
-        "Replaying {} samples ({:.0} s of audio, in real time) from {}",
-        set.samples.len(),
-        audio_s,
-        set.dir.display()
-    );
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
         .map_err(|e| format!("starting the runtime: {e}"))?;
-    let results = runtime.block_on(replay(&speech, &cleanup, settings, &set.samples, |r| {
-        eprintln!("{}", line(r));
-    }));
+    let results = match &saved {
+        Some(raw) => {
+            eprintln!(
+                "Cleaning {} saved transcripts (cleanup only) from {}",
+                set.samples.len(),
+                set.dir.display()
+            );
+            let pace = Duration::from_millis(o.pace_ms.unwrap_or(0));
+            runtime.block_on(replay_raw(
+                &cleanup,
+                settings,
+                &set.samples,
+                raw,
+                pace,
+                |r| eprintln!("{}", line(r)),
+            ))
+        }
+        None => {
+            let speech = Speechmatics::new(&config.speech, key(&config.speech.provider)?);
+            eprintln!(
+                "Replaying {} samples ({:.0} s of audio, in real time) from {}",
+                set.samples.len(),
+                audio_s,
+                set.dir.display()
+            );
+            runtime.block_on(replay(&speech, &cleanup, settings, &set.samples, |r| {
+                eprintln!("{}", line(r));
+            }))
+        }
+    };
 
     let rows = summarise(&results, &set.gold, &set.names);
     println!("\n{}", table(&rows));
@@ -260,7 +302,19 @@ fn run(o: &Options) -> Result<(), String> {
         ),
         (
             "Speech",
-            format!("{} `{}`", config.speech.provider, config.speech.model),
+            match &o.reuse_raw {
+                Some(path) => format!(
+                    "not called: raw transcripts reused from `{}` (an earlier live run), \
+                     cleanup only{}",
+                    path.file_name().map_or_else(
+                        || path.display().to_string(),
+                        |n| n.to_string_lossy().into_owned()
+                    ),
+                    o.pace_ms
+                        .map_or(String::new(), |ms| format!(", {ms} ms between samples"))
+                ),
+                None => format!("{} `{}`", config.speech.provider, config.speech.model),
+            },
         ),
         (
             "Cleanup",
@@ -288,6 +342,17 @@ fn run(o: &Options) -> Result<(), String> {
             ),
         ),
         ("Names list", format!("{} names", set.names.len())),
+        (
+            "Dictionary",
+            if dictionary.is_empty() {
+                "none".to_owned()
+            } else {
+                format!(
+                    "{} terms, substituted and in the prompt",
+                    dictionary.terms().len()
+                )
+            },
+        ),
         ("Config", config_source(&config_from)),
         (
             "Tool",
@@ -310,6 +375,19 @@ fn run(o: &Options) -> Result<(), String> {
     )
     .map_err(|e| format!("writing {}: {e}", texts_path.display()))?;
     eprintln!("Texts (private): {}", texts_path.display());
+    // A live run's raw transcripts, for cleanup-only replays with --reuse-raw.
+    if saved.is_none() {
+        let raw: BTreeMap<String, String> = results
+            .iter()
+            .filter_map(|r| r.raw.clone().map(|raw| (r.sample.clone(), raw)))
+            .collect();
+        let raw_path = unused(&set.dir, &format!("raw-{date}"), "json");
+        set::write_raw(&raw_path, &raw)?;
+        eprintln!(
+            "Raw transcripts (private), for --reuse-raw: {}",
+            raw_path.display()
+        );
+    }
     let missing: BTreeMap<String, String> =
         serde_json::from_str::<BTreeMap<String, String>>(&gold_draft(&results))
             .unwrap_or_default()

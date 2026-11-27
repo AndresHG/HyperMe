@@ -97,8 +97,10 @@ open ~/Applications/HyperMe.app
 ```
 
 The walkthrough asks for the microphone, Accessibility and Input Monitoring, then for your two
-keys, and tests each step. This is a local, unnotarised build for trying HyperMe; a signed release
-comes later. `cargo run` works too, but then macOS gives the permissions to your terminal app.
+keys, and tests each step. This is a local, unnotarised build for trying HyperMe. Releases will
+not be notarised by Apple for now either: macOS blocks their first open, and you allow it once in
+System Settings > Privacy & Security > Open Anyway. `cargo run` works too, but then macOS gives
+the permissions to your terminal app.
 
 **Just want to measure speed on your own voice?** `spikes/flowbench` times key release to cleaned
 text on your recordings, and runs with fake providers if you have no keys. See

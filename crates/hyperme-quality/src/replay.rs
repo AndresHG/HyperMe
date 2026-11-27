@@ -3,9 +3,13 @@
 //! deadline and the raw fallback are exactly the app's. For each sample it sends key-down, the
 //! audio in 20 ms frames at the pace of real time, as the microphone would, and key-up.
 //!
+//! [`replay_raw`] is the cleanup-only variant: the speech provider is a stand-in that returns a
+//! transcript saved by an earlier live run, at once, so only the cleanup call is live.
+//!
 //! The other parts are stand-ins: no microphone, sound or history, and an inserter that keeps
 //! the text instead of pasting it.
 
+use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
@@ -16,7 +20,7 @@ use hyperme_core::traits::{
     Microphone, Sound, Sounds, SpeechProvider, TimingLine, TimingLog, Transcript,
 };
 use tokio::sync::mpsc;
-use tokio::time::{MissedTickBehavior, interval, timeout};
+use tokio::time::{MissedTickBehavior, interval, sleep, timeout};
 
 use crate::set::{Lang, SAMPLE_RATE, Sample};
 
@@ -48,6 +52,8 @@ pub struct Replayed {
 /// What the stand-ins saw during one sample.
 #[derive(Debug, Default)]
 struct Seen {
+    /// The saved transcript the stand-in speech provider returns, in a cleanup-only replay.
+    saved: Option<String>,
     raw: Option<String>,
     pasted: Option<String>,
     timing: Option<TimingLine>,
@@ -90,6 +96,32 @@ impl<L: LiveSession + Send> LiveSession for KeepRawSession<L> {
         let transcript = self.inner.finish().await?;
         with(&self.seen, |s| s.raw = Some(transcript.text.clone()));
         Ok(transcript)
+    }
+}
+
+/// Returns the saved transcript of the current sample, at once, whatever audio it gets.
+struct Saved(Shared);
+
+struct SavedSession(Option<String>);
+
+impl SpeechProvider for Saved {
+    type Session = SavedSession;
+
+    async fn open(&self) -> Result<SavedSession, Error> {
+        Ok(SavedSession(with(&self.0, |s| s.saved.clone())))
+    }
+}
+
+impl LiveSession for SavedSession {
+    async fn send_audio(&mut self, _pcm: &[i16]) -> Result<(), Error> {
+        Ok(())
+    }
+
+    async fn finish(self) -> Result<Transcript, Error> {
+        Ok(Transcript {
+            text: self.0.unwrap_or_default(),
+            language: None,
+        })
     }
 }
 
@@ -210,22 +242,73 @@ pub async fn replay<S, C>(
     cleanup: &C,
     settings: Settings,
     samples: &[Sample],
-    mut each: impl FnMut(&Replayed),
+    each: impl FnMut(&Replayed),
 ) -> Vec<Replayed>
 where
     S: SpeechProvider + Send + Sync,
     C: CleanupProvider + Sync,
 {
     let seen = Shared::default();
+    let speech = KeepRaw {
+        inner: speech,
+        seen: seen.clone(),
+    };
+    drive(speech, cleanup, settings, samples, None, seen, each).await
+}
+
+/// The cleanup-only replay: each sample's transcript comes from `raw` (saved by a live run), at
+/// once and with no audio, through the same engine, so the dictionary, the short rule, the
+/// prompt, the deadline and the raw fallback stay the app's. `pace` is a gap between samples,
+/// for a provider's rate limit. A sample `raw` lacks is reported and not sent. `stt_ms` is 0.
+pub async fn replay_raw<C>(
+    cleanup: &C,
+    settings: Settings,
+    samples: &[Sample],
+    raw: &BTreeMap<String, String>,
+    pace: Duration,
+    each: impl FnMut(&Replayed),
+) -> Vec<Replayed>
+where
+    C: CleanupProvider + Sync,
+{
+    let seen = Shared::default();
+    let speech = KeepRaw {
+        inner: &Saved(seen.clone()),
+        seen: seen.clone(),
+    };
+    // No audio is sent, so the key is held for no time at all.
+    let settings = Settings {
+        min_hold: Duration::ZERO,
+        ..settings
+    };
+    drive(
+        speech,
+        cleanup,
+        settings,
+        samples,
+        Some((raw, pace)),
+        seen,
+        each,
+    )
+    .await
+}
+
+async fn drive<S, C>(
+    speech: S,
+    cleanup: &C,
+    settings: Settings,
+    samples: &[Sample],
+    saved: Option<(&BTreeMap<String, String>, Duration)>,
+    seen: Shared,
+    mut each: impl FnMut(&Replayed),
+) -> Vec<Replayed>
+where
+    S: SpeechProvider + Send + Sync,
+    C: CleanupProvider + Sync,
+{
     let parts = Parts {
         mic: NoMicrophone,
-        providers: fixed(
-            KeepRaw {
-                inner: speech,
-                seen: seen.clone(),
-            },
-            Borrowed(cleanup),
-        ),
+        providers: fixed(speech, Borrowed(cleanup)),
         inserter: KeepText(seen.clone()),
         focus: NoFocus,
         history: NoHistory,
@@ -243,9 +326,23 @@ where
 
     let drive = async {
         let mut out = Vec::new();
+        let mut sent = 0;
         for sample in samples {
             with(&seen, |s| *s = Seen::default());
-            let outcome = dictate(&events, &mut statuses, &sample.pcm).await;
+            let outcome = match saved {
+                None => dictate(&events, &mut statuses, &sample.pcm).await,
+                Some((raw, pace)) => match raw.get(&sample.name) {
+                    Some(text) => {
+                        if sent > 0 {
+                            sleep(pace).await;
+                        }
+                        sent += 1;
+                        with(&seen, |s| s.saved = Some(text.clone()));
+                        dictate(&events, &mut statuses, &[]).await
+                    }
+                    None => Err("no saved transcript for this sample".to_owned()),
+                },
+            };
             let (raw, pasted, timing) =
                 with(&seen, |s| (s.raw.take(), s.pasted.take(), s.timing.take()));
             let outcome = outcome.and_then(|fallback| match (pasted, timing) {
@@ -296,7 +393,9 @@ async fn dictate(
             .await
             .map_err(closed)?;
     }
-    tick.tick().await;
+    if !pcm.is_empty() {
+        tick.tick().await;
+    }
     events.send(Event::KeyUp).await.map_err(closed)?;
 
     let mut ended: Option<Result<bool, String>> = None;

@@ -89,6 +89,9 @@ passes, update this section and record the evidence in `docs/results/`.
 - After dictation comes smart routing and actions; the first tracker connector is GitHub,
   not Linear (owner, 25 November 2026). See `docs/ROADMAP.md`.
 - Licence: MIT OR Apache-2.0, dual, at the user's option (owner, 25 November 2026).
+- No Apple Developer account for now: macOS releases ship unsigned (the local identity, not
+  notarised), as VFS does, and Developer ID is decided later. Linux and Windows matter more than
+  notarisation (owner, 27 November 2026). See `docs/RELEASING.md`.
 - This repository is the one that goes public. It was recreated on 26 November 2026 with its
   history rewritten so that internal project names never appear; the private original is the
   archive (owner, 26 November 2026). See `docs/LAUNCH.md`.
