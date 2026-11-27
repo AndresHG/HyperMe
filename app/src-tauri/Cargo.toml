@@ -53,6 +53,9 @@ serde.workspace = true
 time = { workspace = true, features = ["std"] }
 # tauri's own mock runtime, to test that commands send their events. Not a new crate.
 tauri = { version = "2.12.7", features = ["macos-private-api", "tray-icon", "test"] }
+# The approval card's wait and its 5-minute timeout under a paused clock (approvals.rs). Already
+# a dependency; these features add no crate.
+tokio = { workspace = true, features = ["macros", "rt", "test-util"] }
 
 [lints]
 workspace = true

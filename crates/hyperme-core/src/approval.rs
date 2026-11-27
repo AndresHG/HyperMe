@@ -83,6 +83,206 @@ impl Approver for Unattended {
     }
 }
 
+/// One piece of a server's Markdown message, drawn as plain text by the card (A-5, R-11): no
+/// HTML is ever produced, and a link is shown with its address, never followed.
+/// Serialised as `{"kind": "text" | "bold" | "italic" | "code" | "break" | "item" | "link",
+/// "text": ..., "url": ...}`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Span {
+    Text(String),
+    Bold(String),
+    Italic(String),
+    Code(String),
+    /// A paragraph break.
+    Break,
+    /// The start of a list item.
+    Item,
+    Link {
+        text: String,
+        url: String,
+    },
+}
+
+impl serde::Serialize for Span {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeMap;
+        let (kind, text, url) = match self {
+            Span::Text(t) => ("text", Some(t), None),
+            Span::Bold(t) => ("bold", Some(t), None),
+            Span::Italic(t) => ("italic", Some(t), None),
+            Span::Code(t) => ("code", Some(t), None),
+            Span::Break => ("break", None, None),
+            Span::Item => ("item", None, None),
+            Span::Link { text, url } => ("link", Some(text), Some(url)),
+        };
+        let mut map = serializer.serialize_map(None)?;
+        map.serialize_entry("kind", kind)?;
+        if let Some(text) = text {
+            map.serialize_entry("text", text)?;
+        }
+        if let Some(url) = url {
+            map.serialize_entry("url", url)?;
+        }
+        map.end()
+    }
+}
+
+/// The message as spans: paragraphs, `**bold**`, `*italic*` or `_italic_`, `` `code` ``,
+/// `- ` or `* ` or `1. ` list items, and `[text](url)` links. Anything else, HTML included,
+/// stays text.
+pub fn spans(markdown: &str) -> Vec<Span> {
+    let mut out = Vec::new();
+    let mut blank = false;
+    for line in markdown.lines() {
+        let line = line.trim_end();
+        if line.trim().is_empty() {
+            blank = true;
+            continue;
+        }
+        let trimmed = line.trim_start();
+        let item = ["- ", "* ", "+ "]
+            .iter()
+            .find_map(|m| trimmed.strip_prefix(m))
+            .or_else(|| {
+                let digits = trimmed.chars().take_while(char::is_ascii_digit).count();
+                (digits > 0)
+                    .then(|| trimmed[digits..].strip_prefix(". "))
+                    .flatten()
+            });
+        if let Some(rest) = item {
+            out.push(Span::Item);
+            inline(rest, &mut out);
+        } else {
+            if !out.is_empty() {
+                // A new paragraph after a blank line or a list; a wrapped line joins with a space.
+                if blank || last_was_item(&out) {
+                    out.push(Span::Break);
+                } else {
+                    out.push(Span::Text(" ".to_owned()));
+                }
+            }
+            inline(trimmed, &mut out);
+        }
+        blank = false;
+    }
+    merge_text(out)
+}
+
+fn last_was_item(out: &[Span]) -> bool {
+    out.iter()
+        .rev()
+        .take_while(|s| **s != Span::Break)
+        .any(|s| *s == Span::Item)
+}
+
+fn inline(text: &str, out: &mut Vec<Span>) {
+    let mut plain = String::new();
+    let mut rest = text;
+    while let Some(c) = rest.chars().next() {
+        let found = match c {
+            '*' if rest.starts_with("**") => {
+                closed(&rest[2..], "**").map(|(t, r)| (Span::Bold(t), r))
+            }
+            '*' => closed(&rest[1..], "*").map(|(t, r)| (Span::Italic(t), r)),
+            // `_` marks italics only at word edges, so `search_threads` stays one word.
+            '_' if !plain.ends_with(char::is_alphanumeric) => closed(&rest[1..], "_")
+                .filter(|(_, after)| !after.starts_with(char::is_alphanumeric))
+                .map(|(t, r)| (Span::Italic(t), r)),
+            '`' => closed(&rest[1..], "`").map(|(t, r)| (Span::Code(t), r)),
+            '[' => link(rest),
+            _ => None,
+        };
+        match found {
+            Some((span, after)) => {
+                if !plain.is_empty() {
+                    out.push(Span::Text(std::mem::take(&mut plain)));
+                }
+                out.push(span);
+                rest = after;
+            }
+            None => {
+                plain.push(c);
+                rest = &rest[c.len_utf8()..];
+            }
+        }
+    }
+    if !plain.is_empty() {
+        out.push(Span::Text(plain));
+    }
+}
+
+/// The text up to `end`, if it is closed and not empty or padded with spaces.
+fn closed<'a>(text: &'a str, end: &str) -> Option<(String, &'a str)> {
+    let at = text.find(end)?;
+    let inner = &text[..at];
+    if inner.is_empty() || inner.starts_with(' ') || inner.ends_with(' ') {
+        return None;
+    }
+    Some((inner.to_owned(), &text[at + end.len()..]))
+}
+
+fn link(text: &str) -> Option<(Span, &str)> {
+    let close = text.find("](")?;
+    let label = &text[1..close];
+    let after = &text[close + 2..];
+    // The address ends at the `)` that balances, so `(…)` inside it stays part of it.
+    let mut depth = 0usize;
+    let end = after.char_indices().find_map(|(i, c)| match c {
+        '(' => {
+            depth += 1;
+            None
+        }
+        ')' if depth == 0 => Some(i),
+        ')' => {
+            depth -= 1;
+            None
+        }
+        _ => None,
+    })?;
+    if label.is_empty() || label.contains('[') {
+        return None;
+    }
+    Some((
+        Span::Link {
+            text: label.to_owned(),
+            url: after[..end].to_owned(),
+        },
+        &after[end + 1..],
+    ))
+}
+
+fn merge_text(spans: Vec<Span>) -> Vec<Span> {
+    let mut out: Vec<Span> = Vec::new();
+    for span in spans {
+        if let (Some(Span::Text(last)), Span::Text(next)) = (out.last_mut(), &span) {
+            last.push_str(next);
+            continue;
+        }
+        out.push(span);
+    }
+    out
+}
+
+/// The choice ↵ picks (A-1, R-13): for a read pull, the broadest persistent choice offered
+/// (this tool, then these owners, then this resource, then this audience); otherwise, and when
+/// none is offered, the first choice that does not refuse. Never a deny.
+pub fn default_choice(choices: &[Choice], read: bool) -> Option<usize> {
+    if read {
+        for scope in ["TOOL", "OWNER", "RESOURCE", "AUDIENCE"] {
+            if let Some(i) = choices
+                .iter()
+                .position(|c| !c.is_deny() && c.value.contains("ALWAYS") && c.value.contains(scope))
+            {
+                return Some(i);
+            }
+        }
+    }
+    choices
+        .iter()
+        .position(|c| c.value == "ALLOW_ONCE")
+        .or_else(|| choices.iter().position(|c| !c.is_deny()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

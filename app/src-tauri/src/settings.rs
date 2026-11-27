@@ -42,6 +42,8 @@ pub fn open(app: &AppHandle, section: &str) {
         let handle = app.clone();
         window.on_window_event(move |event| {
             if matches!(event, tauri::WindowEvent::Destroyed) {
+                // An approval card left open answers nothing (specs/166, R-9).
+                crate::approvals::window_closed();
                 crate::home::free_closed_window(&handle);
             }
         });

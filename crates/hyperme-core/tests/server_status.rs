@@ -2,7 +2,8 @@
 //! once-a-day alert and pull, and the held-back count. Tests cite `specs/166-gmail-approvals`.
 
 use hyperme_core::health::{
-    MemoryServerStatus, PullEnd, ServerState, ServerStatusStore, after_pull, pull_runs,
+    MemoryServerStatus, PullEnd, ServerState, ServerStatusStore, after_pull, after_review,
+    pull_runs,
 };
 use hyperme_core::sync::held_back;
 use serde_json::json;
@@ -181,4 +182,29 @@ fn pull_ends_combine() {
     assert_eq!(blocked.and(needs), blocked);
     assert_eq!(needs.and(blocked), blocked);
     assert_eq!(done(1).and(needs), needs);
+}
+
+/// R-8: Later (Esc) in Review or the setup check records "Needs your OK" without using up the
+/// day's background try or alert; a Review that works clears the state.
+#[test]
+fn a_review_left_unanswered_keeps_the_days_alert() {
+    let store = MemoryServerStatus::default();
+    let needs = PullEnd::NeedsUser(ServerState::NeedsOk);
+    after_review(&store, ACCOUNT, SERVER, needs, day(27)).unwrap();
+    let status = store.status(ACCOUNT, SERVER).unwrap();
+    assert_eq!(status.state, Some(ServerState::NeedsOk));
+    assert!(pull_runs(&status, day(27)));
+    assert!(
+        after_pull(&store, ACCOUNT, SERVER, needs, day(27)).unwrap(),
+        "alert still due"
+    );
+    after_review(
+        &store,
+        ACCOUNT,
+        SERVER,
+        PullEnd::Done { held_back: 0 },
+        day(27),
+    )
+    .unwrap();
+    assert_eq!(state(&store), None);
 }

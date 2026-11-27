@@ -5,6 +5,8 @@
 //! providers and devices to it and shows its states in the pill and the menu.
 
 #[cfg(target_os = "macos")]
+mod approvals;
+#[cfg(target_os = "macos")]
 mod connectors;
 #[cfg(target_os = "macos")]
 mod dictionary;
@@ -110,6 +112,8 @@ fn main() {
             connectors::connectors_sign_in,
             connectors::connectors_cancel_sign_in,
             connectors::connectors_disconnect,
+            connectors::connectors_review,
+            approvals::connectors_answer,
             connectors::connectors_open_url,
             tasks::home_today,
             tasks::tasks_add,
