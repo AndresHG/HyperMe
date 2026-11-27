@@ -261,7 +261,7 @@ fn run(o: &Options) -> Result<(), String> {
     // (specs/96, AC-15).
     let cleanup = hyperme_providers::any::cleanup_with_fallback(&config, &EnvOrKeychain(&config))
         .map_err(|e| e.message)?
-        .with_dictionary(&dictionary.prompt_line());
+        .with_dictionary(&dictionary.prompt_line(config.dictation.dictionary_prompt_cap as usize));
     let settings = Settings {
         dictionary: dictionary.clone(),
         ..Settings::from_config(&config)

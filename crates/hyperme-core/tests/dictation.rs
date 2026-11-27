@@ -1249,3 +1249,69 @@ async fn stop_outside_hands_free_is_ignored() {
 fn count(log: &Log, entry: &str) -> usize {
     log.entries().iter().filter(|e| *e == entry).count()
 }
+
+/// Spec 93, AC-5 (R-5): above the prompt cap the warm-up prefix carries no dictionary, and the
+/// cleanup gets only the entries relevant to this dictation, set before the request.
+#[tokio::test(start_paused = true)]
+async fn above_the_cap_the_cleanup_gets_the_relevant_entries() {
+    let log = Log::new();
+    let speech = FakeSpeech::new(&log, "send the sun trix report to the corbit team");
+    let cleanup = FakeCleanup::new(&log, "Send the Zentrix report to the Quorbit team.");
+    let filler: String = (0..20).map(|i| format!("Kfz{i:03}\n")).collect();
+    let settings = hyperme_core::dictation::Settings {
+        prompt_cap: 10,
+        ..settings()
+    };
+    let mut h = Harness::start(&log, speech, cleanup, settings);
+    h.dictionary
+        .send(hyperme_core::dictionary::Dictionary::parse(&format!(
+            "Zentrix: sun trix\nQuorbit\nAna Ruiz\n{filler}"
+        )));
+
+    h.send(Event::KeyDown).await;
+    tokio::time::sleep(ms(1000)).await;
+    h.send(Event::KeyUp).await;
+    h.until(&Status::Done {
+        raw: false,
+        via: None,
+    })
+    .await;
+    let entries = log.entries();
+    let at = |line: &str| entries.iter().position(|e| e.contains(line));
+    let relevant = at("dictionary:\n\nThe speaker's dictionary: Quorbit, Zentrix.");
+    assert!(at("dictionary:") < relevant, "{entries:?}");
+    assert!(
+        relevant < at("clean: send the Zentrix report"),
+        "{entries:?}"
+    );
+    assert_eq!(entries[at("dictionary:").unwrap()], "dictionary:");
+}
+
+/// Spec 93, D6 (R-16): each pasted dictation is told to the app with the pasted text, the
+/// transcript after the dictionary, the app and the entries used, for learning and use counts.
+#[tokio::test(start_paused = true)]
+async fn a_pasted_dictation_is_told_for_learning() {
+    let log = Log::new();
+    let speech = FakeSpeech::new(&log, "send the sun trix report today");
+    let cleanup = FakeCleanup::new(&log, "Send the Zentrix report today.");
+    let mut h = Harness::start(&log, speech, cleanup, with_dictionary());
+
+    h.send(Event::KeyDown).await;
+    tokio::time::sleep(ms(1000)).await;
+    h.send(Event::KeyUp).await;
+    h.until(&Status::Done {
+        raw: false,
+        via: None,
+    })
+    .await;
+    let told = h.pasted.try_recv().expect("nothing told");
+    assert_eq!(
+        told,
+        hyperme_core::dictation::Pasted {
+            text: "Send the Zentrix report today.".to_owned(),
+            transcript: "send the Zentrix report today".to_owned(),
+            app: Some("TextEdit".to_owned()),
+            used: vec!["Zentrix".to_owned()],
+        }
+    );
+}
