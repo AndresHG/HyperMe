@@ -49,12 +49,33 @@ and `GROQ_API_KEY` (the provider name in capitals, then `_API_KEY`) take precede
 | `--prompt v3` | Another cleanup prompt than the config's |
 | `--deadline-ms 1500` | Another cleanup deadline |
 | `--names FILE` | A names list other than the set's `names.txt` |
+| `--dictionary FILE` | A dictionary in the text format (`Zentrix: zen trix`), applied as in the app: substituted in the raw transcript and named in the cleanup prompt. Without it, no dictionary: the app's own dictionary store is not read |
+| `--reuse-raw FILE` | Cleanup only: reuse the raw transcripts of an earlier run (below) |
+| `--pace-ms N` | With `--reuse-raw`: wait this long between samples, for a provider's free-tier rate limit |
 | `--config FILE` | Another config than the app's |
 | `--network TEXT` | Written into the results file, such as `wired` or `Wi-Fi` |
 | `--out FILE` | Where the results file goes; `--no-results` writes none |
 
 It prints a line per sample and a table per language, writes the texts and any gold draft into
 the set folder, and writes `docs/results/quality-YYYY-MM-DD.md` with numbers only.
+
+Every live run also writes the raw transcripts, `{"es-01": "raw text", ...}`, to
+`raw-YYYY-MM-DD.json` in the set folder. They are private like the audio and never go into the
+repository.
+
+## Cleanup-only replays
+
+```bash
+cargo run --release -p hyperme-quality -- run --set spikes/flowbench/samples \
+  --reuse-raw spikes/flowbench/samples/raw-2026-11-27.json --prompt v4 --pace-ms 1000
+```
+
+A live run takes about ten minutes, costs speech minutes, and the transcripts change a little from
+run to run, which hides small prompt differences. `--reuse-raw` sends each saved transcript
+through the same engine at once, with no audio: the dictionary, the short-dictation rule, the
+prompt, the cleanup deadline and the raw fallback are the app's, and only the cleanup call is
+live. `stt_ms` is 0 and `total_ms` is the cleanup alone. The results file says the transcripts
+were reused and from which file. Confirm a winner with one live run.
 
 ## The columns
 

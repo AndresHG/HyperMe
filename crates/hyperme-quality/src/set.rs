@@ -166,6 +166,20 @@ fn write_texts(path: &Path, texts: &BTreeMap<String, String>) -> Result<(), Stri
     std::fs::write(path, json).map_err(|e| format!("writing {}: {e}", path.display()))
 }
 
+/// A live run's raw transcripts, `{sample: raw}`, for `--reuse-raw`. Private like the audio: it
+/// goes into the set folder only.
+pub fn write_raw(path: &Path, raw: &BTreeMap<String, String>) -> Result<(), String> {
+    write_texts(path, raw)
+}
+
+/// Reads a file [`write_raw`] wrote. Unlike the gold texts, a missing file is an error.
+pub fn read_raw(path: &Path) -> Result<BTreeMap<String, String>, String> {
+    if !path.is_file() {
+        return Err(format!("{}: no such file", path.display()));
+    }
+    read_texts(path)
+}
+
 /// Loads the set in `dir`: every `.wav` file, sorted by name, or only those in `only`.
 /// `names` overrides the set's own `names.txt`.
 pub fn load(dir: &Path, only: &[String], names: Option<&Path>) -> Result<Set, String> {
