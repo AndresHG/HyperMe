@@ -138,6 +138,8 @@ fn main() {
             runtime::card_action,
             settings::settings_view,
             settings::settings_set,
+            settings::microphones_list,
+            settings::microphones_set,
             settings::key_set,
             settings::key_test,
             settings::provider_choose,

@@ -11,6 +11,8 @@ pub mod hotkey;
 pub mod keychain;
 pub mod log_file;
 pub mod microphone;
+#[cfg(target_os = "macos")]
+pub mod output_mute;
 pub mod paste;
 #[cfg(target_os = "macos")]
 pub mod permissions;

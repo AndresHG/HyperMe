@@ -17,6 +17,10 @@ pub fn sound_name(sound: Sound) -> &'static str {
     }
 }
 
+/// How long the start sound plays: "Tink" is about 0.1 s long, with a margin. Muting the output
+/// waits for it (#221).
+pub const START_SOUND: std::time::Duration = std::time::Duration::from_millis(150);
+
 /// Soft, as the owner asked (U-5).
 const VOLUME: f32 = 0.35;
 
