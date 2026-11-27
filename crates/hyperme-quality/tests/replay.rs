@@ -97,6 +97,7 @@ fn settings() -> Settings {
     Settings {
         min_hold: Duration::from_millis(300),
         max_length: Duration::from_secs(60),
+        double_tap: Duration::from_millis(400),
         short_words: 3,
         cleanup_deadline: Duration::from_millis(1500),
         sounds: false,

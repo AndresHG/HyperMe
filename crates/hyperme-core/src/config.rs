@@ -261,6 +261,10 @@ pub struct Dictation {
     pub min_hold_ms: u64,
     /// R-7.
     pub max_length_s: u64,
+    /// #167: a key-down this soon after a tap locks recording (hands-free). Optional, so an
+    /// older file still loads.
+    #[serde(default = "default_double_tap_ms")]
+    pub double_tap_ms: u64,
     /// R-13: fewer words than this skip cleanup.
     pub short_dictation_words: u32,
     /// R-32.
@@ -403,6 +407,10 @@ pub struct Tasks {
     pub stale_after: u32,
     pub morning_from: String,
     pub morning_latest: String,
+}
+
+fn default_double_tap_ms() -> u64 {
+    defaults().dictation.double_tap_ms
 }
 
 fn default_talking_minutes() -> u32 {
@@ -827,6 +835,7 @@ impl Config {
         let d = &self.dictation;
         range("dictation.min_hold_ms", d.min_hold_ms, 50, 2000)?;
         range("dictation.max_length_s", d.max_length_s, 5, 600)?;
+        range("dictation.double_tap_ms", d.double_tap_ms, 100, 1000)?;
         range(
             "dictation.short_dictation_words",
             d.short_dictation_words.into(),

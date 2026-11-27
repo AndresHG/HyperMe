@@ -41,7 +41,8 @@ fn show(kind: &'static str, label: &str, hide_after_ms: Option<u64>) -> Change {
 /// The pill for a status, as docs/UX.md's table of states says.
 pub fn change_for(status: &Status) -> Change {
     match status {
-        Status::Recording => show("recording", "", None),
+        // #167: hands-free looks the same until the pill gets its stop button.
+        Status::Recording | Status::Locked => show("recording", "", None),
         Status::Transcribing | Status::Cleaning | Status::Pasting => show("working", "", None),
         Status::Done { raw: false } => show("done", "Pasted", Some(600)),
         // R-12, R-20.
