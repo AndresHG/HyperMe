@@ -198,6 +198,7 @@ fn an_account_turns_off_and_on() {
             connector: "google".to_owned(),
             label: "personal".to_owned(),
             enabled: false,
+            features: Vec::new(),
         }
     );
     cs::set_enabled(&mut connectors, "google:personal", true).unwrap();
@@ -213,6 +214,10 @@ fn add_connector_offers_presets_and_saves_custom_servers() {
     let registry = cs::registry(None, &connectors).unwrap();
     let choices = cs::add_choices(&registry, &connectors);
     assert_eq!(choices[0].id, "google");
+    assert!(
+        choices[0].ready,
+        "Google signs in with the setup sheet (slice 6)"
+    );
     assert_eq!(choices.last().unwrap().id, "custom");
 
     let form = CustomForm {

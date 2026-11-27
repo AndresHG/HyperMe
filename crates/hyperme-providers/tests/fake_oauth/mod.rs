@@ -31,6 +31,10 @@ struct State {
     authorize_queries: Vec<HashMap<String, String>>,
     token_requests: Vec<HashMap<String, String>>,
     revoked: Vec<String>,
+    /// Refresh tokens expire in a week, as for a Google project in "Testing".
+    testing: bool,
+    /// When set, the only client ID the token endpoint accepts.
+    client: Option<String>,
 }
 
 /// The running server. Dropping it leaves the task running until the test ends.
@@ -81,6 +85,16 @@ impl FakeOAuth {
     /// Refuses every refresh token issued so far, as when the user removes access at Google.
     pub fn revoke_all_refresh_tokens(&self) {
         self.state.lock().unwrap().refresh_tokens.clear();
+    }
+
+    /// Issues refresh tokens that expire in 7 days, like a project left in "Testing".
+    pub fn set_testing(&self, testing: bool) {
+        self.state.lock().unwrap().testing = testing;
+    }
+
+    /// Accepts only this client ID at the token endpoint; others get `invalid_client`.
+    pub fn require_client(&self, client_id: &str) {
+        self.state.lock().unwrap().client = Some(client_id.to_owned());
     }
 
     pub fn issued_refresh_tokens(&self) -> Vec<String> {
@@ -167,7 +181,12 @@ async fn serve(mut stream: TcpStream, state: Arc<Mutex<State>>) {
             ("POST", "/token") => {
                 let form = pairs(&body);
                 s.token_requests.push(form.clone());
+                let known = s
+                    .client
+                    .as_ref()
+                    .is_none_or(|client| form.get("client_id") == Some(client));
                 match form.get("grant_type").map(String::as_str) {
+                    _ if !known => reply("401 Unauthorized", "", r#"{"error":"invalid_client"}"#),
                     Some("authorization_code") => {
                         let grant = s.grants.remove(form.get("code").map_or("", |c| c));
                         let ok = grant.is_some_and(|g| {
@@ -184,13 +203,16 @@ async fn serve(mut stream: TcpStream, state: Arc<Mutex<State>>) {
                             s.refresh_tokens.insert(refresh.clone());
                             s.issued_refresh.push(refresh.clone());
                             s.issued_access.push(access.clone());
-                            let body = serde_json::json!({
+                            let mut body = serde_json::json!({
                                 "access_token": access,
                                 "expires_in": s.access_ttl,
                                 "refresh_token": refresh,
                                 "token_type": "Bearer",
                                 "scope": "read",
                             });
+                            if s.testing {
+                                body["refresh_token_expires_in"] = 604_799.into();
+                            }
                             reply("200 OK", "", &body.to_string())
                         } else {
                             invalid_grant()
