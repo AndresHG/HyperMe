@@ -34,6 +34,11 @@ now, beside Phase 1; Part B waits for Phase 2 (owner, 26 November 2026, P-1 in [
   (D-2). `hyperme-quality run` now builds speech through `any::speech`, so a config naming
   `openai-speech` replays through it. Its measurement on the owner's samples waits for an OpenAI
   key in the keychain (none on 27 November 2026).
+- Slice 9: `[cleanup] fallback = { provider, model }`, written by Settings only after its Test
+  passes. `hyperme_core::fallback::Fallback` wraps any cleanup: an error before the first token
+  goes to the fallback inside the engine's deadline. The pill says "Pasted · via <name>"; the
+  trace root records `cleanup_via` and the timing line names the fallback. A fallback with no
+  key is not built and shows red in the Setup check.
 
 ## Later, one pull request each
 

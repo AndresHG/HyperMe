@@ -37,7 +37,11 @@ async fn key_down_records_before_connections_complete() {
     assert_eq!(log.at("warmed"), Some(200));
     h.frames(5, 2).await;
     h.send(Event::KeyUp).await;
-    h.until(&Status::Done { raw: false }).await;
+    h.until(&Status::Done {
+        raw: false,
+        via: None,
+    })
+    .await;
 
     let audio: Vec<String> = log
         .entries()
@@ -160,7 +164,11 @@ async fn maximum_length_processes_the_dictation() {
     h.until(&Status::Transcribing).await;
     assert_eq!(log.at("mic stop"), Some(120_000));
     assert_eq!(log.at("finalize"), Some(120_000));
-    h.until(&Status::Done { raw: false }).await;
+    h.until(&Status::Done {
+        raw: false,
+        via: None,
+    })
+    .await;
     h.send(Event::KeyUp).await;
     h.until(&Status::Idle).await;
     h.settle().await;
@@ -181,7 +189,11 @@ async fn release_finalizes_then_pastes() {
     h.frames(0, 3).await;
     tokio::time::sleep(ms(1000)).await;
     h.send(Event::KeyUp).await;
-    h.until(&Status::Done { raw: false }).await;
+    h.until(&Status::Done {
+        raw: false,
+        via: None,
+    })
+    .await;
 
     assert_eq!(log.at("finalize"), Some(1000));
     assert_eq!(log.at("final transcript"), Some(1250));
@@ -212,7 +224,12 @@ async fn short_transcripts_skip_cleanup() {
     h.send(Event::KeyDown).await;
     tokio::time::sleep(ms(600)).await;
     h.send(Event::KeyUp).await;
-    let seen = h.until(&Status::Done { raw: false }).await;
+    let seen = h
+        .until(&Status::Done {
+            raw: false,
+            via: None,
+        })
+        .await;
     assert!(!seen.contains(&Status::Cleaning), "{seen:?}");
     assert!(!log.entries().iter().any(|e| e.starts_with("clean:")));
     assert_eq!(log.pasted(), ["Sounds good."]);
@@ -261,7 +278,11 @@ async fn slow_cleanup_pastes_raw_at_the_deadline() {
     h.send(Event::KeyDown).await;
     tokio::time::sleep(ms(1000)).await;
     h.send(Event::KeyUp).await;
-    h.until(&Status::Done { raw: true }).await;
+    h.until(&Status::Done {
+        raw: true,
+        via: None,
+    })
+    .await;
     assert_eq!(log.pasted(), ["this one takes the cleanup too long"]);
     let pasted_at = log
         .at("paste: this one takes the cleanup too long")
@@ -281,7 +302,11 @@ async fn failed_cleanup_pastes_raw() {
     h.send(Event::KeyDown).await;
     tokio::time::sleep(ms(1000)).await;
     h.send(Event::KeyUp).await;
-    h.until(&Status::Done { raw: true }).await;
+    h.until(&Status::Done {
+        raw: true,
+        via: None,
+    })
+    .await;
     assert_eq!(log.pasted(), ["the cleanup host is down today"]);
 }
 
@@ -382,7 +407,11 @@ async fn pipeline_overhead_is_under_20_ms() {
         h.frames(0, 5).await;
         let released = std::time::Instant::now();
         h.send(Event::KeyUp).await;
-        h.until(&Status::Done { raw: false }).await;
+        h.until(&Status::Done {
+            raw: false,
+            via: None,
+        })
+        .await;
         overheads.push(released.elapsed());
         h.until(&Status::Idle).await;
     }
@@ -415,7 +444,11 @@ async fn history_gets_the_audio_and_the_text() {
     h.frames(0, 10).await;
     tokio::time::sleep(ms(600)).await;
     h.send(Event::KeyUp).await;
-    h.until(&Status::Done { raw: false }).await;
+    h.until(&Status::Done {
+        raw: false,
+        via: None,
+    })
+    .await;
     assert!(log.has("history begin 1 [TextEdit]"), "{:?}", log.entries());
     assert_eq!(history.samples(1), 4800);
     assert!(log.has("history done 1: Remember to buy milk on the way home. (en)"));
@@ -486,7 +519,11 @@ async fn a_dropped_dictation_can_be_retried() {
     *finish_error.lock().unwrap() = None;
     let before = log.entries().len();
     h.send(Event::Retry(None)).await;
-    h.until(&Status::Done { raw: false }).await;
+    h.until(&Status::Done {
+        raw: false,
+        via: None,
+    })
+    .await;
     let retried: Vec<String> = log.entries()[before..]
         .iter()
         .filter(|e| e.starts_with("audio"))
@@ -608,7 +645,11 @@ async fn timing_on_writes_one_line_of_numbers_per_dictation() {
     h.frames(0, 5).await;
     tokio::time::sleep(ms(960)).await;
     h.send(Event::KeyUp).await;
-    h.until(&Status::Done { raw: false }).await;
+    h.until(&Status::Done {
+        raw: false,
+        via: None,
+    })
+    .await;
 
     let lines = timing.lines.lock().unwrap().clone();
     assert_eq!(lines.len(), 1);
@@ -649,7 +690,11 @@ async fn timing_marks_fallbacks_and_short_dictations() {
     h.send(Event::KeyDown).await;
     tokio::time::sleep(ms(600)).await;
     h.send(Event::KeyUp).await;
-    h.until(&Status::Done { raw: true }).await;
+    h.until(&Status::Done {
+        raw: true,
+        via: None,
+    })
+    .await;
     let line = timing.lines.lock().unwrap()[0].clone();
     assert!(line.fallback);
     assert_eq!(line.first_ms, None);
@@ -668,7 +713,11 @@ async fn timing_marks_fallbacks_and_short_dictations() {
     h.send(Event::KeyDown).await;
     tokio::time::sleep(ms(600)).await;
     h.send(Event::KeyUp).await;
-    h.until(&Status::Done { raw: false }).await;
+    h.until(&Status::Done {
+        raw: false,
+        via: None,
+    })
+    .await;
     let line = timing.lines.lock().unwrap()[0].clone();
     assert_eq!(
         (line.first_ms, line.words, line.first_audio_ms),
@@ -687,7 +736,11 @@ async fn timing_off_records_nothing() {
     h.send(Event::KeyDown).await;
     tokio::time::sleep(ms(600)).await;
     h.send(Event::KeyUp).await;
-    h.until(&Status::Done { raw: false }).await;
+    h.until(&Status::Done {
+        raw: false,
+        via: None,
+    })
+    .await;
     assert!(timing.lines.lock().unwrap().is_empty());
 
     let on = settings();
@@ -731,7 +784,11 @@ async fn with_done_dictation_slow(
     h.frames(0, 10).await;
     tokio::time::sleep(ms(600)).await;
     h.send(Event::KeyUp).await;
-    h.until(&Status::Done { raw: false }).await;
+    h.until(&Status::Done {
+        raw: false,
+        via: None,
+    })
+    .await;
     h.until(&Status::Idle).await;
     (h, finish_error, front)
 }
@@ -863,7 +920,11 @@ async fn retry_by_id_leaves_the_last_failed_dictation() {
     // The provider works again: the pill's Retry still retries dictation 2 and pastes it.
     *fail.lock().unwrap() = None;
     h.send(Event::Retry(None)).await;
-    h.until(&Status::Done { raw: false }).await;
+    h.until(&Status::Done {
+        raw: false,
+        via: None,
+    })
+    .await;
     h.until(&Status::Idle).await;
     assert!(log.has("history done 2: The words were kept on disk for later. (en)"));
 
@@ -904,7 +965,11 @@ async fn retry_by_id_during_a_dictation_is_ignored() {
     h.send(Event::KeyUp).await;
     h.until(&Status::Transcribing).await;
     h.send(Event::Retry(Some(1))).await;
-    h.until(&Status::Done { raw: false }).await;
+    h.until(&Status::Done {
+        raw: false,
+        via: None,
+    })
+    .await;
     h.until(&Status::Idle).await;
     h.settle().await;
     let after: Vec<String> = log.entries()[before..].to_vec();
@@ -939,7 +1004,11 @@ async fn the_cleanup_gets_the_dictionary_words() {
     h.send(Event::KeyDown).await;
     tokio::time::sleep(ms(1000)).await;
     h.send(Event::KeyUp).await;
-    h.until(&Status::Done { raw: false }).await;
+    h.until(&Status::Done {
+        raw: false,
+        via: None,
+    })
+    .await;
     assert!(
         log.has("clean: send the Zentrix report today [TextEdit]"),
         "{:?}",
@@ -958,7 +1027,11 @@ async fn a_short_dictation_gets_the_dictionary_words() {
     h.send(Event::KeyDown).await;
     tokio::time::sleep(ms(600)).await;
     h.send(Event::KeyUp).await;
-    h.until(&Status::Done { raw: false }).await;
+    h.until(&Status::Done {
+        raw: false,
+        via: None,
+    })
+    .await;
     assert_eq!(log.pasted(), ["Zentrix."]);
 }
 
@@ -974,7 +1047,11 @@ async fn the_raw_fallback_gets_the_dictionary_words() {
     h.send(Event::KeyDown).await;
     tokio::time::sleep(ms(1000)).await;
     h.send(Event::KeyUp).await;
-    h.until(&Status::Done { raw: true }).await;
+    h.until(&Status::Done {
+        raw: true,
+        via: None,
+    })
+    .await;
     assert_eq!(log.pasted(), ["the Zentrix host is down"]);
 }
 
@@ -990,7 +1067,11 @@ async fn a_saved_dictionary_applies_from_the_next_dictation() {
     h.send(Event::KeyDown).await;
     tokio::time::sleep(ms(1000)).await;
     h.send(Event::KeyUp).await;
-    h.until(&Status::Done { raw: false }).await;
+    h.until(&Status::Done {
+        raw: false,
+        via: None,
+    })
+    .await;
     assert!(log.has("clean: send the sun trix report today [TextEdit]"));
 
     h.dictionary
@@ -1000,7 +1081,11 @@ async fn a_saved_dictionary_applies_from_the_next_dictation() {
     h.send(Event::KeyDown).await;
     tokio::time::sleep(ms(1000)).await;
     h.send(Event::KeyUp).await;
-    h.until(&Status::Done { raw: false }).await;
+    h.until(&Status::Done {
+        raw: false,
+        via: None,
+    })
+    .await;
     assert!(
         log.has("clean: send the Zentrix report today [TextEdit]"),
         "{:?}",
@@ -1045,7 +1130,11 @@ async fn double_tap_locks_and_a_tap_stops() {
     h.until(&Status::Transcribing).await;
     assert_eq!(log.at("finalize"), Some(5400));
     h.send(Event::KeyUp).await;
-    h.until(&Status::Done { raw: false }).await;
+    h.until(&Status::Done {
+        raw: false,
+        via: None,
+    })
+    .await;
     h.until(&Status::Idle).await;
     h.settle().await;
     assert_eq!(log.pasted(), ["Hands-free works like this."]);
@@ -1094,7 +1183,11 @@ async fn the_pill_stops_or_cancels_a_locked_dictation() {
     h.until(&Status::Locked).await;
     tokio::time::sleep(ms(1000)).await;
     h.send(Event::Stop).await;
-    h.until(&Status::Done { raw: false }).await;
+    h.until(&Status::Done {
+        raw: false,
+        via: None,
+    })
+    .await;
     h.until(&Status::Idle).await;
     assert_eq!(log.pasted(), ["Stopped from the pill."]);
 

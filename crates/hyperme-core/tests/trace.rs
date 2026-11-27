@@ -30,7 +30,11 @@ async fn a_pasted_dictation_is_one_trace_with_its_stages() {
     h.frames(0, 5).await;
     tokio::time::sleep(ms(960)).await;
     h.send(Event::KeyUp).await;
-    h.until(&Status::Done { raw: false }).await;
+    h.until(&Status::Done {
+        raw: false,
+        via: None,
+    })
+    .await;
     h.until(&Status::Idle).await;
 
     let traces = h.traces.all();

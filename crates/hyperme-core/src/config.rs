@@ -357,6 +357,18 @@ pub struct Cleanup {
     estimate_input_tokens: Option<f64>,
     #[serde(default)]
     estimate_output_tokens: Option<f64>,
+    /// Tried when the main provider fails before the deadline (R-24). Settings saves it only
+    /// after its Test passes (R-24a).
+    #[serde(default)]
+    pub fallback: Option<FallbackChoice>,
+}
+
+/// A role's fallback: `fallback = { provider = "openai", model = "gpt-6-luna" }` (R-3).
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct FallbackChoice {
+    pub provider: String,
+    pub model: String,
 }
 
 /// The default file, for keys an older file leaves out.
@@ -763,6 +775,29 @@ impl Config {
         Ok(config)
     }
 
+    /// The cleanup section for the fallback, when one is set (R-24): the main one's prompt,
+    /// level and deadline, with the fallback's provider, model and endpoint, and the fastest
+    /// reasoning effort the catalogue lists for the model ("off" when it lists none).
+    pub fn cleanup_fallback(&self) -> Option<Cleanup> {
+        let f = self.cleanup.fallback.as_ref()?;
+        let entry = self.provider(&f.provider)?;
+        let model = self.catalogue_model(&f.provider, &f.model);
+        Some(Cleanup {
+            provider: f.provider.clone(),
+            model: f.model.clone(),
+            endpoint: entry.endpoint.clone(),
+            reasoning_effort: model
+                .reasoning_effort
+                .first()
+                .map_or_else(|| "off".to_owned(), Clone::clone),
+            key_url: entry.key_url.clone(),
+            price_input_per_million_usd: None,
+            price_output_per_million_usd: None,
+            fallback: None,
+            ..self.cleanup.clone()
+        })
+    }
+
     /// A provider in the catalogue.
     pub fn provider(&self, id: &str) -> Option<&ProviderEntry> {
         self.providers.get(id)
@@ -931,6 +966,10 @@ impl Config {
         let c = &self.cleanup;
         let cleanup = self.role_provider(Role::Cleanup, "cleanup.provider", &c.provider, path)?;
         named("cleanup.model", &c.model)?;
+        if let Some(f) = &c.fallback {
+            self.role_provider(Role::Cleanup, "cleanup.fallback", &f.provider, path)?;
+            named("cleanup.fallback", &f.model)?;
+        }
         if !c.endpoint.is_empty() {
             scheme("cleanup.endpoint", &c.endpoint, cleanup.protocol.schemes())?;
         }
@@ -1414,6 +1453,47 @@ fn choose(
             (None, None) => "off".to_owned(),
         };
         put(&mut lines, range, "reasoning_effort", quoted(&chosen));
+    }
+    let out = joined(&lines, text);
+    Config::parse(&out, path)?;
+    Ok(out)
+}
+
+/// Sets or clears a role's fallback (R-24a: Settings calls this only after the fallback's Test
+/// passed). Keeps every other line; the result is validated, so a provider that cannot fill
+/// the role is refused and nothing changes.
+pub fn set_fallback(
+    text: &str,
+    role: Role,
+    choice: Option<(&str, &str)>,
+) -> Result<String, ConfigError> {
+    let path = Path::new("config.toml");
+    let section = role.section();
+    let mut lines: Vec<String> = text.lines().map(str::to_owned).collect();
+    let range = section_body(&lines, section).ok_or_else(|| ConfigError::Parse {
+        path: path.to_owned(),
+        message: format!("there is no [{section}] section"),
+    })?;
+    match choice {
+        Some((provider, model)) => put(
+            &mut lines,
+            range,
+            "fallback",
+            format!(
+                "{{ provider = {}, model = {} }}",
+                quoted(provider),
+                quoted(model)
+            ),
+        ),
+        None => {
+            let (start, end) = range;
+            let kept: Vec<String> = lines[start..end]
+                .iter()
+                .filter(|l| !sets(l, "fallback"))
+                .cloned()
+                .collect();
+            lines.splice(start..end, kept);
+        }
     }
     let out = joined(&lines, text);
     Config::parse(&out, path)?;

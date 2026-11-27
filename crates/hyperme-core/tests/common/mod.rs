@@ -189,6 +189,8 @@ pub struct FakeCleanup {
     pub warm_delay: Duration,
     pub delay: Duration,
     pub reply: Result<String, Error>,
+    /// What `fallback_used` answers, as a fallback wrapper would after the call.
+    pub via: Option<hyperme_core::traits::Via>,
 }
 
 impl FakeCleanup {
@@ -198,6 +200,7 @@ impl FakeCleanup {
             warm_delay: Duration::ZERO,
             delay: Duration::ZERO,
             reply: Ok(reply.to_owned()),
+            via: None,
         }
     }
 }
@@ -233,6 +236,10 @@ impl CleanupProvider for FakeCleanup {
         on_text(a);
         on_text(b);
         Ok(())
+    }
+
+    fn fallback_used(&self) -> Option<hyperme_core::traits::Via> {
+        self.via.clone()
     }
 }
 

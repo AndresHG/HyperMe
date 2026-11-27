@@ -35,7 +35,7 @@ fn with_server(base: &str, key_required: bool) -> Config {
 fn resolves_the_recommended_pair_by_protocol() {
     let providers = resolve(&Config::default(), &keys(&["speechmatics", "groq"])).unwrap();
     assert!(matches!(providers.speech, AnySpeech::Speechmatics(_)));
-    assert!(matches!(providers.cleanup, AnyCleanup::Chat(_)));
+    assert!(matches!(providers.cleanup.main(), AnyCleanup::Chat(_)));
 }
 
 /// R-12: a provider with no key is not built, and nothing is half-built.
@@ -68,7 +68,7 @@ async fn a_hand_added_provider_cleans_through_resolve() {
 fn a_keyless_provider_needs_no_key() {
     let config = with_server("http://127.0.0.1:9/v1", false);
     let providers = resolve(&config, &keys(&["speechmatics"])).unwrap();
-    assert!(matches!(providers.cleanup, AnyCleanup::Chat(_)));
+    assert!(matches!(providers.cleanup.main(), AnyCleanup::Chat(_)));
 }
 
 /// AC-5: a provider is ready only with a key, unless it needs none, so Settings keeps the old
