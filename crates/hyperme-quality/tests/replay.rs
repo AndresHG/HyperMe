@@ -105,6 +105,7 @@ fn settings() -> Settings {
         cleanup_deadline: Duration::from_millis(1500),
         sounds: false,
         dictionary: Default::default(),
+        prompt_cap: hyperme_core::dictionary::PROMPT_CAP,
     }
 }
 

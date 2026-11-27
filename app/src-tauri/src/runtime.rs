@@ -238,6 +238,7 @@ fn wire(app: &AppHandle, history: Arc<Mutex<HistoryInner>>) -> Result<(), String
     let providers = with_dictionary(
         any::resolve(&config, &KeychainStore::new()).map_err(|e| e.message)?,
         &dictionary,
+        &config,
     );
     let (switch, providers) = watch::channel(Arc::new(providers));
     let (timing, timing_on, traces) = {
@@ -274,8 +275,11 @@ fn wire(app: &AppHandle, history: Arc<Mutex<HistoryInner>>) -> Result<(), String
         dictionary,
         ..Settings::from_config(&config)
     };
-    let engine = Engine::new(parts, settings, status_tx);
+    let mut engine = Engine::new(parts, settings, status_tx);
     let dictionary_updates = engine.dictionary_updates();
+    let (pasted_tx, pasted_rx) = mpsc::unbounded_channel();
+    engine.tell_pasted(pasted_tx);
+    tauri::async_runtime::spawn(after_paste(app.clone(), pasted_rx));
     tauri::async_runtime::spawn(engine.run(events_rx));
     tauri::async_runtime::spawn(forward_audio(app.clone(), mic_rx, events.clone()));
     tauri::async_runtime::spawn(show_statuses(app.clone(), status_rx));
@@ -301,6 +305,7 @@ pub fn reload_providers(app: &AppHandle) -> Result<(), String> {
     let providers = with_dictionary(
         any::resolve(&config, &KeychainStore::new()).map_err(|e| e.message)?,
         &dictionary,
+        &config,
     );
     let (timing, timing_on, traces) = {
         let shared = lock(app);
@@ -390,9 +395,13 @@ impl TimingLog for SharedTiming {
 fn with_dictionary(
     providers: Providers<any::Speech, any::Cleanup>,
     dictionary: &Dictionary,
+    config: &Config,
 ) -> Providers<any::Speech, any::Cleanup> {
+    let cap = config.dictation.dictionary_prompt_cap as usize;
     Providers {
-        cleanup: providers.cleanup.with_dictionary(&dictionary.prompt_line()),
+        cleanup: providers
+            .cleanup
+            .with_dictionary(&dictionary.prompt_line(cap)),
         ..providers
     }
 }
@@ -403,6 +412,32 @@ pub fn update_dictionary(app: &AppHandle, dictionary: Dictionary) {
     if let Some(updates) = lock(app).dictionary.clone() {
         updates.send(dictionary);
     }
+}
+
+/// After each paste (spec 93, D6, D7): the dictionary's use counts, and, with "Learn from my
+/// edits" on, the watch for the user's fixes.
+async fn after_paste(
+    app: AppHandle,
+    mut pasted: mpsc::UnboundedReceiver<hyperme_core::dictation::Pasted>,
+) {
+    while let Some(dictation) = pasted.recv().await {
+        if !crate::dictionary::on_pasted(&app, &dictation) {
+            continue;
+        }
+        let (app, text) = (app.clone(), dictation.text.clone());
+        hyperme_core::traits::FieldWatcher::watch(
+            field_watcher(),
+            text,
+            Box::new(move |_, edited: String| crate::dictionary::learn(&app, &dictation, &edited)),
+        );
+    }
+}
+
+/// The one field watcher (spec 93, D7): it runs only during the 60 s after a paste.
+fn field_watcher() -> &'static hyperme_platform::field_watcher::MacFieldWatcher {
+    static WATCHER: std::sync::OnceLock<hyperme_platform::field_watcher::MacFieldWatcher> =
+        std::sync::OnceLock::new();
+    WATCHER.get_or_init(Default::default)
 }
 
 /// Passes each frame on to the state machine and sends the level to the pill (R-4).
@@ -431,6 +466,10 @@ async fn show_statuses(app: AppHandle, mut statuses: mpsc::UnboundedReceiver<Sta
     let mut released: Option<Instant> = None;
     while let Some(status) = statuses.recv().await {
         follow_for_home(&app, &status);
+        // Spec 93, R-20: the next dictation ends the watch of the last paste.
+        if status == Status::Recording {
+            hyperme_core::traits::FieldWatcher::stop(field_watcher());
+        }
         match status {
             Status::Transcribing if released.is_none() => released = Some(Instant::now()),
             Status::Done { .. } => {

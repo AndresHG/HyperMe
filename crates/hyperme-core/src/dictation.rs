@@ -46,6 +46,8 @@ pub struct Settings {
     /// Spec 93, R-1: the user's dictionary, applied to every final transcript. The app loads it
     /// from the `dictation.dictionary` file; empty by default.
     pub dictionary: Dictionary,
+    /// Spec 93, R-5: above this many entries, the prompt carries only the relevant ones.
+    pub prompt_cap: usize,
 }
 
 impl Settings {
@@ -64,6 +66,7 @@ impl Settings {
             cleanup_deadline: Duration::from_millis(config.cleanup.deadline_ms),
             sounds: config.dictation.sounds,
             dictionary: Dictionary::default(),
+            prompt_cap: config.dictation.dictionary_prompt_cap as usize,
         }
     }
 }
@@ -140,6 +143,20 @@ pub enum Status {
     },
 }
 
+/// A dictation pasted into the app in front, for learning from the user's fixes and for the
+/// dictionary's use counts (spec 93, D6, R-16). Stays in the app; never stored as it is.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Pasted {
+    /// What was pasted.
+    pub text: String,
+    /// The transcript it came from, after the dictionary: where heard forms are found.
+    pub transcript: String,
+    /// The app it was pasted into.
+    pub app: Option<String>,
+    /// The dictionary entries this dictation used, written as in the dictionary.
+    pub used: Vec<String>,
+}
+
 /// The speech and cleanup providers one dictation uses.
 #[derive(Debug)]
 pub struct Providers<S, C> {
@@ -180,6 +197,8 @@ pub struct Engine<M, S, C, I, F, H, N> {
     /// The dictionary line of the last saved dictionary, given to the cleanup provider of each
     /// dictation, so it holds across a provider switch (spec 93, R-10a; specs/96, R-8).
     dictionary_line: Option<String>,
+    /// Where each pasted dictation is told (spec 93, D6).
+    pasted: Option<mpsc::UnboundedSender<Pasted>>,
 }
 
 /// Hands a changed dictionary to a running engine (spec 93, R-10a). The newest one wins; the
@@ -213,6 +232,18 @@ struct FailedDictation {
     app: Option<String>,
 }
 
+/// Tells the app of a pasted dictation, if it listens (spec 93, D6).
+fn tell(to: Option<&mpsc::UnboundedSender<Pasted>>, text: &Text, app: Option<String>) {
+    if let Some(to) = to {
+        let _ = to.send(Pasted {
+            text: text.text.clone(),
+            transcript: text.transcript.clone(),
+            app,
+            used: text.used.clone(),
+        });
+    }
+}
+
 /// How a dictation ended, for the run loop.
 #[derive(Debug, PartialEq, Eq)]
 enum Flow {
@@ -239,6 +270,9 @@ enum NoText {
 /// The text to insert. Stage timings are on the dictation's trace (spec 182, R-13).
 struct Text {
     text: String,
+    /// The transcript after the dictionary, and the entries it used (spec 93, D6).
+    transcript: String,
+    used: Vec<String>,
     /// The raw transcript, after a cleanup failure or the deadline.
     raw: bool,
     language: Option<String>,
@@ -268,7 +302,13 @@ where
             failed: None,
             dictionary: DictionaryUpdates::default(),
             dictionary_line: None,
+            pasted: None,
         }
+    }
+
+    /// Tells `to` of each dictation pasted (spec 93, D6): learning and use counts.
+    pub fn tell_pasted(&mut self, to: mpsc::UnboundedSender<Pasted>) {
+        self.pasted = Some(to);
     }
 
     /// Where Settings sends a changed dictionary (spec 93, R-10a).
@@ -279,7 +319,7 @@ where
     /// Uses the newest saved dictionary, if one is waiting: substitution and the cleanup prompt.
     fn apply_dictionary_update(&mut self) {
         if let Some(dictionary) = self.dictionary.take() {
-            self.dictionary_line = Some(dictionary.prompt_line());
+            self.dictionary_line = Some(dictionary.prompt_line(self.settings.prompt_cap));
             self.settings.dictionary = dictionary;
         }
     }
@@ -310,6 +350,7 @@ where
             status,
             failed,
             dictionary_line,
+            pasted,
             ..
         } = self;
         let Parts {
@@ -560,6 +601,7 @@ where
         }
         trace.inserted();
         trace.end(Outcome::Pasted);
+        tell(pasted.as_ref(), &text, app);
         if let Some(id) = id {
             let _ = trace.history_write(|| history.done(id, &text.text, text.language.as_deref()));
         }
@@ -582,6 +624,7 @@ where
             status,
             failed: slot,
             dictionary_line,
+            pasted,
             ..
         } = self;
         let emit = |s: Status| {
@@ -691,6 +734,9 @@ where
         } else {
             Outcome::Copied
         });
+        if same_app {
+            tell(pasted.as_ref(), &text, failed.app);
+        }
         let _ =
             trace.history_write(|| history.done(failed.id, &text.text, text.language.as_deref()));
         emit(if same_app {
@@ -855,9 +901,15 @@ async fn transcribe_and_clean<L: LiveSession, C: CleanupProvider>(
     let language = transcript.language.clone();
     // Spec 93, R-1: the dictionary fixes the raw transcript once, so the short path, the
     // cleanup and the raw fallback all get the user's words.
-    let (substituted, applied) = settings.dictionary.apply(transcript.text.trim());
-    trace.dictionary(applied);
-    let raw = substituted.as_str();
+    let substituted = settings.dictionary.substitute(transcript.text.trim());
+    trace.dictionary(substituted.made);
+    let raw = substituted.text.as_str();
+    let used: Vec<String> = substituted
+        .seen
+        .iter()
+        .filter_map(|&at| settings.dictionary.terms().get(at))
+        .map(|t| t.written.clone())
+        .collect();
     let words = raw.split_whitespace().count();
     trace.words(words);
     // R-14.
@@ -874,8 +926,17 @@ async fn transcribe_and_clean<L: LiveSession, C: CleanupProvider>(
             text,
             raw: false,
             language,
+            transcript: raw.to_owned(),
+            used: used.clone(),
             via: speech_via,
         });
+    }
+    // Spec 93, R-5: above the prompt cap, the prompt carries the entries relevant to this one.
+    if let Some(line) = settings
+        .dictionary
+        .relevant_line(&substituted, settings.prompt_cap)
+    {
+        cleanup.set_dictionary(&line);
     }
     emit(Status::Cleaning);
     trace.cleanup_started();
@@ -907,6 +968,8 @@ async fn transcribe_and_clean<L: LiveSession, C: CleanupProvider>(
                 text: cleaned.trim().to_owned(),
                 raw: false,
                 language,
+                transcript: raw.to_owned(),
+                used: used.clone(),
                 via: joined_via(speech_via, via.map(|v| v.name)),
             })
         }
@@ -917,6 +980,8 @@ async fn transcribe_and_clean<L: LiveSession, C: CleanupProvider>(
                 text: raw.to_owned(),
                 raw: true,
                 language,
+                transcript: raw.to_owned(),
+                used: used.clone(),
                 via: speech_via,
             })
         }
