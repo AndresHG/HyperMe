@@ -6,11 +6,12 @@
 //! [`resolve`] builds the providers a config names. The app uses it at launch, after each
 //! change in Settings, and for Test, so Test and dictation cannot disagree.
 
-use hyperme_core::config::{Config, Protocol};
+use hyperme_core::config::{self, Config, Protocol, Role};
 use hyperme_core::dictation::Providers;
+use hyperme_core::fallback::Fallback;
 use hyperme_core::secrets::SecretStore;
 use hyperme_core::traits::{
-    CleanupProvider, Error, ErrorKind, LiveSession, SpeechProvider, Transcript,
+    CleanupProvider, Error, ErrorKind, LiveSession, SpeechProvider, Transcript, Via,
 };
 
 use crate::cleanup::ChatCleanup;
@@ -106,6 +107,10 @@ impl AnyCleanup {
     }
 }
 
+/// The cleanup the engine uses: the role's provider, with its fallback when one is set and
+/// ready (R-24, R-24a).
+pub type Cleanup = Fallback<AnyCleanup>;
+
 /// The key a provider needs, or empty for one the catalogue marks as needing none (R-14). A
 /// provider that shares another's key reads that one (D-2). A missing key that is needed
 /// fails, naming the keychain entry.
@@ -146,7 +151,54 @@ pub fn speech(config: &Config, keys: &dyn SecretStore) -> Result<AnySpeech, Erro
 
 /// The cleanup provider the config names, with its key.
 pub fn cleanup(config: &Config, keys: &dyn SecretStore) -> Result<AnyCleanup, Error> {
-    let c = &config.cleanup;
+    cleanup_for(config, &config.cleanup, keys)
+}
+
+/// The cleanup fallback the config names, alone, for its Test (R-24a). Fails when none is set.
+pub fn cleanup_fallback(config: &Config, keys: &dyn SecretStore) -> Result<AnyCleanup, Error> {
+    let c = config.cleanup_fallback().ok_or_else(|| Error {
+        kind: ErrorKind::Other,
+        message: "no cleanup fallback is set".to_owned(),
+    })?;
+    cleanup_for(config, &c, keys)
+}
+
+/// Whether a role's fallback is set, and if so whether it is ready (R-24a): `None` when none
+/// is set; `Some(false)` when its key is missing, so the Setup check turns its row red.
+pub fn fallback_ready(config: &Config, role: Role, keys: &dyn SecretStore) -> Option<bool> {
+    let provider = match role {
+        Role::Cleanup => &config.cleanup.fallback.as_ref()?.provider,
+        Role::Speech => return None,
+    };
+    Some(key_ready(config, provider, keys))
+}
+
+/// The role's cleanup with its fallback. A fallback that cannot be built, its key missing for
+/// example, is skipped: it never blocks or slows a dictation (R-24a).
+pub fn cleanup_with_fallback(config: &Config, keys: &dyn SecretStore) -> Result<Cleanup, Error> {
+    let main = cleanup(config, keys)?;
+    let fallback = config.cleanup_fallback().and_then(|c| {
+        let built = cleanup_for(config, &c, keys).ok()?;
+        let name = config
+            .provider(&c.provider)
+            .map_or_else(|| c.provider.clone(), |p| p.name.clone());
+        Some((
+            built,
+            Via {
+                provider: c.provider,
+                model: c.model,
+                name,
+            },
+        ))
+    });
+    Ok(Fallback::new(main, fallback))
+}
+
+fn cleanup_for(
+    config: &Config,
+    c: &config::Cleanup,
+    keys: &dyn SecretStore,
+) -> Result<AnyCleanup, Error> {
     let key = key_for(config, &c.provider, keys)?;
     match protocol(config, &c.provider)? {
         Protocol::OpenaiChat => ChatCleanup::new(c, &key).map(AnyCleanup::Chat),
@@ -159,10 +211,10 @@ pub fn cleanup(config: &Config, keys: &dyn SecretStore) -> Result<AnyCleanup, Er
 pub fn resolve(
     config: &Config,
     keys: &dyn SecretStore,
-) -> Result<Providers<AnySpeech, AnyCleanup>, Error> {
+) -> Result<Providers<AnySpeech, Cleanup>, Error> {
     Ok(Providers {
         speech: speech(config, keys)?,
-        cleanup: cleanup(config, keys)?,
+        cleanup: cleanup_with_fallback(config, keys)?,
     })
 }
 

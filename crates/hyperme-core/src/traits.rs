@@ -60,6 +60,17 @@ pub trait LiveSession {
     fn finish(self) -> impl Future<Output = Result<Transcript, Error>> + Send;
 }
 
+/// The fallback provider that stood in for the main one (specs/96-provider-settings, R-27): for
+/// the pill's "via" and the timing line.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Via {
+    /// The catalogue id, for the timing line.
+    pub provider: String,
+    pub model: String,
+    /// As people write it, for the pill: "OpenAI".
+    pub name: String,
+}
+
 /// A language model that rewrites a raw transcript into clean text.
 pub trait CleanupProvider {
     /// Replaces the dictionary line the cleanup prompt carries (spec 93, R-4, R-10a). The line
@@ -77,6 +88,12 @@ pub trait CleanupProvider {
         app: Option<&str>,
         on_text: &mut (dyn FnMut(&str) + Send),
     ) -> impl Future<Output = Result<(), Error>> + Send;
+
+    /// The fallback that answered the last [`clean`](Self::clean), if one did (specs/96, R-24,
+    /// R-27). Only one dictation runs at a time, so the engine reads it right after the call.
+    fn fallback_used(&self) -> Option<Via> {
+        None
+    }
 }
 
 /// Microphone capture. While started, the platform glue sends each captured frame to the
@@ -217,6 +234,8 @@ pub struct TimingLine {
     pub words: usize,
     /// The raw transcript was used (deadline or cleanup error).
     pub fallback: bool,
+    /// The fallback cleanup provider and model that answered, when one did (specs/96, R-27).
+    pub cleanup_via: Option<(String, String)>,
 }
 
 /// Where timing lines go when the timing log is on (R-30). The state machine calls it once per

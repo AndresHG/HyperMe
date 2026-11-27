@@ -45,9 +45,17 @@ pub fn change_for(status: &Status) -> Change {
         // #167 AC-6: hands-free, with ✕ (cancel) at the left and a stop button at the right.
         Status::Locked => show("locked", "", None),
         Status::Transcribing | Status::Cleaning | Status::Pasting => show("working", "", None),
-        Status::Done { raw: false } => show("done", "Pasted", Some(600)),
+        Status::Done {
+            raw: false,
+            via: None,
+        } => show("done", "Pasted", Some(600)),
+        // specs/96, R-27: a fallback that answered is named, and stays long enough to read.
+        Status::Done {
+            raw: false,
+            via: Some(name),
+        } => show("done", &format!("Pasted · via {name}"), Some(1500)),
         // R-12, R-20.
-        Status::Done { raw: true } => show("raw", "Raw text", Some(2000)),
+        Status::Done { raw: true, .. } => show("raw", "Raw text", Some(2000)),
         Status::Copied { raw } => show(if *raw { "raw" } else { "done" }, "Copied", Some(1500)),
         // R-14.
         Status::NothingHeard => show("quiet", "Nothing heard", Some(1500)),
@@ -323,12 +331,27 @@ mod tests {
         assert_eq!(width_for(&locked), LOCKED_WIDTH);
         assert_eq!(view(Status::Transcribing).kind, "working");
         assert_eq!(view(Status::Cleaning).kind, "working");
-        let done = view(Status::Done { raw: false });
+        let done = view(Status::Done {
+            raw: false,
+            via: None,
+        });
         assert_eq!(
             (done.kind, done.label.as_str(), done.hide_after_ms),
             ("done", "Pasted", Some(600))
         );
-        let raw = view(Status::Done { raw: true });
+        // specs/96, AC-10: the fallback that answered is named.
+        let via = view(Status::Done {
+            raw: false,
+            via: Some("OpenAI".to_owned()),
+        });
+        assert_eq!(
+            (via.kind, via.label.as_str()),
+            ("done", "Pasted · via OpenAI")
+        );
+        let raw = view(Status::Done {
+            raw: true,
+            via: None,
+        });
         assert_eq!(
             (raw.kind, raw.label.as_str(), raw.hide_after_ms),
             ("raw", "Raw text", Some(2000))
@@ -404,7 +427,13 @@ mod tests {
     #[test]
     fn longer_labels_widen_the_pill() {
         assert_eq!(width_for(&view(Status::Recording)), 120.0);
-        assert_eq!(width_for(&view(Status::Done { raw: false })), 120.0);
+        assert_eq!(
+            width_for(&view(Status::Done {
+                raw: false,
+                via: None
+            })),
+            120.0
+        );
         let notice = width_for(&view(Status::SecureInput));
         assert!(notice > 250.0 && notice <= 420.0, "{notice}");
         // The state's line, the gap and "Nothing heard" fit without an ellipsis: 14 px padding

@@ -12,6 +12,7 @@ pub mod connectors;
 pub mod cost;
 pub mod dictation;
 pub mod dictionary;
+pub mod fallback;
 pub mod field_watch;
 pub mod health;
 pub mod hints;

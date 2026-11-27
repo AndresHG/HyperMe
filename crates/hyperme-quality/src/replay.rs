@@ -425,7 +425,7 @@ async fn dictate(
     let waited = timeout(AFTER_KEY_UP, async {
         while let Some(status) = statuses.recv().await {
             match status {
-                Status::Done { raw } | Status::Copied { raw } => ended = Some(Ok(raw)),
+                Status::Done { raw, .. } | Status::Copied { raw } => ended = Some(Ok(raw)),
                 Status::Failed { message, .. } => ended = Some(Err(message)),
                 Status::NothingHeard => ended = Some(Err("nothing heard".to_owned())),
                 Status::Cancelled => {

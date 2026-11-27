@@ -76,6 +76,17 @@ struct RoleView {
     reasoning_effort: Option<String>,
     /// The providers that can fill the role, recommended first (R-7).
     providers: Vec<ProviderView>,
+    /// The role's fallback, when one is set (R-24). `ready` is false when its key is missing,
+    /// which turns its row red in the Setup check (R-24a).
+    fallback: Option<FallbackView>,
+}
+
+#[derive(Debug, Serialize)]
+struct FallbackView {
+    provider: String,
+    name: String,
+    model: String,
+    ready: bool,
 }
 
 /// A provider in a role's menu. Never holds a key: only whether one is set.
@@ -193,7 +204,20 @@ fn roles_view(config: &Config, keys: &dyn SecretStore) -> Vec<RoleView> {
             ),
         };
         let recommended = Config::recommended(role).0;
+        let fallback = match role {
+            Role::Cleanup => config.cleanup.fallback.as_ref(),
+            Role::Speech => None,
+        }
+        .map(|f| FallbackView {
+            provider: f.provider.clone(),
+            name: config
+                .provider(&f.provider)
+                .map_or_else(|| f.provider.clone(), |p| p.name.clone()),
+            model: f.model.clone(),
+            ready: any::fallback_ready(config, role, keys).unwrap_or(false),
+        });
         RoleView {
+            fallback,
             role: role.section(),
             label,
             provider: provider.clone(),
@@ -358,6 +382,48 @@ pub fn provider_choose(
     })?;
     use_new_providers(&app);
     Ok("saved")
+}
+
+/// Sets a role's fallback (R-24a): tests the provider and model first, with the key it has,
+/// and saves only when Test passes. Returns the time Test took in ms.
+#[tauri::command]
+pub async fn fallback_set(
+    app: AppHandle,
+    role: String,
+    provider: String,
+    model: String,
+) -> Result<u64, String> {
+    let role = role_named(&role)?;
+    let path = config_path(&app);
+    let text = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let candidate =
+        config::set_fallback(&text, role, Some((&provider, &model))).map_err(|e| e.to_string())?;
+    let config = Config::parse(&candidate, &path).map_err(|e| e.to_string())?;
+    let keys = KeychainStore::new();
+    let start = Instant::now();
+    match role {
+        Role::Cleanup => any::cleanup_fallback(&config, &keys)
+            .map_err(|e| e.message)?
+            .check()
+            .await
+            .map_err(|e| e.message)?,
+        Role::Speech => return Err("a speech fallback is not available yet".to_owned()),
+    }
+    let ms = start.elapsed().as_millis() as u64;
+    rewrite_config(&app, |text| {
+        config::set_fallback(text, role, Some((&provider, &model)))
+    })?;
+    use_new_providers(&app);
+    Ok(ms)
+}
+
+/// Removes a role's fallback.
+#[tauri::command]
+pub fn fallback_clear(app: AppHandle, role: String) -> Result<(), String> {
+    let role = role_named(&role)?;
+    rewrite_config(&app, |text| config::set_fallback(text, role, None))?;
+    use_new_providers(&app);
+    Ok(())
 }
 
 /// "Reset to recommended": every role back to the recommended pair; keys stay (R-10).

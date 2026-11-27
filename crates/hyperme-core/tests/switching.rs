@@ -30,7 +30,11 @@ async fn ac4_a_switch_takes_effect_on_the_next_dictation_only() {
     h.frames(5, 5).await;
     tokio::time::sleep(ms(300)).await;
     h.send(Event::KeyUp).await;
-    h.until(&Status::Done { raw: false }).await;
+    h.until(&Status::Done {
+        raw: false,
+        via: None,
+    })
+    .await;
     assert_eq!(log.pasted(), ["Cleaned by the old provider."]);
 
     h.until(&Status::Idle).await;
@@ -39,7 +43,11 @@ async fn ac4_a_switch_takes_effect_on_the_next_dictation_only() {
     h.frames(0, 5).await;
     tokio::time::sleep(ms(300)).await;
     h.send(Event::KeyUp).await;
-    h.until(&Status::Done { raw: false }).await;
+    h.until(&Status::Done {
+        raw: false,
+        via: None,
+    })
+    .await;
     assert_eq!(
         log.pasted(),
         [
@@ -74,7 +82,11 @@ async fn a_saved_dictionary_follows_a_provider_switch() {
     h.frames(0, 5).await;
     tokio::time::sleep(ms(300)).await;
     h.send(Event::KeyUp).await;
-    h.until(&Status::Done { raw: false }).await;
+    h.until(&Status::Done {
+        raw: false,
+        via: None,
+    })
+    .await;
     assert!(
         new_log.has("dictionary:\n\nThe speaker's dictionary: Zentrix."),
         "{:?}",

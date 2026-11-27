@@ -91,6 +91,7 @@
     <div class="row" data-words="microphone permission"><div class="what">Microphone<small>macOS asks the first time you dictate.</small></div><button data-open="microphone">Open</button></div>
     <div class="row" data-words="speech key speechmatics"><div class="what">Speech key<small id="setup-speech-name"></small></div><span class="state" id="setup-speech"></span></div>
     <div class="row" data-words="cleanup key groq"><div class="what">Cleanup key<small id="setup-cleanup-name"></small></div><span class="state" id="setup-cleanup"></span></div>
+    <div id="setup-fallbacks"></div>
     <div id="setup-connectors"></div>
   </section>
 
@@ -269,6 +270,17 @@
     mark($('setup-input'), view.setup.input_monitoring, 'Allowed', 'Not allowed');
     mark($('setup-speech'), view.keys.speech, 'Key saved', 'No key');
     mark($('setup-cleanup'), view.keys.cleanup, 'Key saved', 'No key');
+    // specs/96, R-24a: a fallback whose key went missing is skipped, and its row turns red.
+    const fallbacks = $('setup-fallbacks');
+    fallbacks.textContent = '';
+    for (const r of view.roles || []) {
+      if (!r.fallback) continue;
+      const state = el('span', { className: 'state' });
+      mark(state, r.fallback.ready, 'Key saved', 'No key: skipped until you add it');
+      fallbacks.append(el('div', { className: 'row' },
+        el('div', { className: 'what' }, r.label + ' fallback', el('small', {}, r.fallback.name + ' · ' + r.fallback.model)),
+        state));
+    }
     mark($('speech-state'), view.keys.speech, 'Key saved', 'No key yet');
     mark($('cleanup-state'), view.keys.cleanup, 'Key saved', 'No key yet');
     if (!c) return;
@@ -391,7 +403,64 @@
       const hint = el('td', { className: 'hint', colSpan: 4, id: 'hint-' + r.role });
       body.append(el('tr', {}, hint));
       if (want.model) showHint(hint, r.role, chosen.id, want.model);
+      if (r.role === 'cleanup') body.append(fallbackRow(r));
     }
+  }
+
+  // specs/96, R-24 to R-24a: one fallback per role, saved only once its Test passes.
+  function fallbackRow(r) {
+    const f = r.fallback;
+    const menu = el('select', { 'aria-label': r.label + ' fallback provider' });
+    menu.add(new Option('None', ''));
+    for (const p of r.providers) {
+      if (p.id !== 'local') menu.add(new Option(p.name, p.id, false, f && p.id === f.provider));
+    }
+    const model = el('input', { type: 'text', value: f ? f.model : '', placeholder: 'Model', 'aria-label': r.label + ' fallback model' });
+    const state = el('span', { className: 'state' });
+    const go = el('button', { textContent: 'Test and save' });
+    // One key per provider (D-2): a fallback with no key yet takes it here.
+    const keyField = el('input', { type: 'password', placeholder: 'Paste the key', autocomplete: 'off', 'aria-label': r.label + ' fallback key' });
+    const showKey = () => {
+      const p = r.providers.find((x) => x.id === menu.value);
+      keyField.classList.toggle('hidden', !(p && p.key_required && !p.has_key));
+    };
+    if (f) mark(state, f.ready, 'Only if ' + (r.providers.find((p) => p.id === r.provider) || { name: r.provider }).name + ' fails', 'No key: skipped');
+    const pickModel = () => {
+      const p = r.providers.find((x) => x.id === menu.value);
+      model.value = p && p.models.length ? p.models[0].id : '';
+    };
+    menu.addEventListener('change', async () => {
+      if (!menu.value) {
+        try { await invoke('fallback_clear', { role: r.role }); } catch (e) { $('error').textContent = String(e); }
+        await refresh();
+        return;
+      }
+      pickModel();
+      showKey();
+      state.textContent = 'Not saved until Test passes';
+      state.className = 'state warn';
+    });
+    go.addEventListener('click', async () => {
+      if (!menu.value || !model.value.trim()) { $('error').textContent = 'Pick a fallback provider and model.'; return; }
+      state.textContent = 'Testing…';
+      state.className = 'state warn';
+      try {
+        if (keyField.value.trim() && !keyField.classList.contains('hidden')) {
+          await invoke('key_set', { role: r.role, key: keyField.value, provider: menu.value });
+          keyField.value = '';
+        }
+        const ms = await invoke('fallback_set', { role: r.role, provider: menu.value, model: model.value.trim() });
+        $('error').textContent = '';
+        await refresh();
+        const fresh = $('fallback-state-' + r.role);
+        if (fresh) mark(fresh, true, 'Works · ' + ms + ' ms · saved', '');
+      } catch (e) { mark(state, false, '', String(e) + ' Not saved.'); }
+    });
+    state.id = 'fallback-state-' + r.role;
+    showKey();
+    return el('tr', { id: 'fallback-' + r.role },
+      el('td', { className: 'faint' }, 'Fallback'), el('td', {}, menu), el('td', {}, model),
+      el('td', {}, el('div', { className: 'key' }, state, keyField, go)));
   }
 
   async function showHint(cell, role, provider, model) {

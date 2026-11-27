@@ -67,8 +67,17 @@ impl FileTimingLog {
             u8::from(t.fallback).to_string(),
             clean(&self.names.speech_provider),
             clean(&self.names.speech_model),
-            clean(&self.names.cleanup_provider),
-            clean(&self.names.cleanup_model),
+            // specs/96, R-27: the fallback that answered, when one did.
+            clean(
+                t.cleanup_via
+                    .as_ref()
+                    .map_or(&self.names.cleanup_provider, |v| &v.0),
+            ),
+            clean(
+                t.cleanup_via
+                    .as_ref()
+                    .map_or(&self.names.cleanup_model, |v| &v.1),
+            ),
         ]
         .join("\t")
     }

@@ -27,7 +27,7 @@ use hyperme_platform::paste::{ClipboardInserter, RESTORE_AFTER};
 use hyperme_platform::sounds::SystemSounds;
 use hyperme_platform::timing::{FileTimingLog, Names};
 use hyperme_platform::trace_store::{Labels, TraceSettings, TraceStore};
-use hyperme_providers::any::{self, AnyCleanup, AnySpeech};
+use hyperme_providers::any::{self, AnySpeech};
 use hyperme_providers::speechmatics::SAMPLE_RATE;
 use tauri::{AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, Position, Size};
 use tauri_nspanel::ManagerExt;
@@ -52,7 +52,7 @@ struct Shared {
     /// Hotkey listening must live as long as the app.
     _hotkey: Option<HotkeyListener>,
     /// Replaces the providers the next dictation uses (specs/96-provider-settings, R-8).
-    providers: Option<watch::Sender<Arc<Providers<AnySpeech, AnyCleanup>>>>,
+    providers: Option<watch::Sender<Arc<Providers<AnySpeech, any::Cleanup>>>>,
     /// The timing log, whose provider and model names follow a switch.
     timing: Arc<Mutex<FileTimingLog>>,
     /// Timing is on in the config (R-30); the trace layer's timing sink reads it.
@@ -362,10 +362,10 @@ impl TimingLog for SharedTiming {
 
 /// The cleanup provider with the user's dictionary in its prompt (spec 93, R-4).
 fn with_dictionary(
-    providers: Providers<AnySpeech, AnyCleanup>,
+    providers: Providers<AnySpeech, any::Cleanup>,
     dictionary: &Dictionary,
     config: &Config,
-) -> Providers<AnySpeech, AnyCleanup> {
+) -> Providers<AnySpeech, any::Cleanup> {
     let cap = config.dictation.dictionary_prompt_cap as usize;
     Providers {
         cleanup: providers

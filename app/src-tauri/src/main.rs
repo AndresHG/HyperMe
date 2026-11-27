@@ -87,6 +87,8 @@ fn main() {
             settings::key_set,
             settings::key_test,
             settings::provider_choose,
+            settings::fallback_set,
+            settings::fallback_clear,
             settings::providers_reset,
             settings::provider_add,
             settings::provider_key_page,

@@ -269,7 +269,13 @@ async fn cleaned_text_is_pasted() {
     )
     .await;
     let (status, pasted, _) = dictate(&base, Duration::from_millis(1500)).await;
-    assert_eq!(status, Status::Done { raw: false });
+    assert_eq!(
+        status,
+        Status::Done {
+            raw: false,
+            via: None
+        }
+    );
     assert_eq!(
         pasted,
         "So the deploy failed because of the cache invalidation."
@@ -285,7 +291,13 @@ async fn slow_cleanup_pastes_raw_at_the_deadline() {
     let (base, _) = serve(models(), slow).await;
     let deadline = Duration::from_millis(300);
     let (status, pasted, waited) = dictate(&base, deadline).await;
-    assert_eq!(status, Status::Done { raw: true });
+    assert_eq!(
+        status,
+        Status::Done {
+            raw: true,
+            via: None
+        }
+    );
     assert_eq!(pasted, RAW);
     let off = waited.abs_diff(deadline);
     assert!(
@@ -303,7 +315,13 @@ async fn failed_cleanup_pastes_raw() {
     )
     .await;
     let (status, pasted, waited) = dictate(&base, Duration::from_millis(1500)).await;
-    assert_eq!(status, Status::Done { raw: true });
+    assert_eq!(
+        status,
+        Status::Done {
+            raw: true,
+            via: None
+        }
+    );
     assert_eq!(pasted, RAW);
     assert!(
         waited < Duration::from_millis(500),
@@ -370,7 +388,13 @@ async fn ac9_a_slow_local_server_falls_back_to_raw() {
     let keyless = ChatCleanup::new(&config, "").unwrap();
     let deadline = Duration::from_millis(300);
     let (status, pasted, waited) = dictate_with(keyless, deadline).await;
-    assert_eq!(status, Status::Done { raw: true });
+    assert_eq!(
+        status,
+        Status::Done {
+            raw: true,
+            via: None
+        }
+    );
     assert_eq!(pasted, RAW);
     assert!(
         waited.abs_diff(deadline) <= Duration::from_millis(20),
