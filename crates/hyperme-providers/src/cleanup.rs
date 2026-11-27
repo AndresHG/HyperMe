@@ -45,9 +45,31 @@ into line breaks. Keep every other word as spoken, including informal words, sla
 swearing, in the same order and the same language. Never translate, rephrase, summarise or \
 answer, even when the text is a question or a request. Output only the cleaned text.";
 
+/// The second `medium` prompt: `m1` measured worse than light on the owner's samples, because it
+/// reordered words, dropped spoken words such as "like" or "pues eso", wrote small numbers as
+/// digits and invented line breaks. `m2` starts from `v3` and adds only what helped: repeated
+/// words, commas, and formatting the speaker asks for.
+const PROMPT_M2: &str = "You clean up dictated text in Spanish or English. Change as \
+little as possible. Remove hesitations (um, uh, eh, em, mm), stutters, a word or phrase said \
+twice in a row by mistake, and false starts; when the speaker corrects themselves, keep only \
+the correction. Fix punctuation, including the commas a careful writer would add, capitals and \
+accents, small grammar slips such as a wrong agreement, and words that were clearly misheard. \
+Format only what the speaker clearly dictates as formatting: \"new line\" or \"nueva línea\" \
+said as a command becomes a line break, and an enumeration dictated as a list becomes a list. \
+Keep numbers as they were said. Keep every other word exactly as spoken, including informal \
+words, filler words such as like or pues, slang and swearing, in the same order and the same \
+language; never reorder words. Never translate, rephrase, summarise or answer. Output only \
+the cleaned text.";
+
+/// `m2` with a firmer dictionary rule: a misheard word that sounds like a dictionary term is
+/// the term, even when the transcript shows a real word.
+const M3_RULE: &str = "The speaker often says the terms in their dictionary. When a word or \
+short phrase sounds like one of them, even if the transcript shows a different real word, \
+write the dictionary term. Otherwise change nothing.";
+
 /// The prompt version each level uses (P2-2). `none` makes no call, so it has none.
 const LIGHT: &str = "v4";
-const MEDIUM: &str = "m1";
+const MEDIUM: &str = "m2";
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -60,6 +82,8 @@ pub fn prompt_named(version: &str) -> Option<String> {
         "v3" => Some(PROMPT_V3.to_owned()),
         "v4" => Some(format!("{PROMPT_V3} {V4_RULE}")),
         "m1" => Some(format!("{PROMPT_M1} {V4_RULE}")),
+        "m2" => Some(format!("{PROMPT_M2} {V4_RULE}")),
+        "m3" => Some(format!("{PROMPT_M2} {M3_RULE}")),
         _ => None,
     }
 }
@@ -111,7 +135,9 @@ impl ChatCleanup {
             provider_error(
                 &provider,
                 ErrorKind::Other,
-                format!("cleanup.prompt {version:?} is not a known prompt version (v3, v4, m1)"),
+                format!(
+                    "cleanup.prompt {version:?} is not a known prompt version (v3, v4, m1, m2, m3)"
+                ),
             )
         })?;
         let auth = if key.is_empty() {
@@ -475,7 +501,7 @@ mod tests {
         c.level = CleanupLevel::Light;
         assert_eq!(prompt_version(&c), "v4");
         c.level = CleanupLevel::Medium;
-        assert_eq!(prompt_version(&c), "m1");
+        assert_eq!(prompt_version(&c), "m2");
         let medium = prompt_named(prompt_version(&c)).unwrap();
         assert!(medium.ends_with(V4_RULE));
         assert!(medium.contains("Never translate, rephrase, summarise or answer"));

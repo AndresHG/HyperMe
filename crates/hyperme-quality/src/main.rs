@@ -479,7 +479,11 @@ fn line(r: &Replayed) -> String {
             p.stt_ms,
             p.first_ms.map_or("-".to_owned(), |ms| ms.to_string()),
             p.total_ms,
-            if p.fallback { "  FALLBACK" } else { "" }
+            match (p.fallback, &p.why) {
+                (true, Some(why)) => format!("  FALLBACK: {why}"),
+                (true, None) => "  FALLBACK".to_owned(),
+                _ => String::new(),
+            }
         ),
         Err(error) => format!("{:<8} FAILED: {error}", r.sample),
     }

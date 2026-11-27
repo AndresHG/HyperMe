@@ -45,8 +45,9 @@ model = "openai/gpt-oss-20b"
 reasoning_effort = "low"
 # How much the model changes the transcript: "none" (no model call: the transcript after
 # dictionary substitution, with a capital and a full stop), "light" (fillers, punctuation and
-# clear mishearings only) or "medium" (also repetitions, false starts, small grammar slips and
-# spoken formatting such as numbers, lists and "new line"). It never rephrases or translates.
+# clear mishearings only) or "medium" (also words said twice, false starts, commas, small
+# grammar slips and formatting the speaker dictates, such as lists and "new line"). It never
+# rephrases or translates.
 level = "light"
 # Optional: a named prompt version instead of the level's, for experiments.
 # prompt = "v4"

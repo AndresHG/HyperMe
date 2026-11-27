@@ -14,6 +14,7 @@ fn done(sample: &str, raw: &str, text: &str, fallback: bool, stt: u64, total: u6
         outcome: Ok(Pasted {
             text: text.to_owned(),
             fallback,
+            why: None,
             stt_ms: stt,
             first_ms: (!fallback).then_some(stt + 100),
             total_ms: total,

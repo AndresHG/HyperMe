@@ -68,7 +68,7 @@ repository.
 
 ```bash
 cargo run --release -p hyperme-quality -- run --set spikes/flowbench/samples \
-  --reuse-raw spikes/flowbench/samples/raw-2026-11-27.json --prompt v4 --pace-ms 1000
+  --reuse-raw spikes/flowbench/samples/raw-2026-11-27.json --level light --pace-ms 2500
 ```
 
 A live run takes about ten minutes, costs speech minutes, and the transcripts change a little from
