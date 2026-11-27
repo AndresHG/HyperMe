@@ -169,6 +169,17 @@ impl History for NoHistory {
     fn audio(&self, _id: DictationId) -> Result<Vec<i16>, Error> {
         Err(no_history())
     }
+    fn app(&self, _id: DictationId) -> Result<Option<String>, Error> {
+        Err(no_history())
+    }
+    fn replace_text(
+        &mut self,
+        _id: DictationId,
+        _text: &str,
+        _lang: Option<&str>,
+    ) -> Result<(), Error> {
+        Err(no_history())
+    }
 }
 
 fn no_history() -> Error {

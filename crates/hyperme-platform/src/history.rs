@@ -55,6 +55,62 @@ pub struct Item {
     /// `recording`, `done` or `failed`.
     pub state: String,
     pub audio_bytes: u64,
+    /// The audio file is still on disk and holds more than a header, so the item can be
+    /// retried (#98 R-16).
+    pub has_audio: bool,
+    /// Why a failed dictation failed (#98 R-11).
+    pub message: Option<String>,
+}
+
+/// The two numbers on the Home page (#98 R-7).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Stats {
+    /// Words of the dictations done since Monday 00:00 local time.
+    pub words_this_week: u64,
+    /// Seconds those words would take to type at [`TYPING_WPM`], less the time spent speaking
+    /// them; never below zero.
+    pub seconds_saved: i64,
+}
+
+/// The typing speed time saved is counted against (#98 R-7).
+pub const TYPING_WPM: u64 = 40;
+
+/// The columns [`item_from_row`] reads, in order.
+const ITEM_COLUMNS: &str = "id, started_ms, app, language, text, state, audio_bytes, message";
+
+/// An item from a row of [`ITEM_COLUMNS`], before its audio is checked.
+fn item_from_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Item> {
+    Ok(Item {
+        id: r.get(0)?,
+        started_ms: r.get(1)?,
+        app: r.get(2)?,
+        language: r.get(3)?,
+        text: r.get(4)?,
+        state: r.get(5)?,
+        audio_bytes: r.get::<_, i64>(6)? as u64,
+        has_audio: false,
+        message: r.get(7)?,
+    })
+}
+
+/// Lower case without accents, for search (#98 R-12): "Canción" and "CANCION" both fold to
+/// "cancion". A small map of the Latin letters Spanish and English text meets; other letters
+/// are only lower-cased.
+fn fold(text: &str) -> String {
+    text.chars()
+        .flat_map(char::to_lowercase)
+        .map(|c| match c {
+            'à' | 'á' | 'â' | 'ã' | 'ä' | 'å' | 'ā' => 'a',
+            'ç' => 'c',
+            'è' | 'é' | 'ê' | 'ë' | 'ē' => 'e',
+            'ì' | 'í' | 'î' | 'ï' | 'ī' => 'i',
+            'ñ' => 'n',
+            'ò' | 'ó' | 'ô' | 'õ' | 'ö' | 'ø' | 'ō' => 'o',
+            'ù' | 'ú' | 'û' | 'ü' | 'ū' => 'u',
+            'ý' | 'ÿ' => 'y',
+            c => c,
+        })
+        .collect()
 }
 
 /// The history store.
@@ -135,6 +191,10 @@ impl SqliteHistory {
                 message TEXT,
                 audio_bytes INTEGER NOT NULL DEFAULT 0
             );",
+        )
+        .map_err(|e| error(format!("creating the index: {e}")))?;
+        db.execute_batch(
+            "CREATE INDEX IF NOT EXISTS dictations_started ON dictations (started_ms, id);",
         )
         .map_err(|e| error(format!("creating the index: {e}")))?;
         let mut store = SqliteHistory {
@@ -283,22 +343,133 @@ impl SqliteHistory {
 
     /// Every dictation, newest first.
     pub fn items(&self) -> Result<Vec<Item>, Error> {
+        self.query_items(
+            &format!("SELECT {ITEM_COLUMNS} FROM dictations ORDER BY started_ms DESC, id DESC"),
+            [],
+        )
+    }
+
+    fn query_items(&self, sql: &str, args: impl rusqlite::Params) -> Result<Vec<Item>, Error> {
+        let mut query = Self::sql(self.db.prepare(sql))?;
+        let rows = Self::sql(query.query_map(args, item_from_row))?;
+        let items: Vec<Item> = Self::sql(rows.collect())?;
+        Ok(items.into_iter().map(|i| self.with_audio(i)).collect())
+    }
+
+    /// Finished dictations older than `before` (start time, then id), newest first, that pass
+    /// `keep`, up to `limit`. Keyset paging: a dictation added between two pages is newer than
+    /// the cursor, so it never shifts a later page (#98 AC-7). Dictations still recording are
+    /// left out.
+    fn scan(
+        &self,
+        before: Option<(i64, DictationId)>,
+        limit: usize,
+        mut keep: impl FnMut(&Item) -> bool,
+    ) -> Result<Vec<Item>, Error> {
+        let (ms, id) = before.unwrap_or((i64::MAX, DictationId::MAX));
+        let mut query = Self::sql(self.db.prepare(&format!(
+            "SELECT {ITEM_COLUMNS} FROM dictations
+             WHERE state != 'recording' AND (started_ms < ?1 OR (started_ms = ?1 AND id < ?2))
+             ORDER BY started_ms DESC, id DESC"
+        )))?;
+        let mut rows = Self::sql(query.query(params![ms, id]))?;
+        let mut items = Vec::new();
+        while items.len() < limit {
+            let Some(row) = Self::sql(rows.next())? else {
+                break;
+            };
+            let item = Self::sql(item_from_row(row))?;
+            if keep(&item) {
+                items.push(self.with_audio(item));
+            }
+        }
+        Ok(items)
+    }
+
+    /// A page of History: up to `limit` finished dictations older than `before`, the start
+    /// time and id of the last item of the previous page (#98 R-10, AC-7).
+    pub fn page(
+        &self,
+        before: Option<(i64, DictationId)>,
+        limit: usize,
+    ) -> Result<Vec<Item>, Error> {
+        self.scan(before, limit, |_| true)
+    }
+
+    /// As [`page`](Self::page), only the dictations whose text holds every word of `query`,
+    /// ignoring case and accents (#98 R-12, AC-8). In Rust over the texts: a 30-day history is
+    /// a few thousand items, too few to need a full-text index.
+    pub fn search(
+        &self,
+        query: &str,
+        before: Option<(i64, DictationId)>,
+        limit: usize,
+    ) -> Result<Vec<Item>, Error> {
+        let folded = fold(query);
+        let words: Vec<&str> = folded.split_whitespace().collect();
+        self.scan(before, limit, |item| {
+            let text = fold(item.text.as_deref().unwrap_or_default());
+            words.iter().all(|w| text.contains(w))
+        })
+    }
+
+    /// Words this week and time saved (#98 R-7, AC-6). The week starts on Monday at 00:00 in
+    /// the local time `utc_offset_minutes` east of UTC. Speaking time is the length of each
+    /// dictation's audio.
+    pub fn stats(&self, now_ms: i64, utc_offset_minutes: i32) -> Result<Stats, Error> {
+        let offset_ms = i64::from(utc_offset_minutes) * 60_000;
+        let local_day = (now_ms + offset_ms).div_euclid(DAY_MS);
+        // Day 4 since the epoch, 5 January 1970, was a Monday.
+        let since_monday = (local_day - 4).rem_euclid(7);
+        let week_start = (local_day - since_monday) * DAY_MS - offset_ms;
+
         let mut query = Self::sql(self.db.prepare(
-            "SELECT id, started_ms, app, language, text, state, audio_bytes FROM dictations
-             ORDER BY started_ms DESC, id DESC",
+            "SELECT text, audio_bytes FROM dictations
+             WHERE state = 'done' AND started_ms >= ?1 AND started_ms <= ?2",
         ))?;
-        let rows = Self::sql(query.query_map([], |r| {
-            Ok(Item {
-                id: r.get(0)?,
-                started_ms: r.get(1)?,
-                app: r.get(2)?,
-                language: r.get(3)?,
-                text: r.get(4)?,
-                state: r.get(5)?,
-                audio_bytes: r.get::<_, i64>(6)? as u64,
-            })
-        }))?;
-        Self::sql(rows.collect())
+        let mut rows = Self::sql(query.query(params![week_start, now_ms]))?;
+        let mut words: u64 = 0;
+        let mut audio_bytes: u64 = 0;
+        while let Some(row) = Self::sql(rows.next())? {
+            let text: Option<String> = Self::sql(row.get(0))?;
+            words += text.map_or(0, |t| t.split_whitespace().count() as u64);
+            let bytes = Self::sql(row.get::<_, i64>(1))? as u64;
+            audio_bytes += bytes.saturating_sub(HEADER_BYTES);
+        }
+        let typing_ms = words * 60_000 / TYPING_WPM;
+        let speaking_ms = audio_bytes * 1000 / (u64::from(SAMPLE_RATE) * 2);
+        Ok(Stats {
+            words_this_week: words,
+            seconds_saved: (typing_ms.saturating_sub(speaking_ms) / 1000) as i64,
+        })
+    }
+
+    fn with_audio(&self, mut item: Item) -> Item {
+        item.has_audio = item.audio_bytes > HEADER_BYTES && self.audio_path(item.id).exists();
+        item
+    }
+
+    /// One dictation by id (#98).
+    pub fn item(&self, id: DictationId) -> Result<Option<Item>, Error> {
+        let sql = format!("SELECT {ITEM_COLUMNS} FROM dictations WHERE id = ?1");
+        Ok(self.query_items(&sql, params![id])?.pop())
+    }
+
+    /// Deletes a dictation's text and audio (#98 R-18, AC-12).
+    pub fn delete_item(&mut self, id: DictationId) -> Result<(), Error> {
+        self.delete(id)
+    }
+
+    /// The failed dictations that still have their audio, newest first: all History lists
+    /// while history is off (#98 R-19, AC-13).
+    pub fn failed_with_audio(&self) -> Result<Vec<Item>, Error> {
+        let sql = format!(
+            "SELECT {ITEM_COLUMNS} FROM dictations WHERE state = 'failed'
+             ORDER BY started_ms DESC, id DESC"
+        );
+        let mut items = self.query_items(&sql, [])?;
+        items.retain(|i| i.has_audio);
+        Ok(items)
     }
 }
 
@@ -371,5 +542,41 @@ impl History for SqliteHistory {
             .iter()
             .map(|b| i16::from_le_bytes(*b))
             .collect())
+    }
+
+    fn app(&self, id: DictationId) -> Result<Option<String>, Error> {
+        Self::sql(
+            self.db
+                .query_row(
+                    "SELECT app FROM dictations WHERE id = ?1",
+                    params![id],
+                    |r| r.get::<_, Option<String>>(0),
+                )
+                .optional(),
+        )?
+        .ok_or_else(|| error(format!("no dictation {id}")))
+    }
+
+    /// #98 R-16: the audio stays. With history off, a successful retry leaves nothing behind,
+    /// as `done` does (Phase 1 R-28). An unknown or still-recording id is an error.
+    fn replace_text(
+        &mut self,
+        id: DictationId,
+        text: &str,
+        language: Option<&str>,
+    ) -> Result<(), Error> {
+        if !self.settings.enabled {
+            return self.delete(id);
+        }
+        let now = (self.now)();
+        let changed = Self::sql(self.db.execute(
+            "UPDATE dictations SET state = 'done', text = ?2, language = ?3, finished_ms = ?4,
+             message = NULL WHERE id = ?1 AND state != 'recording'",
+            params![id, text, language, now],
+        ))?;
+        if changed == 0 {
+            return Err(error(format!("no finished dictation {id}")));
+        }
+        Ok(())
     }
 }

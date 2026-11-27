@@ -23,10 +23,12 @@ objc2 = "0.6.5"
 security-framework = "3.7.0"
 # Notification blocks for presence.rs; already in the tree through Tauri, MIT.
 block2 = "0.6.2"
-objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "block2", "NSArray", "NSData", "NSDate", "NSDistributedNotificationCenter", "NSEnumerator", "NSNotification", "NSOperation", "NSProcessInfo", "NSString", "NSTimeZone"] }
-objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "libc", "NSPasteboard", "NSPasteboardItem", "NSRunningApplication", "NSSound", "NSWorkspace"] }
+objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "block2", "NSArray", "NSData", "NSDate", "NSDistributedNotificationCenter", "NSEnumerator", "NSGeometry", "NSNotification", "NSOperation", "NSProcessInfo", "NSString", "NSTimeZone"] }
+objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "libc", "NSApplication", "NSEvent", "NSGraphicsContext", "NSPasteboard", "NSPasteboardItem", "NSResponder", "NSRunningApplication", "NSSound", "NSWorkspace"] }
 
 [dev-dependencies]
+# The mail pull test's synthetic tool answers. Already in the workspace.
+serde_json.workspace = true
 tokio = { workspace = true, features = ["macros", "rt", "sync", "time"] }
 
 [lints]

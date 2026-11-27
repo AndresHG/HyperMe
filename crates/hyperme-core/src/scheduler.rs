@@ -141,13 +141,19 @@ pub trait JobStore: Send {
 }
 
 /// What the app asks of the scheduler.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Command {
     /// "Pause Hyper for 1 hour": hold cards and nudges until then (R-23).
     Pause {
         until: UtcDateTime,
     },
     Resume,
+    /// Runs one job now, by name, such as `sync:google-calendar` for "Hyper, what's next"
+    /// (specs/97-google-connectors, R-16). An unknown or disabled job is ignored; on low power
+    /// a sync still runs, since the user asked.
+    Run {
+        job: String,
+    },
 }
 
 /// What the scheduler tells the app.
@@ -433,6 +439,23 @@ impl<C: Clock, P: Presence, R: Runner, S: JobStore> Scheduler<C, P, R, S> {
                 self.run(i, now).await;
             }
         }
+        // An "every n minutes" job that came due while nobody was there runs as the user
+        // sits down, not up to n minutes later: after a wake, this is the pull on wake
+        // (specs/97-google-connectors, R-17).
+        if !self.low_power {
+            for i in 0..self.jobs.len() {
+                let job = &self.jobs[i].job;
+                if let (true, Schedule::EveryWhilePresent { minutes }) = (job.enabled, job.schedule)
+                    && minutes > 0
+                {
+                    let every = SignedDuration::minutes(i64::from(minutes));
+                    if job.last_run.is_none_or(|ran| ran + every <= now) {
+                        self.run(i, now).await;
+                        self.jobs[i].next = Some(now + every);
+                    }
+                }
+            }
+        }
     }
 
     /// Runs each "every n minutes" job once, after low power (R-33a).
@@ -502,6 +525,16 @@ impl<C: Clock, P: Presence, R: Runner, S: JobStore> Scheduler<C, P, R, S> {
         match command {
             Command::Pause { until } if until > now => self.paused_until = Some(until),
             Command::Pause { .. } | Command::Resume => self.resume(now).await,
+            Command::Run { job } => {
+                if let Some(i) = self
+                    .jobs
+                    .iter()
+                    .position(|e| e.job.name == job && e.job.enabled)
+                {
+                    self.run(i, now).await;
+                    self.jobs[i].next = self.next_for(i, now);
+                }
+            }
         }
     }
 

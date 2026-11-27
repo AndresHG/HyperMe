@@ -62,7 +62,14 @@ pub fn reopen(app: &AppHandle) {
     if onboarding::should_open(&at_launch(app)) {
         open(app, onboarding::Step::Welcome);
     } else {
-        crate::settings::open(app, "setup");
+        crate::home::open(app, "home");
+    }
+}
+
+/// Brings an open walkthrough to the front, activating the app (#130). Nothing when it is closed.
+pub fn bring_to_front(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window(WALKTHROUGH) {
+        let _ = window.set_focus();
     }
 }
 
