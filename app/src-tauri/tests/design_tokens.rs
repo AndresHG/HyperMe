@@ -5,7 +5,13 @@
 use std::path::{Path, PathBuf};
 
 /// Files in `app/ui` held to the tokens. Each page is added as it moves onto `tokens.css`.
-const MIGRATED: &[&str] = &["components.css", "pill.html", "settings.html"];
+const MIGRATED: &[&str] = &[
+    "components.css",
+    "dictionary.css",
+    "home.html",
+    "pill.html",
+    "settings.html",
+];
 
 /// Properties whose lengths must be tokens (`0`, `auto` and keywords pass).
 const SIZED: &[&str] = &[
