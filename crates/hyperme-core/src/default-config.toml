@@ -25,6 +25,9 @@ show_while_idle = true
 talking_minutes_per_day = 30
 # Optional: a text file with your own terms, one per line.
 # dictionary = "/Users/you/hyperme-dictionary.txt"
+# Up to this many dictionary words, the cleanup prompt carries them all; above it, only the ones
+# that look relevant to each dictation. 10 to 1000.
+dictionary_prompt_cap = 150
 
 [speech]
 # Streaming speech-to-text: a provider from the catalogue and one of its models. The catalogue
