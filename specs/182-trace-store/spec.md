@@ -1,6 +1,7 @@
 # Trace store: local traces of every dictation
 
-**Status:** draft, for the owner's approval. TS-1 answered by the owner, 27 November 2026.
+**Status:** implemented, 27 November 2026: all five slices merged ([tasks.md](tasks.md)). TS-1
+answered by the owner, 27 November 2026.
 **Issue:** [#182](https://github.com/AndresHG/hyperme/issues/182). **Size:** L (new crates, core
 and platform, changes spec 25 R-30).
 **Traces to:** [telemetry research](../../docs/research/2026-11-27-telemetry-and-tracing.md)
