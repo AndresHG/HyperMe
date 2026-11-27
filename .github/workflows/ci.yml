@@ -94,3 +94,15 @@ jobs:
         # Tests never call a paid API: they use local fakes and test servers,
         # so CI needs no keys.
         run: cargo test --locked
+
+      - name: Developer trace exports (spec 182, AC-9)
+        # The exports are tested with their features on, against a local OTLP receiver; the
+        # app as released must contain neither feature's crates.
+        if: matrix.crate == '.'
+        run: |
+          cargo clippy -p hyperme-devtrace --all-targets --features otel,trace-chrome --locked -- -D warnings
+          cargo test -p hyperme-devtrace --features otel,trace-chrome --locked
+          if cargo tree -p hyperme-app -e normal --target all --locked | grep -E 'opentelemetry|tracing-chrome'; then
+            echo "A release build must not contain the developer trace exports" >&2
+            exit 1
+          fi

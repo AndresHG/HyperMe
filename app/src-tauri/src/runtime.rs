@@ -80,6 +80,20 @@ fn lock(app: &AppHandle) -> std::sync::MutexGuard<'_, Shared> {
         .unwrap_or_else(PoisonError::into_inner)
 }
 
+/// The developer exports of this session, flushed at exit (spec 182, R-15, R-16).
+static EXPORTS: Mutex<Option<hyperme_devtrace::Exports>> = Mutex::new(None);
+
+/// Writes out what the developer exports still hold. Called when the app exits.
+pub fn flush_exports() {
+    if let Some(mut exports) = EXPORTS
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .take()
+    {
+        exports.shutdown();
+    }
+}
+
 /// The warnings and errors file, `~/Library/Logs/HyperMe/warnings.log` (spec 182, R-14), with
 /// information and above echoed to standard error.
 fn warnings_layer(app: &AppHandle) -> WarningsLayer {
@@ -141,7 +155,11 @@ pub fn start(app: &AppHandle, menu: TrayMenu) {
         store.set_labels(labels(&config));
         sinks.push(store.clone());
     }
-    trace::install_with(sinks, warnings_layer(app));
+    // Developer builds only: a Perfetto file or OTLP export, from the environment (R-15, R-16).
+    let mut exports = hyperme_devtrace::Exports::from_env();
+    let extra = exports.take_layers();
+    trace::install_with(sinks, warnings_layer(app), extra);
+    *EXPORTS.lock().unwrap_or_else(PoisonError::into_inner) = Some(exports);
     app.manage::<State>(Mutex::new(Shared {
         events: None,
         view: None,

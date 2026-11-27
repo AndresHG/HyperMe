@@ -1,0 +1,30 @@
+[package]
+name = "hyperme-devtrace"
+description = "Developer-only trace exports (spec 182, R-15 to R-17): a Perfetto file and OTLP/HTTP. Never in a release build."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+rust-version.workspace = true
+
+[features]
+default = []
+# A Perfetto-readable trace file of the session (R-15).
+trace-chrome = ["dep:tracing-chrome"]
+# OTLP/HTTP export of spans (R-16).
+otel = ["dep:opentelemetry", "dep:opentelemetry_sdk", "dep:opentelemetry-otlp", "dep:tracing-opentelemetry"]
+
+[dependencies]
+tracing = { version = "0.1.44", default-features = false, features = ["std"] }
+tracing-subscriber = { version = "0.3.23", default-features = false, features = ["registry", "std"] }
+tracing-chrome = { version = "0.7.2", optional = true }
+opentelemetry = { version = "0.33.1", default-features = false, features = ["trace"], optional = true }
+opentelemetry_sdk = { version = "0.33.1", default-features = false, features = ["trace"], optional = true }
+opentelemetry-otlp = { version = "0.33.1", default-features = false, features = ["trace", "http-proto", "reqwest-blocking-client"], optional = true }
+tracing-opentelemetry = { version = "0.34.0", default-features = false, optional = true }
+
+[dev-dependencies]
+hyperme-core.workspace = true
+
+[lints]
+workspace = true

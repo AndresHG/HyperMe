@@ -174,6 +174,7 @@ fn main() {
                 // The walkthrough opens during setup, before launch has finished; once it has,
                 // bring it to the front explicitly, as the app no longer activates itself (#130).
                 tauri::RunEvent::Ready => walkthrough::bring_to_front(_app),
+                tauri::RunEvent::Exit => runtime::flush_exports(),
                 _ => {}
             }
         });

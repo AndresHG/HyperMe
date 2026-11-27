@@ -11,6 +11,12 @@ rust-version.workspace = true
 name = "hyperme"
 path = "src/main.rs"
 
+[features]
+# Developer builds only, never a release (spec 182, R-15 to R-17). Each is switched on at run
+# time by its environment variable: HYPERME_TRACE_CHROME=<path>, HYPERME_OTLP_ENDPOINT=<url>.
+trace-chrome = ["hyperme-devtrace/trace-chrome"]
+otel = ["hyperme-devtrace/otel"]
+
 [build-dependencies]
 tauri-build = { version = "2.7.6", default-features = false }
 
@@ -31,6 +37,9 @@ tauri-nspanel = "2.1.1"
 # native-tls like the rest of the app, so no second TLS stack (rustls, ring) comes in.
 tauri-plugin-updater = { version = "2.14.1", default-features = false, features = ["native-tls"] }
 tokio = { workspace = true, features = ["sync", "time"] }
+# Developer-only trace exports, compiled in only with the features below (spec 182, R-15 to
+# R-17). Without them it adds no crate beyond tracing-subscriber, already in the tree.
+hyperme-devtrace = { path = "../../crates/hyperme-devtrace" }
 # Warnings and errors as events, for the warnings file (spec 182, R-14). Already in the tree.
 tracing = { version = "0.1.44", default-features = false, features = ["std"] }
 # The clock for Settings → Connectors' sync ages (connectors.rs). Already in the tree.
