@@ -143,9 +143,11 @@ impl AppStyle {
             }
             AppStyle::Mail => {
                 "an email. Keep the tone formal: full punctuation and capitals. When a \
-                 greeting (Hi Ana, Hola Ana) or a sign-off (Thanks, Un saludo) was said, put \
-                 it on its own line, with the name under the sign-off, and separate topics \
-                 into paragraphs. Never add a greeting or sign-off that was not said."
+                 greeting (Hi Ana, Hola Ana) was said, put it on its own line ending in a \
+                 comma, even when the speaker ran it into the first sentence, and start the \
+                 next line with a capital. When a sign-off (Thanks, Un saludo) was said, put \
+                 it on its own line with the name alone under it, with no full stop. Separate \
+                 topics into paragraphs. Never add a greeting or sign-off that was not said."
             }
             AppStyle::Notes => "a notes app. Use lists and paragraphs where they help the reading.",
             AppStyle::Code => {
@@ -156,7 +158,7 @@ impl AppStyle {
             AppStyle::Terminal => {
                 "a terminal. Do not rewrite: remove only hesitations and false starts, keep \
                  commands, flags and file names exactly as said, and output a single line \
-                 with no lists or line breaks."
+                 with no lists, line breaks or full stop at the end."
             }
             AppStyle::Other => return format!("\n\nThe text will be pasted into {app}."),
         };
@@ -189,12 +191,35 @@ impl AppStyle {
             lines.pop();
         }
         match self {
-            AppStyle::Terminal => lines
-                .iter()
-                .map(|l| l.trim().trim_start_matches("- "))
-                .filter(|l| !l.is_empty())
-                .collect::<Vec<_>>()
-                .join(" "),
+            AppStyle::Terminal => {
+                let line = lines
+                    .iter()
+                    .map(|l| l.trim().trim_start_matches("- "))
+                    .filter(|l| !l.is_empty())
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                // A shell takes a final full stop as part of the command.
+                match line.strip_suffix('.') {
+                    Some(rest) if !rest.ends_with('.') => rest.to_owned(),
+                    _ => line,
+                }
+            }
+            AppStyle::Mail => {
+                // "Thanks," then "Peter.": a name under a sign-off takes no full stop.
+                let n = lines.len();
+                if n >= 2
+                    && lines[n - 2].ends_with(',')
+                    && let Some(name) = lines[n - 1].strip_suffix('.')
+                    && !name.is_empty()
+                    && name.split_whitespace().count() <= 3
+                    && name
+                        .split_whitespace()
+                        .all(|w| w.starts_with(char::is_uppercase))
+                {
+                    lines[n - 1] = name.to_owned();
+                }
+                lines.join("\n")
+            }
             AppStyle::Chat if lines.len() == 1 => {
                 let line = &lines[0];
                 let sentences = line.matches(['.', '!', '?']).count();
@@ -264,13 +289,28 @@ mod tests {
         assert_eq!(AppStyle::Mail.finish("Thanks."), "Thanks.");
     }
 
-    /// Issue 219, AC-4: a terminal never gets a line break, which a shell could run.
+    /// Issue 219, AC-4: a terminal never gets a line break, which a shell could run, nor a
+    /// final full stop.
     #[test]
     fn a_terminal_gets_one_line() {
         assert_eq!(
-            AppStyle::Terminal.finish("git status\n\n- then git diff"),
+            AppStyle::Terminal.finish("git status\n\n- then git diff."),
             "git status then git diff"
         );
+        assert_eq!(AppStyle::Terminal.finish("ls ..."), "ls ...");
+    }
+
+    /// Issue 219, AC-3: the name under a mail sign-off loses its full stop; a last sentence
+    /// keeps it.
+    #[test]
+    fn a_mail_sign_off_name_has_no_full_stop() {
+        let mail = "Hi Laura,\n\nSee you then.\n\nThanks,\nPeter.";
+        assert_eq!(
+            AppStyle::Mail.finish(mail),
+            "Hi Laura,\n\nSee you then.\n\nThanks,\nPeter"
+        );
+        let sentence = "Hi Laura,\n\nSee you at the office tomorrow morning.";
+        assert_eq!(AppStyle::Mail.finish(sentence), sentence);
     }
 
     /// Formatting, AC-5: list markers become `- `, bold and extra blank lines go.

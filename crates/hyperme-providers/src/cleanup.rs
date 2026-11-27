@@ -41,12 +41,14 @@ dictionary, write the dictionary term. Otherwise change nothing.";
 /// everywhere; the app line can still forbid formatting (code editors, terminals).
 const FORMAT_RULE: &str = "Format for reading, without changing words: when the speaker \
 lists three or more items or steps (one, two, three; first, second, then; primero, segundo; \
-or \"three things: ...\"), put each item on its own line after any lead-in sentence, starting \
-with \"- \", or with \"1.\", \"2.\" when the order matters, and drop the spoken words that \
-only number the items. When a longer text moves to another topic, start a new paragraph with \
-an empty line. \"New line\", \"new paragraph\", \"nueva línea\" or \"punto y aparte\" said as a \
-command becomes that break. Keep a short text as one paragraph. Never add headings, bold or \
-other markdown.";
+or \"three things: ...\"), end any lead-in sentence with a colon and put each item on its own \
+line. Start items with \"1.\", \"2.\", \"3.\" when the speaker numbered them (one, two; first, \
+second; uno, dos; primero, segundo), otherwise with \"- \", and drop the spoken words that only \
+number them. Start every item with a capital and end all items alike: a full stop when they \
+are sentences, nothing when they are short phrases. When a longer text moves to another \
+topic, start a new paragraph with an empty line. \"New line\", \"new paragraph\", \"nueva \
+línea\" or \"punto y aparte\" said as a command becomes that break. Keep a short text as one \
+paragraph. Never add headings, bold or other markdown.";
 
 /// The first `medium` prompt (P2-2): light's rules, plus repetitions, small grammar slips and
 /// spoken formatting. Still never rephrased, translated or answered.
