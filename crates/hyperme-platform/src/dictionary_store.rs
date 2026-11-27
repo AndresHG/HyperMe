@@ -4,12 +4,13 @@
 //!
 //! The list is small (at most 1,000 entries), so a save replaces it whole in one transaction,
 //! keeping each row that stays: its source, its date and its use counts. The suggestion and
-//! dismissal tables are for learning (slice D6) and stay empty until then.
+//! dismissal tables hold what learning from the user's edits found (slice D6).
 
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use hyperme_core::dictionary::{Dictionary, Term, key};
+use hyperme_core::dictionary::{Corrected, Dictionary, Term, key};
+use hyperme_core::learning::{self, Known, Step};
 use rusqlite::{Connection, OptionalExtension, params};
 
 /// One entry per schema version: entry n takes `user_version` from n to n + 1.
@@ -73,6 +74,19 @@ impl Source {
 
 /// The meta key set once the text file has been imported (R-14).
 const TEXT_IMPORTED: &str = "text_imported";
+/// The meta key for "Learn from my edits" (R-16): `off`, or on when missing.
+const LEARNING: &str = "learning";
+
+/// A fix seen in the user's edits, waiting for a yes (R-18).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Suggestion {
+    pub written: String,
+    pub heard: String,
+    /// Times seen.
+    pub seen: u32,
+    /// The app it was last fixed in.
+    pub last_app: Option<String>,
+}
 
 fn sql<T>(r: rusqlite::Result<T>) -> Result<T, String> {
     r.map_err(|e| format!("The dictionary store failed: {e}"))
@@ -209,20 +223,232 @@ impl DictionaryStore {
                         }
                     }
                 }
-                for (form, _) in &forms {
+                for (form, heard) in &forms {
                     if !kept_forms.contains(form) {
+                        // R-19: a learned heard form the user deletes never comes back.
+                        sql(tx.execute(
+                            "INSERT OR IGNORE INTO dismissed (entry_written, heard)
+                             SELECT ?2, ?3 FROM heard WHERE id = ?1 AND source = 'learned'",
+                            params![form, term.written, heard],
+                        ))?;
                         sql(tx.execute("DELETE FROM heard WHERE id = ?1", [form]))?;
                     }
                 }
             }
-            for (id, _) in &existing {
+            for (id, written) in &existing {
                 if !kept.contains(id) {
+                    sql(tx.execute(
+                        "INSERT OR IGNORE INTO dismissed (entry_written, heard)
+                         SELECT ?2, heard FROM heard WHERE entry_id = ?1 AND source = 'learned'
+                         UNION SELECT ?2, ?2 FROM entry WHERE id = ?1 AND source = 'learned'",
+                        params![id, written],
+                    ))?;
                     sql(tx.execute("DELETE FROM entry WHERE id = ?1", [id]))?;
                 }
             }
         }
         sql(tx.commit())?;
         self.dictionary()
+    }
+
+    /// Counts one dictation's use of each entry it used (design.md, "Data model"): orders the
+    /// prompt's relevant entries (R-5). Names that are no longer entries are skipped.
+    pub fn count_uses(&mut self, used: &[String]) -> Result<(), String> {
+        if used.is_empty() {
+            return Ok(());
+        }
+        let now = now_ms();
+        let tx = sql(self.db.transaction())?;
+        {
+            let entries: Vec<(i64, String)> = {
+                let mut q = sql(tx.prepare("SELECT id, written FROM entry"))?;
+                sql(sql(q.query_map([], |r| Ok((r.get(0)?, r.get(1)?))))?.collect())?
+            };
+            for name in used {
+                if let Some((id, _)) = entries.iter().find(|(_, w)| key(w) == key(name)) {
+                    sql(tx.execute(
+                        "UPDATE entry SET uses = uses + 1, last_used_ms = ?2 WHERE id = ?1",
+                        params![id, now],
+                    ))?;
+                }
+            }
+        }
+        sql(tx.commit())
+    }
+
+    /// The suggestions waiting for the user (R-18, R-22), oldest first.
+    pub fn suggestions(&self) -> Result<Vec<Suggestion>, String> {
+        let mut q = sql(self.db.prepare(
+            "SELECT entry_written, heard, seen, last_app FROM suggestion ORDER BY first_seen_ms",
+        ))?;
+        sql(sql(q.query_map([], |r| {
+            Ok(Suggestion {
+                written: r.get(0)?,
+                heard: r.get(1)?,
+                seen: r.get(2)?,
+                last_app: r.get(3)?,
+            })
+        }))?
+        .collect())
+    }
+
+    /// The suggestion for this fix, matched as the matcher compares, if one waits.
+    fn suggestion_row(&self, written: &str, heard: &str) -> Result<Option<Suggestion>, String> {
+        Ok(self
+            .suggestions()?
+            .into_iter()
+            .find(|s| key(&s.written) == key(written) && key(&s.heard) == key(heard)))
+    }
+
+    /// How many times this fix was seen, 0 if it is not waiting as a suggestion.
+    pub fn seen(&self, written: &str, heard: &str) -> Result<u32, String> {
+        Ok(self.suggestion_row(written, heard)?.map_or(0, |s| s.seen))
+    }
+
+    /// Notes a sighting of a fix (R-18) and returns how many times it was seen before this one.
+    pub fn note_suggestion(
+        &mut self,
+        written: &str,
+        heard: &str,
+        app: Option<&str>,
+    ) -> Result<u32, String> {
+        match self.suggestion_row(written, heard)? {
+            Some(s) => {
+                sql(self.db.execute(
+                    "UPDATE suggestion SET seen = seen + 1, last_app = ?3
+                     WHERE entry_written = ?1 AND heard = ?2",
+                    params![s.written, s.heard, app],
+                ))?;
+                Ok(s.seen)
+            }
+            None => {
+                sql(self.db.execute(
+                    "INSERT INTO suggestion (entry_written, heard, seen, first_seen_ms, last_app)
+                     VALUES (?1, ?2, 1, ?3, ?4)",
+                    params![written, heard, now_ms(), app],
+                ))?;
+                Ok(0)
+            }
+        }
+    }
+
+    /// Takes a suggestion off the list: it was added, or the user dismissed it.
+    pub fn drop_suggestion(&mut self, written: &str, heard: &str) -> Result<(), String> {
+        if let Some(s) = self.suggestion_row(written, heard)? {
+            sql(self.db.execute(
+                "DELETE FROM suggestion WHERE entry_written = ?1 AND heard = ?2",
+                params![s.written, s.heard],
+            ))?;
+        }
+        Ok(())
+    }
+
+    /// The user dismissed a suggestion: it never comes back (R-19).
+    pub fn dismiss(&mut self, written: &str, heard: &str) -> Result<(), String> {
+        self.drop_suggestion(written, heard)?;
+        sql(self.db.execute(
+            "INSERT OR IGNORE INTO dismissed (entry_written, heard) VALUES (?1, ?2)",
+            params![written, heard],
+        ))?;
+        Ok(())
+    }
+
+    /// Whether the user dismissed this fix, or deleted it once learned (R-19).
+    pub fn is_dismissed(&self, written: &str, heard: &str) -> Result<bool, String> {
+        let mut q = sql(self
+            .db
+            .prepare("SELECT entry_written, heard FROM dismissed"))?;
+        let rows: Vec<(String, String)> =
+            sql(sql(q.query_map([], |r| Ok((r.get(0)?, r.get(1)?))))?.collect())?;
+        Ok(rows
+            .iter()
+            .any(|(w, h)| key(w) == key(written) && key(h) == key(heard)))
+    }
+
+    /// The learned rows, for the page's mark and Undo: `(written, heard)`, with `heard` empty
+    /// for an entry learned with no heard form.
+    pub fn learned(&self) -> Result<Vec<(String, String)>, String> {
+        let mut q = sql(self.db.prepare(
+            "SELECT e.written, h.heard FROM heard h JOIN entry e ON e.id = h.entry_id
+             WHERE h.source = 'learned'
+             UNION ALL SELECT written, '' FROM entry WHERE source = 'learned'",
+        ))?;
+        sql(sql(q.query_map([], |r| Ok((r.get(0)?, r.get(1)?))))?.collect())
+    }
+
+    /// Whether "Learn from my edits" is on (R-16). On unless the user turned it off.
+    pub fn learning(&self) -> Result<bool, String> {
+        let value: Option<String> = sql(self
+            .db
+            .query_row("SELECT value FROM meta WHERE key = ?1", [LEARNING], |r| {
+                r.get(0)
+            })
+            .optional())?;
+        Ok(value.as_deref() != Some("off"))
+    }
+
+    pub fn set_learning(&mut self, on: bool) -> Result<(), String> {
+        sql(self.db.execute(
+            "INSERT INTO meta (key, value) VALUES (?1, ?2)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            params![LEARNING, if on { "on" } else { "off" }],
+        ))?;
+        Ok(())
+    }
+
+    /// The watch of a pasted dictation ended with `edited` in its place (R-16 to R-19): each fix
+    /// of a misheard word becomes a suggestion, or is learned on its second sighting. `pasted`
+    /// and `transcript` are what was pasted and the transcript it came from; `dictations_with`
+    /// counts the dictations in the history that hold some words (R-17). Returns the new
+    /// dictionary when something was learned. The field text is not kept, only the fix (R-21).
+    pub fn learn(
+        &mut self,
+        pasted: &str,
+        transcript: &str,
+        edited: &str,
+        app: Option<&str>,
+        dictations_with: impl Fn(&str) -> u32,
+    ) -> Result<Option<Dictionary>, String> {
+        let mut changed = None;
+        for candidate in learning::candidates(pasted, edited, transcript) {
+            let (Some(heard), Some(pasted_form)) =
+                (candidate.heard.first(), candidate.heard.last())
+            else {
+                continue;
+            };
+            let dictionary = self.dictionary()?;
+            let seen_before = self.seen(&candidate.wanted, heard)?;
+            let known = Known {
+                seen_before,
+                dismissed: candidate
+                    .heard
+                    .iter()
+                    .map(|h| self.is_dismissed(&candidate.wanted, h))
+                    .collect::<Result<Vec<_>, _>>()?
+                    .contains(&true),
+                // This dictation and the earlier sightings were corrected.
+                uncorrected: dictations_with(pasted_form).saturating_sub(seen_before + 1),
+            };
+            match learning::step(&candidate, &dictionary, known) {
+                Step::Nothing => {}
+                Step::Suggest => {
+                    self.note_suggestion(&candidate.wanted, heard, app)?;
+                }
+                Step::Learn => {
+                    let mut fixed = dictionary;
+                    for form in &candidate.heard {
+                        if let Corrected::Added(next) =
+                            fixed.corrected(form, &candidate.wanted, true)?
+                        {
+                            fixed = next;
+                        }
+                    }
+                    self.drop_suggestion(&candidate.wanted, heard)?;
+                    changed = Some(self.save(fixed.terms().to_vec(), Source::Learned)?);
+                }
+            }
+        }
+        Ok(changed)
     }
 
     /// The one-time import of the dictionary text file (R-14, AC-11): into an empty store, the
@@ -364,5 +590,139 @@ mod tests {
         assert_eq!(full.dictionary().unwrap().terms().len(), 1);
         let _ = std::fs::remove_dir_all(path.parent().unwrap());
         let _ = std::fs::remove_dir_all(other.parent().unwrap());
+    }
+
+    /// AC-14 (R-18, R-19): a sighting counts up; a dismissal takes the suggestion off and
+    /// sticks; a learned heard form or entry that the user deletes is dismissed too; use counts
+    /// add up; the learning switch is on until turned off.
+    #[test]
+    fn suggestions_dismissals_and_use_counts_persist() {
+        let path = temp("learn");
+        let mut store = DictionaryStore::open(&path).unwrap();
+        assert_eq!(
+            store.note_suggestion("Zentrix", "sun trix", Some("Slack")),
+            Ok(0)
+        );
+        assert_eq!(
+            store.note_suggestion("zentrix", "Sun Trix", Some("Mail")),
+            Ok(1)
+        );
+        let waiting = store.suggestions().unwrap();
+        assert_eq!(waiting.len(), 1);
+        assert_eq!(
+            (waiting[0].seen, waiting[0].last_app.as_deref()),
+            (2, Some("Mail"))
+        );
+
+        store.note_suggestion("Quorbit", "corbit", None).unwrap();
+        store.dismiss("Quorbit", "corbit").unwrap();
+        assert!(store.is_dismissed("quorbit", "Corbit").unwrap());
+        assert_eq!(store.suggestions().unwrap().len(), 1);
+
+        store
+            .save(
+                vec![term("Zentrix", &["sun trix"]), term("Kubectl", &[])],
+                Source::Learned,
+            )
+            .unwrap();
+        assert_eq!(store.learned().unwrap().len(), 3);
+        store
+            .save(vec![term("Zentrix", &[])], Source::Manual)
+            .unwrap();
+        assert!(store.is_dismissed("Zentrix", "sun trix").unwrap());
+        assert!(store.is_dismissed("Kubectl", "kubectl").unwrap());
+
+        store
+            .count_uses(&["zentrix".to_owned(), "Gone".to_owned()])
+            .unwrap();
+        store.count_uses(&["Zentrix".to_owned()]).unwrap();
+        let uses: u32 = store
+            .db
+            .query_row("SELECT uses FROM entry", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(uses, 2);
+
+        assert!(store.learning().unwrap());
+        store.set_learning(false).unwrap();
+        assert!(!store.learning().unwrap());
+        store.set_learning(true).unwrap();
+        assert!(store.learning().unwrap());
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    /// AC-14 (R-16 to R-19), end to end on the store: a fix seen once waits as a suggestion,
+    /// seen twice it is learned and used; a fix the user dismissed never returns; a heard form
+    /// the user says often without fixing it stays a suggestion.
+    #[test]
+    fn fixes_become_suggestions_then_learned_words() {
+        let path = temp("learn-flow");
+        let mut store = DictionaryStore::open(&path).unwrap();
+        let (pasted, raw) = (
+            "Send the sun trix report today.",
+            "send the sun trix report today",
+        );
+        let edited = "Send the Zentrix report today.";
+        let never = |_: &str| 0;
+
+        assert_eq!(
+            store.learn(pasted, raw, edited, Some("Slack"), never),
+            Ok(None)
+        );
+        assert_eq!(store.suggestions().unwrap().len(), 1);
+        let learned = store
+            .learn(pasted, raw, edited, Some("Slack"), never)
+            .unwrap();
+        let learned = learned.expect("learned on the second sighting");
+        assert_eq!(learned.apply("the sun trix build").0, "the Zentrix build");
+        assert!(store.suggestions().unwrap().is_empty());
+        assert_eq!(store.learned().unwrap().len(), 2);
+        // Already fixed by the dictionary: nothing new.
+        assert_eq!(store.learn(pasted, raw, edited, None, never), Ok(None));
+        assert!(store.suggestions().unwrap().is_empty());
+
+        let (pasted, raw) = ("The corbit page is down.", "the corbit page is down");
+        let edited = "The Quorbit page is down.";
+        store.learn(pasted, raw, edited, None, never).unwrap();
+        store.dismiss("Quorbit", "corbit").unwrap();
+        for _ in 0..3 {
+            assert_eq!(store.learn(pasted, raw, edited, None, never), Ok(None));
+        }
+        assert!(store.suggestions().unwrap().is_empty());
+
+        // Said in five dictations, fixed in two: common, so it stays a suggestion.
+        let (pasted, raw) = ("Ping the dock team.", "ping the dock team");
+        let edited = "Ping the Dokk team.";
+        let often = |_: &str| 5;
+        for _ in 0..2 {
+            assert_eq!(store.learn(pasted, raw, edited, None, often), Ok(None));
+        }
+        assert_eq!(store.seen("Dokk", "dock").unwrap(), 2);
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    /// Review of D6, finding 4 (R-19): deleting the second heard form of a learned word keeps
+    /// it from being suggested or learned again.
+    #[test]
+    fn a_deleted_second_heard_form_stays_deleted() {
+        let path = temp("learn-second");
+        let mut store = DictionaryStore::open(&path).unwrap();
+        let (pasted, raw) = ("Revisa el centris hoy.", "revisa el sentris hoy");
+        let edited = "Revisa el Zentrix hoy.";
+        let never = |_: &str| 0;
+        store.learn(pasted, raw, edited, None, never).unwrap();
+        let learned = store
+            .learn(pasted, raw, edited, None, never)
+            .unwrap()
+            .unwrap();
+        assert_eq!(learned.terms()[0].heard, ["sentris", "centris"]);
+        store
+            .save(vec![term("Zentrix", &["sentris"])], Source::Manual)
+            .unwrap();
+        for _ in 0..3 {
+            assert_eq!(store.learn(pasted, raw, edited, None, never), Ok(None));
+        }
+        assert!(store.suggestions().unwrap().is_empty());
+        assert_eq!(store.dictionary().unwrap().terms()[0].heard, ["sentris"]);
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
     }
 }

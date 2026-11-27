@@ -1,0 +1,25 @@
+# Pasted text and the user's edit, with invented names only (spec 93, AC-13).
+# kind | raw transcript | pasted | edited | expected: heard forms -> wanted, ";" between fixes
+#
+# Fixes of misheard words: kept.
+keep | send the sun trix report today | Send the sun trix report today. | Send the Zentrix report today. | sun trix -> Zentrix
+keep | the corbit dashboard is down again | The corbit dashboard is down again. | The Quorbit dashboard is down again. | corbit -> Quorbit
+keep | ask ana ruis about the corbit deploy | Ask Ana Ruis about the corbit deploy. | Ask Ana Ruiz about the Quorbit deploy. | Ruis -> Ruiz; corbit -> Quorbit
+keep | we moved the lang graph job to friday | We moved the lang graph job to Friday. | We moved the LangGraph job to Friday. | lang graph -> LangGraph
+keep | hay que revisar el sentris mañana | Hay que revisar el centris mañana. | Hay que revisar el Zentrix mañana. | sentris, centris -> Zentrix
+keep | open the zentrix board please | Open the zentrix board, please. | Open the Zentrix board, please. | zentrix -> Zentrix (spelling)
+keep | ping the cube cuddle channel | Ping the cube cuddle channel. | Ping the kubectl channel. | cube cuddle -> kubectl
+keep | the um sun trix build is green | The sun trix build is green. | The Zentrix build is green. | sun trix -> Zentrix
+#
+# Not fixes: dropped.
+drop | please send the numbers to the team | Please send the numbers to the team. | Please email the numbers to the team. |
+drop | the build failed | The build failed. | Sadly the build failed this morning because the runner ran out of disk. |
+drop | the build failed | The build failed. | The build failed! |
+drop | i think the build failed again today | I think the build failed again today. | The build failed today. |
+drop | send it to ana tomorrow | Send it to Ana tomorrow. | Send it to Ana tomorrow. Thanks for the help with all of it. |
+drop | we should ship the new version on monday morning | We should ship the new version on Monday morning. | Honestly, the release can wait until next week, no rush at all. |
+drop | the report is ready | The report is ready. | The report is ready. |
+drop | ok thanks see you then | OK, thanks, see you then. | OK, thanks. See you then. |
+drop | we shipped it deploy tomorrow | we shipped it deploy tomorrow | We shipped it. Deploy tomorrow. |
+drop | meet at nine | Meet at nine. | Meet at 9. |
+drop | ask john about it | Ask john about it. | Ask Mary about it. |
