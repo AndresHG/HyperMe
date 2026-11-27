@@ -43,7 +43,7 @@ pub fn init(app: &AppHandle) {
         Ok(store)
     });
     if let Err(why) = &store {
-        eprintln!("HyperMe: {why}");
+        tracing::warn!("dictionary: {why}");
     }
     app.manage::<Shared>(Mutex::new(State { path, store }));
 }

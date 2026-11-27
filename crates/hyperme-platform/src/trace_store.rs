@@ -419,9 +419,11 @@ fn write_loop(mut db: Connection, jobs: Receiver<Job>) {
                 Ok(())
             }
         };
-        // R-11: a failed write is a warning, never a failed dictation. The warnings file comes
-        // with slice 3; until then the trace is dropped.
-        let _ = result;
+        // R-11: a failed write is a warning in the warnings file, never a failed dictation;
+        // the trace is dropped.
+        if let Err(e) = result {
+            tracing::warn!("trace store: {}", e.message);
+        }
     }
 }
 

@@ -16,9 +16,11 @@ use hyperme_core::trace::{self, TimingSink, TraceSink};
 use hyperme_core::traits::{
     DictationId, Error, ErrorKind, History, Inserter, TimingLine, TimingLog,
 };
+use hyperme_core::warnings::{Stderr, WarningsLayer};
 use hyperme_platform::history::{HistorySettings, SqliteHistory};
 use hyperme_platform::hotkey::macos::HotkeyListener;
 use hyperme_platform::keychain::KeychainStore;
+use hyperme_platform::log_file::{self, RotatingFile};
 use hyperme_platform::microphone::CpalMicrophone;
 use hyperme_platform::paste::macos::{CmdV, MacFocus, MacPasteboard};
 use hyperme_platform::paste::{ClipboardInserter, RESTORE_AFTER};
@@ -78,6 +80,22 @@ fn lock(app: &AppHandle) -> std::sync::MutexGuard<'_, Shared> {
         .unwrap_or_else(PoisonError::into_inner)
 }
 
+/// The warnings and errors file, `~/Library/Logs/HyperMe/warnings.log` (spec 182, R-14), with
+/// information and above echoed to standard error.
+fn warnings_layer(app: &AppHandle) -> WarningsLayer {
+    let home = app.path().home_dir().ok();
+    let dir = home
+        .as_ref()
+        .map(|home| home.join("Library").join("Logs").join("HyperMe"))
+        .unwrap_or_else(|| data_dir(app).join("logs"));
+    let file = RotatingFile::new(dir.join("warnings.log"), log_file::LIMIT);
+    WarningsLayer::new(
+        Arc::new(file),
+        home.map(|h| h.to_string_lossy().into_owned()),
+    )
+    .echo(Arc::new(Stderr))
+}
+
 /// HyperMe's data folder: `~/Library/Application Support/HyperMe` (design.md).
 pub fn data_dir(app: &AppHandle) -> PathBuf {
     app.path()
@@ -123,7 +141,7 @@ pub fn start(app: &AppHandle, menu: TrayMenu) {
         store.set_labels(labels(&config));
         sinks.push(store.clone());
     }
-    trace::install(sinks);
+    trace::install_with(sinks, warnings_layer(app));
     app.manage::<State>(Mutex::new(Shared {
         events: None,
         view: None,
@@ -395,8 +413,9 @@ async fn show_statuses(app: AppHandle, mut statuses: mpsc::UnboundedReceiver<Sta
 fn set_status(app: &AppHandle, text: &str) {
     // The menu shows one line; long provider messages are cut.
     let line: String = text.chars().take(80).collect();
-    // On standard error too, for running from a terminal. Statuses never hold dictated text.
-    eprintln!("HyperMe: {line}");
+    // Echoed to standard error, for running from a terminal; information, so not kept in the
+    // warnings file. Statuses never hold dictated text.
+    tracing::info!("{line}");
     let _ = lock(app).menu.status.set_text(line);
 }
 

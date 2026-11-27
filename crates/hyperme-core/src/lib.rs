@@ -22,3 +22,4 @@ pub mod sync;
 pub mod tasks;
 pub mod trace;
 pub mod traits;
+pub mod warnings;
