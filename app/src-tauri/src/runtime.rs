@@ -13,6 +13,7 @@ use hyperme_core::dictation::{
 };
 use hyperme_core::dictionary::Dictionary;
 use hyperme_core::fallback::FallbackStreak;
+use hyperme_core::microphones::{MuteSettings, Muting, Preference};
 use hyperme_core::trace::{self, TimingSink, TraceSink};
 use hyperme_core::traits::{
     DictationId, Error, ErrorKind, History, Inserter, TimingLine, TimingLog,
@@ -23,9 +24,10 @@ use hyperme_platform::hotkey::macos::HotkeyListener;
 use hyperme_platform::keychain::KeychainStore;
 use hyperme_platform::log_file::{self, RotatingFile};
 use hyperme_platform::microphone::CpalMicrophone;
+use hyperme_platform::output_mute::SystemOutputMute;
 use hyperme_platform::paste::macos::{CmdV, MacFocus, MacPasteboard};
 use hyperme_platform::paste::{ClipboardInserter, RESTORE_AFTER};
-use hyperme_platform::sounds::SystemSounds;
+use hyperme_platform::sounds::{START_SOUND, SystemSounds};
 use hyperme_platform::timing::{FileTimingLog, Names};
 use hyperme_platform::trace_store::{Labels, TraceSettings, TraceStore};
 use hyperme_providers::any;
@@ -72,6 +74,10 @@ struct Shared {
     card: Option<pill::Card>,
     /// "<provider> keeps failing", waiting for the dictation to end (specs/96, R-28).
     fallback_notice: Option<pill::Card>,
+    /// The preferred microphones, which Settings changes for the next dictation (#221).
+    microphones: Preference,
+    /// "Mute audio while dictating", which Settings changes for the next dictation (#221).
+    mute: MuteSettings,
 }
 
 type State = Mutex<Shared>;
@@ -199,6 +205,8 @@ pub fn start(app: &AppHandle, menu: TrayMenu) {
         dictionary: None,
         card: None,
         fallback_notice: None,
+        microphones: Preference::default(),
+        mute: MuteSettings::new(true),
     }));
     settle(app);
     // Home shows the history even before the keys are in, or when one cannot be read.
@@ -272,8 +280,25 @@ fn wire(app: &AppHandle, history: Arc<Mutex<HistoryInner>>) -> Result<(), String
     let (mic_tx, mic_rx) = mpsc::channel(1024);
     let hotkey =
         HotkeyListener::start(&config.dictation.hotkey, events.clone()).map_err(|e| e.message)?;
+    let (microphones, mute) = {
+        let shared = lock(app);
+        (shared.microphones.clone(), shared.mute.clone())
+    };
+    microphones.set(config.dictation.microphones.clone());
+    mute.set(config.dictation.mute_while_dictating);
+    // The mute waits for the start sound, so the user still hears it (#221, AC-7).
+    let mute_delay = if config.dictation.sounds {
+        START_SOUND
+    } else {
+        Duration::ZERO
+    };
     let parts = Parts {
-        mic: CpalMicrophone::new(mic_tx, SAMPLE_RATE),
+        mic: Muting::new(
+            CpalMicrophone::with_preference(mic_tx, SAMPLE_RATE, microphones),
+            SystemOutputMute::default(),
+            mute,
+            mute_delay,
+        ),
         providers,
         inserter: ClipboardInserter::new(Arc::new(MacPasteboard), CmdV, RESTORE_AFTER),
         focus: MacFocus,
@@ -290,6 +315,8 @@ fn wire(app: &AppHandle, history: Arc<Mutex<HistoryInner>>) -> Result<(), String
     let (pasted_tx, pasted_rx) = mpsc::unbounded_channel();
     engine.tell_pasted(pasted_tx);
     tauri::async_runtime::spawn(after_paste(app.clone(), pasted_rx));
+    // The first dictation would otherwise start Core Audio on key-down (#250).
+    hyperme_platform::microphone::warm_up();
     tauri::async_runtime::spawn(engine.run(events_rx));
     tauri::async_runtime::spawn(forward_audio(app.clone(), mic_rx, events.clone()));
     tauri::async_runtime::spawn(show_statuses(app.clone(), status_rx));
@@ -299,6 +326,16 @@ fn wire(app: &AppHandle, history: Arc<Mutex<HistoryInner>>) -> Result<(), String
     shared.providers = Some(switch);
     shared.dictionary = Some(dictionary_updates);
     Ok(())
+}
+
+/// The preferred microphones, from Settings, for the next dictation (#221, AC-2).
+pub fn set_microphones(app: &AppHandle, names: Vec<String>) {
+    lock(app).microphones.set(names);
+}
+
+/// "Mute audio while dictating", from Settings, for the next dictation (#221, AC-7).
+pub fn set_mute(app: &AppHandle, on: bool) {
+    lock(app).mute.set(on);
 }
 
 /// Builds the providers the config names now and hands them to the next dictation, without a
