@@ -68,7 +68,7 @@
     submit.type = 'submit';
     fields.append(wrong, arrow, right, cancel, submit);
     const switchLabel = el('label', 'dict-switch');
-    const misspelling = el('input');
+    const misspelling = el('input', 'ui-switch');
     misspelling.type = 'checkbox';
     misspelling.setAttribute('role', 'switch');
     switchLabel.append(misspelling, el('span', '', 'Correct a misspelling'));
@@ -104,7 +104,7 @@
 
     // R-16: on by default; what it reads stays on the Mac (R-21).
     const learnLabel = el('label', 'dict-switch dict-learn');
-    const learnSwitch = el('input');
+    const learnSwitch = el('input', 'ui-switch');
     learnSwitch.type = 'checkbox';
     learnSwitch.setAttribute('role', 'switch');
     learnLabel.append(learnSwitch, el('span', '', 'Learn from my edits'));
