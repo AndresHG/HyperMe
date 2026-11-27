@@ -420,7 +420,12 @@ impl DictionaryStore {
             let seen_before = self.seen(&candidate.wanted, heard)?;
             let known = Known {
                 seen_before,
-                dismissed: self.is_dismissed(&candidate.wanted, heard)?,
+                dismissed: candidate
+                    .heard
+                    .iter()
+                    .map(|h| self.is_dismissed(&candidate.wanted, h))
+                    .collect::<Result<Vec<_>, _>>()?
+                    .contains(&true),
                 // This dictation and the earlier sightings were corrected.
                 uncorrected: dictations_with(pasted_form).saturating_sub(seen_before + 1),
             };
@@ -692,6 +697,32 @@ mod tests {
             assert_eq!(store.learn(pasted, raw, edited, None, often), Ok(None));
         }
         assert_eq!(store.seen("Dokk", "dock").unwrap(), 2);
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    /// Review of D6, finding 4 (R-19): deleting the second heard form of a learned word keeps
+    /// it from being suggested or learned again.
+    #[test]
+    fn a_deleted_second_heard_form_stays_deleted() {
+        let path = temp("learn-second");
+        let mut store = DictionaryStore::open(&path).unwrap();
+        let (pasted, raw) = ("Revisa el centris hoy.", "revisa el sentris hoy");
+        let edited = "Revisa el Zentrix hoy.";
+        let never = |_: &str| 0;
+        store.learn(pasted, raw, edited, None, never).unwrap();
+        let learned = store
+            .learn(pasted, raw, edited, None, never)
+            .unwrap()
+            .unwrap();
+        assert_eq!(learned.terms()[0].heard, ["sentris", "centris"]);
+        store
+            .save(vec![term("Zentrix", &["sentris"])], Source::Manual)
+            .unwrap();
+        for _ in 0..3 {
+            assert_eq!(store.learn(pasted, raw, edited, None, never), Ok(None));
+        }
+        assert!(store.suggestions().unwrap().is_empty());
+        assert_eq!(store.dictionary().unwrap().terms()[0].heard, ["sentris"]);
         let _ = std::fs::remove_dir_all(path.parent().unwrap());
     }
 }

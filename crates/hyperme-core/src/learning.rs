@@ -11,6 +11,8 @@ const MAX_CHANGED: f32 = 0.4;
 const MAX_RUN: usize = 3;
 /// Letters at least this alike (bigram Dice) look like a misheard word (`sun trix`, `Zentrix`).
 const MIN_LIKE: f32 = 0.4;
+/// A name-like replacement must still be this alike (`Ruis` to `Ruiz`, not `john` to `Mary`).
+const MIN_NAME_LIKE: f32 = 0.2;
 /// Seen in this many dictations without a fix, a word counts as common (R-17).
 pub const COMMON_AFTER: u32 = 3;
 
@@ -131,7 +133,10 @@ pub fn candidates(pasted: &str, edited: &str, raw: &str) -> Vec<Candidate> {
         let (was, now) = (trimmed(old[i]), trimmed(new[j]));
         if was != now && now.chars().any(char::is_uppercase) && !is_common_word(now) {
             let capitals = |w: &str| w.chars().filter(|c| c.is_uppercase()).count();
-            if capitals(now) > capitals(was) && i > 0 {
+            // A capital at the start of a sentence, the user's or the paste's, is not a name.
+            let ends = |w: &str| w.ends_with(['.', '!', '?', ':']);
+            let sentence_start = i == 0 || j == 0 || ends(new[j - 1]) || ends(old[i - 1]);
+            if capitals(now) > capitals(was) && !sentence_start {
                 found.push(Candidate {
                     heard: vec![was.to_owned()],
                     wanted: now.to_owned(),
@@ -154,9 +159,14 @@ pub fn candidates(pasted: &str, edited: &str, raw: &str) -> Vec<Candidate> {
         let already = old_n.windows(now_n.len()).any(|w| w == now_n.as_slice());
         let (was_text, now_text) = (joined(was), joined(now));
         let capitals = |ws: &[&str]| ws.iter().any(|w| w.chars().any(char::is_uppercase));
-        let name_like = now_text.chars().any(|c| c.is_ascii_digit())
-            || (capitals(now) && !capitals(was) && was.len() <= 2);
-        if already || !(alike(&was_text, &now_text) >= MIN_LIKE || name_like) {
+        let like = alike(&was_text, &now_text);
+        // A name, or a term like `k8s`: letters with a digit, or a new capital; never a plain
+        // number (`nine` to `9`), and somewhat alike, so one name swapped for another is not a fix.
+        let name_like = like >= MIN_NAME_LIKE
+            && ((now_text.chars().any(|c| c.is_ascii_digit())
+                && now_text.chars().any(char::is_alphabetic))
+                || (capitals(now) && !capitals(was) && was.len() <= 2));
+        if already || !(like >= MIN_LIKE || name_like) {
             continue;
         }
         let mut heard = Vec::new();
@@ -175,18 +185,30 @@ pub fn candidates(pasted: &str, edited: &str, raw: &str) -> Vec<Candidate> {
     found
 }
 
-/// The raw words in the place of pasted words `from..to`: between the raw words matched to the
-/// pasted words just before and just after. `None` unless that is 1 to 3 words.
+/// The raw words in the place of pasted words `from..to`. When some of those pasted words
+/// match raw words, the raw words from the first match to the last; otherwise the raw words
+/// between the matches just before and just after, so a filler the cleanup dropped next to the
+/// run is not swept in when the run itself is matched. `None` unless that is 1 to 3 words.
 fn raw_stretch(raw: &[&str], pairs: &[(usize, usize)], from: usize, to: usize) -> Option<String> {
-    let before = pairs
+    let inside: Vec<usize> = pairs
         .iter()
-        .rev()
-        .find(|&&(_, p)| p < from)
-        .map_or(0, |&(r, _)| r + 1);
-    let after = pairs
-        .iter()
-        .find(|&&(_, p)| p >= to)
-        .map_or(raw.len(), |&(r, _)| r);
+        .filter(|&&(_, p)| (from..to).contains(&p))
+        .map(|&(r, _)| r)
+        .collect();
+    let (before, after) = match (inside.first(), inside.last()) {
+        (Some(&first), Some(&last)) => (first, last + 1),
+        _ => (
+            pairs
+                .iter()
+                .rev()
+                .find(|&&(_, p)| p < from)
+                .map_or(0, |&(r, _)| r + 1),
+            pairs
+                .iter()
+                .find(|&&(_, p)| p >= to)
+                .map_or(raw.len(), |&(r, _)| r),
+        ),
+    };
     (after > before && after - before <= MAX_RUN).then(|| joined(&raw[before..after]))
 }
 
@@ -226,10 +248,10 @@ pub fn step(candidate: &Candidate, dictionary: &Dictionary, known: Known) -> Ste
     if known.dismissed || covered {
         return Step::Nothing;
     }
-    let common = !candidate.spelling_only
-        && (candidate.heard.iter().any(|h| is_common_word(h))
-            || known.uncorrected >= COMMON_AFTER
-            || words(heard).iter().all(|w| is_common_word(w)));
+    let common = known.uncorrected >= COMMON_AFTER
+        || (!candidate.spelling_only
+            && (candidate.heard.iter().any(|h| is_common_word(h))
+                || words(heard).iter().all(|w| is_common_word(w))));
     if common || known.seen_before == 0 {
         Step::Suggest
     } else {

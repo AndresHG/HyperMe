@@ -37,7 +37,7 @@ fn the_finder_keeps_misheard_words_and_drops_edits() {
         assert_eq!(found, want, "{line}");
         checked += 1;
     }
-    assert_eq!(checked, 15);
+    assert_eq!(checked, 19);
 }
 
 fn candidate(heard: &str, wanted: &str) -> Candidate {

@@ -9,6 +9,7 @@ keep | we moved the lang graph job to friday | We moved the lang graph job to Fr
 keep | hay que revisar el sentris mañana | Hay que revisar el centris mañana. | Hay que revisar el Zentrix mañana. | sentris, centris -> Zentrix
 keep | open the zentrix board please | Open the zentrix board, please. | Open the Zentrix board, please. | zentrix -> Zentrix (spelling)
 keep | ping the cube cuddle channel | Ping the cube cuddle channel. | Ping the kubectl channel. | cube cuddle -> kubectl
+keep | the um sun trix build is green | The sun trix build is green. | The Zentrix build is green. | sun trix -> Zentrix
 #
 # Not fixes: dropped.
 drop | please send the numbers to the team | Please send the numbers to the team. | Please email the numbers to the team. |
@@ -19,3 +20,6 @@ drop | send it to ana tomorrow | Send it to Ana tomorrow. | Send it to Ana tomor
 drop | we should ship the new version on monday morning | We should ship the new version on Monday morning. | Honestly, the release can wait until next week, no rush at all. |
 drop | the report is ready | The report is ready. | The report is ready. |
 drop | ok thanks see you then | OK, thanks, see you then. | OK, thanks. See you then. |
+drop | we shipped it deploy tomorrow | we shipped it deploy tomorrow | We shipped it. Deploy tomorrow. |
+drop | meet at nine | Meet at nine. | Meet at 9. |
+drop | ask john about it | Ask john about it. | Ask Mary about it. |

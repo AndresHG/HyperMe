@@ -144,7 +144,14 @@
         edit.addEventListener('click', () => open(i));
         // R-18, R-19: undoing a learned row removes it, and it is never learned again.
         const remove = el('button', '', mine ? 'Undo' : 'Remove');
-        remove.addEventListener('click', () => save(rows.filter((_, j) => j !== i)));
+        remove.addEventListener('click', () => {
+          // Undoing the last learned misspelling of a word the user added keeps the word.
+          const last = !rows.some((o, j) => j !== i && key(o.word) === key(r.word));
+          const wordLearned = learned.some((l) => key(l.written) === key(r.word) && !l.heard);
+          save(mine && r.wrong && last && !wordLearned
+            ? rows.map((o, j) => (j === i ? { word: r.word, wrong: '' } : o))
+            : rows.filter((_, j) => j !== i));
+        });
         actions.append(edit, ' ', remove);
         row.append(what, actions);
         list.append(row);
