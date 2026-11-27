@@ -22,9 +22,9 @@ In conversation, "version 3" means 0.3.
 
 | Version | Phase | Features | Gate (from ROADMAP.md) | Target |
 | --- | --- | --- | --- | --- |
-| **0.1** | 1 and 2 | Dictation as good as Wispr Flow: hold or hands-free, cleanup levels, personal dictionary with Wispr Flow import, provider settings with any key or a local server, Home and History, local traces and **Report a problem**, in-app updates; tone per app (#219), cleaning text while the user speaks (#220), microphone handling (#221). First public release | Edits per 100 characters at or below Wispr Flow's 11.6, internal names right, a week of daily use | mid-December 2026, under review after #219–#221 are sized |
+| **0.1** | 1 and 2 | Dictation as good as Wispr Flow: hold or hands-free, cleanup levels, personal dictionary with Wispr Flow import, provider settings with any key or a local server, Home and History, local traces and **Report a problem**, in-app updates; tone per app (#219), microphone handling (#221). First public release | Edits per 100 characters at or below Wispr Flow's 11.6, internal names right, a week of daily use | mid-December 2026, under review after #219 and #221 are sized |
 | **0.2** | 3 and 4 (tasks) | Voice commands and the to-do list: one key for dictation, questions and commands; "Hyper, remind me to …"; the task list with dependencies, the morning card and nudges, with calendar events; voice edits of selected text; answers in a card; GitHub tickets; Home sidebar: Commands, the commands run and what the agent did (#231); Insights, usage stats modeled on Wispr Flow's plus commands run and tasks done (#235, needs a spec first) | Commands and the to-do list every day for two weeks | late January 2027 |
-| **0.3** | 4 (email) | Email: Google mail triage, draft-only replies, approvals from connector servers; Home sidebar: Calendar with list and board views (#232) | A week of daily mail drafts | late February 2027 |
+| **0.3** | 4 (email) | Email: Google mail triage, draft-only replies, approvals from connector servers; research on cleaning text while the user speaks (#220); Home sidebar: Calendar with list and board views (#232) | A week of daily mail drafts | late February 2027 |
 | **0.4** | 5 | Meetings: on-device live transcript, "Transcribe?" on a call, notes to proposed tickets, the Meetings page | Tickets from a real meeting accepted with few edits | April 2027 |
 | **1.0** | | The four above, stable | A month with no breaking change | after 0.4 |
 | Later | | Memory ("Hyper, remember …"), self-learning facts, the graph view and contexts; a Claude Code or Codex hand-off, local speech models, Linux and Windows, Microsoft 365 | | |
@@ -42,7 +42,7 @@ gantt
   section 0.1 Dictation
   Wispr-level quality, dictionary, providers :a1, 2026-11-20, 2026-12-08
   Traces, Report a problem, first public build :a2, 2026-11-27, 2026-12-15
-  Tone per app, live cleanup, mic handling :a3, 2026-12-01, 2026-12-15
+  Tone per app, mic handling :a3, 2026-12-01, 2026-12-15
   0.1.0 release :milestone, 2026-12-15, 0d
   section 0.2 Commands and to-do list
   One key routes, commands, GitHub tickets :b1, 2026-12-15, 2027-01-20
@@ -87,7 +87,7 @@ recommendation.
 | --- | --- | --- |
 | A second speech provider as fallback: latency and accuracy on the owner's samples | 0.1 | ROADMAP phase 2 |
 | Tone per app: how others pick it, and what it costs in latency | 0.1 | ROADMAP phase 2 |
-| Cleaning text while the user speaks | 0.1 | ROADMAP phase 2 |
+| Cleaning text while the user speaks (#220; current speed is good, so not needed for 0.1) | 0.3 | ROADMAP phase 2 |
 | Quick notes: memory folder, task list or both | 0.2 (task side), Later (memory) | PRD Q-15 |
 | How Hyper notices facts to remember | Later | PRD Q-16 |
 | "Continue with ChatGPT" in onboarding: latency of answers | 0.2 | PRD Q-17 |
