@@ -18,6 +18,7 @@ pub mod field_watch;
 pub mod health;
 pub mod hints;
 pub mod learning;
+pub mod microphones;
 pub mod registry;
 pub mod report;
 pub mod schedule;
