@@ -35,21 +35,37 @@ pub fn subscriber_with(
     sinks: Vec<Arc<dyn TraceSink>>,
     warnings: crate::warnings::WarningsLayer,
 ) -> tracing::Dispatch {
+    subscriber_layers(sinks, warnings, Vec::new())
+}
+
+/// A layer added under HyperMe's own: a developer export (R-15, R-16).
+pub type ExtraLayer = Box<dyn Layer<tracing_subscriber::Registry> + Send + Sync>;
+
+/// [`subscriber_with`] plus `extra` layers, such as the developer exports of
+/// `hyperme-devtrace`.
+pub fn subscriber_layers(
+    sinks: Vec<Arc<dyn TraceSink>>,
+    warnings: crate::warnings::WarningsLayer,
+    extra: Vec<ExtraLayer>,
+) -> tracing::Dispatch {
     use tracing_subscriber::layer::SubscriberExt;
     tracing::Dispatch::new(
         tracing_subscriber::registry()
+            // An empty list of layers would report a level hint of OFF and silence the rest.
+            .with((!extra.is_empty()).then_some(extra))
             .with(TraceLayer::new(sinks))
             .with(warnings),
     )
 }
 
-/// Installs [`subscriber_with`] for the whole process, once, as the app does at start-up.
+/// Installs [`subscriber_layers`] for the whole process, once, as the app does at start-up.
 /// Returns `false` if a subscriber was already installed.
 pub fn install_with(
     sinks: Vec<Arc<dyn TraceSink>>,
     warnings: crate::warnings::WarningsLayer,
+    extra: Vec<ExtraLayer>,
 ) -> bool {
-    tracing::dispatcher::set_global_default(subscriber_with(sinks, warnings)).is_ok()
+    tracing::dispatcher::set_global_default(subscriber_layers(sinks, warnings, extra)).is_ok()
 }
 
 /// Installs [`subscriber`] for the whole process, once, as the app does at start-up. Returns
