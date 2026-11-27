@@ -66,6 +66,13 @@ pub fn reopen(app: &AppHandle) {
     }
 }
 
+/// Brings an open walkthrough to the front, activating the app (#130). Nothing when it is closed.
+pub fn bring_to_front(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window(WALKTHROUGH) {
+        let _ = window.set_focus();
+    }
+}
+
 pub fn open(app: &AppHandle, step: onboarding::Step) {
     if let Some(window) = app.get_webview_window(WALKTHROUGH) {
         let _ = window.show();

@@ -34,6 +34,9 @@ commands = [
 id = "calendar"
 label = "Calendar: read your events"
 url = "https://calendarmcp.googleapis.com/mcp/v1"
+# R-20: the day's quota and what each call costs, in units. Reported numbers, UNVERIFIED
+# until slice 1 measures them.
+daily_units = 5000
 scopes = ["https://www.googleapis.com/auth/calendar.calendarlist.readonly",
           "https://www.googleapis.com/auth/calendar.events.readonly"]
 
@@ -41,6 +44,8 @@ scopes = ["https://www.googleapis.com/auth/calendar.calendarlist.readonly",
 id = "gmail"
 label = "Mail: read your inbox"
 url = "https://gmailmcp.googleapis.com/mcp/v1"
+daily_units = 5000
+units = { search_threads = 10, get_thread = 1, get_message = 1, create_draft = 10 }
 scopes = ["https://www.googleapis.com/auth/gmail.readonly"]
 # R-14: only when drafts are switched on. Never gmail.send, gmail.modify or mail.google.com.
 optional_scopes = { drafts = ["https://www.googleapis.com/auth/gmail.compose"] }

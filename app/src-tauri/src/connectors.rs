@@ -49,6 +49,8 @@ pub struct Page {
     label: String,
     /// The switches that were on at sign-in.
     features: Vec<String>,
+    /// "31 requests today · 310 of 5000 units", per server (R-20).
+    requests: Vec<String>,
 }
 
 /// The setup sheet for one OAuth preset.
@@ -77,11 +79,19 @@ pub struct View {
     error: Option<String>,
 }
 
-/// Works out an account's health from the keychain. Sync times arrive with the pulls
-/// (slice 7), and "Sign in again" with the refresh alerts (slice 10).
+/// What the app keeps about accounts besides the keychain: the "Sign in again" marks and the
+/// request counts, both in the app's SQLite file.
+pub struct Local<'a> {
+    status: &'a dyn hyperme_core::health::AccountStatusStore,
+    log: &'a dyn hyperme_core::connectors::RequestLog,
+}
+
+/// Works out an account's health: "Sign in again" when its refresh was refused (R-10), else
+/// from the keychain. Sync times arrive with the pulls' wiring in the app.
 fn health(
     registry: &Registry,
     store: &dyn SecretStore,
+    local: &Local<'_>,
     connector: &str,
     label: &str,
 ) -> AccountHealth {
@@ -93,6 +103,9 @@ fn health(
     } else {
         format!("{connector}:{label}")
     };
+    if matches!(local.status.sign_in_needed(&key), Ok(true)) {
+        return AccountHealth::SignInAgain;
+    }
     if !needs_token || matches!(store.get(&key), Ok(Some(_))) {
         AccountHealth::Works { synced: None }
     } else {
@@ -104,9 +117,10 @@ fn build_view(
     connectors: &Connectors,
     registry: &Registry,
     store: &dyn SecretStore,
+    local: &Local<'_>,
     now: UtcDateTime,
 ) -> View {
-    let health = |connector: &str, label: &str| health(registry, store, connector, label);
+    let health = |connector: &str, label: &str| health(registry, store, local, connector, label);
     let rows = cs::list_rows(registry, connectors, &health, now);
     let pages = rows
         .iter()
@@ -127,6 +141,21 @@ fn build_view(
                 enabled: entry.is_none_or(|a| a.enabled),
                 tools_verified: connector.tools_verified,
                 tools: cs::tool_rows(connector),
+                requests: connector
+                    .servers
+                    .iter()
+                    .filter_map(|server| {
+                        let usage = local.log.usage(&row.id, now.date(), &server.id).ok()?;
+                        let quota = server
+                            .daily_units
+                            .map(|daily_units| hyperme_core::health::Quota { daily_units });
+                        let label = server.label.as_deref().unwrap_or(&server.id);
+                        Some(format!(
+                            "{label} · {}",
+                            hyperme_core::health::requests_line(usage, quota)
+                        ))
+                    })
+                    .collect(),
             })
         })
         .collect();
@@ -185,12 +214,19 @@ pub fn connectors_view(app: AppHandle) -> View {
         Err(error) => return empty(error),
     };
     match cs::registry(presets_dir(&app).as_deref(), &config.connectors) {
-        Ok(registry) => build_view(
-            &config.connectors,
-            &registry,
-            &KeychainStore::with_service(KEYCHAIN_SERVICE),
-            UtcDateTime::now(),
-        ),
+        Ok(registry) => match account_data(&app) {
+            Ok(data) => build_view(
+                &config.connectors,
+                &registry,
+                &KeychainStore::with_service(KEYCHAIN_SERVICE),
+                &Local {
+                    status: &data,
+                    log: &data,
+                },
+                UtcDateTime::now(),
+            ),
+            Err(error) => empty(error),
+        },
         Err(error) => empty(error.to_string()),
     }
 }
@@ -409,6 +445,9 @@ pub async fn connectors_sign_in(
         Ok(())
     })
     .map_err(fail)?;
+    // A new sign-in clears "Sign in again" (R-10).
+    let data = account_data(&app).map_err(fail)?;
+    hyperme_core::health::AccountStatusStore::clear(&data, &account).map_err(fail)?;
 
     let auth = std::sync::Arc::new(
         hyperme_providers::mcp::AccountAuth::new(oauth, store, &account).with_token(token),
@@ -511,6 +550,17 @@ mod tests {
     use hyperme_core::config::DEFAULT_CONFIG;
     use hyperme_core::secrets::MemorySecretStore;
 
+    fn local() -> Local<'static> {
+        static STATUS: std::sync::LazyLock<hyperme_core::health::MemoryAccountStatus> =
+            std::sync::LazyLock::new(Default::default);
+        static LOG: std::sync::LazyLock<hyperme_core::connectors::MemoryRequestLog> =
+            std::sync::LazyLock::new(Default::default);
+        Local {
+            status: &*STATUS,
+            log: &*LOG,
+        }
+    }
+
     fn connectors(extra: &str) -> Connectors {
         Config::parse(&format!("{DEFAULT_CONFIG}\n{extra}"), Path::new("c.toml"))
             .unwrap()
@@ -527,7 +577,7 @@ mod tests {
         let store = MemorySecretStore::default();
         let now = UtcDateTime::now();
 
-        let view = build_view(&connectors, &registry, &store, now);
+        let view = build_view(&connectors, &registry, &store, &local(), now);
         assert_eq!(view.rows[0].state, "Not signed in");
         assert_eq!(
             view.setup[1].link,
@@ -535,7 +585,7 @@ mod tests {
         );
 
         store.set("google:personal", "fake-refresh-token").unwrap();
-        let view = build_view(&connectors, &registry, &store, now);
+        let view = build_view(&connectors, &registry, &store, &local(), now);
         assert_eq!(view.rows[0].state, "Works · not synced yet");
         assert_eq!(view.pages[0].id, "google:personal");
         assert!(view.pages[0].account);
@@ -556,6 +606,7 @@ mod tests {
             &connectors,
             &registry,
             &MemorySecretStore::default(),
+            &local(),
             UtcDateTime::now(),
         );
         let states: Vec<&str> = view.rows.iter().map(|r| r.state.as_str()).collect();
@@ -572,7 +623,7 @@ mod tests {
         );
         let registry = cs::registry(None, &connectors).unwrap();
         let store = MemorySecretStore::default();
-        let view = build_view(&connectors, &registry, &store, UtcDateTime::now());
+        let view = build_view(&connectors, &registry, &store, &local(), UtcDateTime::now());
         assert!(!view.sheets[0].client_saved);
 
         setup::save_client(
@@ -584,7 +635,7 @@ mod tests {
             },
         )
         .unwrap();
-        let view = build_view(&connectors, &registry, &store, UtcDateTime::now());
+        let view = build_view(&connectors, &registry, &store, &local(), UtcDateTime::now());
         let sheet = &view.sheets[0];
         assert!(sheet.client_saved);
         assert_eq!(sheet.client_id.as_deref(), Some("fake-id.apps.example"));
@@ -620,5 +671,36 @@ mod tests {
         assert_eq!(access("ask").unwrap(), ToolAccess::Ask);
         assert_eq!(access("off").unwrap(), ToolAccess::Off);
         assert!(access("on").is_err());
+    }
+
+    /// R-10, R-20: an account whose refresh was refused shows "Sign in again"; its page shows
+    /// the day's requests against each server's quota.
+    #[test]
+    fn sign_in_again_and_requests_show_on_the_page() {
+        use hyperme_core::connectors::{MemoryRequestLog, RequestLog};
+        use hyperme_core::health::{AccountStatusStore, MemoryAccountStatus};
+
+        let connectors =
+            connectors("[[connectors.accounts]]\nconnector = \"google\"\nlabel = \"work\"\n");
+        let registry = cs::registry(None, &connectors).unwrap();
+        let store = MemorySecretStore::default();
+        store.set("google:work", "fake-refresh-token").unwrap();
+        let status = MemoryAccountStatus::default();
+        let log = MemoryRequestLog::default();
+        let now = UtcDateTime::now();
+        log.record("google:work", now.date(), "gmail", 10).unwrap();
+        status.mark_sign_in_needed("google:work", now).unwrap();
+        let local = Local {
+            status: &status,
+            log: &log,
+        };
+        let view = build_view(&connectors, &registry, &store, &local, now);
+        assert_eq!(view.rows[0].state, "Sign in again");
+        assert_eq!(view.rows[0].tone, cs::Tone::Bad);
+        assert!(
+            view.pages[0]
+                .requests
+                .contains(&"Mail: read your inbox · 1 request today · 10 of 5000 units".to_owned())
+        );
     }
 }
