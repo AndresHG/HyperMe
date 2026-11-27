@@ -86,6 +86,13 @@ pub fn open(app: &AppHandle, step: onboarding::Step) {
         .resizable(false)
         .build();
     if let Ok(window) = built {
+        // Its page process must end when it closes, or it stays in memory while idle.
+        let handle = app.clone();
+        window.on_window_event(move |event| {
+            if matches!(event, tauri::WindowEvent::Destroyed) {
+                crate::home::free_closed_window(&handle);
+            }
+        });
         let _ = window.set_focus();
     }
 }
