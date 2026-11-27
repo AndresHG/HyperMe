@@ -344,6 +344,7 @@ Asked in the interview of 26 November 2026. Recommendations first.
 | N-2 | Link facts and to-dos to a meeting | Through contexts only | Decided 27 November 2026: contexts only; a direct link stays in Later |
 | N-3 | Shape of tags | Two levels, each context a memory file | Decided 27 November 2026: as recommended |
 | N-4 | When contexts and the meeting prompt arrive | Phases 3 to 5 | Decided 27 November 2026: memory in 3, tasks in 4, meetings in 5 |
+| N-5 | Memory storage and linking | Markdown files plus a SQLite index, deterministic linking | Decided 27 November 2026: as recommended. Embeddings and an AI knowledge graph go to Later, to evaluate again with an interview of the owner first |
 | G-1 | Whose Google sign-in client | Bring your own Google Cloud client now; a shared one later if non-developers ask | Decided 26 November 2026: as recommended ([spec](../specs/97-google-connectors/spec.md)) |
 | G-2 | Gmail access in the first version | Read plus drafts, never send | Decided 26 November 2026: as recommended |
 | G-3 | Mail and calendar content to the model | To the user's own model provider, only when a job or question needs it | Decided 26 November 2026: as recommended. Also: Google must never sign the user out in normal use |

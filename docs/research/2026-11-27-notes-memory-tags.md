@@ -164,6 +164,7 @@ do they relate things automatically? Should HyperMe change course?
 | N-2 | Linking facts and to-dos to a meeting | No direct link. Tags only: "for Amazon" puts it under Amazon, and the meeting gets the Amazon tag from attendees or title. A direct meeting link stays in Later, only if tags prove not enough |
 | N-3 | Shape of tags | Two levels (group, then context), each context a Markdown file in the memory folder with its facts and aliases. The second round (section 5) checked it against Obsidian, Tana, Craft, Mem, Basic Memory, Zep and Mem0 and keeps it, with the format sharpened as recommended there |
 | N-4 | When | Spread: contexts with memory in phase 3, contexts on tasks in phase 4, the meeting prompt and Meetings page in phase 5 |
+| N-5 | Storage and linking after the second round | Keep the Markdown files and SQLite index, with the format sharpened. The owner likes embeddings and an AI knowledge graph too: both go to Later, to evaluate again when there is bandwidth, after an interview of the owner to settle the product questions |
 
 ## Sources
 

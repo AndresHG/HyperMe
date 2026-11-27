@@ -30,7 +30,7 @@ formatting quality and the app itself.
 | **3. Smart routing and actions** | One key for everything you say | The same key routes to dictation, a question or an action; command mode sends the transcript to a tool-calling model (how others do it: [voice commands research](research/2026-11-27-voice-commands.md)); one MCP client (`rmcp`); the first tracker connector; "speak, preview card, Enter" in under a second; short spoken questions answered in a card; voice edits of selected text; "Continue with ChatGPT" as an answers provider; HyperMe as an MCP server (phase 3 or 4) ([research](research/2026-11-26-competitors-and-plan-sign-in.md)); memory: "Hyper, remember …", approved facts in a Markdown folder ([PRD](PRD.md) 7.5); contexts (tags) in two levels, such as Customers > Amazon, each a file in that folder ([notes, memory and contexts](#notes-memory-and-contexts)) | Owner uses commands every day for two weeks. Covers items 1 and 2 of "what nobody ships" ([RESEARCH.md](RESEARCH.md) section 1.2) |
 | **4. Daily tasks and email** | The copilot for the workday | Calendar connector, Google first; HyperMe's own task list with voice capture ("Hyper, remind me to …") and tasks blocked by other tasks; a morning card and "meeting now" nudges ([draft spec](../specs/92-daily-tasks/spec.md)); new items pulled into the task list from calendar, mail and tracker; scheduled jobs, each with a tool allowlist; email triage and replies, draft-only; contexts on tasks ("remind me to send the deck for Amazon") and a filter by context | Owner relies on it for a week of daily planning and mail drafts |
 | **5. Meetings** | Meetings become tasks | Note-taker with live gray transcript and batch cleanup to white ([#20](https://github.com/AndresHG/hyperme/issues/20)), local-first: see [meetings on device](#meetings-on-device) below; proposed tickets with owner and quote; a "Transcribe?" card when a call is detected; one Meetings page for transcripts with or without a calendar event; a meeting takes contexts from its attendees or title ([notes, memory and contexts](#notes-memory-and-contexts)) | Tickets from a real meeting accepted with few edits |
-| **Later** | | Memory grows: proposed facts, a graph view, an optional embeddings index if full-text search proves too weak; a direct link from a fact or to-do to a meeting, only if contexts prove not enough; handing a task to Claude Code by voice, nothing more (owner, 26 November 2026); spoken answers; local speech models for dictation; Linux and Windows, including a local meeting option there in place of Apple's recognizer (for example Whisper through whisper.cpp or sherpa-onnx, both behind the speech trait) | |
+| **Later** | | Memory grows: proposed facts, a graph view; evaluate again, with an interview of the owner first, an embeddings index and an AI knowledge graph (owner, 27 November 2026; see [notes, memory and contexts](#notes-memory-and-contexts)); a direct link from a fact or to-do to a meeting, only if contexts prove not enough; handing a task to Claude Code by voice, nothing more (owner, 26 November 2026); spoken answers; local speech models for dictation; Linux and Windows, including a local meeting option there in place of Apple's recognizer (for example Whisper through whisper.cpp or sherpa-onnx, both behind the speech trait) | |
 
 ## Meetings on device
 
@@ -72,9 +72,12 @@ This does not change the dictation core, which stays on cloud speech for speed.
 | Fact format | One fact per line with its date, `[[links]]` to other files, aliases in the file's properties, readable in Obsidian. A fact can be marked as replaced by a newer one | 3 |
 | Meetings and to-dos | No direct link. "For Amazon" puts a to-do or fact under Amazon, and the Amazon meeting shows beside it through the shared context | 5 |
 
-Not chosen: an AI knowledge graph that runs a model on every capture (Zep, Mem0), because it
-needs a graph database and learns without approval; free-depth tags, which Tana itself calls
-experimental and slow.
+Not now, but to evaluate again when there is bandwidth (owner, 27 November 2026): a local
+embeddings index for fuzzy recall ("what did we say about pricing?"), and an AI knowledge graph
+that extracts entities and facts with a model, as Zep and Mem0 do. The owner likes both. Before
+either is planned, interview the owner to settle the product questions: what it may learn
+without approval, the cost per capture, where the index lives and its memory budget. Then pick
+the best approach. Not chosen: free-depth tags, which Tana itself calls experimental and slow.
 
 ## How this differs from the earlier plan
 
