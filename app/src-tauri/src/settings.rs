@@ -32,6 +32,10 @@ const SHEET_MAX: (f64, f64) = (1040.0, 760.0);
 const SHEET_MIN: (f64, f64) = (640.0, 420.0);
 /// Home's title bar, left out when centring.
 const TITLE_BAR: f64 = 28.0;
+/// Transparent room around the sheet's card for its rounded corners and the page's own shadow.
+/// The window has no native shadow: macOS draws that one square around a transparent window
+/// (the corners the owner saw, 27 November 2026; the pill's square had the same cause).
+pub const SHEET_PAD: f64 = 24.0;
 
 /// Where the Settings sheet sits over Home, in logical points: centred in Home's content area,
 /// filling it less an even margin.
@@ -66,6 +70,12 @@ pub fn open(app: &AppHandle, section: &str) {
     };
     let (pos, size) = (pos.to_logical::<f64>(scale), size.to_logical::<f64>(scale));
     let (x, y, w, h) = sheet_frame((pos.x, pos.y), (size.width, size.height));
+    let (x, y, w, h) = (
+        x - SHEET_PAD,
+        y - SHEET_PAD,
+        w + 2.0 * SHEET_PAD,
+        h + 2.0 * SHEET_PAD,
+    );
     let url = format!("settings.html#{section}");
     let Ok(builder) = WebviewWindowBuilder::new(app, SETTINGS, WebviewUrl::App(url.into()))
         .title("HyperMe Settings")
@@ -74,7 +84,7 @@ pub fn open(app: &AppHandle, section: &str) {
         .decorations(false)
         .transparent(true)
         .resizable(false)
-        .shadow(true)
+        .shadow(false)
         .parent(&home)
     else {
         return;
@@ -823,6 +833,19 @@ pub fn app_restart(app: AppHandle) {
 
 #[cfg(test)]
 mod tests {
+
+    /// Regression (owner, 27 November 2026, "corners are wrong"): the sheet window has no
+    /// native shadow, which macOS draws square, and its page leaves the transparent room the
+    /// rounded card and its shadow need.
+    #[test]
+    fn the_sheet_has_no_square_shadow() {
+        let source = include_str!("settings.rs");
+        let open = &source
+            [source.find("pub fn open(").unwrap()..source.find("pub fn settings_close").unwrap()];
+        assert!(open.contains(".shadow(false)") && open.contains(".transparent(true)"));
+        let page = include_str!("../../ui/settings.html");
+        assert!(page.contains(&format!("padding: {}px", super::SHEET_PAD as u32)));
+    }
 
     /// V0.1 redesign: the sheet fills Home's content area less an even margin, centred, and
     /// keeps between its minimum and maximum size.
