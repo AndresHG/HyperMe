@@ -34,6 +34,9 @@ dictionary, write the dictionary term. Otherwise change nothing.";
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
+/// Settings waits at most this long for a model list.
+const LIST_TIMEOUT: Duration = Duration::from_secs(5);
+
 /// The prompt for a version named in the config.
 pub fn prompt_named(version: &str) -> Option<String> {
     match version {
@@ -54,8 +57,12 @@ pub struct ChatCleanup {
     /// `None` leaves `reasoning_effort` out of the request.
     reasoning_effort: Option<String>,
     prompt: String,
-    /// The `Authorization` header, marked sensitive.
-    auth: HeaderValue,
+    /// The user's dictionary line (spec 93, R-4), between the prompt and the app line. Behind a
+    /// lock so a saved dictionary reaches a provider the engine shares (specs/96, R-8).
+    dictionary: std::sync::Mutex<String>,
+    /// The `Authorization` header, marked sensitive. `None` for a server that needs no key, such
+    /// as one on this Mac (R-14), so no header is sent at all.
+    auth: Option<HeaderValue>,
 }
 
 impl fmt::Debug for ChatCleanup {
@@ -81,14 +88,19 @@ impl ChatCleanup {
                 ),
             )
         })?;
-        let mut auth = HeaderValue::from_str(&format!("Bearer {key}")).map_err(|_| {
-            provider_error(
-                &provider,
-                ErrorKind::Auth,
-                "the key has characters a header cannot carry. Check it in Settings",
-            )
-        })?;
-        auth.set_sensitive(true);
+        let auth = if key.is_empty() {
+            None
+        } else {
+            let mut auth = HeaderValue::from_str(&format!("Bearer {key}")).map_err(|_| {
+                provider_error(
+                    &provider,
+                    ErrorKind::Auth,
+                    "the key has characters a header cannot carry. Check it in Settings",
+                )
+            })?;
+            auth.set_sensitive(true);
+            Some(auth)
+        };
         let http = reqwest::Client::builder()
             .connect_timeout(CONNECT_TIMEOUT)
             .build()
@@ -107,8 +119,16 @@ impl ChatCleanup {
             reasoning_effort: (config.reasoning_effort != "off")
                 .then(|| config.reasoning_effort.clone()),
             prompt,
+            dictionary: std::sync::Mutex::default(),
             auth,
         })
+    }
+
+    fn authorized(&self, request: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+        match &self.auth {
+            Some(auth) => request.header(AUTHORIZATION, auth.clone()),
+            None => request,
+        }
     }
 
     fn error(&self, kind: ErrorKind, what: impl fmt::Display) -> Error {
@@ -138,14 +158,45 @@ impl ChatCleanup {
             ));
         }
         let body = response.text().await.unwrap_or_default();
+        if model_not_found(status, &body) {
+            return Err(self.error(
+                ErrorKind::Other,
+                format!(
+                    "the model {} was not found. Pick another in Settings",
+                    self.model
+                ),
+            ));
+        }
         let body: String = body.chars().take(300).collect();
         Err(self.error(ErrorKind::Other, format!("HTTP {status}: {}", body.trim())))
+    }
+
+    /// Settings' Test (R-13): asks the chosen model to clean a one-word transcript through the
+    /// same request a dictation sends (prompt, reasoning effort, streaming), so a wrong model
+    /// fails Test, not the next dictation. A design note asked for a one-token completion; a
+    /// token limit is left out because hosts disagree on its name (`max_tokens` against
+    /// `max_completion_tokens`), and a one-word transcript costs about as little.
+    pub async fn check(&self) -> Result<(), Error> {
+        self.clean("Test.", None, &mut |_| {}).await
+    }
+
+    /// Adds the user's dictionary to the prompt (spec 93, R-4): `line` is
+    /// `Dictionary::prompt_line()`. It goes after the fixed prompt and before the app line, so
+    /// the prompt's start stays the same from one dictation to the next.
+    pub fn with_dictionary(self, line: &str) -> Self {
+        self.set_dictionary(line);
+        self
     }
 
     /// The request body. The fixed prompt comes first so a provider's prompt cache keeps the
     /// first token fast; the app name (R-11) is its last line.
     fn request_body(&self, raw: &str, app: Option<&str>) -> Value {
-        let mut system = self.prompt.clone();
+        let dictionary = self
+            .dictionary
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        let mut system = format!("{}{dictionary}", self.prompt);
         if let Some(app) = app.filter(|a| !a.trim().is_empty()) {
             system.push_str(&format!("\n\nThe text will be pasted into {app}."));
         }
@@ -171,13 +222,116 @@ fn provider_error(provider: &str, kind: ErrorKind, what: impl fmt::Display) -> E
     }
 }
 
+/// The models a key offers: `GET {endpoint}/models`, the `id` of each entry in `data`
+/// (OpenAI's shape, which Groq, OpenRouter and Google's compatibility endpoint share). Google's
+/// ids start with `models/`, which is dropped. Called only from Settings, never on the dictation
+/// path (R-15). An empty `key` sends no `Authorization` header, for a local server.
+pub async fn list_models(provider: &str, endpoint: &str, key: &str) -> Result<Vec<String>, Error> {
+    list_models_within(provider, endpoint, key, LIST_TIMEOUT).await
+}
+
+/// [`list_models`] with its own time limit, for looking on local ports (R-22).
+pub(crate) async fn list_models_within(
+    provider: &str,
+    endpoint: &str,
+    key: &str,
+    limit: Duration,
+) -> Result<Vec<String>, Error> {
+    let http = reqwest::Client::builder()
+        .connect_timeout(CONNECT_TIMEOUT.min(limit))
+        .timeout(limit)
+        .build()
+        .map_err(|e| {
+            provider_error(
+                provider,
+                ErrorKind::Other,
+                format!("could not set up HTTP: {e}"),
+            )
+        })?;
+    let mut request = http.get(format!("{}/models", endpoint.trim_end_matches('/')));
+    if !key.is_empty() {
+        let mut auth = HeaderValue::from_str(&format!("Bearer {key}")).map_err(|_| {
+            provider_error(
+                provider,
+                ErrorKind::Auth,
+                "the key has characters a header cannot carry",
+            )
+        })?;
+        auth.set_sensitive(true);
+        request = request.header(AUTHORIZATION, auth);
+    }
+    let response = request.send().await.map_err(|e| {
+        provider_error(
+            provider,
+            ErrorKind::Network,
+            format!("could not reach it: {e}"),
+        )
+    })?;
+    let status = response.status();
+    if status == StatusCode::UNAUTHORIZED || status == StatusCode::FORBIDDEN {
+        return Err(provider_error(
+            provider,
+            ErrorKind::Auth,
+            "the key was rejected",
+        ));
+    }
+    if !status.is_success() {
+        return Err(provider_error(
+            provider,
+            ErrorKind::Other,
+            format!("the model list answered {status}"),
+        ));
+    }
+    let text = response.text().await.map_err(|e| {
+        provider_error(
+            provider,
+            ErrorKind::Network,
+            format!("the model list broke off: {e}"),
+        )
+    })?;
+    let body: Value = serde_json::from_str(&text).map_err(|e| {
+        provider_error(
+            provider,
+            ErrorKind::Other,
+            format!("the model list was not JSON: {e}"),
+        )
+    })?;
+    Ok(body["data"]
+        .as_array()
+        .map(|models| {
+            models
+                .iter()
+                .filter_map(|m| m["id"].as_str())
+                .map(|id| id.strip_prefix("models/").unwrap_or(id).to_owned())
+                .collect()
+        })
+        .unwrap_or_default())
+}
+
+/// Whether an error answer means the model does not exist. Providers say it in different
+/// shapes: OpenAI and Groq a `model_not_found` code, Google a 404 naming `models/…`.
+fn model_not_found(status: StatusCode, body: &str) -> bool {
+    let lower = body.to_lowercase();
+    lower.contains("model_not_found")
+        || (status == StatusCode::NOT_FOUND && lower.contains("model"))
+        || (lower.contains("model")
+            && (lower.contains("does not exist") || lower.contains("not found")))
+}
+
 impl CleanupProvider for ChatCleanup {
+    fn set_dictionary(&self, line: &str) {
+        line.clone_into(
+            &mut self
+                .dictionary
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        );
+    }
+
     /// R-2: opens the connection on key-down, so the cleanup call finds it ready.
     async fn warm(&self) -> Result<(), Error> {
         let response = self
-            .http
-            .get(format!("{}/models", self.endpoint))
-            .header(AUTHORIZATION, self.auth.clone())
+            .authorized(self.http.get(format!("{}/models", self.endpoint)))
             .send()
             .await
             .map_err(|e| self.network(&e))?;
@@ -194,9 +348,10 @@ impl CleanupProvider for ChatCleanup {
         on_text: &mut (dyn FnMut(&str) + Send),
     ) -> Result<(), Error> {
         let response = self
-            .http
-            .post(format!("{}/chat/completions", self.endpoint))
-            .header(AUTHORIZATION, self.auth.clone())
+            .authorized(
+                self.http
+                    .post(format!("{}/chat/completions", self.endpoint)),
+            )
             .header(CONTENT_TYPE, "application/json")
             .body(self.request_body(raw, app).to_string())
             .send()
@@ -309,6 +464,32 @@ mod tests {
         let off = cleanup("off", "v4").unwrap().request_body("hi", None);
         assert!(off.get("reasoning_effort").is_none());
         assert_eq!(off["messages"][0]["content"], prompt_named("v4").unwrap());
+    }
+
+    /// Spec 93, AC-4: the dictionary line sits between the fixed prompt and the app line, so
+    /// two apps share the same prompt start.
+    #[test]
+    fn the_dictionary_goes_before_the_app_line() {
+        let line = "\n\nThe speaker's dictionary: LangChain, Zentrix.";
+        let with = cleanup("low", "v4").unwrap().with_dictionary(line);
+        let system = |app| {
+            with.request_body("hola", Some(app))["messages"][0]["content"]
+                .as_str()
+                .unwrap()
+                .to_owned()
+        };
+        let start = format!("{}{line}", prompt_named("v4").unwrap());
+        assert_eq!(
+            system("Slack"),
+            format!("{start}\n\nThe text will be pasted into Slack.")
+        );
+        assert!(system("Mail").starts_with(&start));
+        // An empty dictionary leaves the prompt as it was.
+        let none = cleanup("low", "v4").unwrap().with_dictionary("");
+        assert_eq!(
+            none.request_body("hi", None)["messages"][0]["content"],
+            prompt_named("v4").unwrap()
+        );
     }
 
     #[test]

@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="820" height="520" viewBox="0 0 820 520" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', Arial, sans-serif">
+  <title>HyperMe settings window, Providers with Show advanced on: one table of roles</title>
+  <rect width="820" height="520" fill="#2A2D34"/>
+  <rect x="20" y="20" width="780" height="480" rx="12" fill="#111113" stroke="#3A3A40"/>
+  <circle cx="40" cy="38" r="6" fill="#FF5F57"/><circle cx="60" cy="38" r="6" fill="#FEBC2E"/><circle cx="80" cy="38" r="6" fill="#28C840"/>
+  <text x="380" y="42" fill="#A1A1AA" font-size="13" font-weight="600">Settings</text>
+  <!-- sidebar -->
+  <rect x="20" y="58" width="170" height="442" fill="#16161A"/>
+  <g font-size="13">
+    <text x="36" y="92" fill="#A1A1AA">Setup check</text>
+    <text x="36" y="124" fill="#6B6B73" font-size="10" font-weight="700" letter-spacing="0.6">EVERYDAY</text>
+    <text x="36" y="148" fill="#A1A1AA">General</text>
+    <text x="36" y="172" fill="#A1A1AA">Shortcuts</text>
+    <text x="36" y="204" fill="#6B6B73" font-size="10" font-weight="700" letter-spacing="0.6">SETUP</text>
+    <rect x="28" y="212" width="152" height="26" rx="6" fill="#26262B"/>
+    <text x="36" y="230" fill="#FFFFFF" font-weight="600">Providers</text>
+    <text x="36" y="256" fill="#A1A1AA">Privacy</text>
+    <text x="36" y="280" fill="#A1A1AA">Advanced</text>
+    <text x="36" y="304" fill="#A1A1AA">About</text>
+  </g>
+  <!-- content -->
+  <text x="212" y="90" fill="#FFFFFF" font-size="18" font-weight="700">Providers</text>
+  <text x="212" y="110" fill="#A1A1AA" font-size="12">Every model service in one place. Keys stay in the macOS keychain and are never shown again.</text>
+  <g font-size="11" fill="#6B6B73" font-weight="600">
+    <text x="212" y="142">ROLE</text><text x="338" y="142">PROVIDER</text><text x="482" y="142">MODEL</text><text x="642" y="142">KEY / TEST</text>
+  </g>
+  <line x1="212" y1="150" x2="784" y2="150" stroke="#2E2E34"/>
+  <!-- speech row -->
+  <g font-size="12">
+    <text x="212" y="178" fill="#FFFFFF">Dictation speech</text>
+    <rect x="338" y="164" width="134" height="24" rx="6" fill="#1F1F24" stroke="#2E2E34"/><text x="346" y="180" fill="#FFFFFF">Speechmatics (Rec…</text><text x="462" y="180" fill="#6B6B73">▾</text>
+    <rect x="482" y="164" width="150" height="24" rx="6" fill="#1F1F24" stroke="#2E2E34"/><text x="490" y="180" fill="#FFFFFF">melia-1</text><text x="622" y="180" fill="#6B6B73">▾</text>
+    <text x="642" y="180" fill="#22C55E">Works · 18 ms</text>
+    <rect x="730" y="164" width="44" height="24" rx="6" fill="#1F1F24" stroke="#2E2E34"/><text x="740" y="180" fill="#FFFFFF">Test</text>
+    <text x="212" y="206" fill="#A1A1AA" font-size="11">About $6 a month · 0.43 s measured (results) · Your median 0.47 s</text>
+  </g>
+  <line x1="212" y1="216" x2="784" y2="216" stroke="#2E2E34"/>
+  <!-- cleanup row: a provider picked without a key -->
+  <g font-size="12">
+    <text x="212" y="244" fill="#FFFFFF">Dictation cleanup</text>
+    <rect x="338" y="230" width="134" height="24" rx="6" fill="#1F1F24" stroke="#7C5CFF"/><text x="346" y="246" fill="#FFFFFF">OpenAI</text><text x="462" y="246" fill="#6B6B73">▾</text>
+    <rect x="482" y="230" width="150" height="24" rx="6" fill="#1F1F24" stroke="#2E2E34"/><text x="490" y="246" fill="#FFFFFF">(first catalogue model)</text><text x="622" y="246" fill="#6B6B73">▾</text>
+    <text x="482" y="272" fill="#A1A1AA" font-size="11">Reasoning effort</text>
+    <rect x="566" y="261" width="66" height="18" rx="5" fill="#1F1F24" stroke="#2E2E34"/><text x="573" y="274" fill="#FFFFFF" font-size="11">off ▾</text>
+    <text x="642" y="246" fill="#F59E0B" font-size="11">No key yet. Until this one</text>
+    <text x="642" y="260" fill="#F59E0B" font-size="11">works, dictation keeps Groq.</text>
+    <rect x="642" y="268" width="92" height="24" rx="6" fill="#1F1F24" stroke="#2E2E34"/><text x="650" y="284" fill="#6B6B73">Paste the key</text>
+    <rect x="738" y="268" width="46" height="24" rx="6" fill="#7C5CFF"/><text x="745" y="284" fill="#FFFFFF" font-size="10">Save+Test</text>
+    <text x="642" y="308" fill="#7C5CFF" font-size="11">Get a key</text>
+    <text x="212" y="326" fill="#A1A1AA" font-size="11">About $0.20 a month · Speed not measured</text>
+  </g>
+  <line x1="212" y1="336" x2="784" y2="336" stroke="#2E2E34"/>
+  <!-- provider menu open note -->
+  <rect x="338" y="350" width="200" height="104" rx="8" fill="#1B1B1F" stroke="#2E2E34"/>
+  <g font-size="12" fill="#FFFFFF">
+    <text x="350" y="370">Groq (Recommended)</text>
+    <text x="350" y="390">OpenAI</text>
+    <text x="350" y="410">OpenRouter · Gemini · Anthropic</text>
+    <text x="350" y="430">Local server</text>
+    <text x="350" y="448" fill="#7C5CFF">Add a custom endpoint…</text>
+  </g>
+  <text x="550" y="370" fill="#6B6B73" font-size="11">The cleanup menu: recommended first,</text>
+  <text x="550" y="386" fill="#6B6B73" font-size="11">then the PRD's order, local, custom.</text>
+  <rect x="664" y="466" width="120" height="24" rx="6" fill="#1F1F24" stroke="#2E2E34"/><text x="674" y="482" fill="#FFFFFF" font-size="12">Reset to recommended</text>
+  <text x="212" y="482" fill="#6B6B73" font-size="11">Changes save at once and reach the next dictation.</text>
+</svg>

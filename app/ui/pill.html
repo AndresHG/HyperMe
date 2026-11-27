@@ -80,6 +80,29 @@
   .label { overflow: hidden; text-overflow: ellipsis; }
   .label:empty { display: none; }
   .muted { color: var(--muted); }
+  /* The morning card (#92, docs/ux/daily-cards.svg). Heights match pill.rs (CARD_*), so the
+     panel fits it exactly. It never takes focus, so it is answered with a click. */
+  .card {
+    box-sizing: border-box; width: 100%; height: 100%; padding: 18px; border-radius: 18px;
+    background: var(--surface); box-shadow: inset 0 0 0 1px #3a3a40; color: var(--text);
+    font: 12px -apple-system, system-ui, sans-serif; overflow: hidden;
+  }
+  .card[hidden] { display: none; }
+  .card h1 { margin: 0; height: 24px; font: 700 15px ui-rounded, -apple-system, sans-serif; }
+  .card .line { height: 20px; line-height: 20px; color: var(--muted); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .card .line.strong { color: var(--text); font-size: 12px; }
+  .card .task { height: 28px; margin-bottom: 4px; border-radius: 9px; background: #1b1b1f; display: flex; align-items: center; gap: 8px; padding: 0 12px; }
+  .card .task i { width: 7px; height: 7px; border-radius: 50%; box-shadow: inset 0 0 0 1px var(--muted); flex: none; }
+  .card .task.due i { background: var(--raw); box-shadow: none; }
+  .card .task.unblocked i { background: #7c5cff; box-shadow: none; }
+  .card .task span { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .card .task em { font-style: normal; font-size: 11px; color: #6b6b73; }
+  .card .task.due em { color: var(--raw); }
+  .card .task.unblocked em { color: #a08cff; }
+  .card .keys { height: 42px; display: flex; align-items: flex-end; gap: 8px; }
+  .card button { font: 600 11px -apple-system, sans-serif; height: 26px; padding: 0 12px; border-radius: 7px; border: 0; background: #26262b; color: var(--muted); cursor: pointer; }
+  .card button.main { background: #7c5cff; color: #fff; }
+  .card .bad { color: var(--recording); }
 </style>
 </head>
 <body>
@@ -88,6 +111,7 @@
     <canvas id="voice" aria-hidden="true"></canvas>
     <span id="label" class="label"></span>
   </div>
+  <div id="card" class="card" role="dialog" aria-label="Morning card" hidden></div>
 <script>
   // Each state has an icon and a word, never colour alone (docs/UX.md).
   const icons = {
@@ -210,7 +234,63 @@
     raf = 0;
   }
 
+  const tauri = window.__TAURI__;
+
+  // ---- The morning card ----
+  const card = document.getElementById('card');
+  const node = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+
+  // A card is the morning card or an alert (docs/UX.md, "Alerts"); `kind` says which.
+  function showCard(view) {
+    hidden();
+    kind = 'card';
+    if (view.kind === 'alert') return showAlert(view);
+    const parts = [node('h1', null, view.title)];
+    if (view.yesterday) parts.push(node('div', 'line', view.yesterday));
+    if (view.meetings) parts.push(node('div', 'line strong', view.meetings));
+    for (const t of view.tasks) {
+      const row = node('div', 'task' + (t.tone ? ' ' + t.tone : ''));
+      row.append(node('i'), node('span', null, t.title));
+      if (t.mark) row.append(node('em', null, t.mark));
+      parts.push(row);
+    }
+    if (view.footer) parts.push(node('div', 'line', view.footer));
+    if (view.mail) parts.push(node('div', 'line strong', view.mail));
+    if (view.stale) parts.push(node('div', 'line', view.stale));
+    const keys = node('div', 'keys');
+    const open = node('button', 'main', 'Open Today');
+    const later = node('button', null, 'Later');
+    if (tauri) {
+      open.addEventListener('click', () => tauri.core.invoke('card_open_today'));
+      later.addEventListener('click', () => tauri.core.invoke('card_dismiss'));
+    }
+    keys.append(open, later);
+    parts.push(keys);
+    card.replaceChildren(...parts);
+    card.hidden = false;
+  }
+
+  function showAlert(view) {
+    const title = node('h1', null, view.title);
+    title.prepend(node('span', 'bad', '! '));
+    const keys = node('div', 'keys');
+    const fix = node('button', 'main', view.action);
+    const later = node('button', null, 'Later');
+    if (tauri) {
+      fix.addEventListener('click', () => tauri.core.invoke('card_action'));
+      later.addEventListener('click', () => tauri.core.invoke('card_dismiss'));
+    }
+    keys.append(fix, later);
+    card.replaceChildren(title, node('div', 'line strong', view.detail), keys);
+    card.hidden = false;
+  }
+
   function render(view) {
+    card.hidden = true;
+    if (view.kind === 'card') {
+      if (tauri) tauri.core.invoke('pill_card').then((c) => { if (c) showCard(c); });
+      return;
+    }
     const was = kind;
     kind = view.kind;
     since = performance.now();
@@ -234,6 +314,7 @@
 
   // Nothing runs while the pill is hidden.
   function hidden() {
+    card.hidden = true;
     kind = 'hidden';
     stop();
     pill.className = 'pill hidden';
@@ -248,7 +329,6 @@
   render({ kind: 'recording', label: '' });
   hidden();
 
-  const tauri = window.__TAURI__;
   if (tauri) {
     // A view sent before these listeners exist is lost (the bead is sent at launch), so once they
     // are in place the page asks for the current one, unless an event has already come.
@@ -256,6 +336,7 @@
     Promise.all([
       tauri.event.listen('pill', (event) => { heard = true; render(event.payload); }),
       tauri.event.listen('pill-hidden', () => { heard = true; hidden(); }),
+      tauri.event.listen('card', (event) => { heard = true; showCard(event.payload); }),
       tauri.event.listen('level', (event) => { target = event.payload; }),
     ]).then(() => tauri.core.invoke('pill_view')).then((view) => {
       if (!heard && view) render(view);

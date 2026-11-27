@@ -466,7 +466,7 @@ async fn a_dropped_dictation_can_be_retried() {
     // The provider works again; Retry sends the saved audio and pastes.
     *finish_error.lock().unwrap() = None;
     let before = log.entries().len();
-    h.send(Event::Retry).await;
+    h.send(Event::Retry(None)).await;
     h.until(&Status::Done { raw: false }).await;
     let retried: Vec<String> = log.entries()[before..]
         .iter()
@@ -481,7 +481,7 @@ async fn a_dropped_dictation_can_be_retried() {
     assert!(log.has("history done 1: The connection dropped, but the words were kept. (en)"));
 
     // Nothing is left to retry.
-    h.send(Event::Retry).await;
+    h.send(Event::Retry(None)).await;
     h.until(&Status::Idle).await;
     h.settle().await;
     assert_eq!(log.pasted().len(), 1);
@@ -512,7 +512,7 @@ async fn a_retry_in_another_app_copies() {
     h.until(&Status::Idle).await;
     *finish_error.lock().unwrap() = None;
     *frontmost.lock().unwrap() = "Safari".to_owned();
-    h.send(Event::Retry).await;
+    h.send(Event::Retry(None)).await;
     h.until(&Status::Copied { raw: false }).await;
     assert!(log.pasted().is_empty());
     assert!(log.has("copy: This goes to the clipboard after the retry."));
@@ -529,14 +529,14 @@ async fn a_failed_retry_can_be_retried() {
     tokio::time::sleep(ms(600)).await;
     h.send(Event::KeyUp).await;
     h.until(&Status::Idle).await;
-    h.send(Event::Retry).await;
+    h.send(Event::Retry(None)).await;
     let seen = h.until(&Status::Idle).await;
     assert!(
         seen.iter()
             .any(|s| matches!(s, Status::Failed { retry: true, .. })),
         "{seen:?}"
     );
-    h.send(Event::Retry).await;
+    h.send(Event::Retry(None)).await;
     let seen = h.until(&Status::Idle).await;
     assert!(
         seen.iter()
@@ -679,4 +679,307 @@ async fn timing_off_records_nothing() {
     h.send(Event::Esc).await;
     h.until(&Status::Idle).await;
     assert!(timing.lines.lock().unwrap().is_empty());
+}
+
+// Home window and History (#98), slice 2: retry any dictation by id, from Home.
+
+/// A harness whose speech can be made to fail, the switch, and the frontmost app; one
+/// dictation already done and pasted into TextEdit as dictation 1.
+async fn with_done_dictation(log: &Log, history: &FakeHistory) -> (Harness, FailSwitch, Front) {
+    with_done_dictation_slow(log, history, ms(0)).await
+}
+
+/// As [`with_done_dictation`], with speech that takes `finish_delay` to finalize.
+async fn with_done_dictation_slow(
+    log: &Log,
+    history: &FakeHistory,
+    finish_delay: std::time::Duration,
+) -> (Harness, FailSwitch, Front) {
+    let mut speech = FakeSpeech::new(log, "retry this dictation from home please");
+    speech.finish_delay = finish_delay;
+    let finish_error = speech.finish_error.clone();
+    let cleanup = FakeCleanup::new(log, "Retry this dictation from Home, please.");
+    let focus = FakeFocus::textedit();
+    let front = focus.app.clone();
+    let mut h = Harness::start_full(log, speech, cleanup, settings(), focus, history.clone());
+    h.send(Event::KeyDown).await;
+    h.frames(0, 10).await;
+    tokio::time::sleep(ms(600)).await;
+    h.send(Event::KeyUp).await;
+    h.until(&Status::Done { raw: false }).await;
+    h.until(&Status::Idle).await;
+    (h, finish_error, front)
+}
+
+type FailSwitch = std::sync::Arc<std::sync::Mutex<Option<hyperme_core::traits::Error>>>;
+type Front = std::sync::Arc<std::sync::Mutex<String>>;
+
+/// #98 AC-10 (core half, R-16): Retry of a done dictation by id sends its saved audio again,
+/// cleans it for the app it was dictated into, copies the new text instead of pasting (Home
+/// has focus), and replaces the item's text instead of finishing it again.
+#[tokio::test(start_paused = true)]
+async fn retry_by_id_copies_and_replaces_the_text() {
+    let log = Log::new();
+    let history = FakeHistory::new(&log);
+    let (mut h, _, front) = with_done_dictation(&log, &history).await;
+    *front.lock().unwrap() = "HyperMe".to_owned();
+    let before = log.entries().len();
+
+    h.send(Event::Retry(Some(1))).await;
+    h.until(&Status::Copied { raw: false }).await;
+    h.until(&Status::Idle).await;
+    let after: Vec<String> = log.entries()[before..].to_vec();
+    assert!(
+        after.contains(&format!("audio {} from 0", 10 * 480)),
+        "{after:?}"
+    );
+    assert!(
+        after.contains(&"clean: retry this dictation from home please [TextEdit]".to_owned()),
+        "{after:?}"
+    );
+    assert!(after.contains(&"copy: Retry this dictation from Home, please.".to_owned()));
+    assert!(
+        after.contains(
+            &"history replace 1: Retry this dictation from Home, please. (en)".to_owned()
+        )
+    );
+    assert!(
+        !after
+            .iter()
+            .any(|e| e.starts_with("paste: ") || e.starts_with("history done"))
+    );
+}
+
+/// #98 AC-10 (core half): a failing retry by id keeps the old text, says why, and does not
+/// offer the pill's Retry when nothing else failed.
+#[tokio::test(start_paused = true)]
+async fn failed_retry_by_id_keeps_the_old_text() {
+    let log = Log::new();
+    let history = FakeHistory::new(&log);
+    let (mut h, fail, _) = with_done_dictation(&log, &history).await;
+    *fail.lock().unwrap() = Some(err(ErrorKind::Network, "connection reset"));
+    let before = log.entries().len();
+
+    h.send(Event::Retry(Some(1))).await;
+    let seen = h.until(&Status::Idle).await;
+    assert!(
+        seen.iter().any(|s| matches!(s, Status::Failed { message, retry: false } if message.contains("connection reset"))),
+        "{seen:?}"
+    );
+    let after: Vec<String> = log.entries()[before..].to_vec();
+    assert!(
+        !after
+            .iter()
+            .any(|e| e.starts_with("history ") || e.starts_with("copy: ")),
+        "{after:?}"
+    );
+    assert_eq!(history.samples(1), 10 * 480, "the audio stays");
+}
+
+/// #98 AC-10 (core half): a dictation with no audio left cannot be retried.
+#[tokio::test(start_paused = true)]
+async fn retry_by_id_without_audio_fails() {
+    let log = Log::new();
+    let history = FakeHistory::new(&log);
+    let (mut h, _, _) = with_done_dictation(&log, &history).await;
+    history.audio.lock().unwrap().remove(&1);
+    h.send(Event::Retry(Some(1))).await;
+    let seen = h.until(&Status::Idle).await;
+    assert!(
+        seen.iter().any(|s| matches!(s, Status::Failed { message, retry: false } if message.starts_with("Retry:"))),
+        "{seen:?}"
+    );
+    let opens = log
+        .entries()
+        .iter()
+        .filter(|e| *e == "speech open start")
+        .count();
+    assert_eq!(opens, 1, "no speech session for a retry without audio");
+}
+
+/// #98 AC-10 (core half): a retry by id leaves the last failed dictation in place for the
+/// pill's Retry, and a retry by id of that same dictation clears it.
+#[tokio::test(start_paused = true)]
+async fn retry_by_id_leaves_the_last_failed_dictation() {
+    let log = Log::new();
+    let history = FakeHistory::new(&log);
+    let speech = FakeSpeech::new(&log, "the words were kept on disk for later");
+    let fail = speech.finish_error.clone();
+    let cleanup = FakeCleanup::new(&log, "The words were kept on disk for later.");
+    let mut h = Harness::start_full(
+        &log,
+        speech,
+        cleanup,
+        settings(),
+        FakeFocus::textedit(),
+        history.clone(),
+    );
+
+    // Dictation 1 is done; dictation 2 fails and waits for the pill's Retry.
+    for failing in [false, true] {
+        *fail.lock().unwrap() = failing.then(|| err(ErrorKind::Network, "connection reset"));
+        h.send(Event::KeyDown).await;
+        h.frames(0, 5).await;
+        tokio::time::sleep(ms(600)).await;
+        h.send(Event::KeyUp).await;
+        h.until(&Status::Idle).await;
+    }
+    assert!(log.has("history failed 2"));
+
+    // Retrying dictation 1 fails too: the pill still offers Retry for dictation 2.
+    h.send(Event::Retry(Some(1))).await;
+    let seen = h.until(&Status::Idle).await;
+    assert!(
+        seen.iter()
+            .any(|s| matches!(s, Status::Failed { retry: true, .. })),
+        "{seen:?}"
+    );
+
+    // The provider works again: the pill's Retry still retries dictation 2 and pastes it.
+    *fail.lock().unwrap() = None;
+    h.send(Event::Retry(None)).await;
+    h.until(&Status::Done { raw: false }).await;
+    h.until(&Status::Idle).await;
+    assert!(log.has("history done 2: The words were kept on disk for later. (en)"));
+
+    // Dictation 3 fails; Home retries it by id, which clears the pill's Retry.
+    *fail.lock().unwrap() = Some(err(ErrorKind::Network, "connection reset"));
+    h.send(Event::KeyDown).await;
+    tokio::time::sleep(ms(600)).await;
+    h.send(Event::KeyUp).await;
+    h.until(&Status::Idle).await;
+    *fail.lock().unwrap() = None;
+    h.send(Event::Retry(Some(3))).await;
+    h.until(&Status::Copied { raw: false }).await;
+    assert!(log.has("history replace 3: The words were kept on disk for later. (en)"));
+    let before = log.entries().len();
+    h.send(Event::Retry(None)).await;
+    h.until(&Status::Idle).await;
+    h.settle().await;
+    assert!(
+        !log.entries()[before..]
+            .iter()
+            .any(|e| e.starts_with("speech open")),
+        "nothing left for the pill's Retry"
+    );
+}
+
+/// #98 AC-10 (core half), Phase 1 R-31: a retry by id while a dictation is in progress is
+/// ignored, as the pill's Retry is.
+#[tokio::test(start_paused = true)]
+async fn retry_by_id_during_a_dictation_is_ignored() {
+    let log = Log::new();
+    let history = FakeHistory::new(&log);
+    let (mut h, _, _) = with_done_dictation_slow(&log, &history, ms(300)).await;
+    let before = log.entries().len();
+    h.send(Event::KeyDown).await;
+    h.until(&Status::Recording).await;
+    h.send(Event::Retry(Some(1))).await;
+    tokio::time::sleep(ms(600)).await;
+    h.send(Event::KeyUp).await;
+    h.until(&Status::Transcribing).await;
+    h.send(Event::Retry(Some(1))).await;
+    h.until(&Status::Done { raw: false }).await;
+    h.until(&Status::Idle).await;
+    h.settle().await;
+    let after: Vec<String> = log.entries()[before..].to_vec();
+    assert_eq!(
+        after.iter().filter(|e| *e == "speech open start").count(),
+        1,
+        "{after:?}"
+    );
+    assert!(
+        !after
+            .iter()
+            .any(|e| e.starts_with("copy: ") || e.starts_with("history replace"))
+    );
+}
+
+/// Settings with a small dictionary (spec 93).
+fn with_dictionary() -> hyperme_core::dictation::Settings {
+    hyperme_core::dictation::Settings {
+        dictionary: hyperme_core::dictionary::Dictionary::parse("Zentrix: zen trix, sun trix"),
+        ..settings()
+    }
+}
+
+/// Spec 93, AC-2: the cleanup gets the transcript with the dictionary applied.
+#[tokio::test(start_paused = true)]
+async fn the_cleanup_gets_the_dictionary_words() {
+    let log = Log::new();
+    let speech = FakeSpeech::new(&log, "send the sun trix report today");
+    let cleanup = FakeCleanup::new(&log, "Send the Zentrix report today.");
+    let mut h = Harness::start(&log, speech, cleanup, with_dictionary());
+
+    h.send(Event::KeyDown).await;
+    tokio::time::sleep(ms(1000)).await;
+    h.send(Event::KeyUp).await;
+    h.until(&Status::Done { raw: false }).await;
+    assert!(
+        log.has("clean: send the Zentrix report today [TextEdit]"),
+        "{:?}",
+        log.entries()
+    );
+}
+
+/// Spec 93, AC-2: a short dictation, which skips the cleanup, still gets the dictionary.
+#[tokio::test(start_paused = true)]
+async fn a_short_dictation_gets_the_dictionary_words() {
+    let log = Log::new();
+    let speech = FakeSpeech::new(&log, "zen trix");
+    let cleanup = FakeCleanup::new(&log, "never used");
+    let mut h = Harness::start(&log, speech, cleanup, with_dictionary());
+
+    h.send(Event::KeyDown).await;
+    tokio::time::sleep(ms(600)).await;
+    h.send(Event::KeyUp).await;
+    h.until(&Status::Done { raw: false }).await;
+    assert_eq!(log.pasted(), ["Zentrix."]);
+}
+
+/// Spec 93, AC-2: the raw fallback after a cleanup failure still gets the dictionary.
+#[tokio::test(start_paused = true)]
+async fn the_raw_fallback_gets_the_dictionary_words() {
+    let log = Log::new();
+    let speech = FakeSpeech::new(&log, "the sun trix host is down");
+    let mut cleanup = FakeCleanup::new(&log, "");
+    cleanup.reply = Err(err(ErrorKind::Network, "connection refused"));
+    let mut h = Harness::start(&log, speech, cleanup, with_dictionary());
+
+    h.send(Event::KeyDown).await;
+    tokio::time::sleep(ms(1000)).await;
+    h.send(Event::KeyUp).await;
+    h.until(&Status::Done { raw: true }).await;
+    assert_eq!(log.pasted(), ["the Zentrix host is down"]);
+}
+
+/// Spec 93, AC-8 (R-10a): a dictionary saved while the app runs is used from the next
+/// dictation, in the substitution and in the cleanup prompt, with no restart.
+#[tokio::test(start_paused = true)]
+async fn a_saved_dictionary_applies_from_the_next_dictation() {
+    let log = Log::new();
+    let speech = FakeSpeech::new(&log, "send the sun trix report today");
+    let cleanup = FakeCleanup::new(&log, "Send the report today.");
+    let mut h = Harness::start(&log, speech, cleanup, settings());
+
+    h.send(Event::KeyDown).await;
+    tokio::time::sleep(ms(1000)).await;
+    h.send(Event::KeyUp).await;
+    h.until(&Status::Done { raw: false }).await;
+    assert!(log.has("clean: send the sun trix report today [TextEdit]"));
+
+    h.dictionary
+        .send(hyperme_core::dictionary::Dictionary::parse(
+            "Zentrix: sun trix",
+        ));
+    h.send(Event::KeyDown).await;
+    tokio::time::sleep(ms(1000)).await;
+    h.send(Event::KeyUp).await;
+    h.until(&Status::Done { raw: false }).await;
+    assert!(
+        log.has("clean: send the Zentrix report today [TextEdit]"),
+        "{:?}",
+        log.entries()
+    );
+    assert!(log.has("dictionary:\n\nThe speaker's dictionary: Zentrix."));
 }

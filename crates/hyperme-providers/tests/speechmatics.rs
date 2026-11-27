@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex};
 
 use common::{Got, Reply, serve, started_then};
 use hyperme_core::config;
-use hyperme_core::dictation::{Engine, Event, Parts, Settings, Status};
+use hyperme_core::dictation::{Engine, Event, Parts, Settings, Status, fixed};
 use hyperme_core::traits::{
     CleanupProvider, DictationId, Error, ErrorKind, FocusInfo, History, Inserter, LiveSession,
     Microphone, Sound, Sounds, SpeechProvider, TimingLine, TimingLog,
@@ -375,8 +375,7 @@ async fn engine_pastes_the_final_transcript_from_speechmatics() {
     settings.min_hold = std::time::Duration::ZERO;
     let parts = Parts {
         mic: NoMic,
-        speech: speech(&base),
-        cleanup: EchoCleanup,
+        providers: fixed(speech(&base), EchoCleanup),
         inserter: Paste(Recorder(log.clone())),
         focus: NoFocus,
         history: NoHistory,
@@ -436,6 +435,17 @@ impl History for NoHistory {
     }
     fn audio(&self, _id: DictationId) -> Result<Vec<i16>, Error> {
         Ok(Vec::new())
+    }
+    fn app(&self, _id: DictationId) -> Result<Option<String>, Error> {
+        Ok(None)
+    }
+    fn replace_text(
+        &mut self,
+        _id: DictationId,
+        _text: &str,
+        _language: Option<&str>,
+    ) -> Result<(), Error> {
+        Ok(())
     }
 }
 

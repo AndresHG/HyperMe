@@ -15,6 +15,50 @@ All notable changes to HyperMe are recorded here. The format follows
 
 ### Added
 
+- Local server for cleanup (issue 129, slice 7 of `specs/96-provider-settings`): any
+  OpenAI-compatible server on this Mac (Ollama, LM Studio, `mlx_lm.server`), with no key and no
+  `Authorization` header. Picking it in Settings looks on ports 11434, 1234 and 8080 at once and
+  offers the servers that answer with their models; another address can be typed. The address is
+  kept in `cleanup.endpoint`, the model menu lists that server's models, and the hint says it
+  runs on this Mac and nothing leaves it for cleanup. It keeps the same deadline and raw-text
+  fallback as any other cleanup.
+- The hint line under each provider role (issue 128, slice 6 of `specs/96-provider-settings`):
+  the monthly cost for the user's talking time, the same figure onboarding shows; the latency
+  the project measured with a link to the result, or "Speed not measured"; and with the timing
+  log on, the user's own median over their last 50 dictations on that provider. Onboarding's
+  talking-time choice is saved as `dictation.talking_minutes_per_day` (default 30).
+- Test checks the key and the model (issue 127, slice 5 of `specs/96-provider-settings`): the
+  cleanup Test has the chosen model clean one word through the same request a dictation sends,
+  so a wrong model fails Test. A rejected key, a model that does not exist (in OpenAI's, Groq's
+  and Google's shapes) and no network each get their own message, which never holds the key.
+  Dictation errors gain the same "model was not found" message.
+- Models from the key (issue 126, slice 4 of `specs/96-provider-settings`): opening a role's
+  model menu lists the models the provider's key offers (`GET /models`), the catalogue's first,
+  without embeddings, speech and image models (`hide_models` in the catalogue). The list is
+  cached for the session. When listing fails, the menu keeps the catalogue's models and says so
+  in one line. A model name can always be typed.
+- Settings → Providers, "Show advanced" (issue 125, slice 3 of `specs/96-provider-settings`):
+  one table of roles, each with a provider menu (recommended first), a model field with the
+  catalogue's models, the reasoning effort the model takes, the key state with an inline key
+  field, Test, "Get a key", and Reset to recommended. A provider picked without a key is not
+  saved: the role keeps the one it has until the new key passes Test. "Add a custom endpoint…"
+  writes an OpenAI-compatible entry to `config.toml`. New catalogue entries, each checked
+  against the provider's docs on 26 November 2026: OpenAI, OpenRouter, Google Gemini and
+  Anthropic. Mockup: `docs/ux/providers-advanced.svg`.
+- Switching providers without a restart (issue 124, slice 2 of `specs/96-provider-settings`):
+  `hyperme-providers::any` has one client enum per role (`AnySpeech`, `AnyCleanup`) and one
+  `resolve` path that builds the providers a config names, used at launch, after a change in
+  Settings and by Test. The engine reads its providers from a `watch` channel once on key-down,
+  so a change reaches the next dictation and never one in progress. A provider that cannot be
+  built yet (no key) leaves the one in use running. The timing log's provider names follow a
+  switch.
+- A provider catalogue (issue 123, slice 1 of `specs/96-provider-settings`): what each provider
+  is (protocol, endpoint, key page, roles, models with dated prices and measured latency) lives
+  in `default-providers.toml`, built into the app, and `[speech]` and `[cleanup]` name only a
+  provider and a model. `config.toml` may add a provider or replace a built-in one with a
+  `[providers.<name>]` section; an unknown protocol is an error naming the file, line and the
+  protocols that exist. Files written before keep working unchanged, their endpoints and prices
+  overriding the catalogue's. The cost estimate reads catalogue models.
 - `crates/hyperme-quality`, the quality harness (issue 99): replays a set of saved dictations
   through the app's own state machine and providers and scores the pasted text against the
   owner's corrected texts (zero-edit, edits per 100 characters, internal names), with flowbench's

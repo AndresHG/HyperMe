@@ -10,12 +10,13 @@ use std::time::Duration;
 
 use std::collections::BTreeMap;
 
-use hyperme_core::dictation::{Engine, Event, Parts, Settings, Status};
+use hyperme_core::dictation::{Engine, Event, Parts, Providers, Settings, Status};
 use hyperme_core::traits::{
-    CleanupProvider, DictationId, Error, ErrorKind, FocusInfo, History, Inserter, LiveSession,
-    Microphone, Sound, Sounds, SpeechProvider, TimingLine, TimingLog, Transcript,
+    Added, CleanupProvider, Correction, DictationId, Dictionary, Error, ErrorKind, FocusInfo,
+    History, Inserter, LiveSession, Microphone, Sound, Sounds, SpeechProvider, TimingLine,
+    TimingLog, Transcript,
 };
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, watch};
 use tokio::time::{Instant, sleep};
 
 /// What happened, in order, with when.
@@ -198,6 +199,10 @@ impl FakeCleanup {
 }
 
 impl CleanupProvider for FakeCleanup {
+    fn set_dictionary(&self, line: &str) {
+        self.log.push(format!("dictionary:{line}"));
+    }
+
     async fn warm(&self) -> Result<(), Error> {
         self.log.push("warm start");
         if !self.warm_delay.is_zero() {
@@ -248,6 +253,8 @@ impl Inserter for FakeInserter {
 pub struct FakeHistory {
     pub log: Log,
     pub audio: Arc<Mutex<BTreeMap<DictationId, Vec<i16>>>>,
+    /// The app each dictation was dictated into.
+    apps: Arc<Mutex<BTreeMap<DictationId, Option<String>>>>,
     next: Arc<Mutex<DictationId>>,
 }
 
@@ -256,6 +263,7 @@ impl FakeHistory {
         FakeHistory {
             log: log.clone(),
             audio: Arc::default(),
+            apps: Arc::default(),
             next: Arc::default(),
         }
     }
@@ -270,6 +278,10 @@ impl History for FakeHistory {
         let mut next = self.next.lock().unwrap();
         *next += 1;
         self.audio.lock().unwrap().insert(*next, Vec::new());
+        self.apps
+            .lock()
+            .unwrap()
+            .insert(*next, app.map(str::to_owned));
         self.log
             .push(format!("history begin {} [{}]", *next, app.unwrap_or("-")));
         Ok(*next)
@@ -311,6 +323,43 @@ impl History for FakeHistory {
             .get(&id)
             .cloned()
             .ok_or_else(|| err(ErrorKind::Other, "no such dictation"))
+    }
+
+    fn app(&self, id: DictationId) -> Result<Option<String>, Error> {
+        self.apps
+            .lock()
+            .unwrap()
+            .get(&id)
+            .cloned()
+            .ok_or_else(|| err(ErrorKind::Other, "no such dictation"))
+    }
+
+    fn replace_text(
+        &mut self,
+        id: DictationId,
+        text: &str,
+        language: Option<&str>,
+    ) -> Result<(), Error> {
+        self.log.push(format!(
+            "history replace {id}: {text} ({})",
+            language.unwrap_or("-")
+        ));
+        Ok(())
+    }
+}
+
+/// A dictionary that records every correction and answers from a queue: `Ok(Added::Added)`
+/// once the queue is empty (#98 R-20).
+#[derive(Default)]
+pub struct FakeDictionary {
+    pub corrections: Vec<Correction>,
+    pub answers: std::collections::VecDeque<Result<Added, Error>>,
+}
+
+impl Dictionary for FakeDictionary {
+    fn add_correction(&mut self, c: Correction) -> Result<Added, Error> {
+        self.corrections.push(c);
+        self.answers.pop_front().unwrap_or(Ok(Added::Added))
     }
 }
 
@@ -369,8 +418,12 @@ pub fn settings() -> Settings {
 /// A running engine: send events, read statuses.
 pub struct Harness {
     pub events: mpsc::Sender<Event>,
+    /// Where a changed dictionary goes (spec 93, R-10a).
+    pub dictionary: hyperme_core::dictation::DictionaryUpdates,
     pub status: mpsc::UnboundedReceiver<Status>,
     pub log: Log,
+    /// Replaces the providers, as Settings does (specs/96-provider-settings, R-8).
+    pub switch: watch::Sender<Arc<Providers<FakeSpeech, FakeCleanup>>>,
 }
 
 impl Harness {
@@ -437,10 +490,10 @@ impl Harness {
     ) -> Self {
         let (events, events_rx) = mpsc::channel(256);
         let (status_tx, status) = mpsc::unbounded_channel();
+        let (switch, providers) = watch::channel(Arc::new(Providers { speech, cleanup }));
         let parts = Parts {
             mic: FakeMic { log: log.clone() },
-            speech,
-            cleanup,
+            providers,
             inserter: FakeInserter { log: log.clone() },
             focus,
             history,
@@ -448,12 +501,15 @@ impl Harness {
             timing,
         };
         let engine = Engine::new(parts, settings, status_tx);
+        let dictionary = engine.dictionary_updates();
         // Spawned on the runtime, which proves the engine's future is Send.
         tokio::spawn(engine.run(events_rx));
         Harness {
             events,
+            dictionary,
             status,
             log: log.clone(),
+            switch,
         }
     }
 

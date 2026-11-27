@@ -38,7 +38,24 @@
   #banner.on { display: flex; }
   .hidden { display: none !important; }
   code { font-size: 12px; }
+  /* Settings → Providers, "Show advanced": one table of roles (specs/96-provider-settings, R-6). */
+  .roles { width: 100%; border-collapse: collapse; margin-top: 8px; }
+  .roles th { text-align: left; font-weight: 500; color: var(--muted); font-size: 12px; padding: 6px 8px 6px 0; border-bottom: 1px solid var(--line); }
+  .roles td { padding: 10px 8px 2px 0; vertical-align: top; }
+  .roles td.hint { padding: 0 0 10px; color: var(--muted); font-size: 12px; border-bottom: 1px solid var(--line); }
+  .roles select, .roles input[type=text] { min-width: 0; width: 100%; }
+  .roles .key { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .roles .key input[type=password] { min-width: 140px; flex: 1; }
+  .roles .effort { margin-top: 6px; font-size: 12px; color: var(--muted); }
+  .roles .effort select { width: auto; margin-left: 4px; }
+  .toolbar { display: flex; justify-content: space-between; align-items: center; margin-top: 18px; }
+  .add { display: flex; gap: 6px; margin-top: 8px; }
+  .add input { flex: 1; min-width: 0; }
+  .add select { flex: 1; min-width: 0; }
+  td.local { padding-top: 0; }
+  a.link { color: var(--violet); cursor: pointer; text-decoration: none; }
 </style>
+<link rel="stylesheet" href="dictionary.css">
 </head>
 <body>
 <nav>
@@ -47,8 +64,10 @@
   <div class="group">Everyday</div>
   <a href="#general">General</a>
   <a href="#shortcuts">Shortcuts</a>
+  <a href="#dictionary">Dictionary</a>
   <div class="group">Setup</div>
   <a href="#providers">Providers</a>
+  <a href="#connectors">Connectors</a>
   <a href="#privacy">Privacy</a>
   <a href="#advanced" id="nav-advanced" class="hidden">Advanced</a>
   <a href="#about">About</a>
@@ -65,6 +84,7 @@
     <div class="row" data-words="microphone permission"><div class="what">Microphone<small>macOS asks the first time you dictate.</small></div><button data-open="microphone">Open</button></div>
     <div class="row" data-words="speech key speechmatics"><div class="what">Speech key<small id="setup-speech-name"></small></div><span class="state" id="setup-speech"></span></div>
     <div class="row" data-words="cleanup key groq"><div class="what">Cleanup key<small id="setup-cleanup-name"></small></div><span class="state" id="setup-cleanup"></span></div>
+    <div id="setup-connectors"></div>
   </section>
 
   <section id="general">
@@ -86,20 +106,93 @@
   <section id="providers">
     <h1>Providers</h1>
     <p class="lead">Every model service in one place. Keys stay in the macOS keychain and are never shown again.</p>
-    <div class="row" data-words="speech provider speechmatics model"><div class="what">Speech<small id="speech-name">Used by dictation</small></div><input type="text" data-section="speech" data-key="model" aria-label="Speech model"></div>
-    <div class="row" data-words="speech key speechmatics test"><div class="what">Speech key<small class="state" id="speech-state"></small></div><span><input type="password" id="speech-key" placeholder="Paste a new key" autocomplete="off"> <button data-key-save="speech">Save</button> <button data-key-test="speech">Test</button></span></div>
-    <div class="row" data-words="cleanup provider groq model language"><div class="what">Cleanup<small id="cleanup-name">Used by dictation cleanup</small></div><input type="text" data-section="cleanup" data-key="model" aria-label="Cleanup model"></div>
-    <div class="row" data-words="reasoning effort cleanup"><div class="what">Reasoning effort<small>"off" leaves it out of the request.</small></div><select data-section="cleanup" data-key="reasoning_effort"><option>off</option><option>low</option><option>medium</option><option>high</option></select></div>
-    <div class="row" data-words="cleanup key groq test"><div class="what">Cleanup key<small class="state" id="cleanup-state"></small></div><span><input type="password" id="cleanup-key" placeholder="Paste a new key" autocomplete="off"> <button data-key-save="cleanup">Save</button> <button data-key-test="cleanup">Test</button></span></div>
+    <div id="providers-simple">
+      <div class="row" data-words="speech provider speechmatics key test"><div class="what">Speech<small id="speech-name">Used by dictation</small><small class="state" id="speech-state"></small></div><span><input type="password" id="speech-key" placeholder="Paste a new key" autocomplete="off"> <button data-key-save="speech">Save</button> <button data-key-test="speech">Test</button></span></div>
+      <div class="row" data-words="cleanup provider groq key test"><div class="what">Cleanup<small id="cleanup-name">Used by dictation cleanup</small><small class="state" id="cleanup-state"></small></div><span><input type="password" id="cleanup-key" placeholder="Paste a new key" autocomplete="off"> <button data-key-save="cleanup">Save</button> <button data-key-test="cleanup">Test</button></span></div>
+      <p class="lead" style="margin-top:12px">Turn on <a class="link" href="#general">Show advanced</a> to choose other providers and models.</p>
+    </div>
+    <div id="providers-advanced" class="hidden" data-words="provider model openai openrouter gemini anthropic local custom endpoint reasoning">
+      <table class="roles">
+        <thead><tr><th style="width:15%">Role</th><th style="width:25%">Provider</th><th style="width:27%">Model</th><th>Key / Test</th></tr></thead>
+        <tbody id="roles-body"></tbody>
+      </table>
+      <div class="toolbar"><small class="lead" style="margin:0">Changes save at once and reach the next dictation.</small><button id="reset-providers">Reset to recommended</button></div>
+    </div>
+  </section>
+
+  <section id="connectors">
+    <div id="connectors-list">
+      <div class="row" style="border:0;padding-top:0"><div><h1>Connectors</h1><p class="lead" style="margin:0">MCP servers Hyper reads from and acts in, each with its accounts and tools.</p></div><button class="main" id="connectors-add" style="white-space:nowrap">+ Add connector</button></div>
+      <div id="connectors-rows"></div>
+      <p class="lead hidden" id="connectors-empty">No connectors yet. Add one to let Hyper read your calendar, mail or tracker.</p>
+    </div>
+    <div id="connectors-sheet" class="hidden">
+      <h1>Add connector</h1>
+      <p class="lead">A preset, or your own MCP server.</p>
+      <div id="connectors-choices"></div>
+      <div id="connectors-custom" class="hidden">
+        <div class="row" data-words="custom mcp server name"><div class="what">Name</div><input type="text" id="custom-name" placeholder="Team wiki"></div>
+        <div class="row" data-words="custom mcp server url"><div class="what">URL<small>https://, or http:// to this Mac</small></div><input type="text" id="custom-url" placeholder="https://wiki.example.com/mcp"></div>
+        <div class="row" data-words="custom mcp server command stdio"><div class="what">Or a command<small>Servers started by a command are not supported yet.</small></div><input type="text" id="custom-command" placeholder="my-mcp-server" disabled></div>
+        <div class="row" data-words="custom mcp server bearer token sign in"><div class="what">Sign-in</div><select id="custom-auth"><option value="none">None</option><option value="bearer">Bearer token</option></select></div>
+        <div class="row" style="border:0"><span></span><span><button id="custom-cancel">Cancel</button> <button class="main" id="custom-add">Add</button></span></div>
+      </div>
+      <p><button id="sheet-close">Cancel</button></p>
+    </div>
+    <div id="connectors-oauth" class="hidden">
+      <h1 id="oauth-title"></h1>
+      <div id="oauth-client">
+        <p class="lead">1 · Your client. HyperMe uses your own OAuth client, so nothing passes through us.</p>
+        <div class="row" data-words="google client cloud setup"><div class="what">Create your client<small>Opens the provider's setup guide.</small></div><span><button id="oauth-open-client">Open setup</button> <button id="oauth-gcloud">Use gcloud instead</button></span></div>
+        <div class="row" data-words="client id"><div class="what">Client ID<small class="state" id="oauth-client-state"></small></div><input type="text" id="oauth-client-id" autocomplete="off"></div>
+        <div class="row" data-words="client secret"><div class="what">Client secret<small>Kept in the macOS keychain, never shown again.</small></div><span style="white-space:nowrap"><input type="password" id="oauth-client-secret" autocomplete="off"> <button id="oauth-client-save">Save and test</button></span></div>
+      </div>
+      <div id="oauth-signin">
+        <p class="lead" style="margin-top:14px">2 · Sign in, and choose what Hyper can see.</p>
+        <div class="row" data-words="account label personal work"><div class="what">Label<small>One word you can say: "in my work calendar".</small></div><input type="text" id="oauth-label" placeholder="personal"></div>
+        <div id="oauth-features"></div>
+        <div class="row" style="border:0"><span class="state" id="oauth-wait"></span><span><button id="oauth-cancel" class="hidden">Cancel</button> <button class="main" id="oauth-go">Sign in</button></span></div>
+      </div>
+      <div id="oauth-testing" class="hidden">
+        <p class="bad">Your project is in Testing, so you would be signed out every 7 days.</p>
+        <p class="lead">Set its publishing status to In production (no review is needed for your own account), then sign in again.</p>
+        <p><button id="oauth-open-production">Open the setting</button></p>
+      </div>
+      <div id="oauth-done" class="hidden"></div>
+      <p><button id="oauth-close">Close</button></p>
+    </div>
+    <div id="connectors-page" class="hidden">
+      <p><a href="#connectors" id="page-back">‹ Connectors</a></p>
+      <h1 id="page-title"></h1>
+      <p class="lead"><span class="state" id="page-state"></span></p>
+      <div class="row" id="page-enabled-row" data-words="connector account on off"><div class="what">Use this account<small>Off keeps the sign-in but stops using it.</small></div><input type="checkbox" id="page-enabled"></div>
+      <div class="row hidden" id="page-token-row" data-words="connector bearer token"><div class="what">Bearer token<small>Kept in the macOS keychain, never shown again.</small></div><span><input type="password" id="page-token" placeholder="Paste a token" autocomplete="off"> <button id="page-token-save">Save</button></span></div>
+      <div class="row hidden" id="page-oauth-row" data-words="sign in again disconnect account"><div class="what">Account<small id="page-disconnect-note">Disconnect removes access and deletes what HyperMe cached from this account.</small></div><span style="white-space:nowrap"><button id="page-sign-in">Sign in again</button> <button id="page-disconnect">Disconnect</button></span></div>
+      <div id="page-requests"></div>
+      <p class="lead" style="margin-top:14px">Tools<span id="page-unverified" class="warn hidden"> · names not checked against the live server yet</span></p>
+      <div id="page-tools"></div>
+    </div>
+  </section>
+
+  <section id="dictionary">
+    <h1>Dictionary</h1>
+    <p class="lead">Words HyperMe should always get right: names, products and jargon. Turn on "Correct a misspelling" to fix a word that keeps coming out wrong. Changes apply from your next dictation.</p>
+    <div id="dict-root"></div>
   </section>
 
   <section id="privacy">
     <h1>Privacy</h1>
-    <p class="lead">Audio and text go only to the speech and cleanup providers above, under your keys. Nothing else leaves this Mac, and there is no telemetry. A dictation's audio stays on this Mac so a dropped connection never loses it.</p>
+    <p class="lead">Audio and text go only to the speech and cleanup providers above, under your keys. Connected accounts follow the rules at the bottom of this page. There is no telemetry. A dictation's audio stays on this Mac so a dropped connection never loses it.</p>
     <div class="row" data-words="history dictation audio keep"><div class="what">Dictation history<small>Keeps each dictation's audio and text on this Mac.</small></div><input type="checkbox" data-section="history" data-key="enabled"></div>
     <div class="row" data-words="history retention days unlimited"><div class="what">Keep for<small>Older dictations are deleted.</small></div><select id="retention"><option value="30">30 days</option><option value="unlimited">Unlimited</option></select></div>
     <div class="row" data-words="history size limit"><div class="what">Size limit (MB)<small>The oldest dictations go first.</small></div><input type="number" min="10" data-section="history" data-key="size_limit_mb"></div>
     <div class="row" data-words="timing log measure"><div class="what">Timing log<small>One line of stage timings per dictation, numbers only.</small></div><input type="checkbox" data-section="timing" data-key="log"></div>
+    <div id="privacy-connectors" class="hidden" data-words="connected accounts google calendar mail privacy">
+      <p class="lead" style="margin:16px 0 4px">Connected accounts</p>
+      <div id="privacy-accounts"></div>
+      <p class="lead" id="privacy-where" style="margin:8px 0 0"></p>
+      <p class="lead" id="privacy-kept" style="margin:4px 0 0"></p>
+    </div>
   </section>
 
   <section id="advanced">
@@ -109,8 +202,8 @@
     <div class="row" data-words="minimum hold tap"><div class="what">Minimum hold (ms)</div><input type="number" min="50" max="2000" data-section="dictation" data-key="min_hold_ms"></div>
     <div class="row" data-words="maximum length"><div class="what">Maximum length (s)</div><input type="number" min="5" max="600" data-section="dictation" data-key="max_length_s"></div>
     <div class="row" data-words="short dictation words"><div class="what">Short dictation (words)<small>Fewer words skip cleanup.</small></div><input type="number" min="0" max="50" data-section="dictation" data-key="short_dictation_words"></div>
-    <div class="row" data-words="speech endpoint url"><div class="what">Speech endpoint</div><input type="text" data-section="speech" data-key="endpoint"></div>
-    <div class="row" data-words="cleanup endpoint url"><div class="what">Cleanup endpoint</div><input type="text" data-section="cleanup" data-key="endpoint"></div>
+    <div class="row" data-words="speech endpoint url region"><div class="what">Speech endpoint<small>Overrides the provider's own address, such as another region.</small></div><input type="text" data-section="speech" data-key="endpoint"></div>
+    <div class="row" data-words="cleanup endpoint url proxy"><div class="what">Cleanup endpoint<small>Overrides the provider's own address. A new host is better added as a custom endpoint in Providers.</small></div><input type="text" data-section="cleanup" data-key="endpoint"></div>
     <div class="row" data-words="config file toml"><div class="what">Config file<small id="config-path"></small></div><button data-open="config">Open config file</button></div>
   </section>
 
@@ -120,6 +213,7 @@
   </section>
   <p id="error" class="bad"></p>
 </main>
+<script src="dictionary.js"></script>
 <script>
   const invoke = window.__TAURI__.core.invoke;
   const $ = (id) => document.getElementById(id);
@@ -127,11 +221,14 @@
 
   function showSection() {
     let id = (location.hash || '#setup').slice(1);
+    // hyperme://settings/connectors/<id> opens Connectors at that row (connectors.js).
+    const item = id.includes('/') ? id.slice(id.indexOf('/') + 1) : null;
+    id = id.split('/')[0];
+    if (window.connectorsShow) window.connectorsShow(id === 'connectors' ? item : undefined);
     // From the walkthrough's "Use other providers" (U-12): Providers, with Advanced showing.
     if (id === 'providers-advanced') {
       id = 'providers';
-      $('show-advanced').checked = true;
-      $('nav-advanced').classList.remove('hidden');
+      showAdvanced(true);
     }
     document.querySelectorAll('section').forEach((s) => s.classList.toggle('on', s.id === id));
     document.querySelectorAll('nav a').forEach((a) => a.classList.toggle('on', a.getAttribute('href') === '#' + id));
@@ -181,13 +278,232 @@
       $('retention').add(new Option(c.retention_days + ' days', String(c.retention_days)));
     }
     $('retention').value = c.retention_days === null ? 'unlimited' : String(c.retention_days);
+    renderRoles();
   }
+
+  // ---- The providers table (specs/96-provider-settings, R-6 to R-14) ----
+  // A provider picked without a key waits here, per role, until its key passes Test (R-12).
+  const pending = {};
+  const el = (tag, props = {}, ...kids) => {
+    const node = Object.assign(document.createElement(tag), props);
+    kids.forEach((k) => node.append(k));
+    return node;
+  };
+
+  function renderRoles() {
+    const body = $('roles-body');
+    body.textContent = '';
+    for (const r of view.roles) {
+      const want = pending[r.role] || { provider: r.provider, model: r.model };
+      const chosen = r.providers.find((p) => p.id === want.provider) || { id: want.provider, name: want.provider, models: [], key_required: true, has_key: false };
+      const inUse = r.providers.find((p) => p.id === r.provider);
+
+      const providerMenu = el('select', { 'aria-label': r.label + ' provider' });
+      for (const p of r.providers) {
+        providerMenu.add(new Option(p.name + (p.recommended ? ' (Recommended)' : ''), p.id, false, p.id === chosen.id));
+      }
+      if (r.role === 'cleanup') providerMenu.add(new Option('Add a custom endpoint…', '__add'));
+      providerMenu.addEventListener('change', () => {
+        if (providerMenu.value === '__add') { showAdd(r, providerMenu); return; }
+        if (providerMenu.value === 'local') { showLocal(providerMenu); return; }
+        const p = r.providers.find((x) => x.id === providerMenu.value);
+        const model = p.models.length ? p.models[0].id : '';
+        if (!model) { pending[r.role] = { provider: p.id, model: '' }; renderRoles(); return; }
+        choose(r.role, p.id, model);
+      });
+
+      const listId = 'models-' + r.role;
+      const models = el('datalist', { id: listId });
+      chosen.models.forEach((m) => models.append(new Option(m.id)));
+      const modelField = el('input', { type: 'text', value: want.model, placeholder: 'Type a model name' });
+      modelField.setAttribute('list', listId);
+      modelField.setAttribute('aria-label', r.label + ' model');
+      modelField.addEventListener('change', () => {
+        const model = modelField.value.trim();
+        if (model) choose(r.role, chosen.id, model);
+      });
+      const notice = el('div', { className: 'effort' });
+      // R-15: the key's own models, fetched when the menu is opened and cached by the app.
+      modelField.addEventListener('focus', async () => {
+        try {
+          const menu = await invoke('models_list', { provider: chosen.id });
+          models.textContent = '';
+          menu.models.forEach((m) => models.append(new Option(m)));
+          notice.textContent = menu.notice || '';
+        } catch (e) { notice.textContent = String(e); }
+      }, { once: true });
+      const modelCell = el('td', {}, modelField, models, notice);
+      if (r.role === 'cleanup' && !pending[r.role]) {
+        const info = chosen.models.find((m) => m.id === want.model);
+        const efforts = ['off'].concat(info ? info.reasoning_effort : (r.reasoning_effort && r.reasoning_effort !== 'off' ? [r.reasoning_effort] : []));
+        const effort = el('select', { 'aria-label': 'Reasoning effort' });
+        efforts.forEach((v) => effort.add(new Option(v, v, false, v === r.reasoning_effort)));
+        effort.addEventListener('change', () => save('cleanup', 'reasoning_effort', effort.value).then(refresh));
+        modelCell.append(el('div', { className: 'effort' }, 'Reasoning effort', effort));
+      }
+
+      const state = el('span', { className: 'state', id: 'role-state-' + r.role });
+      const keyCell = el('td', {}, el('div', { className: 'key' }, state));
+      const row = keyCell.firstChild;
+      const needsKey = chosen.key_required && !chosen.has_key;
+      if (needsKey) {
+        state.textContent = pending[r.role] ? 'No key yet. Until this one works, dictation keeps using ' + (inUse ? inUse.name : r.provider) + '.' : 'No key yet';
+        state.className = 'state warn';
+        const keyField = el('input', { type: 'password', placeholder: 'Paste the key', autocomplete: 'off' });
+        const add = el('button', { className: 'main', textContent: 'Save and test' });
+        add.addEventListener('click', () => saveAndTest(r.role, chosen.id, modelField.value.trim(), keyField));
+        row.append(keyField, add);
+      } else {
+        state.textContent = chosen.key_required ? 'Key saved' : 'No key needed';
+        state.className = 'state ok';
+        const test = el('button', { textContent: 'Test' });
+        test.addEventListener('click', () => testRole(r.role, chosen.id, modelField.value.trim()));
+        row.append(test);
+      }
+      if (needsKey && chosen.has_key_page) {
+        const page = el('a', { className: 'link', textContent: 'Get a key' });
+        page.addEventListener('click', () => invoke('provider_key_page', { provider: chosen.id }));
+        row.append(page);
+      }
+
+      body.append(el('tr', { id: 'role-' + r.role },
+        el('td', {}, r.label), el('td', {}, providerMenu), modelCell, keyCell));
+      // The hint line: cost, measured speed with its source, and the user's own median (R-18).
+      const hint = el('td', { className: 'hint', colSpan: 4, id: 'hint-' + r.role });
+      body.append(el('tr', {}, hint));
+      if (want.model) showHint(hint, r.role, chosen.id, want.model);
+    }
+  }
+
+  async function showHint(cell, role, provider, model) {
+    try {
+      const h = await invoke('provider_hint', { role, provider, model });
+      cell.textContent = h.cost + ' · ' + h.speed;
+      if (h.source) {
+        const link = el('a', { className: 'link', textContent: ' (results)' });
+        link.addEventListener('click', () => invoke('result_open', { source: h.source }));
+        cell.append(link);
+      }
+      if (h.mine) cell.append(' · ' + h.mine);
+    } catch (e) { cell.textContent = ''; }
+  }
+
+  function showAdd(r, menu) {
+    const name = el('input', { type: 'text', placeholder: 'Name, such as My server' });
+    const address = el('input', { type: 'text', placeholder: 'https://host/v1' });
+    const add = el('button', { className: 'main', textContent: 'Add' });
+    const cancel = el('button', { textContent: 'Cancel' });
+    const form = el('div', { className: 'add' }, name, address, add, cancel);
+    menu.after(form);
+    menu.disabled = true;
+    name.focus();
+    cancel.addEventListener('click', () => renderRoles());
+    add.addEventListener('click', async () => {
+      try {
+        const id = await invoke('provider_add', { name: name.value, endpoint: address.value });
+        $('error').textContent = '';
+        pending[r.role] = { provider: id, model: '' };
+        await refresh();
+      } catch (e) { $('error').textContent = String(e); }
+    });
+  }
+
+  // R-22: Local server looks on the usual ports on this Mac and offers what answers; the user
+  // may type another address instead.
+  async function showLocal(menu) {
+    const status = el('div', { className: 'effort', textContent: 'Looking for a server on this Mac…' });
+    const found = el('div', { className: 'add' });
+    const address = el('input', { type: 'text', placeholder: 'http://127.0.0.1:11434/v1', 'aria-label': 'Server address' });
+    const model = el('input', { type: 'text', placeholder: 'Model name', 'aria-label': 'Server model' });
+    const use = el('button', { className: 'main', textContent: 'Use' });
+    const cancel = el('button', { textContent: 'Cancel' });
+    const typed = el('div', { className: 'add' }, address, model, use, cancel);
+    // A row of its own under the cleanup row, so the fields have the table's width.
+    const cell = el('td', { colSpan: 4, className: 'local' }, status, found, typed);
+    $('role-cleanup').after(el('tr', { id: 'local-form' }, cell));
+    menu.disabled = true;
+    cancel.addEventListener('click', () => renderRoles());
+    use.addEventListener('click', () => {
+      if (!address.value.trim() || !model.value.trim()) { $('error').textContent = 'Type the server address and a model name.'; return; }
+      useLocal(address.value, model.value.trim());
+    });
+    let servers = [];
+    try { servers = await invoke('local_discover'); } catch (e) { $('error').textContent = String(e); }
+    if (!servers.length) {
+      status.textContent = 'No server answered on the usual ports. Start Ollama, LM Studio or mlx_lm.server, or type its address.';
+      return;
+    }
+    status.textContent = servers.length === 1 ? 'Found a server on this Mac:' : 'Found these servers on this Mac:';
+    for (const s of servers) {
+      if (!s.models.length) {
+        found.append(el('span', { className: 'state warn', textContent: 'Port ' + s.port + ' has no models yet' }));
+        continue;
+      }
+      const pick = el('select', { 'aria-label': 'Model on port ' + s.port });
+      s.models.forEach((m) => pick.add(new Option(m)));
+      const go = el('button', { className: 'main', textContent: 'Use port ' + s.port });
+      go.addEventListener('click', () => useLocal(s.endpoint, pick.value));
+      found.append(pick, go);
+    }
+    address.value = servers[0].endpoint;
+  }
+
+  async function useLocal(endpoint, model) {
+    try {
+      await invoke('local_use', { endpoint, model });
+      delete pending.cleanup;
+      $('error').textContent = '';
+    } catch (e) { $('error').textContent = String(e); }
+    await refresh();
+  }
+
+  async function choose(role, provider, model) {
+    try {
+      const result = await invoke('provider_choose', { role, provider, model });
+      $('error').textContent = '';
+      if (result === 'needs_key') pending[role] = { provider, model };
+      else delete pending[role];
+    } catch (e) { $('error').textContent = String(e); }
+    await refresh();
+  }
+
+  async function testRole(role, provider, model) {
+    const state = $('role-state-' + role);
+    state.textContent = 'Testing…';
+    state.className = 'state warn';
+    try {
+      const ms = await invoke('key_test', { role, provider, model });
+      mark(state, true, 'Works · ' + ms + ' ms', '');
+      return true;
+    } catch (e) { mark(state, false, '', String(e)); return false; }
+  }
+
+  // R-12: the key goes to the keychain, the pair is tested, and only then does the role switch.
+  async function saveAndTest(role, provider, model, field) {
+    if (!field.value.trim()) return;
+    if (!model) { $('error').textContent = 'Type a model name first.'; return; }
+    try {
+      await invoke('key_set', { role, key: field.value, provider });
+      field.value = '';
+    } catch (e) { $('error').textContent = String(e); return; }
+    if (await testRole(role, provider, model)) await choose(role, provider, model);
+  }
+
+  $('reset-providers').addEventListener('click', async () => {
+    try {
+      await invoke('providers_reset');
+      Object.keys(pending).forEach((k) => delete pending[k]);
+      $('error').textContent = '';
+    } catch (e) { $('error').textContent = String(e); }
+    await refresh();
+  });
 
   async function save(section, key, value) {
     try {
       await invoke('settings_set', { section, key, value });
       $('error').textContent = '';
-      $('banner').classList.add('on');
+      // Provider settings reach the next dictation at once (R-8); the rest need a restart.
+      if (section !== 'speech' && section !== 'cleanup') $('banner').classList.add('on');
     } catch (e) {
       $('error').textContent = String(e);
       refresh();
@@ -208,7 +524,13 @@
   });
   $('hotkey-chord').addEventListener('change', (e) => save('dictation', 'hotkey', e.target.value));
   $('retention').addEventListener('change', (e) => save('history', 'retention_days', e.target.value === 'unlimited' ? 'unlimited' : Number(e.target.value)));
-  $('show-advanced').addEventListener('change', (e) => $('nav-advanced').classList.toggle('hidden', !e.target.checked));
+  function showAdvanced(on) {
+    $('show-advanced').checked = on;
+    $('nav-advanced').classList.toggle('hidden', !on);
+    $('providers-advanced').classList.toggle('hidden', !on);
+    $('providers-simple').classList.toggle('hidden', on);
+  }
+  $('show-advanced').addEventListener('change', (e) => showAdvanced(e.target.checked));
   $('restart').addEventListener('click', () => invoke('app_restart'));
 
   document.querySelectorAll('[data-key-save]').forEach((button) => button.addEventListener('click', async () => {
@@ -218,7 +540,6 @@
     try {
       await invoke('key_set', { role, key: field.value });
       field.value = '';
-      $('banner').classList.add('on');
       refresh();
     } catch (e) { $('error').textContent = String(e); }
   }));
@@ -243,8 +564,12 @@
     document.querySelectorAll('section').forEach((s) => s.classList.toggle('on', q ? !!s.querySelector('.row:not(.hidden)') : s.id === (location.hash || '#setup').slice(1)));
   });
 
+  // Spec 93, R-10 to R-13: Settings → Dictionary, the page shared with Home (dictionary.js).
+  HyperDictionary.mount($('dict-root'), { invoke, onError: (m) => { $('error').textContent = m; } });
+
   showSection();
   refresh().catch((e) => { $('error').textContent = String(e); });
 </script>
+<script src="connectors.js"></script>
 </body>
 </html>

@@ -1,25 +1,32 @@
 //! The config file: `config.toml` in the app's data folder (design.md, "Config").
 //!
 //! Provider and model names and endpoints come from this file, never from code (R-26); their
-//! defaults live in `default-config.toml`, which is written on first launch. The file holds no
+//! defaults live in `default-config.toml`, which is written on first launch. What each provider
+//! is (protocol, endpoint, key page, models and prices) lives in the catalogue,
+//! `default-providers.toml`, built into the app; the user's file may add or replace entries
+//! (specs/96-provider-settings, R-1 to R-5). The file holds no
 //! secrets: a key-like field is an error. Unknown keys are an error naming the file and line,
 //! and out-of-range values name the key.
 
+use std::collections::{BTreeMap, HashSet};
 use std::fmt;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use time::{Time, Weekday};
 
+use crate::connector_settings::AccountEntry;
+use crate::registry::{CustomServer, ToolLists};
 use crate::schedule::Schedule;
 use crate::tasks::{DayRules, WeekdaySet};
 
 /// The file written when there is none, and the source of every default.
 pub const DEFAULT_CONFIG: &str = include_str!("default-config.toml");
 
-/// The only speech providers with a client. Speech protocols differ, so each needs its own code.
-const SPEECH_PROVIDERS: &[&str] = &["speechmatics"];
+/// The built-in provider catalogue (R-1). Entries in the user's file add to it or replace an
+/// entry of the same name.
+pub const DEFAULT_PROVIDERS: &str = include_str!("default-providers.toml");
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -32,6 +39,213 @@ pub struct Config {
     /// The task list and the morning card. Optional: an older file takes the defaults.
     #[serde(default = "default_tasks")]
     pub tasks: Tasks,
+    /// The provider catalogue: the built-in one with the user's entries over it (R-1, R-5).
+    #[serde(default)]
+    pub providers: BTreeMap<String, ProviderEntry>,
+    /// The user's own MCP servers (specs/97-google-connectors, R-4). Optional: an older file
+    /// has none.
+    #[serde(default)]
+    pub connectors: Connectors,
+}
+
+/// `[connectors]`: custom MCP servers, connected accounts and the user's tool switches.
+/// Presets are data files, not config. Settings writes this part of the file whole
+/// (`connector_settings::write_connectors`).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct Connectors {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub custom: Vec<CustomServer>,
+    /// Signed-in accounts, by connector and label (R-11). Their tokens are in the keychain.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub accounts: Vec<AccountEntry>,
+    /// The user's tool switches per connector id, exact tool names (R-5).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub tools: BTreeMap<String, ToolLists>,
+}
+
+/// How the app talks to a provider. The code knows protocols, not providers (R-2, D-7): adding
+/// a provider that speaks one of these is a catalogue entry.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Protocol {
+    /// Speechmatics' real-time WebSocket API.
+    SpeechmaticsRt,
+    /// An OpenAI-compatible `/chat/completions` API.
+    OpenaiChat,
+}
+
+impl Protocol {
+    pub const ALL: [Protocol; 2] = [Protocol::SpeechmaticsRt, Protocol::OpenaiChat];
+
+    /// The name written in the catalogue.
+    pub fn name(self) -> &'static str {
+        match self {
+            Protocol::SpeechmaticsRt => "speechmatics-rt",
+            Protocol::OpenaiChat => "openai-chat",
+        }
+    }
+
+    /// The roles a client of this protocol can fill.
+    pub fn roles(self) -> &'static [Role] {
+        match self {
+            Protocol::SpeechmaticsRt => &[Role::Speech],
+            Protocol::OpenaiChat => &[Role::Cleanup],
+        }
+    }
+
+    /// The URL schemes its endpoint may use.
+    fn schemes(self) -> &'static [&'static str] {
+        match self {
+            Protocol::SpeechmaticsRt => &["wss", "ws"],
+            Protocol::OpenaiChat => &["https", "http"],
+        }
+    }
+}
+
+/// One job a model does (spec.md, "Requirements"). Answers and meeting cleanup join later.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Role {
+    Speech,
+    Cleanup,
+}
+
+impl Role {
+    /// The config section that names this role's provider.
+    pub fn section(self) -> &'static str {
+        match self {
+            Role::Speech => "speech",
+            Role::Cleanup => "cleanup",
+        }
+    }
+}
+
+fn yes() -> bool {
+    true
+}
+
+fn later_in_menus() -> u32 {
+    500
+}
+
+/// Whether `endpoint` is a server on this Mac: its host is `127.0.0.1`, `localhost` or `[::1]`
+/// (R-23).
+pub fn on_this_mac(endpoint: &str) -> bool {
+    let rest = endpoint.split_once("://").map_or(endpoint, |(_, r)| r);
+    let authority = rest.split('/').next().unwrap_or("");
+    let host = if authority.starts_with('[') {
+        authority.split(']').next().map(|h| &h[1..]).unwrap_or("")
+    } else {
+        authority.split(':').next().unwrap_or("")
+    };
+    matches!(host, "127.0.0.1" | "localhost" | "::1")
+}
+
+/// What a provider is (R-1).
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ProviderEntry {
+    /// As people write it: "Speechmatics", "Local server".
+    pub name: String,
+    pub protocol: Protocol,
+    pub endpoint: String,
+    /// Where "Get a key" goes.
+    #[serde(default)]
+    pub key_url: Option<String>,
+    /// The roles it is offered for; each must be one its protocol can fill.
+    pub roles: Vec<Role>,
+    /// False for a server that needs no key, such as one on this Mac (R-14).
+    #[serde(default = "yes")]
+    pub key_required: bool,
+    /// The key can list the models it offers (R-15).
+    #[serde(default)]
+    pub list_models: bool,
+    /// Listed models whose names contain any of these are left out of the menu: embeddings,
+    /// speech and image models the role cannot use (R-15, design.md "Model listing").
+    #[serde(default)]
+    pub hide_models: Vec<String>,
+    /// Credit new accounts get, for onboarding's line about it.
+    #[serde(default)]
+    pub free_credit_usd: Option<f64>,
+    /// Place in a role's provider menu, lowest first, after the recommended one (R-7). Entries
+    /// without one, such as a user's own, come after the built-in ones.
+    #[serde(default = "later_in_menus")]
+    pub order: u32,
+    /// The models the catalogue knows, recommended first.
+    #[serde(default)]
+    pub models: Vec<ModelEntry>,
+    /// Ports on this Mac where a server like it usually listens, tried in order when the user
+    /// picks it (R-22).
+    #[serde(default)]
+    pub ports: Vec<u16>,
+}
+
+/// One model of a provider: its prices and the latency this project measured (R-1, R-19).
+#[derive(Debug, Clone, Default, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ModelEntry {
+    pub id: String,
+    /// Speech.
+    #[serde(default)]
+    pub price_per_hour_usd: Option<f64>,
+    /// Cleanup.
+    #[serde(default)]
+    pub price_input_per_million_usd: Option<f64>,
+    #[serde(default)]
+    pub price_output_per_million_usd: Option<f64>,
+    /// The day the prices were checked against the provider's page, "YYYY-MM-DD".
+    #[serde(default)]
+    pub prices_checked: Option<String>,
+    /// The `reasoning_effort` values the model takes; empty means the field is never sent.
+    #[serde(default)]
+    pub reasoning_effort: Vec<String>,
+    #[serde(default)]
+    pub measured: Option<Measured>,
+}
+
+impl ModelEntry {
+    /// A model the catalogue does not list, typed by hand (R-16): no prices, no measurement.
+    pub fn named(id: &str) -> Self {
+        ModelEntry {
+            id: id.to_owned(),
+            ..ModelEntry::default()
+        }
+    }
+}
+
+/// A latency this project measured, with the result it comes from (R-18, R-19).
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Measured {
+    /// Median from key release to text.
+    pub release_to_text_ms: u64,
+    #[serde(default)]
+    pub p90_ms: Option<u64>,
+    /// The file under `docs/results/`.
+    pub source: String,
+}
+
+/// The built-in catalogue file's shape.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Catalogue {
+    providers: BTreeMap<String, ProviderEntry>,
+}
+
+/// The built-in catalogue, parsed and checked once.
+fn built_in_providers() -> &'static BTreeMap<String, ProviderEntry> {
+    static PROVIDERS: std::sync::OnceLock<BTreeMap<String, ProviderEntry>> =
+        std::sync::OnceLock::new();
+    PROVIDERS.get_or_init(|| {
+        let path = Path::new("default-providers.toml");
+        let catalogue: Catalogue =
+            toml::from_str(DEFAULT_PROVIDERS).expect("the built-in catalogue parses");
+        for (id, entry) in &catalogue.providers {
+            validate_provider(id, entry, path).expect("the built-in catalogue is valid");
+        }
+        catalogue.providers
+    })
 }
 
 fn show_while_idle() -> bool {
@@ -55,6 +269,10 @@ pub struct Dictation {
     /// so a config written before it existed still loads, with the bead on.
     #[serde(default = "show_while_idle")]
     pub show_while_idle: bool,
+    /// Minutes of talking a day, for the cost estimates (U-11). Onboarding saves the user's
+    /// choice here. Optional: an older file takes the default file's value.
+    #[serde(default = "default_talking_minutes")]
+    pub talking_minutes_per_day: u32,
     /// The user's terms, one per line.
     pub dictionary: Option<PathBuf>,
 }
@@ -62,15 +280,20 @@ pub struct Dictation {
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Speech {
+    /// A provider in the catalogue whose protocol can fill the speech role.
     pub provider: String,
     pub model: String,
+    /// The provider's endpoint, from the catalogue. A file written before the catalogue sets it
+    /// here, and then it overrides the catalogue's (R-4).
+    #[serde(default)]
     pub endpoint: String,
-    /// Onboarding's "Get a key" page. Optional: an older file takes the default file's value.
+    /// Onboarding's "Get a key" page, from the catalogue unless an older file sets it.
     #[serde(default)]
     key_url: Option<String>,
-    /// For the cost estimate (docs/UX.md, "Models and keys in onboarding").
+    /// Older files only: overrides the catalogue model's price (R-4).
     #[serde(default)]
     price_per_hour_usd: Option<f64>,
+    /// From the catalogue unless an older file sets it.
     #[serde(default)]
     free_credit_usd: Option<f64>,
 }
@@ -78,10 +301,13 @@ pub struct Speech {
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Cleanup {
-    /// Labels the keychain entry and error messages (R-21).
+    /// A provider in the catalogue whose protocol can fill the cleanup role. Labels the keychain
+    /// entry and error messages (R-21).
     pub provider: String,
     pub model: String,
-    /// Base URL of an OpenAI-compatible chat completions API.
+    /// Base URL of an OpenAI-compatible chat completions API, from the catalogue. A file written
+    /// before the catalogue sets it here, and then it overrides the catalogue's (R-4).
+    #[serde(default)]
     pub endpoint: String,
     /// Sent as `reasoning_effort`; `off` leaves the field out.
     pub reasoning_effort: String,
@@ -89,14 +315,16 @@ pub struct Cleanup {
     pub prompt: String,
     /// R-12: after this, the raw transcript is pasted.
     pub deadline_ms: u64,
-    /// Onboarding's "Get a key" page. Optional, like the cost fields below: an older file takes
-    /// the default file's values, so no price is ever written in code.
+    /// Onboarding's "Get a key" page, from the catalogue unless an older file sets it.
     #[serde(default)]
     key_url: Option<String>,
+    /// Older files only: override the catalogue model's prices (R-4).
     #[serde(default)]
     price_input_per_million_usd: Option<f64>,
     #[serde(default)]
     price_output_per_million_usd: Option<f64>,
+    /// What an hour of talking sends to cleanup, for the estimate. Optional: an older file
+    /// takes the default file's values, so no estimate is ever written in code.
     #[serde(default)]
     estimate_dictations_per_hour: Option<f64>,
     #[serde(default)]
@@ -105,7 +333,7 @@ pub struct Cleanup {
     estimate_output_tokens: Option<f64>,
 }
 
-/// The default file's speech and cleanup sections, for keys an older file leaves out.
+/// The default file, for keys an older file leaves out.
 fn defaults() -> &'static Config {
     static DEFAULTS: std::sync::OnceLock<Config> = std::sync::OnceLock::new();
     DEFAULTS.get_or_init(Config::default)
@@ -123,26 +351,20 @@ macro_rules! or_default {
 }
 
 impl Speech {
+    /// The provider's "Get a key" page, or empty when it has none.
     pub fn key_url(&self) -> String {
-        or_default!(self, speech, key_url)
+        self.key_url.clone().unwrap_or_default()
     }
-    pub fn price_per_hour_usd(&self) -> f64 {
-        or_default!(self, speech, price_per_hour_usd)
-    }
+    /// Credit new accounts get, or 0.
     pub fn free_credit_usd(&self) -> f64 {
-        or_default!(self, speech, free_credit_usd)
+        self.free_credit_usd.unwrap_or_default()
     }
 }
 
 impl Cleanup {
+    /// The provider's "Get a key" page, or empty when it has none.
     pub fn key_url(&self) -> String {
-        or_default!(self, cleanup, key_url)
-    }
-    pub fn price_input_per_million_usd(&self) -> f64 {
-        or_default!(self, cleanup, price_input_per_million_usd)
-    }
-    pub fn price_output_per_million_usd(&self) -> f64 {
-        or_default!(self, cleanup, price_output_per_million_usd)
+        self.key_url.clone().unwrap_or_default()
     }
     pub fn estimate_dictations_per_hour(&self) -> f64 {
         or_default!(self, cleanup, estimate_dictations_per_hour)
@@ -181,6 +403,10 @@ pub struct Tasks {
     pub stale_after: u32,
     pub morning_from: String,
     pub morning_latest: String,
+}
+
+fn default_talking_minutes() -> u32 {
+    defaults().dictation.talking_minutes_per_day
 }
 
 fn default_tasks() -> Tasks {
@@ -369,7 +595,7 @@ pub enum ConfigError {
     /// A value out of range or not allowed.
     Invalid {
         path: PathBuf,
-        key: &'static str,
+        key: String,
         message: String,
     },
     /// A key-like field: the config file holds no secrets (R-26). Never carries the value.
@@ -463,16 +689,107 @@ impl Config {
         }
         let table: toml::Table = toml::from_str(text).map_err(parse_error)?;
         reject_secrets(&table, "", text, path)?;
-        let config: Config = toml::from_str(text).map_err(parse_error)?;
+        let mut config: Config = toml::from_str(text).map_err(parse_error)?;
+        for (id, entry) in &config.providers {
+            validate_provider(id, entry, path)?;
+        }
+        let mine = std::mem::take(&mut config.providers);
+        config.providers = built_in_providers().clone();
+        config.providers.extend(mine);
         config.validate(path)?;
+        config.resolve_from_catalogue();
         Ok(config)
     }
 
+    /// A provider in the catalogue.
+    pub fn provider(&self, id: &str) -> Option<&ProviderEntry> {
+        self.providers.get(id)
+    }
+
+    /// The providers that can fill `role`, in menu order: the recommended one first, then by
+    /// each entry's `order`, then by name (R-7).
+    pub fn providers_for(&self, role: Role) -> impl Iterator<Item = (&str, &ProviderEntry)> {
+        let recommended = Config::recommended(role).0;
+        let mut fitting: Vec<(&str, &ProviderEntry)> = self
+            .providers
+            .iter()
+            .filter(|(_, entry)| entry.roles.contains(&role))
+            .map(|(id, entry)| (id.as_str(), entry))
+            .collect();
+        fitting.sort_by_key(|(id, entry)| (*id != recommended, entry.order, *id));
+        fitting.into_iter()
+    }
+
+    /// The recommended provider and model for `role`: the default file's (R-6, R-10).
+    pub fn recommended(role: Role) -> (&'static str, &'static str) {
+        let d = defaults();
+        match role {
+            Role::Speech => (&d.speech.provider, &d.speech.model),
+            Role::Cleanup => (&d.cleanup.provider, &d.cleanup.model),
+        }
+    }
+
+    /// The speech model in use: the catalogue's entry, or a bare one for a model typed by hand,
+    /// with an older file's price over it (R-4).
+    pub fn speech_model(&self) -> ModelEntry {
+        let mut model = self.catalogue_model(&self.speech.provider, &self.speech.model);
+        if let Some(price) = self.speech.price_per_hour_usd {
+            model.price_per_hour_usd = Some(price);
+        }
+        model
+    }
+
+    /// The cleanup model in use, like [`Config::speech_model`].
+    pub fn cleanup_model(&self) -> ModelEntry {
+        let c = &self.cleanup;
+        let mut model = self.catalogue_model(&c.provider, &c.model);
+        if let Some(price) = c.price_input_per_million_usd {
+            model.price_input_per_million_usd = Some(price);
+        }
+        if let Some(price) = c.price_output_per_million_usd {
+            model.price_output_per_million_usd = Some(price);
+        }
+        model
+    }
+
+    fn catalogue_model(&self, provider: &str, model: &str) -> ModelEntry {
+        self.provider(provider)
+            .and_then(|entry| entry.models.iter().find(|m| m.id == model))
+            .cloned()
+            .unwrap_or_else(|| ModelEntry::named(model))
+    }
+
+    /// Fills each role's endpoint, key page and credit from its catalogue entry where the file
+    /// does not set them (R-4). Runs after validation, so every role's provider exists.
+    fn resolve_from_catalogue(&mut self) {
+        if let Some(entry) = self.providers.get(&self.speech.provider) {
+            let s = &mut self.speech;
+            if s.endpoint.is_empty() {
+                s.endpoint.clone_from(&entry.endpoint);
+            }
+            if s.key_url.is_none() {
+                s.key_url.clone_from(&entry.key_url);
+            }
+            if s.free_credit_usd.is_none() {
+                s.free_credit_usd = entry.free_credit_usd;
+            }
+        }
+        if let Some(entry) = self.providers.get(&self.cleanup.provider) {
+            let c = &mut self.cleanup;
+            if c.endpoint.is_empty() {
+                c.endpoint.clone_from(&entry.endpoint);
+            }
+            if c.key_url.is_none() {
+                c.key_url.clone_from(&entry.key_url);
+            }
+        }
+    }
+
     fn validate(&self, path: &Path) -> Result<(), ConfigError> {
-        let invalid = |key, message: String| {
+        let invalid = |key: &str, message: String| {
             Err(ConfigError::Invalid {
                 path: path.to_owned(),
-                key,
+                key: key.to_owned(),
                 message,
             })
         };
@@ -516,25 +833,26 @@ impl Config {
             0,
             50,
         )?;
+        range(
+            "dictation.talking_minutes_per_day",
+            d.talking_minutes_per_day.into(),
+            1,
+            600,
+        )?;
 
         let s = &self.speech;
-        if !SPEECH_PROVIDERS.contains(&s.provider.as_str()) {
-            invalid(
-                "speech.provider",
-                format!(
-                    "is {:?}: supported providers are {}",
-                    s.provider,
-                    SPEECH_PROVIDERS.join(", ")
-                ),
-            )?;
-        }
+        let speech = self.role_provider(Role::Speech, "speech.provider", &s.provider, path)?;
         named("speech.model", &s.model)?;
-        scheme("speech.endpoint", &s.endpoint, &["wss", "ws"])?;
+        if !s.endpoint.is_empty() {
+            scheme("speech.endpoint", &s.endpoint, speech.protocol.schemes())?;
+        }
 
         let c = &self.cleanup;
-        named("cleanup.provider", &c.provider)?;
+        let cleanup = self.role_provider(Role::Cleanup, "cleanup.provider", &c.provider, path)?;
         named("cleanup.model", &c.model)?;
-        scheme("cleanup.endpoint", &c.endpoint, &["https", "http"])?;
+        if !c.endpoint.is_empty() {
+            scheme("cleanup.endpoint", &c.endpoint, cleanup.protocol.schemes())?;
+        }
         named("cleanup.reasoning_effort", &c.reasoning_effort)?;
         named("cleanup.prompt", &c.prompt)?;
         range("cleanup.deadline_ms", c.deadline_ms, 100, 10_000)?;
@@ -610,8 +928,140 @@ impl Config {
             }
         }
         range("tasks.stale_after", t.stale_after.into(), 1, 30)?;
+
+        for server in &self.connectors.custom {
+            if let Err(message) = server.check() {
+                invalid("connectors.custom", message)?;
+            }
+        }
+        let mut accounts = HashSet::new();
+        for account in &self.connectors.accounts {
+            if let Err(message) = account.check() {
+                invalid("connectors.accounts", message)?;
+            }
+            if !accounts.insert((&account.connector, &account.label)) {
+                invalid(
+                    "connectors.accounts",
+                    format!("has {}:{} twice", account.connector, account.label),
+                )?;
+            }
+        }
         Ok(())
     }
+}
+
+impl Config {
+    /// The catalogue entry a role names, which must exist and fill that role (R-3, R-7).
+    fn role_provider(
+        &self,
+        role: Role,
+        key: &'static str,
+        id: &str,
+        path: &Path,
+    ) -> Result<&ProviderEntry, ConfigError> {
+        let invalid = |message| ConfigError::Invalid {
+            path: path.to_owned(),
+            key: key.to_owned(),
+            message,
+        };
+        let fitting = || {
+            self.providers_for(role)
+                .map(|(id, _)| id)
+                .collect::<Vec<_>>()
+                .join(", ")
+        };
+        match self.providers.get(id) {
+            Some(entry) if entry.roles.contains(&role) => Ok(entry),
+            Some(_) => Err(invalid(format!(
+                "is {id:?}, which cannot do {}: providers that can are {}",
+                role.section(),
+                fitting()
+            ))),
+            None => Err(invalid(format!(
+                "is {id:?}, which is not in the catalogue: providers for {} are {}",
+                role.section(),
+                fitting()
+            ))),
+        }
+    }
+}
+
+/// Checks one catalogue entry: names, endpoint scheme for its protocol, roles its protocol can
+/// fill, and prices of 0 or more. Keys name the entry, such as `providers.groq.endpoint`.
+fn validate_provider(id: &str, entry: &ProviderEntry, path: &Path) -> Result<(), ConfigError> {
+    let invalid = |key: String, message: String| {
+        Err(ConfigError::Invalid {
+            path: path.to_owned(),
+            key,
+            message,
+        })
+    };
+    let key = |field: &str| format!("providers.{id}.{field}");
+    if entry.name.trim().is_empty() {
+        return invalid(key("name"), "is empty".to_owned());
+    }
+    let schemes = entry.protocol.schemes();
+    if !schemes
+        .iter()
+        .any(|s| entry.endpoint.starts_with(&format!("{s}://")))
+    {
+        return invalid(
+            key("endpoint"),
+            format!(
+                "is {:?}: a {} endpoint must start with {}://",
+                entry.endpoint,
+                entry.protocol.name(),
+                schemes.join(":// or ")
+            ),
+        );
+    }
+    let secure = format!("{}://", "https");
+    if let Some(url) = &entry.key_url
+        && !url.starts_with(&secure)
+    {
+        return invalid(
+            key("key_url"),
+            format!("is {url:?}: it must start with {secure}"),
+        );
+    }
+    if entry.roles.is_empty() {
+        return invalid(key("roles"), "is empty: name at least one role".to_owned());
+    }
+    for role in &entry.roles {
+        if !entry.protocol.roles().contains(role) {
+            return invalid(
+                key("roles"),
+                format!(
+                    "has {:?}, which the {} protocol cannot do",
+                    role.section(),
+                    entry.protocol.name()
+                ),
+            );
+        }
+    }
+    let not_negative = |field: &str, value: Option<f64>| match value {
+        Some(v) if !(v.is_finite() && v >= 0.0) => {
+            invalid(field.to_owned(), format!("is {v}: it must be 0 or more"))
+        }
+        _ => Ok(()),
+    };
+    not_negative(&key("free_credit_usd"), entry.free_credit_usd)?;
+    for model in &entry.models {
+        if model.id.trim().is_empty() {
+            return invalid(key("models"), "has a model with an empty id".to_owned());
+        }
+        let field = |name: &str| key(&format!("models.{}.{name}", model.id));
+        not_negative(&field("price_per_hour_usd"), model.price_per_hour_usd)?;
+        not_negative(
+            &field("price_input_per_million_usd"),
+            model.price_input_per_million_usd,
+        )?;
+        not_negative(
+            &field("price_output_per_million_usd"),
+            model.price_output_per_million_usd,
+        )?;
+    }
+    Ok(())
 }
 
 /// R-26: fails on the first key-like field anywhere in the file.
@@ -681,7 +1131,7 @@ fn find_secret_line(text: &str) -> Option<(usize, String)> {
 }
 
 /// `api_key`, `key`, `groq_key`, `token`, `secret`, `password` and the like. Not `hotkey`.
-fn looks_like_secret(name: &str) -> bool {
+pub(crate) fn looks_like_secret(name: &str) -> bool {
     let name = name.to_lowercase();
     ["key", "apikey", "token", "secret", "password", "passwd"]
         .iter()
@@ -754,4 +1204,203 @@ pub fn set_value(text: &str, section: &str, key: &str, value: &str) -> Result<St
     }
     Config::parse(&out, path)?;
     Ok(out)
+}
+
+/// The keys an older file may set in a role's section that belong to its provider: they are
+/// commented out when the role changes provider (R-4).
+const PROVIDER_OVERRIDES: &[&str] = &[
+    "endpoint",
+    "key_url",
+    "price_per_hour_usd",
+    "price_input_per_million_usd",
+    "price_output_per_million_usd",
+    "free_credit_usd",
+];
+
+/// A TOML string, quoted and escaped.
+fn quoted(value: &str) -> String {
+    toml::Value::String(value.to_owned()).to_string()
+}
+
+/// The body of `[section]`: the first line after the header and the line after the last.
+fn section_body(lines: &[String], section: &str) -> Option<(usize, usize)> {
+    let header = format!("[{section}]");
+    let start = lines.iter().position(|l| l.trim() == header)? + 1;
+    let end = lines[start..]
+        .iter()
+        .position(|l| l.trim_start().starts_with('['))
+        .map_or(lines.len(), |i| start + i);
+    Some((start, end))
+}
+
+/// Whether `line` sets `key`, as `key = ...`.
+fn sets(line: &str, key: &str) -> bool {
+    line.trim_start()
+        .strip_prefix(key)
+        .is_some_and(|rest| rest.trim_start().starts_with('='))
+}
+
+/// Sets `key = value` in the section body: the line that sets it, else a commented-out one,
+/// else a new line after the header.
+fn put(lines: &mut Vec<String>, (start, end): (usize, usize), key: &str, value: String) {
+    let line = format!("{key} = {value}");
+    let body = &lines[start..end];
+    let found = body.iter().position(|l| sets(l, key)).or_else(|| {
+        body.iter().position(|l| {
+            l.trim_start()
+                .strip_prefix('#')
+                .is_some_and(|r| sets(r, key))
+        })
+    });
+    match found {
+        Some(i) => lines[start + i] = line,
+        None => lines.insert(start, line),
+    }
+}
+
+fn joined(lines: &[String], like: &str) -> String {
+    let mut out = lines.join("\n");
+    if like.ends_with('\n') {
+        out.push('\n');
+    }
+    out
+}
+
+/// Sets a role's provider and model in one write, as Settings does when the user picks them
+/// (R-8). Keeps every other line and comment. When the provider changes, an older file's
+/// endpoint, key page and prices for the old provider are commented out. Cleanup's reasoning
+/// effort becomes one the model takes: on the same provider the current one if it may, else the
+/// model's first (the catalogue lists the fastest first), or "off" when the catalogue lists none
+/// for it or does not know the model on another provider.
+/// The result is validated like the file itself, so a provider that cannot fill the role is
+/// refused and nothing changes.
+pub fn choose_provider(
+    text: &str,
+    role: Role,
+    provider: &str,
+    model: &str,
+) -> Result<String, ConfigError> {
+    choose(text, role, provider, model, false, None)
+}
+
+fn choose(
+    text: &str,
+    role: Role,
+    provider: &str,
+    model: &str,
+    clear_overrides: bool,
+    effort: Option<&str>,
+) -> Result<String, ConfigError> {
+    let path = Path::new("config.toml");
+    let config = Config::parse(text, path)?;
+    let (current, current_effort) = match role {
+        Role::Speech => (&config.speech.provider, None),
+        Role::Cleanup => (
+            &config.cleanup.provider,
+            Some(config.cleanup.reasoning_effort.as_str()),
+        ),
+    };
+    let same_provider = current == provider;
+    let section = role.section();
+    let mut lines: Vec<String> = text.lines().map(str::to_owned).collect();
+    let range = section_body(&lines, section).ok_or_else(|| ConfigError::Parse {
+        path: path.to_owned(),
+        message: format!("there is no [{section}] section"),
+    })?;
+    if clear_overrides || !same_provider {
+        for line in &mut lines[range.0..range.1] {
+            if PROVIDER_OVERRIDES.iter().any(|key| sets(line, key)) {
+                *line = format!("# {}", line.trim_start());
+            }
+        }
+    }
+    put(&mut lines, range, "provider", quoted(provider));
+    put(&mut lines, range, "model", quoted(model));
+    if let Some(current_effort) = current_effort {
+        let listed = config
+            .provider(provider)
+            .and_then(|p| p.models.iter().find(|m| m.id == model))
+            .map(|m| &m.reasoning_effort);
+        let chosen = match (effort, listed) {
+            (Some(effort), _) => effort.to_owned(),
+            (None, Some(values)) if same_provider && values.iter().any(|v| v == current_effort) => {
+                current_effort.to_owned()
+            }
+            (None, Some(values)) => values.first().map_or("off", String::as_str).to_owned(),
+            (None, None) if same_provider => current_effort.to_owned(),
+            (None, None) => "off".to_owned(),
+        };
+        put(&mut lines, range, "reasoning_effort", quoted(&chosen));
+    }
+    let out = joined(&lines, text);
+    Config::parse(&out, path)?;
+    Ok(out)
+}
+
+/// Puts every role back to the recommended provider and model, with the recommended reasoning
+/// effort and no endpoint or price overrides (R-10). Keys live in the keychain and providers the
+/// user added stay in the file.
+pub fn reset_to_recommended(text: &str) -> Result<String, ConfigError> {
+    let (provider, model) = Config::recommended(Role::Speech);
+    let text = choose(text, Role::Speech, provider, model, true, None)?;
+    let (provider, model) = Config::recommended(Role::Cleanup);
+    let effort = defaults().cleanup.reasoning_effort.as_str();
+    choose(&text, Role::Cleanup, provider, model, true, Some(effort))
+}
+
+/// Adds a cleanup provider at `endpoint` speaking the OpenAI-compatible protocol, as Settings'
+/// "Add a custom endpoint…" does (design.md, "Settings page"; R-5). The entry is appended to the
+/// user's file under a name made from `name` and not yet taken. Returns the new text and that
+/// name. The result is validated, so a bad address is refused and nothing changes.
+pub fn add_provider(
+    text: &str,
+    name: &str,
+    endpoint: &str,
+) -> Result<(String, String), ConfigError> {
+    let path = Path::new("config.toml");
+    let invalid = |key: &str, message: &str| ConfigError::Invalid {
+        path: path.to_owned(),
+        key: key.to_owned(),
+        message: message.to_owned(),
+    };
+    let name = name.trim();
+    if name.is_empty() {
+        return Err(invalid("name", "is empty"));
+    }
+    let config = Config::parse(text, path)?;
+    let mut slug = String::new();
+    for c in name.to_lowercase().chars() {
+        if c.is_ascii_alphanumeric() {
+            slug.push(c);
+        } else if !slug.ends_with('-') && !slug.is_empty() {
+            slug.push('-');
+        }
+    }
+    let base = match slug.trim_end_matches('-') {
+        "" => "custom".to_owned(),
+        s => s.to_owned(),
+    };
+    let id = (1..)
+        .map(|n| {
+            if n == 1 {
+                base.clone()
+            } else {
+                format!("{base}-{n}")
+            }
+        })
+        .find(|id| config.provider(id).is_none())
+        .expect("some name is free");
+    let mut out = text.to_owned();
+    if !out.is_empty() && !out.ends_with('\n') {
+        out.push('\n');
+    }
+    out.push_str(&format!(
+        "\n# Added in Settings: an OpenAI-compatible cleanup endpoint.\n[providers.{id}]\n\
+         name = {}\nprotocol = \"openai-chat\"\nendpoint = {}\nroles = [\"cleanup\"]\n\
+         list_models = true\n",
+        quoted(name),
+        quoted(endpoint.trim().trim_end_matches('/'))
+    ));
+    Config::parse(&out, path)?;
+    Ok((out, id))
 }

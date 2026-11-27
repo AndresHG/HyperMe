@@ -141,13 +141,40 @@ pub trait JobStore: Send {
 }
 
 /// What the app asks of the scheduler.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Command {
     /// "Pause Hyper for 1 hour": hold cards and nudges until then (R-23).
     Pause {
         until: UtcDateTime,
     },
     Resume,
+    /// Runs one job now, by name, such as `sync:google-calendar` for "Hyper, what's next"
+    /// (specs/97-google-connectors, R-16). An unknown or disabled job is ignored; on low power
+    /// a sync still runs, since the user asked.
+    Run {
+        job: String,
+    },
+    /// Replaces the job table, as when an account is added or removed: the app passes
+    /// [`seed`]'s result. Jobs that stay keep their retry; new ones get their next run now.
+    SetJobs {
+        jobs: Vec<Job>,
+    },
+    /// Replaces the nudges still to come; the app computes them from the calendar cache and the
+    /// tasks with a due time.
+    SetNudges {
+        nudges: Vec<Nudge>,
+    },
+}
+
+/// A one-off card at a moment (R-22): a meeting a few minutes ahead, or a task's due time. It
+/// shows once at `at`, or later after a sleep while `until` (the meeting's start, the due time)
+/// is still ahead; after that it is dropped. While HyperMe is paused it is held and not shown
+/// (R-23). The runner gets it as a job of kind [`JobKind::Nudge`] named `id`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Nudge {
+    pub id: String,
+    pub at: UtcDateTime,
+    pub until: UtcDateTime,
 }
 
 /// What the scheduler tells the app.
@@ -232,6 +259,8 @@ struct Scheduler<C, P, R, S> {
     paused_until: Option<UtcDateTime>,
     /// Cards held during a pause, in the order they came.
     held: Vec<usize>,
+    /// Nudges still to come.
+    nudges: Vec<Nudge>,
 }
 
 /// Runs the scheduler until the command channel closes. At start it catches up missed runs;
@@ -260,6 +289,7 @@ pub async fn run<C: Clock, P: Presence, R: Runner, S: JobStore>(parts: Parts<C, 
         missed_on_low_power: false,
         paused_until: None,
         held: Vec::new(),
+        nudges: Vec::new(),
     };
     let now = s.clock.now();
     s.recompute(now);
@@ -333,6 +363,7 @@ impl<C: Clock, P: Presence, R: Runner, S: JobStore> Scheduler<C, P, R, S> {
             .iter()
             .filter_map(|e| e.next)
             .chain(self.paused_until)
+            .chain(self.nudges.iter().map(|n| n.at))
             .min()
     }
 
@@ -357,6 +388,22 @@ impl<C: Clock, P: Presence, R: Runner, S: JobStore> Scheduler<C, P, R, S> {
         let now = self.clock.now();
         if self.paused_until.is_some_and(|until| until <= now) {
             self.resume(now).await;
+        }
+        let paused = self.paused_until.is_some_and(|until| until > now);
+        let (due, later): (Vec<Nudge>, Vec<Nudge>) = std::mem::take(&mut self.nudges)
+            .into_iter()
+            .partition(|n| n.at <= now);
+        self.nudges = later;
+        for nudge in due {
+            if now < nudge.until && !paused {
+                let job = Job::new(
+                    &nudge.id,
+                    JobKind::Nudge,
+                    Schedule::EveryWhilePresent { minutes: 0 },
+                );
+                // A nudge is not in the job table: nothing to record or retry.
+                let _ = self.runner.run(&job).await;
+            }
         }
         for i in 0..self.jobs.len() {
             if !self.jobs[i].next.is_some_and(|next| next <= now) {
@@ -433,6 +480,23 @@ impl<C: Clock, P: Presence, R: Runner, S: JobStore> Scheduler<C, P, R, S> {
                 self.run(i, now).await;
             }
         }
+        // An "every n minutes" job that came due while nobody was there runs as the user
+        // sits down, not up to n minutes later: after a wake, this is the pull on wake
+        // (specs/97-google-connectors, R-17).
+        if !self.low_power {
+            for i in 0..self.jobs.len() {
+                let job = &self.jobs[i].job;
+                if let (true, Schedule::EveryWhilePresent { minutes }) = (job.enabled, job.schedule)
+                    && minutes > 0
+                {
+                    let every = SignedDuration::minutes(i64::from(minutes));
+                    if job.last_run.is_none_or(|ran| ran + every <= now) {
+                        self.run(i, now).await;
+                        self.jobs[i].next = Some(now + every);
+                    }
+                }
+            }
+        }
     }
 
     /// Runs each "every n minutes" job once, after low power (R-33a).
@@ -502,7 +566,44 @@ impl<C: Clock, P: Presence, R: Runner, S: JobStore> Scheduler<C, P, R, S> {
         match command {
             Command::Pause { until } if until > now => self.paused_until = Some(until),
             Command::Pause { .. } | Command::Resume => self.resume(now).await,
+            Command::Run { job } => {
+                if let Some(i) = self
+                    .jobs
+                    .iter()
+                    .position(|e| e.job.name == job && e.job.enabled)
+                {
+                    self.run(i, now).await;
+                    self.jobs[i].next = self.next_for(i, now);
+                }
+            }
+            Command::SetJobs { jobs } => self.set_jobs(jobs, now),
+            Command::SetNudges { nudges } => self.nudges = nudges,
         }
+    }
+
+    fn set_jobs(&mut self, jobs: Vec<Job>, now: UtcDateTime) {
+        let held: Vec<String> = self
+            .held
+            .iter()
+            .map(|&i| self.jobs[i].job.name.clone())
+            .collect();
+        let old = std::mem::take(&mut self.jobs);
+        self.jobs = jobs
+            .into_iter()
+            .map(|job| Entry {
+                retry_after: old
+                    .iter()
+                    .find(|e| e.job.name == job.name)
+                    .and_then(|e| e.retry_after),
+                job,
+                next: None,
+            })
+            .collect();
+        self.held = held
+            .iter()
+            .filter_map(|name| self.jobs.iter().position(|e| &e.job.name == name))
+            .collect();
+        self.recompute(now);
     }
 
     /// Ends a pause: the held cards collapse into one, the latest morning or evening card.

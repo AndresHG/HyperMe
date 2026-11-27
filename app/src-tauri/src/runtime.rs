@@ -7,9 +7,13 @@ use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
 use hyperme_core::config::Config;
-use hyperme_core::dictation::{Engine, Event, Parts, Settings, Status};
-use hyperme_core::secrets::SecretStore;
-use hyperme_core::traits::{DictationId, Error, ErrorKind, History, Inserter};
+use hyperme_core::dictation::{
+    DictionaryUpdates, Engine, Event, Parts, Providers, Settings, Status,
+};
+use hyperme_core::dictionary::Dictionary;
+use hyperme_core::traits::{
+    DictationId, Error, ErrorKind, History, Inserter, TimingLine, TimingLog,
+};
 use hyperme_platform::history::{HistorySettings, SqliteHistory};
 use hyperme_platform::hotkey::macos::HotkeyListener;
 use hyperme_platform::keychain::KeychainStore;
@@ -18,11 +22,11 @@ use hyperme_platform::paste::macos::{CmdV, MacFocus, MacPasteboard};
 use hyperme_platform::paste::{ClipboardInserter, RESTORE_AFTER};
 use hyperme_platform::sounds::SystemSounds;
 use hyperme_platform::timing::{FileTimingLog, Names};
-use hyperme_providers::cleanup::ChatCleanup;
-use hyperme_providers::speechmatics::{SAMPLE_RATE, Speechmatics};
+use hyperme_providers::any::{self, AnyCleanup, AnySpeech};
+use hyperme_providers::speechmatics::SAMPLE_RATE;
 use tauri::{AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, Position, Size};
 use tauri_nspanel::ManagerExt;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, watch};
 
 use crate::pill::{self, Change, View};
 use crate::{PILL, TrayMenu, geometry};
@@ -42,6 +46,20 @@ struct Shared {
     show_while_idle: bool,
     /// Hotkey listening must live as long as the app.
     _hotkey: Option<HotkeyListener>,
+    /// Replaces the providers the next dictation uses (specs/96-provider-settings, R-8).
+    providers: Option<watch::Sender<Arc<Providers<AnySpeech, AnyCleanup>>>>,
+    /// The timing log, whose provider and model names follow a switch.
+    timing: Arc<Mutex<FileTimingLog>>,
+    /// A dictation or retry is in progress: from its first status until Idle.
+    busy: bool,
+    /// The dictation Home asked to retry, while that retry runs (spec 98, R-16).
+    home_retry: Option<DictationId>,
+    /// History is on in the config (spec 98, R-19).
+    history_enabled: bool,
+    /// Where Settings → Dictionary sends a saved dictionary (spec 93, R-10a).
+    dictionary: Option<DictionaryUpdates>,
+    /// The card on screen, while it is: the morning card or an alert (#92, R-19, R-36).
+    card: Option<pill::Card>,
 }
 
 type State = Mutex<Shared>;
@@ -72,20 +90,7 @@ pub fn timing_path() -> PathBuf {
 
 /// Where the pill's top-left corner goes for a given width.
 pub fn pill_origin(app: &AppHandle, width: f64) -> (f64, f64) {
-    match app.primary_monitor() {
-        Ok(Some(monitor)) => {
-            let scale = monitor.scale_factor();
-            let area = monitor.work_area();
-            let work = geometry::Rect {
-                x: f64::from(area.position.x) / scale,
-                y: f64::from(area.position.y) / scale,
-                width: f64::from(area.size.width) / scale,
-                height: f64::from(area.size.height) / scale,
-            };
-            geometry::bottom_centre(work, (width, geometry::PILL_SIZE.1))
-        }
-        _ => (0.0, 0.0),
-    }
+    card_origin(app, (width, geometry::PILL_SIZE.1))
 }
 
 /// Starts the dictation, or says in the menu why it cannot.
@@ -100,8 +105,21 @@ pub fn start(app: &AppHandle, menu: TrayMenu) {
         show_while_idle: Config::load_or_create(&data_dir(app).join("config.toml"))
             .map_or(true, |config| config.dictation.show_while_idle),
         _hotkey: None,
+        providers: None,
+        timing: Arc::new(Mutex::new(timing_log(&Config::default()))),
+        busy: false,
+        home_retry: None,
+        history_enabled: Config::load_or_create(&data_dir(app).join("config.toml"))
+            .map_or(true, |config| config.history.enabled),
+        dictionary: None,
+        card: None,
     }));
     settle(app);
+    // Home shows the history even before the keys are in, or when one cannot be read.
+    let dir = data_dir(app);
+    if let Ok(config) = Config::load_or_create(&dir.join("config.toml")) {
+        open_history(&history, &dir, &config);
+    }
     match wire(app, history) {
         Ok(()) => set_status(app, "Ready"),
         Err(why) => set_status(app, &why),
@@ -122,28 +140,33 @@ pub fn ensure_running(app: &AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-fn wire(app: &AppHandle, history: Arc<Mutex<HistoryInner>>) -> Result<(), String> {
-    let dir = data_dir(app);
-    let config =
-        Config::load_or_create(&dir.join("config.toml")).map_err(|e| format!("Config: {e}"))?;
-    let keys = KeychainStore::new();
-    let key = |provider: &str| match keys.get(provider) {
-        Ok(Some(key)) => Ok(key),
-        Ok(None) => Err(format!("No {provider} key yet")),
-        Err(e) => Err(e.to_string()),
-    };
-    let speech = Speechmatics::new(&config.speech, key(&config.speech.provider)?);
-    let cleanup = ChatCleanup::new(&config.cleanup, &key(&config.cleanup.provider)?)
-        .map_err(|e| e.message)?;
-    {
-        let mut inner = history.lock().unwrap_or_else(PoisonError::into_inner);
-        // A history that cannot open leaves dictation working, without history or retry.
+/// Opens the history store if it is not open yet. A history that cannot open leaves dictation
+/// working, without history or retry.
+fn open_history(history: &Mutex<HistoryInner>, dir: &std::path::Path, config: &Config) {
+    let mut inner = history.lock().unwrap_or_else(PoisonError::into_inner);
+    if inner.store.is_none() {
         inner.store = SqliteHistory::open(
             &dir.join("history"),
             HistorySettings::from_config(&config.history),
         )
         .ok();
     }
+}
+
+fn wire(app: &AppHandle, history: Arc<Mutex<HistoryInner>>) -> Result<(), String> {
+    let dir = data_dir(app);
+    let config =
+        Config::load_or_create(&dir.join("config.toml")).map_err(|e| format!("Config: {e}"))?;
+    // An unreadable dictionary store leaves dictation working without it; Settings shows why.
+    let dictionary = crate::dictionary::current(app);
+    let providers = with_dictionary(
+        any::resolve(&config, &KeychainStore::new()).map_err(|e| e.message)?,
+        &dictionary,
+    );
+    let (switch, providers) = watch::channel(Arc::new(providers));
+    let timing = lock(app).timing.clone();
+    *timing.lock().unwrap_or_else(PoisonError::into_inner) = timing_log(&config);
+    open_history(&history, &dir, &config);
 
     let (events, events_rx) = mpsc::channel(1024);
     // The microphone's frames pass through a task that feeds the level meter.
@@ -152,31 +175,94 @@ fn wire(app: &AppHandle, history: Arc<Mutex<HistoryInner>>) -> Result<(), String
         HotkeyListener::start(&config.dictation.hotkey, events.clone()).map_err(|e| e.message)?;
     let parts = Parts {
         mic: CpalMicrophone::new(mic_tx, SAMPLE_RATE),
-        speech,
-        cleanup,
+        providers,
         inserter: ClipboardInserter::new(Arc::new(MacPasteboard), CmdV, RESTORE_AFTER),
         focus: MacFocus,
         history: SharedHistory(history),
         sounds: SystemSounds,
-        timing: FileTimingLog::new(
-            timing_path(),
-            Names {
-                speech_provider: config.speech.provider.clone(),
-                speech_model: config.speech.model.clone(),
-                cleanup_provider: config.cleanup.provider.clone(),
-                cleanup_model: config.cleanup.model.clone(),
-            },
-        ),
+        timing: SharedTiming(timing),
     };
     let (status_tx, status_rx) = mpsc::unbounded_channel();
-    let engine = Engine::new(parts, Settings::from_config(&config), status_tx);
+    let settings = Settings {
+        dictionary,
+        ..Settings::from_config(&config)
+    };
+    let engine = Engine::new(parts, settings, status_tx);
+    let dictionary_updates = engine.dictionary_updates();
     tauri::async_runtime::spawn(engine.run(events_rx));
     tauri::async_runtime::spawn(forward_audio(app.clone(), mic_rx, events.clone()));
     tauri::async_runtime::spawn(show_statuses(app.clone(), status_rx));
     let mut shared = lock(app);
     shared.events = Some(events);
     shared._hotkey = Some(hotkey);
+    shared.providers = Some(switch);
+    shared.dictionary = Some(dictionary_updates);
     Ok(())
+}
+
+/// Builds the providers the config names now and hands them to the next dictation, without a
+/// restart (R-8). A dictation in progress keeps its own (R-9). If they cannot be built, a key
+/// missing for example, the providers in use stay and the reason is returned (R-12). Does
+/// nothing before dictation has started; it reads the config when it does.
+pub fn reload_providers(app: &AppHandle) -> Result<(), String> {
+    let Some(switch) = lock(app).providers.clone() else {
+        return Ok(());
+    };
+    let config = Config::load_or_create(&data_dir(app).join("config.toml"))
+        .map_err(|e| format!("Config: {e}"))?;
+    let dictionary = crate::dictionary::current(app);
+    let providers = with_dictionary(
+        any::resolve(&config, &KeychainStore::new()).map_err(|e| e.message)?,
+        &dictionary,
+    );
+    let timing = lock(app).timing.clone();
+    *timing.lock().unwrap_or_else(PoisonError::into_inner) = timing_log(&config);
+    switch.send_replace(Arc::new(providers));
+    Ok(())
+}
+
+/// The timing log, labelled with the config's providers and models.
+fn timing_log(config: &Config) -> FileTimingLog {
+    FileTimingLog::new(
+        timing_path(),
+        Names {
+            speech_provider: config.speech.provider.clone(),
+            speech_model: config.speech.model.clone(),
+            cleanup_provider: config.cleanup.provider.clone(),
+            cleanup_model: config.cleanup.model.clone(),
+        },
+    )
+}
+
+/// The timing log behind a lock, so a provider switch can relabel it.
+struct SharedTiming(Arc<Mutex<FileTimingLog>>);
+
+impl TimingLog for SharedTiming {
+    fn record(&mut self, line: &TimingLine) {
+        self.0
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .record(line);
+    }
+}
+
+/// The cleanup provider with the user's dictionary in its prompt (spec 93, R-4).
+fn with_dictionary(
+    providers: Providers<AnySpeech, AnyCleanup>,
+    dictionary: &Dictionary,
+) -> Providers<AnySpeech, AnyCleanup> {
+    Providers {
+        cleanup: providers.cleanup.with_dictionary(&dictionary.prompt_line()),
+        ..providers
+    }
+}
+
+/// Hands a dictionary saved in Settings to the running dictation (spec 93, R-10a). Before the
+/// dictation is running there is nothing to update: it reads the file when it starts.
+pub fn update_dictionary(app: &AppHandle, dictionary: Dictionary) {
+    if let Some(updates) = lock(app).dictionary.clone() {
+        updates.send(dictionary);
+    }
 }
 
 /// Passes each frame on to the state machine and sends the level to the pill (R-4).
@@ -204,6 +290,7 @@ async fn show_statuses(app: AppHandle, mut statuses: mpsc::UnboundedReceiver<Sta
     // Key release, for the walkthrough's "Pasted in 0.43 s".
     let mut released: Option<Instant> = None;
     while let Some(status) = statuses.recv().await {
+        follow_for_home(&app, &status);
         match status {
             Status::Transcribing if released.is_none() => released = Some(Instant::now()),
             Status::Done { .. } => {
@@ -246,6 +333,7 @@ fn show(app: &AppHandle, view: View) {
         shared.generation += 1;
         let was_pill = shared.view.as_ref().is_some_and(|v| v.kind != "idle");
         shared.view = Some(view.clone());
+        shared.card = None;
         (shared.generation, was_pill)
     };
     let width = pill::width_for(&view);
@@ -277,6 +365,103 @@ fn show(app: &AppHandle, view: View) {
     }
 }
 
+/// Shows the morning card from the dot (#92, R-15, R-19). It never takes focus: the panel cannot
+/// become key, so the card is answered with a click. An `update` (a sync filled in a part,
+/// R-18) replaces only a card still on screen. A dictation in progress is never interrupted;
+/// the day stays in Home's Today. Unanswered, it shrinks back into the dot.
+pub fn show_card(app: &AppHandle, card: pill::Card, update: bool) {
+    let generation = {
+        let mut shared = lock(app);
+        let morning_on_screen = matches!(shared.card, Some(pill::Card::Morning(_)));
+        if (update && !morning_on_screen) || shared.busy {
+            return;
+        }
+        shared.generation += 1;
+        shared.view = Some(View {
+            kind: "card",
+            label: String::new(),
+            hide_after_ms: None,
+            retry: false,
+        });
+        shared.card = Some(card.clone());
+        shared.generation
+    };
+    let (width, height) = card.size();
+    if let Some(window) = app.get_webview_window(PILL) {
+        let (x, y) = card_origin(app, (width, height));
+        let _ = window.set_size(Size::Logical(LogicalSize::new(width, height)));
+        let _ = window.set_position(Position::Logical(LogicalPosition::new(x, y)));
+    }
+    let _ = app.emit_to(PILL, "card", &card);
+    on_panel(app, |panel| panel.show());
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(Duration::from_millis(pill::CARD_LINGER_MS)).await;
+        if lock(&app).generation == generation {
+            settle(&app);
+        }
+    });
+}
+
+/// Where a card of `size` goes: bottom centre, like the pill.
+fn card_origin(app: &AppHandle, size: (f64, f64)) -> (f64, f64) {
+    match app.primary_monitor() {
+        Ok(Some(monitor)) => {
+            let scale = monitor.scale_factor();
+            let area = monitor.work_area();
+            let work = geometry::Rect {
+                x: f64::from(area.position.x) / scale,
+                y: f64::from(area.position.y) / scale,
+                width: f64::from(area.size.width) / scale,
+                height: f64::from(area.size.height) / scale,
+            };
+            geometry::bottom_centre(work, size)
+        }
+        _ => (0.0, 0.0),
+    }
+}
+
+/// The card on screen, for the page once it has loaded (a card sent at launch can come before
+/// its listeners).
+#[tauri::command]
+pub fn pill_card(app: AppHandle) -> Option<pill::Card> {
+    lock(&app).card.clone()
+}
+
+/// "Open Today" on the card: Home at Today, and the card goes back into the dot (R-19).
+#[tauri::command]
+pub fn card_open_today(app: AppHandle) {
+    settle(&app);
+    crate::home::open(&app, "today");
+}
+
+/// The main button of an alert: Fix opens Settings where the fix is (R-36), Join a meeting's
+/// web link, Open Today Home at Today (R-22). The card goes back into the dot.
+#[tauri::command]
+pub fn card_action(app: AppHandle) {
+    let link = match &lock(&app).card {
+        Some(pill::Card::Alert(alert)) => alert.link.clone(),
+        _ => None,
+    };
+    settle(&app);
+    match link.as_deref() {
+        Some(crate::tasks::TODAY_LINK) => crate::home::open(&app, "today"),
+        Some(url) if url.starts_with("https://") => {
+            let _ = crate::tasks::tasks_open_meeting(url.to_owned());
+        }
+        Some(link) => {
+            let _ = crate::connectors::open_link(&app, link);
+        }
+        None => crate::settings::open(&app, "connectors"),
+    }
+}
+
+/// "Later" on the card.
+#[tauri::command]
+pub fn card_dismiss(app: AppHandle) {
+    settle(&app);
+}
+
 /// Sizes the panel for `width` and puts it at the bottom centre.
 fn place(app: &AppHandle, width: f64) {
     if let Some(window) = app.get_webview_window(PILL) {
@@ -303,6 +488,7 @@ fn hide(app: &AppHandle) {
         let mut shared = lock(app);
         shared.generation += 1;
         shared.view = None;
+        shared.card = None;
     }
     // The page stops drawing the voice, so nothing runs while the pill is hidden.
     let _ = app.emit_to(PILL, "pill-hidden", ());
@@ -347,8 +533,102 @@ pub fn pill_clicked(app: AppHandle) {
     }
     settle(&app);
     if retry && let Some(events) = events {
-        let _ = events.try_send(Event::Retry);
+        let _ = events.try_send(Event::Retry(None));
     }
+}
+
+/// Tells Home how a retry it asked for is going, and that the history changed after any other
+/// dictation (spec 98, R-16, AC-15).
+fn follow_for_home(app: &AppHandle, status: &Status) {
+    use crate::home::{RetryEvent, RetryUpdate, retry_update};
+    let retrying = {
+        let mut shared = lock(app);
+        shared.busy = *status != Status::Idle;
+        shared.home_retry
+    };
+    let Some(id) = retrying else {
+        if matches!(
+            status,
+            Status::Done { .. } | Status::Copied { .. } | Status::Failed { retry: true, .. }
+        ) {
+            crate::home::emit_changed(app);
+        }
+        return;
+    };
+    let event = |state, text, message| RetryEvent {
+        id,
+        state,
+        text,
+        message,
+    };
+    let (event, ended) = match retry_update(status) {
+        Some(RetryUpdate::Working) => (event("working", None, None), false),
+        Some(RetryUpdate::Done) => {
+            let text = with_history(app, |h| h.item(id))
+                .ok()
+                .flatten()
+                .and_then(|i| i.text);
+            (event("done", text, None), true)
+        }
+        Some(RetryUpdate::Failed(message)) => (event("failed", None, Some(message)), true),
+        Some(RetryUpdate::Ended) => (event("ended", None, None), true),
+        None => return,
+    };
+    if ended {
+        lock(app).home_retry = None;
+    }
+    crate::home::emit_retry(app, event);
+}
+
+/// Home's Retry (spec 98, R-16): refused while a dictation runs, as Phase 1 refuses a second
+/// one, so the row says so instead of waiting on nothing.
+pub fn retry_from_home(app: &AppHandle, id: DictationId) -> Result<(), String> {
+    let mut shared = lock(app);
+    if shared.busy || shared.home_retry.is_some() {
+        return Err("A dictation is in progress; retry when it is done".to_owned());
+    }
+    let events = shared.events.clone().ok_or_else(|| {
+        "Retry needs the speech and cleanup keys; add them in Settings".to_owned()
+    })?;
+    events
+        .try_send(Event::Retry(Some(id)))
+        .map_err(|_| "HyperMe is busy; try again".to_owned())?;
+    shared.home_retry = Some(id);
+    Ok(())
+}
+
+/// History is on in the config (spec 98, R-19).
+pub fn history_enabled(app: &AppHandle) -> bool {
+    lock(app).history_enabled
+}
+
+/// Runs `change` on the history store, for Home's actions.
+pub fn with_history_mut<T>(
+    app: &AppHandle,
+    change: impl FnOnce(&mut SqliteHistory) -> Result<T, Error>,
+) -> Result<T, String> {
+    let history = lock(app).history.clone();
+    let mut inner = history.lock().unwrap_or_else(PoisonError::into_inner);
+    let store = inner
+        .store
+        .as_mut()
+        .ok_or_else(|| "History is not available yet".to_owned())?;
+    change(store).map_err(|e| e.message)
+}
+
+/// Runs `read` on the history store, for Home's commands. An error when the history is not
+/// open (no keys yet, or it could not open).
+pub fn with_history<T>(
+    app: &AppHandle,
+    read: impl FnOnce(&SqliteHistory) -> Result<T, Error>,
+) -> Result<T, String> {
+    let history = lock(app).history.clone();
+    let inner = history.lock().unwrap_or_else(PoisonError::into_inner);
+    let store = inner
+        .store
+        .as_ref()
+        .ok_or_else(|| "History is not available yet".to_owned())?;
+    read(store).map_err(|e| e.message)
 }
 
 /// The menu's actions.
@@ -381,9 +661,11 @@ pub fn menu_action(app: &AppHandle, id: &str) {
             });
         }
         "settings" => crate::settings::open(app, "setup"),
+        "open-home" => crate::home::open(app, "home"),
+        "dictionary" => crate::settings::open(app, "dictionary"),
         "retry" => {
             if let Some(events) = lock(app).events.clone() {
-                let _ = events.try_send(Event::Retry);
+                let _ = events.try_send(Event::Retry(None));
             }
         }
         _ => {}
@@ -452,5 +734,23 @@ impl History for SharedHistory {
             message: "history is not available".to_owned(),
         })?;
         store.audio(id)
+    }
+
+    fn app(&self, id: DictationId) -> Result<Option<String>, Error> {
+        let inner = self.inner();
+        let store = inner.store.as_ref().ok_or_else(|| Error {
+            kind: ErrorKind::Device,
+            message: "history is not available".to_owned(),
+        })?;
+        store.app(id)
+    }
+
+    fn replace_text(
+        &mut self,
+        id: DictationId,
+        text: &str,
+        language: Option<&str>,
+    ) -> Result<(), Error> {
+        self.inner().store()?.replace_text(id, text, language)
     }
 }

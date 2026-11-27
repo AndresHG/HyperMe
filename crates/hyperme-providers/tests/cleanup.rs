@@ -6,108 +6,18 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use hyperme_core::config;
-use hyperme_core::dictation::{Engine, Event, Parts, Settings, Status};
+use hyperme_core::dictation::{Engine, Event, Parts, Settings, Status, fixed};
 use hyperme_core::traits::{
     CleanupProvider, DictationId, Error, ErrorKind, FocusInfo, History, Inserter, LiveSession,
     Microphone, Sound, Sounds, SpeechProvider, TimingLine, TimingLog, Transcript,
 };
 use hyperme_providers::cleanup::ChatCleanup;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::{TcpListener, TcpStream};
+use tokio::net::TcpListener;
+
+mod chat_server;
+use chat_server::*;
 
 const KEY: &str = "not-a-real-key-for-tests";
-
-/// How the server answers one request.
-#[derive(Clone)]
-struct Answer {
-    delay: Duration,
-    response: String,
-}
-
-fn answer(status: &str, content_type: &str, body: &str) -> Answer {
-    Answer {
-        delay: Duration::ZERO,
-        response: format!(
-            "HTTP/1.1 {status}\r\ncontent-type: {content_type}\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{body}",
-            body.len()
-        ),
-    }
-}
-
-fn models() -> Answer {
-    answer(
-        "200 OK",
-        "application/json",
-        r#"{"object":"list","data":[]}"#,
-    )
-}
-
-/// A streamed answer: reasoning first, as gpt-oss sends it, then the text in pieces.
-fn streamed(pieces: &[&str]) -> Answer {
-    let mut body = String::from(
-        "data: {\"choices\":[{\"index\":0,\"delta\":{\"reasoning\":\"Clean it.\"}}]}\n\n",
-    );
-    for piece in pieces {
-        let chunk = serde_json::json!({"choices": [{"index": 0, "delta": {"content": piece}}]});
-        body.push_str(&format!("data: {chunk}\n\n"));
-    }
-    body.push_str("data: [DONE]\n\n");
-    answer("200 OK", "text/event-stream", &body)
-}
-
-/// Serves every connection on loopback: `GET /v1/models` gets `models`, anything else `chat`.
-/// Returns the base URL and the raw requests seen.
-async fn serve(models: Answer, chat: Answer) -> (String, Arc<Mutex<Vec<String>>>) {
-    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let base = format!("http://{}/v1", listener.local_addr().unwrap());
-    let requests = Arc::new(Mutex::new(Vec::new()));
-    let seen = requests.clone();
-    tokio::spawn(async move {
-        loop {
-            let Ok((mut stream, _)) = listener.accept().await else {
-                return;
-            };
-            let (models, chat, seen) = (models.clone(), chat.clone(), seen.clone());
-            tokio::spawn(async move {
-                let request = read_request(&mut stream).await;
-                let reply = if request.starts_with("GET /v1/models") {
-                    models
-                } else {
-                    chat
-                };
-                seen.lock().unwrap().push(request);
-                tokio::time::sleep(reply.delay).await;
-                // The client may have given up at its deadline.
-                let _ = stream.write_all(reply.response.as_bytes()).await;
-                let _ = stream.shutdown().await;
-            });
-        }
-    });
-    (base, requests)
-}
-
-/// Reads the head and, going by `content-length`, the whole body.
-async fn read_request(stream: &mut TcpStream) -> String {
-    let mut received = Vec::new();
-    let mut chunk = [0u8; 8192];
-    loop {
-        if let Some(head_end) = received.windows(4).position(|w| w == b"\r\n\r\n") {
-            let head = String::from_utf8_lossy(&received[..head_end]).to_lowercase();
-            let body_len = head
-                .lines()
-                .find_map(|line| line.strip_prefix("content-length:"))
-                .map_or(0, |value| value.trim().parse::<usize>().unwrap());
-            if received.len() >= head_end + 4 + body_len {
-                break;
-            }
-        }
-        match stream.read(&mut chunk).await {
-            Ok(0) | Err(_) => break,
-            Ok(n) => received.extend_from_slice(&chunk[..n]),
-        }
-    }
-    String::from_utf8_lossy(&received).into_owned()
-}
 
 fn cleanup(endpoint: &str) -> ChatCleanup {
     let mut config = config::Config::default().cleanup;
@@ -306,6 +216,10 @@ const RAW: &str = "so the deploy failed because of the cash invalidation";
 /// Runs one dictation and returns the final status, what was pasted, and the time from the
 /// final transcript to the paste.
 async fn dictate(endpoint: &str, deadline: Duration) -> (Status, String, Duration) {
+    dictate_with(cleanup(endpoint), deadline).await
+}
+
+async fn dictate_with(cleanup: ChatCleanup, deadline: Duration) -> (Status, String, Duration) {
     let marks = Marks::default();
     let (events, events_rx) = tokio::sync::mpsc::channel(16);
     let (status_tx, mut status) = tokio::sync::mpsc::unbounded_channel();
@@ -318,8 +232,7 @@ async fn dictate(endpoint: &str, deadline: Duration) -> (Status, String, Duratio
     };
     let parts = Parts {
         mic: NoMic,
-        speech,
-        cleanup: cleanup(endpoint),
+        providers: fixed(speech, cleanup),
         inserter: Paste(marks.clone()),
         focus: Notes,
         history: NoHistory,
@@ -428,6 +341,17 @@ impl History for NoHistory {
     fn audio(&self, _id: DictationId) -> Result<Vec<i16>, Error> {
         Ok(Vec::new())
     }
+    fn app(&self, _id: DictationId) -> Result<Option<String>, Error> {
+        Ok(None)
+    }
+    fn replace_text(
+        &mut self,
+        _id: DictationId,
+        _text: &str,
+        _language: Option<&str>,
+    ) -> Result<(), Error> {
+        Ok(())
+    }
 }
 
 struct NoTiming;
@@ -438,4 +362,31 @@ impl TimingLog for NoTiming {
 struct Silent;
 impl Sounds for Silent {
     fn play(&self, _sound: Sound) {}
+}
+
+/// Provider settings AC-9 (R-23): a local server, which has no key, is held to the same
+/// deadline and falls back to the raw transcript when it is slow.
+#[tokio::test]
+async fn ac9_a_slow_local_server_falls_back_to_raw() {
+    let mut slow = streamed(&["never in time"]);
+    slow.delay = Duration::from_secs(3);
+    let (base, requests) = serve(models(), slow).await;
+    let mut config = config::Config::default().cleanup;
+    config.endpoint = base;
+    let keyless = ChatCleanup::new(&config, "").unwrap();
+    let deadline = Duration::from_millis(300);
+    let (status, pasted, waited) = dictate_with(keyless, deadline).await;
+    assert_eq!(status, Status::Done { raw: true });
+    assert_eq!(pasted, RAW);
+    assert!(
+        waited.abs_diff(deadline) <= Duration::from_millis(20),
+        "{waited:?}"
+    );
+    // No key, so no Authorization header at all.
+    for request in requests.lock().unwrap().iter() {
+        assert!(
+            !request.to_lowercase().contains("authorization"),
+            "{request}"
+        );
+    }
 }

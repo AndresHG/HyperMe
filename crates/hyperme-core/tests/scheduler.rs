@@ -545,6 +545,70 @@ async fn a_wake_runs_jobs_skipped_on_low_power_once() {
     assert_eq!(h.runs().len(), before + 1);
 }
 
+// --- Connector sync (specs/97-google-connectors) -----------------------------------------
+
+fn google_sync_job() -> Job {
+    let text = format!(
+        "{}\n[[connectors.accounts]]\nconnector = \"google\"\nlabel = \"personal\"\n",
+        hyperme_core::config::DEFAULT_CONFIG
+    );
+    let connectors = Config::parse(&text, std::path::Path::new("config.toml"))
+        .unwrap()
+        .connectors;
+    let registry = hyperme_core::connector_settings::registry(None, &connectors).unwrap();
+    hyperme_core::sync::sync_jobs(&registry, &connectors)
+        .into_iter()
+        .find(|job| job.name == "sync:google-calendar")
+        .unwrap()
+}
+
+/// specs/97-google-connectors AC-8, R-16, R-17: with the default sync job, a 12-hour present
+/// day makes no more than 40 calendar pulls, none while the Mac is asleep, and one on wake.
+#[tokio::test(start_paused = true)]
+async fn default_syncing_stays_under_forty_pulls_a_day_and_sleeps() {
+    let mut jobs = morning_only();
+    jobs.push(google_sync_job());
+    let h = Harness::start(local(THU, 8, 0), jobs);
+    h.send(PresenceEvent::Launched).await;
+    h.pass(SignedDuration::hours(12)).await; // to 20:00
+    let pulls = |h: &Harness| {
+        h.runs()
+            .into_iter()
+            .filter(|(name, _)| name == "sync:google-calendar")
+            .map(|(_, at)| at)
+            .collect::<Vec<_>>()
+    };
+    let day = pulls(&h);
+    assert!(day.len() <= 40, "{} pulls", day.len());
+    assert!(day.len() >= 24, "{} pulls", day.len());
+
+    h.send(PresenceEvent::Locked).await;
+    h.send(PresenceEvent::Asleep).await;
+    h.sleep_mac(SignedDuration::hours(11)); // the night, asleep: to 07:00
+    assert_eq!(pulls(&h).len(), day.len(), "no pull while asleep");
+    h.send(PresenceEvent::Woke).await;
+    h.send(PresenceEvent::Unlocked).await;
+    let after = pulls(&h);
+    assert_eq!(after.len(), day.len() + 1, "one pull on wake");
+    assert!(*after.last().unwrap() >= local(FRI, 7, 0));
+}
+
+/// R-16 ("Hyper, what's next"): a sync job runs at once on request, by name; an unknown name
+/// does nothing.
+#[tokio::test(start_paused = true)]
+async fn a_sync_runs_on_request() {
+    let h = Harness::start(local(THU, 9, 0), vec![google_sync_job()]);
+    h.command(Command::Run {
+        job: "sync:google-calendar".into(),
+    })
+    .await;
+    h.command(Command::Run {
+        job: "sync:nothing".into(),
+    })
+    .await;
+    assert_eq!(names(&h.runs()), ["sync:google-calendar"]);
+}
+
 // --- Built-in jobs -------------------------------------------------------------------------
 
 /// R-31, design.md: the built-in jobs come from the config (roll-over at day start every day,
@@ -594,4 +658,116 @@ fn built_in_jobs_come_from_the_config_and_keep_their_state() {
     assert_eq!(got.schedule, rollover.schedule, "schedule from the config");
     assert!(jobs.contains(&prompt));
     assert_eq!(jobs.len(), builtin.len() + 1);
+}
+
+// --- A new job list ------------------------------------------------------------------------
+
+/// Slice 7 (app), "rebuild the job list when connectors change": an account added while
+/// HyperMe runs brings its sync job, which runs at once while the user is present; an account
+/// removed takes its job away, and the jobs that stay keep their state and timer.
+#[tokio::test(start_paused = true)]
+async fn a_new_job_list_adds_and_removes_jobs() {
+    let rollover = at_job("rollover", JobKind::RollOver, 4, 0);
+    let h = Harness::start(local(THU, 9, 0), vec![rollover.clone()]);
+    h.send(PresenceEvent::Launched).await;
+
+    h.command(Command::SetJobs {
+        jobs: vec![rollover.clone(), google_sync_job()],
+    })
+    .await;
+    assert_eq!(names(&h.runs()), ["sync:google-calendar"], "runs at once");
+
+    h.command(Command::SetJobs {
+        jobs: vec![rollover],
+    })
+    .await;
+    h.pass(SignedDuration::hours(20)).await;
+    assert_eq!(
+        names(&h.runs()),
+        ["sync:google-calendar", "rollover"],
+        "the removed sync never runs again; roll-over still fires at 04:00"
+    );
+}
+
+// --- Nudges --------------------------------------------------------------------------------
+
+use hyperme_core::scheduler::Nudge;
+
+fn nudge(id: &str, at: UtcDateTime, until: UtcDateTime) -> Nudge {
+    Nudge {
+        id: id.into(),
+        at,
+        until,
+    }
+}
+
+/// AC-10, R-22: a task due at 16:00 shows its nudge at 15:50, once, with no wake-up before it
+/// beyond the timer; a meeting at 10:30 is nudged at 10:28.
+#[tokio::test(start_paused = true)]
+async fn a_nudge_shows_once_at_its_time() {
+    let h = Harness::start(local(THU, 9, 0), Vec::new());
+    h.command(Command::SetNudges {
+        nudges: vec![
+            nudge("task:7", local(THU, 15, 50), local(THU, 16, 0)),
+            nudge("meeting:1", local(THU, 10, 28), local(THU, 10, 30)),
+        ],
+    })
+    .await;
+    h.pass(SignedDuration::minutes(87)).await;
+    assert!(h.runs().is_empty(), "nothing before 10:28");
+    h.pass(SignedDuration::minutes(2)).await;
+    assert_eq!(h.runs(), [("meeting:1".to_owned(), local(THU, 10, 28))]);
+    h.pass(SignedDuration::hours(7)).await;
+    assert_eq!(
+        names(&h.runs()),
+        ["meeting:1", "task:7"],
+        "each once, the task at 15:50"
+    );
+    assert_eq!(h.runs()[1].1, local(THU, 15, 50));
+}
+
+/// R-22, R-35: a nudge whose moment passed while the Mac slept is shown on wake only if its
+/// meeting or due time is still ahead; otherwise it is dropped.
+#[tokio::test(start_paused = true)]
+async fn a_nudge_missed_asleep_shows_only_while_still_useful() {
+    let h = Harness::start(local(THU, 9, 0), Vec::new());
+    h.command(Command::SetNudges {
+        nudges: vec![
+            nudge("meeting:1", local(THU, 10, 28), local(THU, 10, 30)),
+            nudge("task:7", local(THU, 10, 50), local(THU, 11, 0)),
+        ],
+    })
+    .await;
+    // Asleep from 09:00 to 10:55: the meeting has started, the task is due in 5 minutes.
+    h.sleep_mac(SignedDuration::minutes(115));
+    h.send(PresenceEvent::Woke).await;
+    h.pass(SignedDuration::SECOND).await;
+    assert_eq!(names(&h.runs()), ["task:7"]);
+}
+
+/// R-23: while HyperMe is paused, nudges are held and not shown; a new list replaces the old.
+#[tokio::test(start_paused = true)]
+async fn nudges_are_held_while_paused_and_replaced_by_a_new_list() {
+    let h = Harness::start(local(THU, 9, 0), Vec::new());
+    h.command(Command::SetNudges {
+        nudges: vec![nudge("task:1", local(THU, 9, 30), local(THU, 9, 40))],
+    })
+    .await;
+    h.command(Command::Pause {
+        until: local(THU, 10, 0),
+    })
+    .await;
+    h.pass(SignedDuration::hours(1)).await;
+    assert!(h.runs().is_empty(), "held during the pause");
+
+    h.command(Command::SetNudges {
+        nudges: vec![nudge("task:2", local(THU, 11, 0), local(THU, 11, 10))],
+    })
+    .await;
+    h.command(Command::SetNudges {
+        nudges: vec![nudge("task:3", local(THU, 11, 5), local(THU, 11, 15))],
+    })
+    .await;
+    h.pass(SignedDuration::hours(2)).await;
+    assert_eq!(names(&h.runs()), ["task:3"]);
 }

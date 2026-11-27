@@ -459,7 +459,12 @@
         b.innerHTML = '<span></span><small></small>';
         b.children[0].textContent = c.label;
         b.children[1].textContent = c.detail.split(',')[0];
-        b.addEventListener('click', () => pickChoice(i));
+        b.addEventListener('click', () => {
+          pickChoice(i);
+          // Kept for the cost hints in Settings → Providers. A file written before the setting
+          // existed has no line for it; the hints then use the default.
+          invoke('settings_set', { section: 'dictation', key: 'talking_minutes_per_day', value: c.minutes_per_day }).catch(() => {});
+        });
         $('choices').appendChild(b);
       });
       pickChoice(Math.min(1, k.choices.length - 1));

@@ -62,7 +62,14 @@ pub fn reopen(app: &AppHandle) {
     if onboarding::should_open(&at_launch(app)) {
         open(app, onboarding::Step::Welcome);
     } else {
-        crate::settings::open(app, "setup");
+        crate::home::open(app, "home");
+    }
+}
+
+/// Brings an open walkthrough to the front, activating the app (#130). Nothing when it is closed.
+pub fn bring_to_front(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window(WALKTHROUGH) {
+        let _ = window.set_focus();
     }
 }
 
@@ -249,6 +256,8 @@ pub fn onboarding_try(app: AppHandle) -> Result<(), String> {
 #[derive(Debug, Serialize)]
 pub struct CostChoice {
     label: &'static str,
+    /// Saved as `dictation.talking_minutes_per_day` when picked, for Settings' hints.
+    minutes_per_day: u32,
     detail: &'static str,
     shown_as: String,
     speech_usd: f64,
@@ -276,6 +285,7 @@ pub fn onboarding_keys_screen(app: AppHandle) -> Result<KeysScreen, String> {
             let c = cost::monthly_cost(&config, choice.minutes_per_day);
             CostChoice {
                 label: choice.label,
+                minutes_per_day: choice.minutes_per_day,
                 detail: choice.detail,
                 shown_as: cost::shown_as(c.total_usd()),
                 speech_usd: c.speech_usd,
