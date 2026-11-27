@@ -23,18 +23,20 @@ fn config_path(app: &AppHandle) -> PathBuf {
     crate::runtime::data_dir(app).join("config.toml")
 }
 
-/// The sheet's size when Home has room for it (V0.1 redesign).
-const SHEET: (f64, f64) = (820.0, 580.0);
+/// The sheet's size when Home has room for it, close to Wispr Flow's settings (V0.1 redesign).
+const SHEET: (f64, f64) = (720.0, 500.0);
 /// The smallest sheet; Home's own minimum is 720 × 480.
-const SHEET_MIN: (f64, f64) = (640.0, 440.0);
+const SHEET_MIN: (f64, f64) = (600.0, 420.0);
+/// Home's title bar, left out when centring.
+const TITLE_BAR: f64 = 28.0;
 
-/// Where the Settings sheet sits over Home, in logical points: centred across, 28 pt below
-/// Home's top edge (under its title bar), and never larger than Home less a margin.
+/// Where the Settings sheet sits over Home, in logical points: centred in Home's content area,
+/// and never larger than Home less a margin.
 pub fn sheet_frame(home_pos: (f64, f64), home_size: (f64, f64)) -> (f64, f64, f64, f64) {
-    let w = SHEET.0.min(home_size.0 - 40.0).max(SHEET_MIN.0);
-    let h = SHEET.1.min(home_size.1 - 56.0).max(SHEET_MIN.1);
+    let w = SHEET.0.min(home_size.0 - 80.0).max(SHEET_MIN.0);
+    let h = SHEET.1.min(home_size.1 - TITLE_BAR - 60.0).max(SHEET_MIN.1);
     let x = home_pos.0 + (home_size.0 - w) / 2.0;
-    let y = home_pos.1 + 28.0;
+    let y = home_pos.1 + TITLE_BAR + (home_size.1 - TITLE_BAR - h) / 2.0;
     (x, y, w, h)
 }
 
@@ -67,6 +69,7 @@ pub fn open(app: &AppHandle, section: &str) {
         .inner_size(w, h)
         .position(x, y)
         .decorations(false)
+        .transparent(true)
         .resizable(false)
         .shadow(true)
         .parent(&home)
@@ -818,16 +821,16 @@ pub fn app_restart(app: AppHandle) {
 #[cfg(test)]
 mod tests {
 
-    /// V0.1 redesign: the sheet sits centred over Home under its title bar, and shrinks with a
-    /// small Home but never below its minimum.
+    /// V0.1 redesign: the sheet sits centred in Home's content area, and shrinks with a small
+    /// Home but never below its minimum.
     #[test]
     fn the_sheet_sits_over_home() {
         assert_eq!(
             super::sheet_frame((100.0, 50.0), (1000.0, 700.0)),
-            (190.0, 78.0, 820.0, 580.0)
+            (240.0, 164.0, 720.0, 500.0)
         );
         let (_, _, w, h) = super::sheet_frame((0.0, 0.0), (720.0, 480.0));
-        assert_eq!((w, h), (680.0, 440.0));
+        assert_eq!((w, h), (640.0, 420.0));
     }
 
     /// #216 regression, V0.1 redesign: the account label is a choice (Personal, Work, Other), so
