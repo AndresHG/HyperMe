@@ -26,6 +26,15 @@ now, beside Phase 1; Part B waits for Phase 2 (owner, 26 November 2026, P-1 in [
 | 11 | Privacy section lists every provider set, fallbacks included; request-counting test | AC-14 | S | 3, 9 |
 | 12 | Speed check: flowbench replay and timing log with the recommended pair after slices 2 and 10, written to `docs/results/` | AC-15 | S | 2, 10 |
 
+## Progress
+
+- Slices 1 to 7: merged.
+- Slice 8: OpenAI streaming speech is the catalogue entry `openai-speech` (protocol
+  `openai-realtime`, model `gpt-live-transcribe`), sharing the OpenAI key through `key_from`
+  (D-2). `hyperme-quality run` now builds speech through `any::speech`, so a config naming
+  `openai-speech` replays through it. Its measurement on the owner's samples waits for an OpenAI
+  key in the keychain (none on 27 November 2026).
+
 ## Later, one pull request each
 
 - A further speech provider (Soniox, AssemblyAI, ElevenLabs), each only after it gets Spanish and

@@ -4,12 +4,14 @@
 # To add a provider of your own, or point a built-in one at another host, copy an entry into
 # config.toml. An entry there with the same name replaces the built-in one. Keys never go here.
 #
-# protocol   how HyperMe talks to it: "speechmatics-rt" (streaming speech) or "openai-chat"
-#            (an OpenAI-compatible chat completions API, for cleanup)
+# protocol   how HyperMe talks to it: "speechmatics-rt" or "openai-realtime" (streaming
+#            speech), or "openai-chat" (an OpenAI-compatible chat completions API, for cleanup)
 # roles      the jobs it can do: "speech", "cleanup"
 # key_url    where "Get a key" goes
 # key_note   one line shown beside the key field while there is no key
 # key_required = false for a server that needs no key, such as one on this Mac
+# key_from   another entry whose key this one uses: one key per provider (OpenAI speech and
+#            OpenAI cleanup share the OpenAI key)
 # list_models  true when the key can list the models it offers
 # hide_models  listed models whose names contain one of these are not offered (embeddings,
 #            speech and image models)
@@ -33,6 +35,26 @@ id = "melia-1"
 price_per_hour_usd = 0.40
 prices_checked = "2026-11-26"
 measured = { release_to_text_ms = 426, p90_ms = 587, source = "docs/results/2026-11-25-eu-speech.md" }
+
+# OpenAI streaming speech (slice 8; PRD Q-5 and P-2: the first speech provider after the
+# recommended one, offered as the fallback). Checked on 27 November 2026 against
+# developers.openai.com/api/docs/guides/realtime-transcription: a transcription session on
+# wss://api.openai.com/v1/realtime?intent=transcription with no model in the URL, mono PCM16 at
+# 24 kHz, turn_detection null, manual commit. No language is sent (Phase 1 R-10).
+[providers.openai-speech]
+name = "OpenAI"
+order = 20
+protocol = "openai-realtime"
+endpoint = "wss://api.openai.com/v1/realtime?intent=transcription"
+key_url = "https://platform.openai.com/settings/organization/api-keys"
+key_from = "openai"
+roles = ["speech"]
+
+# developers.openai.com/api/docs/models/gpt-live-transcribe: USD 0.017 a minute of audio.
+[[providers.openai-speech.models]]
+id = "gpt-live-transcribe"
+price_per_hour_usd = 1.02
+prices_checked = "2026-11-27"
 
 [providers.groq]
 name = "Groq"

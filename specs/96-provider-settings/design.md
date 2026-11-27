@@ -72,6 +72,11 @@ add an entry or replace a built-in one by writing `[providers.<name>]`, which wi
 `needs_key` is spelled `key_required` (default true), because the config refuses any field whose
 name ends in `_key` as a likely secret.
 
+**One key, two protocols (slice 8).** OpenAI speech and OpenAI cleanup speak different
+protocols, so they are two catalogue entries, `openai-speech` and `openai`. The speech entry says
+`key_from = "openai"`: every key lookup goes through `Config::key_account`, so both read and
+write the one OpenAI keychain entry (D-2).
+
 **Migration (R-4).** An old `[speech]` or `[cleanup]` with `endpoint`, `key_url` or price fields
 still parses: those fields override the catalogue entry of the same provider, and the app does
 not rewrite the user's file. The catalogue itself comes from `default-config.toml` when the user's

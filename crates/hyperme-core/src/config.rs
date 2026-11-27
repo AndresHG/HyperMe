@@ -73,23 +73,30 @@ pub enum Protocol {
     SpeechmaticsRt,
     /// An OpenAI-compatible `/chat/completions` API.
     OpenaiChat,
+    /// OpenAI's Realtime API in a transcription session (slice 8).
+    OpenaiRealtime,
 }
 
 impl Protocol {
-    pub const ALL: [Protocol; 2] = [Protocol::SpeechmaticsRt, Protocol::OpenaiChat];
+    pub const ALL: [Protocol; 3] = [
+        Protocol::SpeechmaticsRt,
+        Protocol::OpenaiChat,
+        Protocol::OpenaiRealtime,
+    ];
 
     /// The name written in the catalogue.
     pub fn name(self) -> &'static str {
         match self {
             Protocol::SpeechmaticsRt => "speechmatics-rt",
             Protocol::OpenaiChat => "openai-chat",
+            Protocol::OpenaiRealtime => "openai-realtime",
         }
     }
 
     /// The roles a client of this protocol can fill.
     pub fn roles(self) -> &'static [Role] {
         match self {
-            Protocol::SpeechmaticsRt => &[Role::Speech],
+            Protocol::SpeechmaticsRt | Protocol::OpenaiRealtime => &[Role::Speech],
             Protocol::OpenaiChat => &[Role::Cleanup],
         }
     }
@@ -97,7 +104,7 @@ impl Protocol {
     /// The URL schemes its endpoint may use.
     fn schemes(self) -> &'static [&'static str] {
         match self {
-            Protocol::SpeechmaticsRt => &["wss", "ws"],
+            Protocol::SpeechmaticsRt | Protocol::OpenaiRealtime => &["wss", "ws"],
             Protocol::OpenaiChat => &["https", "http"],
         }
     }
@@ -162,6 +169,10 @@ pub struct ProviderEntry {
     /// False for a server that needs no key, such as one on this Mac (R-14).
     #[serde(default = "yes")]
     pub key_required: bool,
+    /// Another catalogue entry whose key this one uses: one key per provider, whatever the
+    /// protocol (D-2). OpenAI speech and OpenAI cleanup share the OpenAI key.
+    #[serde(default)]
+    pub key_from: Option<String>,
     /// The key can list the models it offers (R-15).
     #[serde(default)]
     pub list_models: bool,
@@ -765,6 +776,13 @@ impl Config {
         self.providers.get(id)
     }
 
+    /// The keychain entry that holds `provider`'s key: its own, or the one it shares (D-2).
+    pub fn key_account<'a>(&'a self, provider: &'a str) -> &'a str {
+        self.provider(provider)
+            .and_then(|p| p.key_from.as_deref())
+            .unwrap_or(provider)
+    }
+
     /// The providers that can fill `role`, in menu order: the recommended one first, then by
     /// each entry's `order`, then by name (R-7).
     pub fn providers_for(&self, role: Role) -> impl Iterator<Item = (&str, &ProviderEntry)> {
@@ -905,6 +923,17 @@ impl Config {
             1,
             600,
         )?;
+
+        for (id, entry) in &self.providers {
+            if let Some(from) = &entry.key_from
+                && (from == id || !self.providers.contains_key(from))
+            {
+                invalid(
+                    &format!("providers.{id}.key_from"),
+                    format!("is {from:?}: it must name another provider in the catalogue"),
+                )?;
+            }
+        }
 
         let s = &self.speech;
         let speech = self.role_provider(Role::Speech, "speech.provider", &s.provider, path)?;
