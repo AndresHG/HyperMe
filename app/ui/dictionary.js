@@ -1,10 +1,11 @@
 /* The Dictionary page (spec 93, R-10 to R-13, R-15, R-17), shared by Settings → Dictionary and
-   the Dictionary page in Home. It works like Wispr Flow's: "Add word" asks for a word; the
+   the Dictionary page in Home. It works like Wispr Flow's: one field for a word; the
    "Correct a misspelling" switch turns it into two fields, the misspelling and the right word.
    Each misspelling is its own row ("zen trix → Zentrix"); a word with no misspelling is a row of
    its own. The whole list is saved on each change through `dictionary_save`.
 
-   HyperDictionary.mount(root, { invoke, onError }) draws the page inside `root`. */
+   HyperDictionary.mount(root, { invoke, onError }) draws the page inside `root`. The add row is
+   always open: there is no separate "Add word" step. */
 (() => {
   const el = (tag, cls, text) => {
     const e = document.createElement(tag);
@@ -33,20 +34,9 @@
     let editing = -1;
     let confirmedCommon = '';
 
-    const bar = el('div', 'dict-bar');
-    const search = el('input', 'dict-search');
-    search.type = 'search';
-    search.placeholder = 'Search your words';
-    search.setAttribute('aria-label', 'Search your words');
-    const add = el('button', 'main', 'Add word');
-    bar.append(search, add);
-
-    const sheet = el('form', 'dict-sheet hidden');
-    const switchLabel = el('label', 'dict-switch');
-    const misspelling = el('input');
-    misspelling.type = 'checkbox';
-    misspelling.setAttribute('role', 'switch');
-    switchLabel.append(misspelling, el('span', '', 'Correct a misspelling'));
+    // One add row, always open (owner, 27 November 2026): type the word and press Add or ↵.
+    // The switch turns it into misspelling → word. Edit loads a row into it; Cancel leaves.
+    const sheet = el('form', 'dict-sheet');
     const fields = el('div', 'dict-fields');
     const wrong = el('input', 'dict-wrong');
     wrong.type = 'text';
@@ -57,15 +47,23 @@
     const right = el('input', 'dict-right');
     right.type = 'text';
     right.maxLength = 60;
-    fields.append(wrong, arrow, right);
-    const hint = el('p', 'dict-hint');
-    const buttons = el('div', 'dict-buttons');
-    const cancel = el('button', '', 'Cancel');
+    const cancel = el('button', 'hidden', 'Cancel');
     cancel.type = 'button';
     const submit = el('button', 'main', 'Add');
     submit.type = 'submit';
-    buttons.append(cancel, submit);
-    sheet.append(switchLabel, fields, hint, buttons);
+    fields.append(wrong, arrow, right, cancel, submit);
+    const switchLabel = el('label', 'dict-switch');
+    const misspelling = el('input');
+    misspelling.type = 'checkbox';
+    misspelling.setAttribute('role', 'switch');
+    switchLabel.append(misspelling, el('span', '', 'Correct a misspelling'));
+    const hint = el('p', 'dict-hint');
+    sheet.append(fields, switchLabel, hint);
+
+    const search = el('input', 'dict-search');
+    search.type = 'search';
+    search.placeholder = 'Filter the list';
+    search.setAttribute('aria-label', 'Filter your words');
 
     const list = el('div', 'dict-rows');
     const empty = el('p', 'dict-empty hidden', 'No words yet. Add names, products and jargon, or fix a word from History.');
@@ -84,7 +82,7 @@
     foot.append(where, tools, file);
 
     root.classList.add('dict');
-    root.replaceChildren(bar, sheet, list, empty, foot);
+    root.replaceChildren(sheet, search, list, empty, foot);
 
     function showMode() {
       const on = misspelling.checked;
@@ -102,17 +100,16 @@
       right.value = row.word;
       hint.textContent = '';
       submit.textContent = i >= 0 ? 'Save' : 'Add';
-      sheet.classList.remove('hidden');
+      cancel.classList.toggle('hidden', i < 0);
+      sheet.classList.toggle('editing', i >= 0);
       showMode();
       (misspelling.checked ? wrong : right).focus();
     }
-    function close() {
-      editing = -1;
-      sheet.classList.add('hidden');
-    }
+    const close = () => open(-1);
+    showMode();
 
-    function render() {
-      const q = key(search.value);
+    function render(typed) {
+      const q = key(search.value || (typeof typed === 'string' ? typed : ''));
       list.replaceChildren();
       rows.forEach((r, i) => {
         if (q && !key(r.word + ' ' + r.wrong).includes(q)) return;
@@ -165,11 +162,12 @@
       const next = rows.slice();
       const row = { word, wrong: heard };
       if (editing >= 0) next[editing] = row; else next.unshift(row);
-      if (await save(next)) close();
+      if (await save(next)) { close(); render(); }
     });
     misspelling.addEventListener('change', () => { showMode(); (misspelling.checked ? wrong : right).focus(); });
     wrong.addEventListener('input', () => { if (confirmedCommon) { confirmedCommon = ''; hint.textContent = ''; submit.textContent = editing >= 0 ? 'Save' : 'Add'; } });
-    add.addEventListener('click', () => open(-1));
+    // The list narrows as the word is typed, so a word already there shows before it is added.
+    right.addEventListener('input', () => { if (editing < 0 && !misspelling.checked) render(right.value); });
     cancel.addEventListener('click', close);
     sheet.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
     search.addEventListener('input', render);
