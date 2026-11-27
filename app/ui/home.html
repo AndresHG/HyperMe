@@ -62,16 +62,6 @@
   .search { display: flex; align-items: center; gap: 8px; width: 240px; flex: none; padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--muted); }
   .search:focus-within { border-color: var(--violet); box-shadow: 0 0 0 3px color-mix(in srgb, var(--violet) 22%, transparent); }
   .search input { border: 0; outline: none; background: transparent; color: CanvasText; font: inherit; flex: 1; min-width: 0; }
-  /* Up next (R-8): one line that opens Today. */
-  #upnext { display: flex; align-items: center; gap: 14px; padding: 12px 14px; border-radius: 12px; background: var(--soft); color: inherit; text-decoration: none; margin-bottom: 18px; cursor: default; }
-  #upnext[hidden] { display: none; }
-  #upnext .when { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 10px; background: var(--violet); color: #fff; flex: none; line-height: 1.1; }
-  #upnext .when small { font-size: 10px; font-weight: 600; opacity: .85; }
-  #upnext .when b { font: 700 14px ui-rounded, -apple-system, sans-serif; }
-  #upnext .what { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-  #upnext .what b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  #upnext .what span { color: var(--muted); }
-  #upnext .go { color: var(--violet-text); font-weight: 600; white-space: nowrap; }
   .suggested-line { margin: 0 0 16px; color: var(--muted); }
   .suggested-line a { color: var(--violet-text); }
   h2 { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 0 0 6px; }
@@ -123,6 +113,7 @@
   #blocks { margin-bottom: 18px; }
   /* Today (#92): tasks on the left in Things' style, the schedule on the right. */
   .today { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 28px; align-items: start; }
+  .tasks-title { margin-left: 8px; }
   .tasks { display: flex; flex-direction: column; gap: 2px; }
   .task { display: flex; align-items: center; gap: 12px; padding: 8px; border-radius: 8px; min-height: 38px; }
   .task:hover { background: var(--hover); }
@@ -191,28 +182,27 @@
         <h1 id="greeting">Hello</h1>
         <p class="lead" id="stats">&nbsp;</p>
       </div>
+      <p class="lead">Say "Hyper, add a task…"</p>
+    </header>
+    <p class="suggested-line" id="suggested-line" hidden><span id="suggested-count"></span> · <a href="#dictionary">Review</a></p>
+    <div id="blocks"></div>
+    <div id="today-root"></div>
+  </section>
+
+  <section id="history" aria-labelledby="history-title">
+    <header>
+      <div>
+        <h1 id="history-title">History</h1>
+        <p class="lead">Everything you dictated, newest first.</p>
+      </div>
       <label class="search" id="search-box">
         <svg aria-hidden="true" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3 3"/></svg>
         <input id="search" type="search" placeholder="Search dictations" aria-label="Search dictations" autocomplete="off">
       </label>
     </header>
-    <a href="#today" id="upnext" hidden></a>
-    <p class="suggested-line" id="suggested-line" hidden><span id="suggested-count"></span> · <a href="#dictionary">Review</a></p>
-    <div id="blocks"></div>
     <div class="off" id="off" hidden>History is off · <a href="#" id="off-link">Settings → Privacy</a>. Only dictations waiting for a retry are listed.</div>
     <div id="list"></div>
     <div class="more" id="more"></div>
-  </section>
-
-  <section id="today" aria-labelledby="today-title">
-    <header>
-      <div>
-        <h1 id="today-title">Today</h1>
-        <p class="lead" id="today-date"></p>
-      </div>
-      <p class="lead">Say "Hyper, add a task…"</p>
-    </header>
-    <div id="today-root"></div>
   </section>
 
   <section id="dictionary" aria-label="Dictionary">
@@ -239,12 +229,11 @@
     document.querySelectorAll('#sections a').forEach((a) => a.classList.toggle('on', a.dataset.id === id));
     if (id === 'home') {
       loadHome();
-      resetHistory();
-      if (block) document.getElementById('block-' + block)?.scrollIntoView();
-    } else if (id === 'today') {
-      redrawToday();
-      // Today on screen clears what was new there (R-21, R-22).
+      // The day on screen clears what was new there (R-21, R-22).
       emit('home://block-viewed', 'today');
+      if (block) document.getElementById('block-' + block)?.scrollIntoView();
+    } else if (id === 'history') {
+      resetHistory();
     } else if (id === 'dictionary') {
       dictionary.reload();
     }
@@ -253,7 +242,7 @@
   // Sidebar icons, drawn inline (no icon font, no request).
   const ICONS = {
     home: '<path d="M2.5 7 8 2.5 13.5 7v6.5h-11z"/>',
-    today: '<rect x="2.5" y="3" width="11" height="10.5" rx="2"/><path d="M2.5 6.5h11M5.5 1.8v2.4M10.5 1.8v2.4"/>',
+    history: '<circle cx="8" cy="8" r="6"/><path d="M8 4.8V8l2.2 1.6"/>',
     dictionary: '<path d="M3 2.5h8.5a1.5 1.5 0 0 1 1.5 1.5v9.5H4.5A1.5 1.5 0 0 1 3 12z"/><path d="M3 12a1.5 1.5 0 0 1 1.5-1.5H13"/>',
   };
   const icon = (paths, size = 16) => {
@@ -301,7 +290,7 @@
   // Spec 200, R-12: Report a problem from Help, and from a failed item (its trace leads the issue).
   $('open-report').addEventListener('click', (e) => { e.preventDefault(); openSettings('diagnostics/report'); });
   // ⌘, opens Settings at the section closest to where you are (docs/UX.md).
-  const settingsSection = () => (location.hash.startsWith('#today') ? 'connectors' : 'general');
+  const settingsSection = () => (location.hash.startsWith('#history') ? 'privacy' : 'general');
 
   document.addEventListener('keydown', (e) => {
     if (!e.metaKey || e.altKey || e.ctrlKey) return;
@@ -551,7 +540,7 @@
 
   main.addEventListener('scroll', () => {
     currentList().render();
-    if ($('home').classList.contains('on') && main.scrollTop + main.clientHeight > main.scrollHeight - 600) loadMoreHistory();
+    if ($('history').classList.contains('on') && main.scrollTop + main.clientHeight > main.scrollHeight - 600) loadMoreHistory();
   }, { passive: true });
   window.addEventListener('resize', () => currentList().render());
 
@@ -589,7 +578,7 @@
   }
 
   function move(step) {
-    if (!$('home').classList.contains('on')) return;
+    if (!$('history').classList.contains('on')) return;
     const list = currentList();
     const items = list.items;
     if (items.length === 0) return;
@@ -849,43 +838,23 @@
     return Math.floor(minutes / 60) + ' h ' + (minutes % 60) + ' min';
   }
 
-  // R-7: the two numbers, in one quiet line under the greeting.
+  // R-7: the date and the two numbers, in one quiet line under the greeting.
   async function loadStats() {
+    const date = dayFormat.format(new Date());
     try {
       const stats = await invoke('home_stats', { utcOffsetMinutes: -new Date().getTimezoneOffset() });
-      $('stats').textContent = stats.words_this_week.toLocaleString(LOCALE) + ' words this week · ' + duration(stats.seconds_saved) + ' saved';
+      $('stats').textContent = date + ' · ' + stats.words_this_week.toLocaleString(LOCALE) + ' words this week · ' + duration(stats.seconds_saved) + ' saved';
     } catch (_) {
-      $('stats').textContent = dayFormat.format(new Date());
+      $('stats').textContent = date;
     }
   }
 
   async function loadHome() {
     greet();
     await loadStats();
-    await loadUpNext();
     await loadSuggested();
     await loadBlocks();
-  }
-
-  // R-8: Up next, the next meeting and what is left in Today, as one line that opens Today.
-  async function loadUpNext() {
-    const line = $('upnext');
-    let page;
-    try { page = await invoke('home_today'); } catch (_) { line.hidden = true; return; }
-    const next = page.meetings.find((m) => m.now) || page.meetings.find((m) => !m.past);
-    const left = [];
-    if (page.lines.length) left.push(page.lines.length === 1 ? '1 task left today' : page.lines.length + ' tasks left today');
-    if (page.waiting.length) left.push(page.waiting.length + ' waiting');
-    if (!next && !left.length) { line.hidden = true; return; }
-    const when = el('span', 'when');
-    if (next && next.now) when.append(el('b', null, 'Now'));
-    else if (next && next.starts_in_min != null && next.starts_in_min < 100) when.append(el('small', null, 'IN'), el('b', null, next.starts_in_min + 'm'));
-    else if (next) when.append(el('b', null, next.start));
-    else when.append(el('b', null, String(page.lines.length)));
-    const what = el('span', 'what');
-    what.append(el('b', null, next ? next.title + ' · ' + next.start : 'Today'), el('span', null, left.join(' · ') || 'Nothing else today'));
-    line.replaceChildren(when, what, el('span', 'go', 'Open Today ›'));
-    line.hidden = false;
+    await renderToday($('today-root'));
   }
 
   // Spec 93, R-22: one line while dictionary suggestions wait; the pill shows nothing.
@@ -935,8 +904,7 @@
   }
 
   function redrawToday() {
-    if ($('today').classList.contains('on')) renderToday($('today-root'));
-    if ($('home').classList.contains('on')) loadUpNext();
+    if ($('home').classList.contains('on')) renderToday($('today-root'));
   }
 
   async function renderToday(root) {
@@ -944,15 +912,12 @@
     const typing = root.querySelector('input.add');
     const draft = typing ? typing.value : '';
     const focused = typing && document.activeElement === typing;
-    $('today-date').textContent = dayFormat.format(new Date());
     let page;
     try { page = await invoke('home_today'); } catch (e) {
       root.replaceChildren(el('p', 'error', String(e)));
       return;
     }
     const left = page.lines.length;
-    $('today-date').textContent = dayFormat.format(new Date()) + ' · ' + (page.done_today ? page.done_today + ' done, ' : '') + (left === 1 ? '1 to go' : left + ' to go');
-
     const tasks = el('div', 'tasks');
     const stale = [];
     for (const line of page.lines) {
@@ -975,7 +940,7 @@
     tasks.append(addRow);
 
     const column = el('div');
-    column.append(tasks);
+    column.append(el('h2', 'tasks-title', 'Today · ' + (page.done_today ? page.done_today + ' done, ' : '') + (left === 1 ? '1 to go' : left + ' to go')), tasks);
     // R-14: rolled over too often; ask once, below the list.
     for (const line of stale) column.append(staleRow(line, page));
     if (page.waiting.length) {
@@ -1124,7 +1089,7 @@
   // Typing anywhere in History goes to the search field. It is not focused on entry: a focused
   // field kept about 20 MB of graphics memory alive (AC-2).
   document.addEventListener('keydown', (e) => {
-    if (!$('home').classList.contains('on') || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (!$('history').classList.contains('on') || e.metaKey || e.ctrlKey || e.altKey) return;
     if (e.target instanceof HTMLInputElement || e.key.length !== 1 || $('search-box').hidden) return;
     if (selected && stateOf(selected.id).mode) return;
     $('search').focus();

@@ -22,8 +22,9 @@ pub struct Section {
     pub shortcut: &'static str,
 }
 
-/// The sidebar's sections in order (R-5, AC-4). The Home page holds the dictations, as Wispr
-/// Flow's does, and the day has its own Today section (V0.1 redesign, owner, 27 November 2026).
+/// The sidebar's sections in order (R-5, AC-4). Every view is a sidebar item, never a tab: Home
+/// is the day, History the dictations (V0.1 redesign, owner, 27 November 2026); Calendar and
+/// Commands join later.
 /// The Dictionary appears only while the app holds a dictionary (R-21); Style and Meetings come
 /// with their own changes.
 pub fn sections(dictionary_present: bool) -> Vec<Section> {
@@ -35,8 +36,8 @@ pub fn sections(dictionary_present: bool) -> Vec<Section> {
             shortcut: "⌘1",
         },
         Section {
-            id: "today",
-            title: "Today",
+            id: "history",
+            title: "History",
             page: "home.html",
             shortcut: "⌘2",
         },
@@ -59,9 +60,8 @@ pub struct Block {
     pub title: &'static str,
 }
 
-/// The Home page's blocks, in order (R-9), between Up next and the dictations. None ships: the
-/// day moved to the Today section (V0.1 redesign). A block that shows is listed here; the page
-/// asks for the list on load and on `home://refresh`.
+/// The Home page's blocks, in order (R-9), above the day. None ships now. A block that shows is
+/// listed here; the page asks for the list on load and on `home://refresh`.
 pub fn blocks() -> Vec<Block> {
     Vec::new()
 }
@@ -851,19 +851,19 @@ mod window {
 mod tests {
     use super::*;
 
-    /// AC-4 (R-5, R-21): Home, Today and, once a dictionary exists, Dictionary, in order, with
-    /// their keys. History lives on the Home page (V0.1 redesign, owner, 27 November 2026).
+    /// AC-4 (R-5, R-21): Home, History and, once a dictionary exists, Dictionary, in order, with
+    /// their keys; every view is a sidebar item (V0.1 redesign, owner, 27 November 2026).
     #[test]
     fn sections_list_only_what_exists() {
         let ids = |list: Vec<Section>| -> Vec<(&str, &str)> {
             list.iter().map(|s| (s.id, s.shortcut)).collect()
         };
-        assert_eq!(ids(sections(false)), [("home", "⌘1"), ("today", "⌘2")]);
+        assert_eq!(ids(sections(false)), [("home", "⌘1"), ("history", "⌘2")]);
         assert_eq!(
             ids(sections(true)),
-            [("home", "⌘1"), ("today", "⌘2"), ("dictionary", "⌘3")]
+            [("home", "⌘1"), ("history", "⌘2"), ("dictionary", "⌘3")]
         );
-        // R-9: no Home block ships; the day has its own section.
+        // R-9: no Home block ships; the day is the Home page itself.
         assert!(blocks().is_empty());
     }
 
@@ -876,15 +876,15 @@ mod tests {
             id: "brief",
             title: "Brief",
         }];
-        assert_eq!(resolve("today", &s, &blocks()), ("today", None));
+        assert_eq!(resolve("history", &s, &blocks()), ("history", None));
         assert_eq!(resolve("home", &s, &blocks()), ("home", None));
-        // Older callers and links: History is the Home page now.
-        assert_eq!(resolve("history", &s, &blocks()), ("home", None));
+        // The morning card's "Open Today": the day is the Home page.
+        assert_eq!(resolve("today", &s, &blocks()), ("home", None));
         assert_eq!(resolve("brief", &s, &brief), ("home", Some("brief")));
         assert_eq!(resolve("dictionary", &s, &brief), ("home", None));
         assert_eq!(resolve("", &s, &brief), ("home", None));
         assert_eq!(hash(("home", Some("brief"))), "home/brief");
-        assert_eq!(hash(("today", None)), "today");
+        assert_eq!(hash(("history", None)), "history");
     }
 
     /// AC-14 (R-24): the page keeps no dictation text in the web view's storage.
