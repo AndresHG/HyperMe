@@ -6,6 +6,8 @@ All notable changes to HyperMe are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.1.0-alpha.1] - 2026-11-27
+
 ### Fixed
 
 - The pill at rest showed a dark square with a row of white dots instead of the bead: the bead's
