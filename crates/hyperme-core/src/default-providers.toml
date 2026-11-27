@@ -10,6 +10,8 @@
 # key_url    where "Get a key" goes
 # key_required = false for a server that needs no key, such as one on this Mac
 # list_models  true when the key can list the models it offers
+# hide_models  listed models whose names contain one of these are not offered (embeddings,
+#            speech and image models)
 #
 # Each model: its prices with the date they were checked against the provider's page, and the
 # latency this project measured, with the result it comes from. Check prices before each release.
@@ -39,6 +41,7 @@ endpoint = "https://api.groq.com/openai/v1"
 key_url = "https://console.groq.com/keys"
 roles = ["cleanup"]
 list_models = true
+hide_models = ["whisper", "guard", "tts", "orpheus", "playai", "distil"]
 
 # From Groq's openai/gpt-oss-20b page: USD 0.075 per million input tokens and USD 0.30 per
 # million output tokens. The measurement is key release to cleaned text with Speechmatics.
@@ -65,6 +68,7 @@ endpoint = "https://api.openai.com/v1"
 key_url = "https://platform.openai.com/settings/organization/api-keys"
 roles = ["cleanup"]
 list_models = true
+hide_models = ["embedding", "whisper", "tts", "transcribe", "audio", "realtime", "image", "dall-e", "moderation", "sora", "search"]
 
 # developers.openai.com/api/docs/models/gpt-6-luna: standard tier.
 [[providers.openai.models]]
@@ -119,6 +123,7 @@ endpoint = "https://generativelanguage.googleapis.com/v1beta/openai"
 key_url = "https://aistudio.google.com/apikey"
 roles = ["cleanup"]
 list_models = true
+hide_models = ["embedding", "imagen", "veo", "tts", "aqa", "image", "live"]
 
 [[providers.gemini.models]]
 id = "gemini-3.5-flash-lite"

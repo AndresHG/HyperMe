@@ -333,7 +333,17 @@
         const model = modelField.value.trim();
         if (model) choose(r.role, chosen.id, model);
       });
-      const modelCell = el('td', {}, modelField, models);
+      const notice = el('div', { className: 'effort' });
+      // R-15: the key's own models, fetched when the menu is opened and cached by the app.
+      modelField.addEventListener('focus', async () => {
+        try {
+          const menu = await invoke('models_list', { provider: chosen.id });
+          models.textContent = '';
+          menu.models.forEach((m) => models.append(new Option(m)));
+          notice.textContent = menu.notice || '';
+        } catch (e) { notice.textContent = String(e); }
+      }, { once: true });
+      const modelCell = el('td', {}, modelField, models, notice);
       if (r.role === 'cleanup' && !pending[r.role]) {
         const info = chosen.models.find((m) => m.id === want.model);
         const efforts = ['off'].concat(info ? info.reasoning_effort : (r.reasoning_effort && r.reasoning_effort !== 'off' ? [r.reasoning_effort] : []));

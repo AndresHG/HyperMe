@@ -148,6 +148,10 @@ pub struct ProviderEntry {
     /// The key can list the models it offers (R-15).
     #[serde(default)]
     pub list_models: bool,
+    /// Listed models whose names contain any of these are left out of the menu: embeddings,
+    /// speech and image models the role cannot use (R-15, design.md "Model listing").
+    #[serde(default)]
+    pub hide_models: Vec<String>,
     /// Credit new accounts get, for onboarding's line about it.
     #[serde(default)]
     pub free_credit_usd: Option<f64>,

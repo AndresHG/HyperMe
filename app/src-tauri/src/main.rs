@@ -81,6 +81,7 @@ fn main() {
             settings::providers_reset,
             settings::provider_add,
             settings::provider_key_page,
+            settings::models_list,
             settings::settings_open,
             settings::app_restart,
             dictionary::dictionary_view,

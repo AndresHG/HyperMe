@@ -358,6 +358,50 @@ pub fn provider_add(app: AppHandle, name: String, endpoint: String) -> Result<St
     Ok(id)
 }
 
+/// A model menu for the page: the models, and one line when the listing failed.
+#[derive(Debug, Clone, Serialize)]
+pub struct ModelMenuView {
+    models: Vec<String>,
+    notice: Option<String>,
+}
+
+/// Model menus fetched this session, by provider (R-15). Only full lists are kept; a new key
+/// clears them.
+fn model_cache() -> &'static std::sync::Mutex<std::collections::HashMap<String, ModelMenuView>> {
+    static CACHE: std::sync::OnceLock<
+        std::sync::Mutex<std::collections::HashMap<String, ModelMenuView>>,
+    > = std::sync::OnceLock::new();
+    CACHE.get_or_init(Default::default)
+}
+
+/// The model menu of `provider`, fetched when the page opens the menu, never on the dictation
+/// path (R-15 to R-17).
+#[tauri::command]
+pub async fn models_list(app: AppHandle, provider: String) -> Result<ModelMenuView, String> {
+    let cached = model_cache()
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .get(&provider)
+        .cloned();
+    if let Some(menu) = cached {
+        return Ok(menu);
+    }
+    let config = load(&config_path(&app))?;
+    let menu =
+        hyperme_providers::models::model_menu(&config, &provider, &KeychainStore::new()).await;
+    let view = ModelMenuView {
+        models: menu.models,
+        notice: menu.notice,
+    };
+    if view.notice.is_none() {
+        model_cache()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(provider, view.clone());
+    }
+    Ok(view)
+}
+
 /// "Get a key" for any provider in the catalogue: opens its key page in the browser.
 #[tauri::command]
 pub fn provider_key_page(app: AppHandle, provider: String) -> Result<(), String> {
@@ -408,6 +452,11 @@ pub fn key_set(
         return Err(format!("{provider} is not in the provider catalogue"));
     }
     save_key(&app, &KeychainStore::new(), &provider, &key)?;
+    // Another key may offer other models.
+    model_cache()
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .remove(&provider);
     // A new key reaches the next dictation without a restart.
     if let Err(why) = crate::runtime::reload_providers(&app) {
         eprintln!("HyperMe: providers unchanged: {why}");

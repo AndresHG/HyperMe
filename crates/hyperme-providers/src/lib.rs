@@ -6,6 +6,7 @@ pub mod actions;
 pub mod any;
 pub mod cleanup;
 pub mod mcp;
+pub mod models;
 pub mod oauth;
 pub mod setup;
 pub mod speechmatics;

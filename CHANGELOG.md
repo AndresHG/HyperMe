@@ -15,6 +15,11 @@ All notable changes to HyperMe are recorded here. The format follows
 
 ### Added
 
+- Models from the key (issue 126, slice 4 of `specs/96-provider-settings`): opening a role's
+  model menu lists the models the provider's key offers (`GET /models`), the catalogue's first,
+  without embeddings, speech and image models (`hide_models` in the catalogue). The list is
+  cached for the session. When listing fails, the menu keeps the catalogue's models and says so
+  in one line. A model name can always be typed.
 - Settings → Providers, "Show advanced" (issue 125, slice 3 of `specs/96-provider-settings`):
   one table of roles, each with a provider menu (recommended first), a model field with the
   catalogue's models, the reasoning effort the model takes, the key state with an inline key
