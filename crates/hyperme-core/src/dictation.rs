@@ -18,6 +18,7 @@ use tokio::sync::{mpsc, watch};
 use tokio::time::{Instant, sleep_until, timeout};
 
 use crate::config::Config;
+use crate::dictionary::Dictionary;
 use crate::traits::{
     CleanupProvider, DictationId, Error, FocusInfo, History, Inserter, LiveSession, Microphone,
     Sound, Sounds, SpeechProvider, TimingLine, TimingLog,
@@ -38,6 +39,9 @@ pub struct Settings {
     pub sounds: bool,
     /// R-30: write one line of stage timings per dictation.
     pub timing_log: bool,
+    /// Spec 93, R-1: the user's dictionary, applied to every final transcript. The app loads it
+    /// from the `dictation.dictionary` file; empty by default.
+    pub dictionary: Dictionary,
 }
 
 impl Settings {
@@ -49,6 +53,7 @@ impl Settings {
             cleanup_deadline: Duration::from_millis(config.cleanup.deadline_ms),
             sounds: config.dictation.sounds,
             timing_log: config.timing.log,
+            dictionary: Dictionary::default(),
         }
     }
 }
@@ -610,7 +615,10 @@ async fn transcribe_and_clean<L: LiveSession, C: CleanupProvider>(
     };
     let transcript_at = Instant::now();
     let language = transcript.language.clone();
-    let raw = transcript.text.trim();
+    // Spec 93, R-1: the dictionary fixes the raw transcript once, so the short path, the
+    // cleanup and the raw fallback all get the user's words.
+    let (substituted, _) = settings.dictionary.apply(transcript.text.trim());
+    let raw = substituted.as_str();
     let words = raw.split_whitespace().count();
     // R-14.
     if words == 0 {

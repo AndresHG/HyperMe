@@ -8,6 +8,7 @@ use std::time::{Duration, Instant};
 
 use hyperme_core::config::Config;
 use hyperme_core::dictation::{Engine, Event, Parts, Providers, Settings, Status};
+use hyperme_core::dictionary::Dictionary;
 use hyperme_core::traits::{
     DictationId, Error, ErrorKind, History, Inserter, TimingLine, TimingLog,
 };
@@ -133,7 +134,11 @@ fn wire(app: &AppHandle, history: Arc<Mutex<HistoryInner>>) -> Result<(), String
     let dir = data_dir(app);
     let config =
         Config::load_or_create(&dir.join("config.toml")).map_err(|e| format!("Config: {e}"))?;
-    let providers = any::resolve(&config, &KeychainStore::new()).map_err(|e| e.message)?;
+    let dictionary = load_dictionary(config.dictation.dictionary.as_deref());
+    let providers = with_dictionary(
+        any::resolve(&config, &KeychainStore::new()).map_err(|e| e.message)?,
+        &dictionary,
+    );
     let (switch, providers) = watch::channel(Arc::new(providers));
     let timing = lock(app).timing.clone();
     *timing.lock().unwrap_or_else(PoisonError::into_inner) = timing_log(&config);
@@ -162,7 +167,11 @@ fn wire(app: &AppHandle, history: Arc<Mutex<HistoryInner>>) -> Result<(), String
         timing: SharedTiming(timing),
     };
     let (status_tx, status_rx) = mpsc::unbounded_channel();
-    let engine = Engine::new(parts, Settings::from_config(&config), status_tx);
+    let settings = Settings {
+        dictionary,
+        ..Settings::from_config(&config)
+    };
+    let engine = Engine::new(parts, settings, status_tx);
     tauri::async_runtime::spawn(engine.run(events_rx));
     tauri::async_runtime::spawn(forward_audio(app.clone(), mic_rx, events.clone()));
     tauri::async_runtime::spawn(show_statuses(app.clone(), status_rx));
@@ -183,7 +192,11 @@ pub fn reload_providers(app: &AppHandle) -> Result<(), String> {
     };
     let config = Config::load_or_create(&data_dir(app).join("config.toml"))
         .map_err(|e| format!("Config: {e}"))?;
-    let providers = any::resolve(&config, &KeychainStore::new()).map_err(|e| e.message)?;
+    let dictionary = load_dictionary(config.dictation.dictionary.as_deref());
+    let providers = with_dictionary(
+        any::resolve(&config, &KeychainStore::new()).map_err(|e| e.message)?,
+        &dictionary,
+    );
     let timing = lock(app).timing.clone();
     *timing.lock().unwrap_or_else(PoisonError::into_inner) = timing_log(&config);
     switch.send_replace(Arc::new(providers));
@@ -212,6 +225,32 @@ impl TimingLog for SharedTiming {
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .record(line);
+    }
+}
+
+/// The cleanup provider with the user's dictionary in its prompt (spec 93, R-4).
+fn with_dictionary(
+    providers: Providers<AnySpeech, AnyCleanup>,
+    dictionary: &Dictionary,
+) -> Providers<AnySpeech, AnyCleanup> {
+    Providers {
+        cleanup: providers.cleanup.with_dictionary(&dictionary.prompt_line()),
+        ..providers
+    }
+}
+
+/// The dictionary file named in the config (spec 93). A missing or unreadable file leaves
+/// dictation working with no dictionary.
+fn load_dictionary(path: Option<&std::path::Path>) -> Dictionary {
+    let Some(path) = path else {
+        return Dictionary::default();
+    };
+    match std::fs::read_to_string(path) {
+        Ok(text) => Dictionary::parse(&text),
+        Err(e) => {
+            eprintln!("HyperMe: dictionary {} not read: {e}", path.display());
+            Dictionary::default()
+        }
     }
 }
 
