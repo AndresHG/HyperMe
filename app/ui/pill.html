@@ -72,6 +72,20 @@
   .icon { position: absolute; left: 14px; top: 0; bottom: 0; display: flex; align-items: center; }
   .icon:empty { display: none; }
   .dot { width: 8px; height: 8px; border-radius: 50%; }
+  /* Hands-free (#167): ✕ cancels at the left, the red square stops at the right, after Wispr
+     Flow's bar. Shown only in the locked state. */
+  .hf {
+    position: absolute; top: 0; bottom: 0; margin: auto 0; width: 20px; height: 20px;
+    border: 0; padding: 0; border-radius: 50%; display: none; align-items: center;
+    justify-content: center; cursor: pointer; background: #26262b; color: var(--muted);
+    font: 600 11px -apple-system, system-ui, sans-serif;
+  }
+  .hf:hover { color: var(--text); background: #33333a; }
+  .hf.cancel { left: 8px; }
+  .hf.stop { right: 8px; background: rgba(255, 77, 79, 0.18); }
+  .hf.stop::before { content: ''; width: 7px; height: 7px; border-radius: 1.5px; background: var(--recording); }
+  .hf.stop:hover { background: rgba(255, 77, 79, 0.3); }
+  .pill.locked .hf { display: flex; }
   canvas { flex: none; display: none; }
   @media (prefers-reduced-motion: reduce) {
     /* Reduce motion: no spring, a short cross-fade instead. */
@@ -110,6 +124,8 @@
     <span id="icon" class="icon"></span>
     <canvas id="voice" aria-hidden="true"></canvas>
     <span id="label" class="label"></span>
+    <button id="cancel" class="hf cancel" aria-label="Cancel dictation" title="Cancel (Esc)">✕</button>
+    <button id="stop" class="hf stop" aria-label="Stop and paste" title="Stop and paste"></button>
   </div>
   <div id="card" class="card" role="dialog" aria-label="Morning card" hidden></div>
 <script>
@@ -210,12 +226,12 @@
 
   function frame(now) {
     raf = 0;
-    if (kind !== 'recording' && kind !== 'working') return;
+    if (!voiced(kind) && kind !== 'working') return;
     if (now - lastFrame >= FRAME_MS - 2) {
       lastFrame = now;
       frames++;
       ctx.clearRect(0, 0, WIDTH, HEIGHT);
-      if (kind === 'recording') {
+      if (voiced(kind)) {
         step(now);
         drawBars((i) => heights[i]);
       } else {
@@ -225,8 +241,11 @@
     if (!document.hidden) raf = requestAnimationFrame(frame);
   }
 
+  // Recording, held or hands-free: the bars follow the voice.
+  function voiced(k) { return k === 'recording' || k === 'locked'; }
+
   function animate() {
-    if (!raf && (kind === 'recording' || kind === 'working')) raf = requestAnimationFrame(frame);
+    if (!raf && (voiced(kind) || kind === 'working')) raf = requestAnimationFrame(frame);
   }
 
   function stop() {
@@ -298,9 +317,9 @@
     icon.innerHTML = icons[kind] || '';
     label.textContent = view.label;
     label.className = 'label' + (kind === 'quiet' || kind === 'notice' ? ' muted' : '');
-    const moving = kind === 'recording' || kind === 'working';
+    const moving = voiced(kind) || kind === 'working';
     canvas.style.display = moving ? 'block' : 'none';
-    if (kind === 'recording' && was !== 'recording') {
+    if (voiced(kind) && !voiced(was)) {
       // The bars rise from a flat line; the first frame is drawn now, inside the 50 ms budget.
       target = smooth = 0;
       history.fill(0);
@@ -342,6 +361,13 @@
       if (!heard && view) render(view);
     });
     pill.addEventListener('click', () => tauri.core.invoke('pill_clicked'));
+    // #167 AC-4: the hands-free buttons; the click stays off the pill itself.
+    for (const [id, stop] of [['stop', true], ['cancel', false]]) {
+      document.getElementById(id).addEventListener('click', (event) => {
+        event.stopPropagation();
+        tauri.core.invoke('pill_hands_free', { stop });
+      });
+    }
   }
 </script>
 </body>
