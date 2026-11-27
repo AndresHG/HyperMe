@@ -195,6 +195,8 @@ pub struct RemoteServer {
     today: Today,
     http: reqwest::Client,
     session: Mutex<Option<Session>>,
+    /// What each tool costs in quota units; others cost 1 (R-20).
+    units: std::collections::BTreeMap<String, u32>,
 }
 
 impl fmt::Debug for RemoteServer {
@@ -227,7 +229,13 @@ impl RemoteServer {
             today,
             http,
             session: Mutex::new(None),
+            units: std::collections::BTreeMap::new(),
         }
+    }
+
+    /// Counts each tool's calls at its cost in units, from the preset (R-20).
+    pub fn with_units(self, units: std::collections::BTreeMap<String, u32>) -> Self {
+        RemoteServer { units, ..self }
     }
 
     /// Every tool the server offers.
@@ -279,8 +287,12 @@ impl RemoteServer {
         rejected: Option<&AccessToken>,
     ) -> Result<Reply, Failure> {
         let (peer, token) = self.connect(rejected).await?;
+        let units = match request {
+            Request::CallTool(params) => self.units.get(params.name.as_ref()).copied().unwrap_or(1),
+            Request::ListTools => 1,
+        };
         self.log
-            .record(&self.auth.account, (self.today)(), &self.id, 1)
+            .record(&self.auth.account, (self.today)(), &self.id, units)
             .map_err(ConnectorError::Count)?;
         let result = match request {
             Request::ListTools => peer.list_all_tools().await.map(Reply::Tools),
@@ -346,4 +358,59 @@ fn service_error(error: ServiceError) -> ConnectorError {
 
 fn initialize_error(error: ClientInitializeError) -> ConnectorError {
     ConnectorError::Transport(error.to_string())
+}
+
+/// The pulls' tool caller (G-5): one account's servers by id, each call checked against the
+/// sync job's allowlist (R-22, AC-10). The answer is the tool's structured content, or its
+/// first text block read as JSON.
+#[derive(Debug)]
+pub struct McpCaller {
+    servers: Vec<RemoteServer>,
+    allowlist: Vec<String>,
+}
+
+impl McpCaller {
+    pub fn new(servers: Vec<RemoteServer>, allowlist: Vec<String>) -> Self {
+        McpCaller { servers, allowlist }
+    }
+}
+
+impl hyperme_core::sync::ToolCaller for McpCaller {
+    async fn call(
+        &self,
+        server: &str,
+        tool: &str,
+        args: serde_json::Value,
+    ) -> Result<serde_json::Value, hyperme_core::sync::SyncError> {
+        let remote = self
+            .servers
+            .iter()
+            .find(|s| s.id == server)
+            .ok_or_else(|| format!("no server {server} for this account"))?;
+        let arguments = match args {
+            serde_json::Value::Object(map) => Some(map),
+            serde_json::Value::Null => None,
+            other => return Err(format!("{tool}: arguments must be an object, not {other}").into()),
+        };
+        let result = remote
+            .call_tool(tool, arguments, &self.allowlist)
+            .await
+            .map_err(|e| match e {
+                ConnectorError::SignInAgain => hyperme_core::sync::SyncError::SignInAgain,
+                other => other.to_string().into(),
+            })?;
+        if result.is_error == Some(true) {
+            return Err(format!("{tool} answered with an error").into());
+        }
+        if let Some(structured) = result.structured_content {
+            return Ok(structured);
+        }
+        let text = result
+            .content
+            .iter()
+            .find_map(|block| block.as_text().map(|t| t.text.clone()))
+            .ok_or_else(|| format!("{tool} answered with no text"))?;
+        serde_json::from_str(&text)
+            .map_err(|_| format!("{tool} answered text that is not JSON").into())
+    }
 }

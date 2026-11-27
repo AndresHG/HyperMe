@@ -42,6 +42,17 @@ cargo test
 Tests must not call a paid API or need a key. Use the local fakes and test servers, as
 `spikes/flowbench` does. On Linux, `cpal` needs the ALSA headers (`libasound2-dev`).
 
+## Developer settings
+
+Environment variables for checking the app by eye and for measuring it. They change nothing a user
+sees unless set.
+
+| Variable | Effect |
+| --- | --- |
+| `HYPERME_NO_WALKTHROUGH=1` | The first-launch walkthrough stays closed (`scripts/measure-idle.sh` uses it) |
+| `HYPERME_SHOW_PILL=1` | The pill shows at launch, to check its shape |
+| `HYPERME_OPEN_HOME=<target>` | Home opens at launch at a section or block, such as `history` |
+
 ## Pull requests
 
 - Branch from `master`; never commit to `master`. One topic per pull request.

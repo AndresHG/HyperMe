@@ -38,6 +38,10 @@ struct Seen {
     auth: Vec<String>,
     unauthorized: usize,
     calls: Vec<String>,
+    /// What the read tool answers, as text; a fixed sentence when unset.
+    answer: Option<String>,
+    /// The arguments of each call, in order.
+    arguments: Vec<serde_json::Value>,
 }
 
 #[derive(Clone)]
@@ -72,11 +76,18 @@ impl ServerHandler for Tools {
         _context: RequestContext<RoleServer>,
     ) -> impl Future<Output = Result<CallToolResponse, ErrorData>> + MaybeSendFuture + '_ {
         let name = request.name.to_string();
-        self.seen.lock().unwrap().calls.push(name.clone());
+        let mut seen = self.seen.lock().unwrap();
+        seen.calls.push(name.clone());
+        seen.arguments.push(serde_json::Value::Object(
+            request.arguments.clone().unwrap_or_default(),
+        ));
         let text = match name.as_str() {
-            READ_TOOL => "3 synthetic events",
-            WRITE_TOOL => "synthetic draft",
-            _ => "unknown tool",
+            READ_TOOL => seen
+                .answer
+                .clone()
+                .unwrap_or_else(|| "3 synthetic events".to_owned()),
+            WRITE_TOOL => "synthetic draft".to_owned(),
+            _ => "unknown tool".to_owned(),
         };
         std::future::ready(Ok(CallToolResponse::Complete(CallToolResult::success(
             vec![ContentBlock::text(text)],
@@ -134,6 +145,16 @@ impl FakeMcp {
 
     pub fn unauthorized(&self) -> usize {
         self.seen.lock().unwrap().unauthorized
+    }
+
+    /// Makes the read tool answer with this text, such as synthetic JSON.
+    pub fn set_answer(&self, text: &str) {
+        self.seen.lock().unwrap().answer = Some(text.to_owned());
+    }
+
+    /// The arguments of each tool call, in order.
+    pub fn arguments(&self) -> Vec<serde_json::Value> {
+        self.seen.lock().unwrap().arguments.clone()
     }
 
     /// The tools called, in order.

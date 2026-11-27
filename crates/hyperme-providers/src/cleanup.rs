@@ -54,6 +54,9 @@ pub struct ChatCleanup {
     /// `None` leaves `reasoning_effort` out of the request.
     reasoning_effort: Option<String>,
     prompt: String,
+    /// The user's dictionary line (spec 93, R-4), between the prompt and the app line. Behind a
+    /// lock so a saved dictionary reaches a provider the engine shares (specs/96, R-8).
+    dictionary: std::sync::Mutex<String>,
     /// The `Authorization` header, marked sensitive.
     auth: HeaderValue,
 }
@@ -107,6 +110,7 @@ impl ChatCleanup {
             reasoning_effort: (config.reasoning_effort != "off")
                 .then(|| config.reasoning_effort.clone()),
             prompt,
+            dictionary: std::sync::Mutex::default(),
             auth,
         })
     }
@@ -142,10 +146,23 @@ impl ChatCleanup {
         Err(self.error(ErrorKind::Other, format!("HTTP {status}: {}", body.trim())))
     }
 
+    /// Adds the user's dictionary to the prompt (spec 93, R-4): `line` is
+    /// `Dictionary::prompt_line()`. It goes after the fixed prompt and before the app line, so
+    /// the prompt's start stays the same from one dictation to the next.
+    pub fn with_dictionary(self, line: &str) -> Self {
+        self.set_dictionary(line);
+        self
+    }
+
     /// The request body. The fixed prompt comes first so a provider's prompt cache keeps the
     /// first token fast; the app name (R-11) is its last line.
     fn request_body(&self, raw: &str, app: Option<&str>) -> Value {
-        let mut system = self.prompt.clone();
+        let dictionary = self
+            .dictionary
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        let mut system = format!("{}{dictionary}", self.prompt);
         if let Some(app) = app.filter(|a| !a.trim().is_empty()) {
             system.push_str(&format!("\n\nThe text will be pasted into {app}."));
         }
@@ -172,6 +189,15 @@ fn provider_error(provider: &str, kind: ErrorKind, what: impl fmt::Display) -> E
 }
 
 impl CleanupProvider for ChatCleanup {
+    fn set_dictionary(&self, line: &str) {
+        line.clone_into(
+            &mut self
+                .dictionary
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        );
+    }
+
     /// R-2: opens the connection on key-down, so the cleanup call finds it ready.
     async fn warm(&self) -> Result<(), Error> {
         let response = self
@@ -309,6 +335,32 @@ mod tests {
         let off = cleanup("off", "v4").unwrap().request_body("hi", None);
         assert!(off.get("reasoning_effort").is_none());
         assert_eq!(off["messages"][0]["content"], prompt_named("v4").unwrap());
+    }
+
+    /// Spec 93, AC-4: the dictionary line sits between the fixed prompt and the app line, so
+    /// two apps share the same prompt start.
+    #[test]
+    fn the_dictionary_goes_before_the_app_line() {
+        let line = "\n\nThe speaker's dictionary: LangChain, Zentrix.";
+        let with = cleanup("low", "v4").unwrap().with_dictionary(line);
+        let system = |app| {
+            with.request_body("hola", Some(app))["messages"][0]["content"]
+                .as_str()
+                .unwrap()
+                .to_owned()
+        };
+        let start = format!("{}{line}", prompt_named("v4").unwrap());
+        assert_eq!(
+            system("Slack"),
+            format!("{start}\n\nThe text will be pasted into Slack.")
+        );
+        assert!(system("Mail").starts_with(&start));
+        // An empty dictionary leaves the prompt as it was.
+        let none = cleanup("low", "v4").unwrap().with_dictionary("");
+        assert_eq!(
+            none.request_body("hi", None)["messages"][0]["content"],
+            prompt_named("v4").unwrap()
+        );
     }
 
     #[test]
