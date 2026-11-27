@@ -1,0 +1,14 @@
+{
+  "en-f01": "For the trip I need three things. First, the passport. Second, the charger for the laptop. Third, some euros in cash.",
+  "en-f02": "Hey team, quick update, the release is moving to Thursday because QA found two bugs in the login flow.",
+  "en-f03": "Hi Laura, thanks for sending the contract. I read it over the weekend and it looks fine to me. There is one thing I want to change in section four, the payment date. Could we move it to the end of the month? Thanks, Peter.",
+  "en-f04": "Things to buy, milk, eggs, bread, coffee and tomatoes.",
+  "en-f05": "Um, git commit dash m fix the login bug.",
+  "en-f06": "Uh, rename the function parse config to load config and update the tests.",
+  "en-f07": "The meeting went well. We agreed on the budget for next year. New paragraph. On hiring, we will open two roles in January.",
+  "es-f01": "Para mañana tengo que hacer tres cosas. Primero, llamar al banco. Segundo, enviar la factura a Marta. Y tercero, reservar la mesa para la cena.",
+  "es-f02": "Vale, nos vemos a las ocho en la puerta del cine.",
+  "es-f03": "Hola Carlos, te escribo para confirmar la reunión del martes a las diez. Si necesitas cambiar la hora, dímelo. Un saludo, Ana.",
+  "es-f04": "Los pasos para desplegar son, uno, hacer merge a master, dos, esperar a que pase el build, y tres, lanzar el script de despliegue.",
+  "es-f05": "El proyecto va bien y el equipo está contento con el ritmo. Punto y aparte. Sobre el presupuesto, necesitamos revisar los costes de la nube antes de enero."
+}

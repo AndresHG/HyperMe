@@ -78,11 +78,14 @@ impl CleanupProvider for FakeCleanup {
     async fn clean(
         &self,
         raw: &str,
-        _app: Option<&str>,
+        app: Option<&str>,
         on_text: &mut (dyn FnMut(&str) + Send),
     ) -> Result<(), Error> {
         let delay = if raw.contains("slow") { 2000 } else { 200 };
         sleep(Duration::from_millis(delay)).await;
+        if let Some(app) = app {
+            on_text(&format!("[{app}] "));
+        }
         let cleaned = raw.replace("eh ", "");
         let mut chars = cleaned.chars();
         let first: String = chars
@@ -141,9 +144,14 @@ async fn samples_run_through_the_app_state_machine() {
     ];
     let mut seen = Vec::new();
     let start = Instant::now();
-    let results = replay(&speech, &FakeCleanup, settings(), &samples, |r| {
-        seen.push(r.sample.clone())
-    })
+    let results = replay(
+        &speech,
+        &FakeCleanup,
+        settings(),
+        &samples,
+        &BTreeMap::new(),
+        |r| seen.push(r.sample.clone()),
+    )
     .await;
     assert_eq!(seen, ["es-01", "en-01", "en-02", "es-02"]);
 
@@ -191,7 +199,15 @@ async fn a_sample_shorter_than_the_minimum_hold_is_reported() {
         name: "en-09".to_owned(),
         pcm: vec![0; 2_400],
     };
-    let results = replay(&speech, &FakeCleanup, settings(), &[short], |_| {}).await;
+    let results = replay(
+        &speech,
+        &FakeCleanup,
+        settings(),
+        &[short],
+        &BTreeMap::new(),
+        |_| {},
+    )
+    .await;
     let error = results[0].outcome.as_ref().unwrap_err();
     assert!(error.contains("minimum hold"), "{error}");
 }
@@ -233,6 +249,7 @@ async fn saved_transcripts_replay_through_the_engine_without_audio() {
         &FakeCleanup,
         settings,
         &samples,
+        &BTreeMap::new(),
         &raw,
         Duration::ZERO,
         |_| {},
@@ -276,13 +293,17 @@ async fn a_replay_of_saved_transcripts_is_paced_and_reports_missing_ones() {
         &FakeCleanup,
         settings(),
         &samples,
+        // Formatting, AC-7: a sample's app from `apps.json` reaches the cleanup.
+        &[("es-03".to_owned(), "Notes".to_owned())].into(),
         &raw,
         Duration::from_secs(3),
         |_| {},
     )
     .await;
     assert!(results[0].outcome.is_ok());
-    assert!(results[2].outcome.is_ok());
+    let notes = &results[2].outcome.as_ref().unwrap().text;
+    assert!(notes.starts_with("[Notes] "), "{notes}");
+    assert!(!results[0].outcome.as_ref().unwrap().text.contains('['));
     let missing = results[1].outcome.as_ref().unwrap_err();
     assert!(missing.contains("no saved transcript"), "{missing}");
     // One gap between the two samples sent, plus two cleanups.
@@ -319,6 +340,7 @@ async fn a_fallback_after_a_cleanup_error_says_why() {
         &Limited,
         settings(),
         &[sample("es-01", 0)],
+        &BTreeMap::new(),
         &raw,
         Duration::ZERO,
         |_| {},

@@ -66,6 +66,38 @@ fn a_set_loads_samples_gold_and_names() {
     std::fs::remove_dir_all(&dir).unwrap();
 }
 
+/// Formatting, AC-7: a text set has no audio; its samples come from `raw.json`, each with its
+/// app, and it may live in the repository because its texts are invented. Audio beside it
+/// makes it a private set again.
+#[test]
+fn a_text_set_loads_from_its_transcripts_and_may_be_committed() {
+    let repo = temp_dir("text-set");
+    std::fs::create_dir_all(repo.join(".git")).unwrap();
+    let dir = repo.join("formatting");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("raw.json"), r#"{"en-f01": "a", "es-f01": "b"}"#).unwrap();
+    std::fs::write(dir.join("apps.json"), r#"{"en-f01": "Slack"}"#).unwrap();
+    // Without the marker it is neither a text set nor allowed in the repository.
+    assert!(load(&dir, &[], None).is_err());
+    assert!(check_location_with(&dir, |_, _| false).is_err());
+
+    std::fs::write(
+        dir.join(hyperme_quality::set::SYNTHETIC),
+        "Invented texts.\n",
+    )
+    .unwrap();
+    let set = load(&dir, &[], None).unwrap();
+    assert!(set.text_only);
+    let names: Vec<&str> = set.samples.iter().map(|s| s.name.as_str()).collect();
+    assert_eq!(names, ["en-f01", "es-f01"]);
+    assert_eq!(set.apps["en-f01"], "Slack");
+    assert!(check_location_with(&dir, |_, _| false).is_ok());
+
+    std::fs::write(dir.join("en-f01.wav"), wav_bytes(&[1])).unwrap();
+    assert!(check_location_with(&dir, |_, _| false).is_err());
+    std::fs::remove_dir_all(&repo).unwrap();
+}
+
 /// AC-4: the language comes from the sample's name.
 #[test]
 fn the_language_comes_from_the_name() {
