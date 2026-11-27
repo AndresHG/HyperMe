@@ -30,6 +30,28 @@ pub fn subscriber(sinks: Vec<Arc<dyn TraceSink>>) -> tracing::Dispatch {
     tracing::Dispatch::new(tracing_subscriber::registry().with(TraceLayer::new(sinks)))
 }
 
+/// [`subscriber`] with the warnings and errors file (R-14) as well.
+pub fn subscriber_with(
+    sinks: Vec<Arc<dyn TraceSink>>,
+    warnings: crate::warnings::WarningsLayer,
+) -> tracing::Dispatch {
+    use tracing_subscriber::layer::SubscriberExt;
+    tracing::Dispatch::new(
+        tracing_subscriber::registry()
+            .with(TraceLayer::new(sinks))
+            .with(warnings),
+    )
+}
+
+/// Installs [`subscriber_with`] for the whole process, once, as the app does at start-up.
+/// Returns `false` if a subscriber was already installed.
+pub fn install_with(
+    sinks: Vec<Arc<dyn TraceSink>>,
+    warnings: crate::warnings::WarningsLayer,
+) -> bool {
+    tracing::dispatcher::set_global_default(subscriber_with(sinks, warnings)).is_ok()
+}
+
 /// Installs [`subscriber`] for the whole process, once, as the app does at start-up. Returns
 /// `false` if a subscriber was already installed.
 pub fn install(sinks: Vec<Arc<dyn TraceSink>>) -> bool {

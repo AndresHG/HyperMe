@@ -206,9 +206,9 @@ where
             block.extend(data.iter().map(|&s| f32::from_sample(s)));
             pipeline.push(&block);
         },
-        // The error never carries audio, so it is safe to print. The next start rebuilds.
+        // The error never carries audio, so it is safe to log. The next start rebuilds.
         move |err| {
-            eprintln!("microphone: {err}");
+            tracing::warn!("microphone: {err}");
             if needs_rebuild(err.kind()) {
                 shared.broken.store(true, Ordering::SeqCst);
             }

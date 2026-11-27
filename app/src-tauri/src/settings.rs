@@ -319,7 +319,7 @@ fn rewrite_config(
 fn use_new_providers(app: &AppHandle) {
     providers_changed(app);
     if let Err(why) = crate::runtime::reload_providers(app) {
-        eprintln!("HyperMe: providers unchanged: {why}");
+        tracing::warn!("providers unchanged: {why}");
     }
 }
 
@@ -589,7 +589,7 @@ pub fn key_set(
         .remove(&provider);
     // A new key reaches the next dictation without a restart.
     if let Err(why) = crate::runtime::reload_providers(&app) {
-        eprintln!("HyperMe: providers unchanged: {why}");
+        tracing::warn!("providers unchanged: {why}");
     }
     Ok(())
 }

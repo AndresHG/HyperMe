@@ -14,6 +14,8 @@ rusqlite.workspace = true
 # The trace store's span fields and events, as small JSON objects (trace_store.rs). Already in
 # the workspace.
 serde_json.workspace = true
+# The microphone's errors as warning events (spec 182, R-14). Already in the tree.
+tracing = { version = "0.1.44", default-features = false, features = ["std"] }
 # The task store's local dates (task_store.rs), as in hyperme-core.
 time.workspace = true
 # time: the macOS clock's timer (presence.rs).
@@ -30,8 +32,6 @@ objc2-foundation = { version = "0.3.2", default-features = false, features = ["s
 objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "libc", "NSApplication", "NSEvent", "NSGraphicsContext", "NSPasteboard", "NSPasteboardItem", "NSResponder", "NSRunningApplication", "NSSound", "NSWorkspace"] }
 
 [dev-dependencies]
-# Runs the core's spans under a subscriber in the trace store tests. Already in the tree.
-tracing = { version = "0.1.44", default-features = false, features = ["std"] }
 tokio = { workspace = true, features = ["macros", "rt", "sync", "time"] }
 
 [lints]

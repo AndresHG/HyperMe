@@ -624,7 +624,7 @@ pub fn start(app: &tauri::AppHandle) {
     let store = match SqliteTaskStore::open(&path) {
         Ok(store) => Arc::new(store),
         Err(e) => {
-            eprintln!("HyperMe: daily tasks are off: {e}");
+            tracing::warn!("daily tasks are off: {e}");
             return;
         }
     };
@@ -662,7 +662,7 @@ pub fn start(app: &tauri::AppHandle) {
             while let Some(signal) = signals.recv().await {
                 // The scheduler sends this once, at a job's second failure in a day (R-36).
                 let hyperme_core::scheduler::Signal::JobFailed { job } = signal;
-                eprintln!("HyperMe: job {job} failed twice today");
+                tracing::warn!("job {job} failed twice today");
                 let alert = match config(&app).and_then(|c| Ok((registry(&app, &c)?, c))) {
                     Ok((registry, config)) => failed_alert(&job, &registry, &config.connectors),
                     Err(_) => crate::pill::AlertView {
@@ -680,7 +680,7 @@ pub fn start(app: &tauri::AppHandle) {
         let jobs = match job_table(&app, &store).await {
             Ok(jobs) => jobs,
             Err(e) => {
-                eprintln!("HyperMe: daily tasks are off: {e}");
+                tracing::warn!("daily tasks are off: {e}");
                 return;
             }
         };
@@ -769,7 +769,7 @@ pub fn jobs_changed(app: &tauri::AppHandle) {
             Ok(jobs) => {
                 let _ = commands.send(hyperme_core::scheduler::Command::SetJobs { jobs });
             }
-            Err(e) => eprintln!("HyperMe: jobs not rebuilt: {e}"),
+            Err(e) => tracing::warn!("jobs not rebuilt: {e}"),
         }
     });
 }

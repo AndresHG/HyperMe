@@ -1615,6 +1615,7 @@ dependencies = [
  "tauri-plugin-updater",
  "time",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
