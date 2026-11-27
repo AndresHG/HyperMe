@@ -285,7 +285,8 @@ impl Card {
 }
 
 /// Heights in points; `pill.html` uses the same ones, so the panel fits the card exactly.
-pub const CARD_PAD: f64 = 18.0;
+/// `--space-5` in the page.
+pub const CARD_PAD: f64 = 20.0;
 pub const CARD_TITLE: f64 = 24.0;
 pub const CARD_LINE: f64 = 20.0;
 pub const CARD_ROW: f64 = 32.0;
@@ -547,6 +548,15 @@ mod level_tests {
     }
 
     // ---- The morning card ----
+
+    /// The card's padding is `--space-5` in the page and `CARD_PAD` here, so the panel fits the
+    /// card exactly (docs/DESIGN.md, 4-point grid).
+    #[test]
+    fn the_card_padding_matches_the_page() {
+        let page = include_str!("../../ui/pill.html");
+        assert_eq!(CARD_PAD, 20.0);
+        assert!(page.contains("padding: var(--space-5); border-radius: var(--radius-sheet);"));
+    }
 
     use super::{
         CARD_KEYS, CARD_LINE, CARD_PAD, CARD_ROW, CARD_TITLE, CARD_WIDTH, card_size, morning_view,

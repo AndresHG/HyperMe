@@ -3,57 +3,41 @@
 <head>
 <meta charset="utf-8">
 <title>HyperMe pill</title>
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="components.css">
 <style>
   /* Tokens and states from docs/UX.md, "Visual language", "The pill" and "The voice while you
      talk" (U-14, U-15). The pill is always dark, whatever the system theme (U-16). */
-  :root {
-    --surface: #111113;
-    --edge: rgba(255, 255, 255, 0.06);
-    --text: #ffffff;
-    --muted: #a1a1aa;
-    --recording: #ff4d4f;
-    --done: #22c55e;
-    --raw: #f59e0b;
-  }
-  html, body {
-    margin: 0;
-    height: 100%;
-    background: transparent;
-    overflow: hidden;
-    -webkit-user-select: none;
-    user-select: none;
-    cursor: default;
-  }
+  html, body { height: 100%; background: transparent; overflow: hidden; }
   /* The panel is transparent: only the capsule (or the bead) is drawn, centred in it. */
   body { display: flex; align-items: center; justify-content: center; }
   .pill {
     position: relative;
-    box-sizing: border-box;
     width: 100%;
     height: 100%;
-    border-radius: 999px;
-    background: var(--surface);
-    box-shadow: inset 0 0 0 1px var(--edge);
-    color: var(--text);
+    border-radius: var(--radius-capsule);
+    background: var(--color-pill-bg);
+    box-shadow: inset 0 0 0 1px var(--color-pill-border);
+    color: var(--color-pill-label);
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 0 30px;
-    font: 500 13px ui-rounded, -apple-system, system-ui, sans-serif;
+    padding: 0 var(--space-8);
+    font: 500 var(--text-body) var(--font-system);
     white-space: nowrap;
     /* The one spring from the bead's centre for every size change (docs/UX.md, 180 ms). */
-    transition: width 180ms cubic-bezier(0.22, 1, 0.36, 1), height 180ms cubic-bezier(0.22, 1, 0.36, 1);
+    transition: width var(--duration) var(--easing), height var(--duration) var(--easing);
   }
-  .pill.error, .pill.retry { box-shadow: inset 0 0 0 1.5px var(--recording); cursor: pointer; }
+  .pill.error, .pill.retry { box-shadow: inset 0 0 0 1.5px var(--color-recording);  }
   /* The bead at rest (U-13, B: glass): a small dark glass bead with a soft highlight. Still:
      no animation runs while idle. */
   .pill.idle {
     width: 14px;
     height: 14px;
     padding: 0;
-    background: radial-gradient(circle at 35% 30%, #4a4a55 0%, #18181d 60%, #0b0b0e 100%);
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18), 0 1px 3px rgba(0, 0, 0, 0.35);
-    cursor: pointer;
+    background: var(--pill-bead);
+    box-shadow: var(--shadow-bead);
+    
   }
   .pill.idle::after {
     content: '';
@@ -62,8 +46,8 @@
     top: 2.5px;
     width: 4px;
     height: 4px;
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.35);
+    border-radius: var(--radius-capsule);
+    background: var(--pill-bead-highlight);
   }
   .pill.idle > * { display: none !important; }
   /* Until the first view arrives, and whenever the panel is hidden, nothing is drawn. */
@@ -71,20 +55,20 @@
   /* The state's mark sits at the left edge, so the label and the voice stay in the exact centre. */
   .icon { position: absolute; left: 14px; top: 0; bottom: 0; display: flex; align-items: center; }
   .icon:empty { display: none; }
-  .dot { width: 8px; height: 8px; border-radius: 50%; }
+  .dot { width: 8px; height: 8px; border-radius: var(--radius-capsule); }
   /* Hands-free (#167): ✕ cancels at the left, ✓ stops and pastes at the right. Shown only in
      the locked state. */
   .hf {
     position: absolute; top: 0; bottom: 0; margin: auto 0; width: 20px; height: 20px;
-    border: 0; padding: 0; border-radius: 50%; display: none; align-items: center;
-    justify-content: center; cursor: pointer; background: #26262b; color: var(--muted);
-    font: 600 11px -apple-system, system-ui, sans-serif;
+    border: 0; padding: 0; border-radius: var(--radius-capsule); display: none; align-items: center;
+    justify-content: center;  background: var(--color-pill-hover); color: var(--color-pill-label-secondary);
+    font: 600 var(--text-subheadline) var(--font-system);
   }
-  .hf:hover { color: var(--text); background: #33333a; }
+  .hf:hover { color: var(--color-pill-label); background: var(--color-pill-pressed); }
   .hf.cancel { left: 8px; }
   /* Green check, not a red stop: it accepts the dictation and pastes it (owner, 27 November). */
-  .hf.stop { right: 8px; background: rgba(34, 197, 94, 0.2); color: var(--done); font-size: 12px; }
-  .hf.stop:hover { background: rgba(34, 197, 94, 0.32); color: var(--done); }
+  .hf.stop { right: 8px; background: var(--color-done-soft); color: var(--color-done); font-size: var(--text-callout); }
+  .hf.stop:hover { background: var(--color-done-soft-strong); color: var(--color-done); }
   .pill.locked .hf { display: flex; }
   canvas { flex: none; display: none; }
   @media (prefers-reduced-motion: reduce) {
@@ -93,30 +77,30 @@
   }
   .label { overflow: hidden; text-overflow: ellipsis; }
   .label:empty { display: none; }
-  .muted { color: var(--muted); }
+  .muted { color: var(--color-pill-label-secondary); }
   /* The morning card (#92, docs/ux/daily-cards.svg). Heights match pill.rs (CARD_*), so the
      panel fits it exactly. It never takes focus, so it is answered with a click. */
   .card {
-    box-sizing: border-box; width: 100%; height: 100%; padding: 18px; border-radius: 18px;
-    background: var(--surface); box-shadow: inset 0 0 0 1px #3a3a40; color: var(--text);
-    font: 12px -apple-system, system-ui, sans-serif; overflow: hidden;
+    width: 100%; height: 100%; padding: var(--space-5); border-radius: var(--radius-sheet);
+    background: var(--color-pill-bg); box-shadow: inset 0 0 0 1px var(--color-pill-border-strong); color: var(--color-pill-label);
+    font: var(--text-callout) var(--font-system); overflow: hidden;
   }
   .card[hidden] { display: none; }
-  .card h1 { margin: 0; height: 24px; font: 700 15px ui-rounded, -apple-system, sans-serif; }
-  .card .line { height: 20px; line-height: 20px; color: var(--muted); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .card .line.strong { color: var(--text); font-size: 12px; }
-  .card .task { height: 28px; margin-bottom: 4px; border-radius: 9px; background: #1b1b1f; display: flex; align-items: center; gap: 8px; padding: 0 12px; }
-  .card .task i { width: 7px; height: 7px; border-radius: 50%; box-shadow: inset 0 0 0 1px var(--muted); flex: none; }
-  .card .task.due i { background: var(--raw); box-shadow: none; }
-  .card .task.unblocked i { background: #7c5cff; box-shadow: none; }
+  .card h1 { margin: 0; height: 24px; font: 700 var(--text-title3) var(--font-system); }
+  .card .line { height: 20px; line-height: 20px; color: var(--color-pill-label-secondary); font-size: var(--text-subheadline); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .card .line.strong { color: var(--color-pill-label); font-size: var(--text-callout); }
+  .card .task { height: 28px; margin-bottom: var(--space-1); border-radius: var(--radius-card); background: var(--color-pill-raised); display: flex; align-items: center; gap: var(--space-2); padding: 0 var(--space-3); }
+  .card .task i { width: 7px; height: 7px; border-radius: var(--radius-capsule); box-shadow: inset 0 0 0 1px var(--color-pill-label-secondary); flex: none; }
+  .card .task.due i { background: var(--color-raw); box-shadow: none; }
+  .card .task.unblocked i { background: var(--color-accent); box-shadow: none; }
   .card .task span { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .card .task em { font-style: normal; font-size: 11px; color: #6b6b73; }
-  .card .task.due em { color: var(--raw); }
-  .card .task.unblocked em { color: #a08cff; }
-  .card .keys { height: 42px; display: flex; align-items: flex-end; gap: 8px; }
-  .card button { font: 600 11px -apple-system, sans-serif; height: 26px; padding: 0 12px; border-radius: 7px; border: 0; background: #26262b; color: var(--muted); cursor: pointer; }
-  .card button.main { background: #7c5cff; color: #fff; }
-  .card .bad { color: var(--recording); }
+  .card .task em { font-style: normal; font-size: var(--text-subheadline); color: var(--color-pill-label-tertiary); }
+  .card .task.due em { color: var(--color-raw); }
+  .card .task.unblocked em { color: var(--color-pill-accent-text); }
+  .card .keys { height: 42px; display: flex; align-items: flex-end; gap: var(--space-2); }
+  .card button { font: 600 var(--text-subheadline) var(--font-system); height: 26px; padding: 0 var(--space-3); border-radius: var(--radius-control); border: 0; background: var(--color-pill-hover); color: var(--color-pill-label-secondary);  }
+  .card button.main { background: var(--color-accent); color: var(--color-on-accent); }
+  .card .bad { color: var(--color-recording); }
 </style>
 </head>
 <body>
@@ -131,10 +115,10 @@
 <script>
   // Each state has an icon and a word, never colour alone (docs/UX.md).
   const icons = {
-    recording: '<span class="dot" style="background:var(--recording)"></span>',
+    recording: '<span class="dot" style="background:var(--color-recording)"></span>',
     notice: '<span class="muted">🔒</span>',
-    error: '<span style="color:var(--recording)">!</span>',
-    retry: '<span style="color:var(--recording)">↻</span>',
+    error: '<span style="color:var(--color-recording)">!</span>',
+    retry: '<span style="color:var(--color-recording)">↻</span>',
   };
   const pill = document.getElementById('pill');
   const icon = document.getElementById('icon');

@@ -1,0 +1,113 @@
+/* Shared components (docs/DESIGN.md, "Components"), built only from tokens.css. Every page links
+   tokens.css, then this file. A page adds layout; it never restyles a control. Classes carry a
+   `ui-` prefix so they never meet a page's own names. */
+
+/* Behaviour every page shares (docs/DESIGN.md, "Behaviour"). */
+*, *::before, *::after { box-sizing: border-box; }
+html { overscroll-behavior: none; }
+body {
+  margin: 0;
+  font: var(--weight-regular) var(--text-body) / var(--leading-body) var(--font-system);
+  color: var(--color-label);
+  -webkit-font-smoothing: antialiased;
+  -webkit-user-select: none;
+  user-select: none;
+  cursor: default;
+}
+/* Content the user may copy. */
+.ui-selectable, input, textarea, [contenteditable] { -webkit-user-select: text; user-select: text; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: default; }
+:focus-visible { outline: var(--focus-ring-width) solid var(--color-focus-ring); outline-offset: 0; }
+/* Links that open the browser are the one place for the hand. */
+a.ui-link { color: var(--color-accent-text); text-decoration: none; cursor: pointer; }
+a.ui-link:hover { text-decoration: underline; }
+
+/* Button: default, primary, borderless. */
+.ui-button {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--space-1);
+  height: var(--control-height); padding: 0 var(--control-padding-x);
+  border: var(--border-width) solid var(--color-control-border); border-radius: var(--radius-control);
+  background: var(--color-control-bg); color: var(--color-label);
+  font-size: var(--text-body); white-space: nowrap;
+}
+.ui-button:active { background: var(--color-pressed); }
+.ui-button:disabled { color: var(--color-label-tertiary); }
+.ui-button.primary { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-on-accent); }
+.ui-button.primary:active { filter: brightness(0.92); }
+.ui-button.borderless { border-color: transparent; background: transparent; }
+.ui-button.borderless:hover { background: var(--color-hover); }
+.ui-button.small { height: var(--control-height-small); font-size: var(--text-callout); }
+.ui-button.large { height: var(--control-height-large); padding: 0 var(--control-padding-x-large); }
+
+/* Field: text, number, password, search, and the pop-up button (select). */
+.ui-field {
+  height: var(--control-height); padding: 0 var(--field-padding-x);
+  border: var(--border-width) solid var(--color-control-border); border-radius: var(--radius-control);
+  background: var(--color-control-bg); color: var(--color-label);
+  font-size: var(--text-body); min-width: 0;
+}
+.ui-field::placeholder { color: var(--color-label-tertiary); }
+.ui-field:focus { outline: none; border-color: var(--color-accent); box-shadow: 0 0 0 var(--focus-ring-width) var(--color-focus-ring); }
+textarea.ui-field { height: auto; padding: var(--space-1) var(--field-padding-x); resize: vertical; }
+
+/* Toggle: a checkbox drawn as a switch. */
+.ui-switch {
+  appearance: none; flex: none; position: relative; margin: 0;
+  width: var(--space-8); height: var(--space-5); border-radius: var(--radius-capsule);
+  background: var(--color-fill); box-shadow: inset 0 0 0 var(--border-width) var(--color-control-border);
+  transition: background var(--duration-fast) var(--easing);
+}
+.ui-switch::after {
+  content: ''; position: absolute; top: 2px; left: 2px; width: var(--space-4); height: var(--space-4);
+  border-radius: var(--radius-capsule); background: var(--color-on-accent); box-shadow: var(--shadow-card);
+  transition: left var(--duration-fast) var(--easing);
+}
+.ui-switch:checked { background: var(--color-accent); box-shadow: none; }
+.ui-switch:checked::after { left: calc(100% - var(--space-4) - 2px); }
+
+/* Segmented control: radio inputs in labels inside `.ui-segmented`. */
+.ui-segmented {
+  display: inline-flex; padding: var(--segment-inset); gap: var(--segment-inset); border-radius: var(--radius-control);
+  background: var(--color-fill);
+}
+.ui-segmented label {
+  display: flex; align-items: center; justify-content: center; gap: var(--space-1);
+  height: calc(var(--control-height) - 4px); padding: 0 var(--space-3); border-radius: var(--radius-small);
+  font-size: var(--text-body);
+}
+.ui-segmented input { position: absolute; opacity: 0; pointer-events: none; }
+.ui-segmented label:has(input:checked) { background: var(--color-control-bg); box-shadow: var(--shadow-card); font-weight: var(--weight-medium); }
+.ui-segmented label:has(input:focus-visible) { outline: var(--focus-ring-width) solid var(--color-focus-ring); }
+
+/* List row: a row in a list, with hover, pressed and selected states. */
+.ui-row {
+  display: flex; align-items: center; gap: var(--space-2);
+  min-height: var(--row-height); padding: var(--space-1) var(--space-2); border-radius: var(--radius-control);
+}
+.ui-row:hover { background: var(--color-hover); }
+.ui-row:active { background: var(--color-pressed); }
+.ui-row.selected, .ui-row[aria-selected="true"], .ui-row[aria-current="page"] { background: var(--color-accent-selected); }
+
+/* Card: a group of rows or content on its own surface (System Settings' grouped rows). */
+.ui-card {
+  border: var(--border-width) solid var(--color-separator); border-radius: var(--radius-card);
+  background: var(--color-card-bg);
+}
+.ui-card > .ui-card-row {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-4);
+  padding: var(--space-3) var(--space-4); border-top: var(--border-width) solid var(--color-separator);
+}
+.ui-card > .ui-card-row:first-child { border-top: 0; }
+
+/* Menu: a popover list of actions. */
+.ui-menu {
+  min-width: 200px; padding: var(--space-1); border-radius: var(--radius-card);
+  background: var(--color-content-bg); box-shadow: var(--shadow-popover);
+}
+.ui-menu > [role="menuitem"] {
+  display: flex; justify-content: space-between; gap: var(--space-4);
+  padding: var(--space-1) var(--space-2); border-radius: var(--radius-small);
+}
+.ui-menu > [role="menuitem"]:hover, .ui-menu > [role="menuitem"].selected { background: var(--color-accent); color: var(--color-on-accent); }
+.ui-menu kbd { font: inherit; color: inherit; opacity: 0.6; }
