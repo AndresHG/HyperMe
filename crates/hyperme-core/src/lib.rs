@@ -10,6 +10,7 @@ pub mod connector_settings;
 pub mod connector_setup;
 pub mod connectors;
 pub mod cost;
+pub mod diagnostics;
 pub mod dictation;
 pub mod dictionary;
 pub mod fallback;
