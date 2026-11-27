@@ -49,8 +49,8 @@
   .day { font-size: 11px; font-weight: 600; color: var(--muted); margin: 18px 0 4px; }
   /* Rows sit in a list that keeps only those near the viewport (AC-2): each is placed by its
      offset, collapsed rows have a fixed height, and the first and last of a day round the group. */
-  #recent, #list { position: relative; }
-  #recent > .row, #recent > .day, #list > .row, #list > .day { position: absolute; left: 0; right: 0; }
+  #list { position: relative; }
+  #list > .row, #list > .day { position: absolute; left: 0; right: 0; }
   .day { height: 40px; box-sizing: border-box; padding-top: 18px; margin: 0 !important; }
   .row { display: grid; grid-template-columns: 52px 110px 1fr; gap: 10px; align-items: baseline; padding: 8px 12px; height: 36px; box-sizing: border-box; overflow: hidden; background: var(--card); border: 1px solid var(--line); border-top: 0; }
   .row.first { border-top: 1px solid var(--line); border-radius: 12px 12px 0 0; }
@@ -66,6 +66,31 @@
   .error { color: var(--bad); padding: 18px 0; }
   #blocks:empty { display: none; }
   #blocks { margin-bottom: 24px; }
+  /* #92: Today leads Home: meetings, the day's tasks, "Waiting on", and one line to add. */
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; margin-bottom: 18px; }
+  .card > div { display: flex; align-items: center; gap: 10px; min-height: 36px; padding: 6px 12px; border-top: 1px solid var(--line); }
+  .card > div:first-child { border-top: 0; }
+  .card time { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 12px; min-width: 84px; }
+  .card .title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .meet.past { color: var(--faint); }
+  .meet .soon { color: var(--violet); font-size: 12px; font-weight: 600; }
+  .tag { font-size: 11px; padding: 1px 6px; border-radius: 999px; background: var(--hover); color: var(--muted); white-space: nowrap; }
+  .tag.new { background: var(--on); color: var(--violet); font-weight: 600; }
+  .tag.warn { color: var(--warn); }
+  .card button { font: inherit; font-size: 12px; padding: 3px 8px; border-radius: 6px; border: 1px solid var(--line); background: Canvas; color: inherit; cursor: default; }
+  .card button:hover { border-color: var(--violet); }
+  .task .check { width: 16px; height: 16px; padding: 0; border-radius: 999px; border: 1.5px solid var(--faint); flex: none; }
+  .task .check:hover { border-color: var(--violet); background: var(--on); }
+  .task .acts { display: none; gap: 4px; }
+  .task:hover .acts, .task:focus-within .acts { display: flex; }
+  .task.stale { flex-wrap: wrap; }
+  .task .ask { flex-basis: 100%; display: flex; align-items: center; gap: 6px; padding-left: 26px; font-size: 12px; color: var(--muted); }
+  .card input { font: inherit; padding: 4px 8px; border-radius: 6px; border: 1px solid var(--line); background: Canvas; color: inherit; }
+  .card input:focus { outline: none; border-color: var(--violet); }
+  .card input.add { flex: 1; border: 0; padding: 4px 0 4px 26px; background: transparent; }
+  .card input.name { flex: 1; }
+  .wait .title { color: var(--muted); }
+  .sub { font-size: 12px; color: var(--muted); margin: -10px 0 18px; }
   .search { width: 100%; padding: 8px 12px; border-radius: 9px; border: 1px solid var(--line); background: Canvas; color: inherit; font: inherit; margin: 0 0 8px; }
   .search:focus { outline: none; border-color: var(--violet); box-shadow: 0 0 0 3px color-mix(in srgb, var(--violet) 25%, transparent); }
   .more { color: var(--faint); font-size: 12px; padding: 12px 0; text-align: center; }
@@ -121,8 +146,6 @@
       </div>
     </header>
     <div id="blocks"></div>
-    <h2>Recent</h2>
-    <div id="recent"></div>
   </section>
 
   <section id="history" aria-label="History">
@@ -361,10 +384,10 @@
     top(id) { const e = this.entries.find((x) => x.item && x.item.id === id); return e ? e.top : 0; }
   }
 
-  const recentList = new List($('recent'), () => (info.history ? 'No dictations in the last 7 days. Hold your shortcut and talk.' : 'History is off, and no dictation is waiting for a retry.'));
+  // Dictations live only in History; Home leads with the day (owner, 27 November 2026).
   const historyList = new List($('list'), null);
-  const lists = [recentList, historyList];
-  const currentList = () => ($('history').classList.contains('on') ? historyList : recentList);
+  const lists = [historyList];
+  const currentList = () => historyList;
 
   function dayNode(label) {
     const d = document.createElement('div');
@@ -443,6 +466,7 @@
   }
 
   function move(step) {
+    if (!$('history').classList.contains('on')) return;
     const list = currentList();
     const items = list.items;
     if (items.length === 0) return;
@@ -686,28 +710,9 @@
     greet();
     await loadStats();
     await loadBlocks();
-    if (selected && selected.list === recentList) selected = null;
-    try {
-      // The last 7 days, a page at a time; with history off, only what waits for a retry.
-      const since = startOfDay(Date.now()) - 6 * DAY_MS;
-      let items = [];
-      let before = null;
-      if (!info.history) items = (await invoke('home_failed')).filter((i) => i.started_ms >= since);
-      else for (;;) {
-        const page = await invoke('home_page', { before, limit: PAGE });
-        const fresh = page.filter((i) => i.started_ms >= since);
-        items = items.concat(fresh);
-        if (page.length < PAGE || fresh.length < page.length) break;
-        before = cursor(page);
-      }
-      recentList.set(items);
-    } catch (error) {
-      recentList.set([]);
-      $('recent').replaceChildren(Object.assign(document.createElement('p'), { className: 'error', textContent: String(error) }));
-    }
   }
 
-  // Blocks above Recent come from other features (#92, #93); none ship yet.
+  // The Home page's blocks come from other features: Today (#92) first.
   const seen = new IntersectionObserver((entries) => {
     for (const entry of entries) {
       if (entry.isIntersecting) {
@@ -726,9 +731,141 @@
       const title = document.createElement('h2');
       title.textContent = b.title;
       div.append(title);
+      if (b.id === 'today') renderToday(div);
       seen.observe(div);
       return div;
     }));
+  }
+
+  // ---- Today (#92, slice 8): meetings, tasks, "Waiting on", add ----
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+  const button = (label, onClick, aria) => { const b = el('button', null, label); if (aria) b.setAttribute('aria-label', aria); b.addEventListener('click', onClick); return b; };
+
+  async function taskAct(id, action, value = null) {
+    try { await invoke('tasks_act', { id, action, value }); } catch (e) { alertLine(String(e)); }
+    redrawToday();
+  }
+
+  function alertLine(text) {
+    const block = $('block-today');
+    block?.querySelector('.error')?.remove();
+    block?.append(el('p', 'error', text));
+  }
+
+  function redrawToday() {
+    const block = $('block-today');
+    if (block) renderToday(block);
+  }
+
+  async function renderToday(div) {
+    // Keep what is being typed in the add field across a redraw.
+    const typing = div.querySelector('input.add');
+    const draft = typing ? typing.value : '';
+    const focused = typing && document.activeElement === typing;
+    let page;
+    try { page = await invoke('home_today'); } catch (e) {
+      div.replaceChildren(div.querySelector('h2'), el('p', 'error', String(e)));
+      return;
+    }
+    const parts = [div.querySelector('h2')];
+    if (page.done_today) parts.push(el('p', 'sub', page.done_today + ' done today'));
+
+    if (page.meetings.length) {
+      const card = el('div', 'card');
+      for (const m of page.meetings) {
+        const row = el('div', 'meet' + (m.past ? ' past' : ''));
+        row.append(el('time', null, m.start + '–' + m.end), el('span', 'title', m.title));
+        if (m.now) row.append(el('span', 'soon', 'now'));
+        else if (m.starts_in_min != null) row.append(el('span', 'soon', 'in ' + duration(m.starts_in_min * 60)));
+        if (m.link && !m.past) row.append(button('Join', () => invoke('tasks_open_meeting', { url: m.link }).catch((e) => alertLine(String(e)))));
+        card.append(row);
+      }
+      parts.push(card);
+    }
+
+    const tasks = el('div', 'card');
+    for (const line of page.lines) tasks.append(taskRow(line, page));
+    const add = el('input', 'add');
+    add.placeholder = 'Add a task for today';
+    add.setAttribute('aria-label', 'Add a task for today');
+    add.value = draft;
+    add.addEventListener('keydown', async (e) => {
+      if (e.key !== 'Enter' || !add.value.trim()) return;
+      e.preventDefault();
+      try { await invoke('tasks_add', { title: add.value }); add.value = ''; } catch (err) { alertLine(String(err)); }
+      await renderToday(div);
+      div.querySelector('input.add')?.focus();
+    });
+    const addRow = el('div', 'task');
+    addRow.append(add);
+    tasks.append(addRow);
+    parts.push(tasks);
+
+    if (page.waiting.length) {
+      parts.push(el('h2', null, 'Waiting on'));
+      const card = el('div', 'card');
+      for (const w of page.waiting) {
+        const row = el('div', 'wait');
+        row.append(el('span', 'title', w.title));
+        if (w.new) row.append(el('span', 'tag new', 'new'));
+        row.append(el('span', 'tag', 'after ' + w.on));
+        card.append(row);
+      }
+      parts.push(card);
+    }
+    div.replaceChildren(...parts);
+    if (focused) add.focus();
+  }
+
+  function taskRow(line, page) {
+    const row = el('div', 'task' + (line.stale ? ' stale' : ''));
+    row.append(button('', () => taskAct(line.id, 'done'), 'Done: ' + line.title));
+    row.lastChild.className = 'check';
+    const title = el('span', 'title', line.title);
+    title.title = 'Double-click to rename';
+    title.addEventListener('dblclick', () => rename(row, title, line));
+    row.append(title);
+    for (const mark of line.marks) row.append(el('span', 'tag' + (mark === 'new' ? ' new' : mark === 'overdue' ? ' warn' : ''), mark));
+    const acts = el('span', 'acts');
+    acts.append(
+      button('Tomorrow', () => taskAct(line.id, 'tomorrow')),
+      button('Rename', () => rename(row, title, line)),
+      button('Drop', () => taskAct(line.id, 'drop')),
+    );
+    row.append(acts);
+    if (line.stale) {
+      // R-14: rolled over too often; ask once.
+      const ask = el('span', 'ask', 'Rolled over ' + line.rolled + ' times:');
+      const day = el('input');
+      day.type = 'date';
+      day.min = page.tomorrow;
+      day.setAttribute('aria-label', 'Pick a day for ' + line.title);
+      day.addEventListener('change', () => { if (day.value) taskAct(line.id, 'move', day.value); });
+      ask.append(button('Keep', () => taskAct(line.id, 'keep')), el('span', null, 'or pick a day'), day, button('Drop', () => taskAct(line.id, 'drop')));
+      row.append(ask);
+    }
+    return row;
+  }
+
+  function rename(row, title, line) {
+    const input = el('input', 'name');
+    input.value = line.title;
+    input.setAttribute('aria-label', 'Rename ' + line.title);
+    title.replaceWith(input);
+    input.focus();
+    input.select();
+    let done = false;
+    const finish = (save) => {
+      if (done) return;
+      done = true;
+      if (save && input.value.trim() && input.value.trim() !== line.title) taskAct(line.id, 'rename', input.value);
+      else redrawToday();
+    };
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+      else if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+    });
+    input.addEventListener('blur', () => finish(true));
   }
 
   // ---- History (R-10, R-12, R-19) ----
@@ -800,7 +937,7 @@
   async function showNew() {
     try {
       const page = info.history ? await invoke('home_page', { before: null, limit: PAGE }) : await invoke('home_failed');
-      for (const list of [recentList, historyList]) {
+      for (const list of [historyList]) {
         if (list === historyList && (historyQuery.trim() || list.items.length === 0)) continue;
         const newest = list.items.length ? list.items[0].started_ms : -Infinity;
         const fresh = page.filter((i) => !list.has(i.id) && i.started_ms >= newest);

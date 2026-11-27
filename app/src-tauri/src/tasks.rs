@@ -9,11 +9,15 @@
 use std::future::Future;
 use std::sync::Arc;
 
-use hyperme_core::brief::{self, DayCounts, Meeting, MorningCard, Now, Part, Sources};
+use hyperme_core::brief::{self, DayCounts, Meeting, MorningCard, Now, Part, Sources, TodayView};
+use hyperme_core::schedule::Zone;
 use hyperme_core::scheduler::{Clock, Job, JobKind, JobStatus, JobStore, Runner};
 use hyperme_core::sync;
-use hyperme_core::tasks::{DayRules, TaskStore};
+use hyperme_core::tasks::{
+    DayRules, Finish, Group, NewTask, Source, TaskId, TaskStore, TaskUpdate,
+};
 use hyperme_platform::task_store::SqliteTaskStore;
+use serde::Serialize;
 use time::{Date, Duration, PlainDateTime, UtcDateTime};
 
 /// The sync jobs that fill each part of the morning card, by job name.
@@ -60,16 +64,40 @@ fn ms(at: UtcDateTime) -> i64 {
     (at - UtcDateTime::UNIX_EPOCH).whole_milliseconds() as i64
 }
 
+/// Today's date by the day start, and when it began (Unix ms), at `at`.
+fn today_of(zone: &dyn Zone, rules: &DayRules, at: UtcDateTime) -> (Date, i64) {
+    let offset = zone.offset_at(at);
+    let local = at.to_offset(offset);
+    let today = rules.day_of(PlainDateTime::new(local.date(), local.time()));
+    let began = rules.starts_at(today).assume_offset(offset).to_utc();
+    (today, ms(began))
+}
+
+/// Today as Home shows it, from the store at `now` (R-10, R-21).
+async fn load_today(
+    store: &SqliteTaskStore,
+    zone: &(dyn Zone + Sync),
+    rules: &DayRules,
+    now: UtcDateTime,
+) -> Result<TodayView, String> {
+    let (today, day_began_ms) = today_of(zone, rules, now);
+    let snapshot = store
+        .snapshot(today, day_began_ms)
+        .await
+        .map_err(|e| e.to_string())?;
+    let at = Now {
+        today,
+        day_began_ms,
+        rules: *rules,
+        morning_shown_ms: store.morning_at(today).map_err(|e| e.to_string())?,
+        today_seen_ms: store.seen_at(today).map_err(|e| e.to_string())?,
+    };
+    Ok(brief::today(&snapshot, &at))
+}
+
 impl<C: Clock + Sync, Y: Syncer, U: Ui> DailyRunner<C, Y, U> {
-    /// Today's date by the day start, and when it began, at `at`.
     fn today(&self, at: UtcDateTime) -> (Date, i64) {
-        let offset = self.clock.offset_at(at);
-        let local = at.to_offset(offset);
-        let today = self
-            .rules
-            .day_of(PlainDateTime::new(local.date(), local.time()));
-        let began = self.rules.starts_at(today).assume_offset(offset).to_utc();
-        (today, ms(began))
+        today_of(&self.clock, &self.rules, at)
     }
 
     /// The morning card from the store and the caches, never the network (R-18). A part
@@ -137,7 +165,7 @@ impl<C: Clock + Sync, Y: Syncer, U: Ui> DailyRunner<C, Y, U> {
             day_began_ms,
             rules: self.rules,
             morning_shown_ms: Some(shown_ms),
-            today_seen_ms: None,
+            today_seen_ms: self.store.seen_at(today).map_err(|e| e.to_string())?,
         };
         let sources = Sources {
             meetings,
@@ -186,6 +214,258 @@ impl<C: Clock + Sync, Y: Syncer, U: Ui> Runner for DailyRunner<C, Y, U> {
     }
 }
 
+// --- Home's Today (slice 8) -----------------------------------------------------------------
+
+/// One of today's meetings as Home lists it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct MeetingRow {
+    pub title: String,
+    /// Local times, `09:30`.
+    pub start: String,
+    pub end: String,
+    /// A link to join or open the event.
+    pub link: Option<String>,
+    /// Minutes until the next meeting starts; set on that one only.
+    pub starts_in_min: Option<i64>,
+    /// Under way now.
+    pub now: bool,
+    /// Over already.
+    pub past: bool,
+}
+
+/// One task line in Today.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct LineRow {
+    pub id: TaskId,
+    pub title: String,
+    /// Small marks after the title: `new`, `unblocked`, `blocker dropped`, `due 16:00`,
+    /// `overdue` (R-11, R-21).
+    pub marks: Vec<String>,
+    /// Rolled over too often: ask keep, pick a day or drop (R-14).
+    pub stale: bool,
+    pub rolled: u32,
+}
+
+/// A task under "Waiting on", with the blocker's title (R-10).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct WaitingRow {
+    pub id: TaskId,
+    pub title: String,
+    pub on: String,
+    pub new: bool,
+}
+
+/// The Today block: meetings, then the tasks in order, then "Waiting on".
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct TodayPage {
+    /// `YYYY-MM-DD`, today and tomorrow, for the day picker.
+    pub today: String,
+    pub tomorrow: String,
+    pub meetings: Vec<MeetingRow>,
+    pub lines: Vec<LineRow>,
+    pub waiting: Vec<WaitingRow>,
+    pub done_today: usize,
+    /// Something arrived that the user has not seen (R-21): the attention dot.
+    pub has_new: bool,
+}
+
+fn hhmm(at: UtcDateTime, zone: &dyn Zone) -> String {
+    let t = at.to_offset(zone.offset_at(at)).time();
+    format!("{:02}:{:02}", t.hour(), t.minute())
+}
+
+/// Builds the Today block from the view and today's meetings at `now`.
+pub fn today_page(
+    view: &TodayView,
+    meetings: &[sync::Meeting],
+    now: UtcDateTime,
+    zone: &dyn Zone,
+) -> TodayPage {
+    let next = meetings.iter().position(|m| m.start > now);
+    let meetings = meetings
+        .iter()
+        .enumerate()
+        .map(|(i, m)| MeetingRow {
+            title: m.title.clone(),
+            start: hhmm(m.start, zone),
+            end: hhmm(m.end, zone),
+            link: m.url.clone(),
+            // Rounded up, so a meeting 30 s away is "in 1 min", never "in 0 min".
+            starts_in_min: (Some(i) == next).then(|| ((m.start - now).whole_seconds() + 59) / 60),
+            now: m.start <= now && now < m.end,
+            past: m.end <= now,
+        })
+        .collect();
+    let lines = view
+        .lines
+        .iter()
+        .map(|l| {
+            let mut marks = Vec::new();
+            if l.new {
+                marks.push("new".to_owned());
+            }
+            match l.group {
+                Group::Unblocked {
+                    blocker_dropped: true,
+                } => marks.push("blocker dropped".to_owned()),
+                Group::Unblocked { .. } => marks.push("unblocked".to_owned()),
+                _ => {}
+            }
+            if let Some(due) = l.due {
+                if due.date < view.date {
+                    marks.push("overdue".to_owned());
+                } else if let (true, Some(t)) = (due.date == view.date, due.time) {
+                    marks.push(format!("due {:02}:{:02}", t.hour(), t.minute()));
+                }
+            }
+            LineRow {
+                id: l.id,
+                title: l.title.clone(),
+                marks,
+                stale: l.stale,
+                rolled: l.rolled,
+            }
+        })
+        .collect::<Vec<_>>();
+    let waiting = view
+        .waiting
+        .iter()
+        .map(|w| WaitingRow {
+            id: w.id,
+            title: w.title.clone(),
+            on: w.on.clone(),
+            new: w.new,
+        })
+        .collect::<Vec<_>>();
+    let has_new = view.lines.iter().any(|l| l.new) || view.waiting.iter().any(|w| w.new);
+    TodayPage {
+        today: view.date.to_string(),
+        tomorrow: view.date.next_day().unwrap_or(view.date).to_string(),
+        meetings,
+        lines,
+        waiting,
+        done_today: view.done_today,
+        has_new,
+    }
+}
+
+/// A `YYYY-MM-DD` day, as the page's day picker sends it.
+pub fn parse_day(text: &str) -> Option<Date> {
+    let mut parts = text.splitn(3, '-').map(str::parse::<i32>);
+    let (y, m, d) = (
+        parts.next()?.ok()?,
+        parts.next()?.ok()?,
+        parts.next()?.ok()?,
+    );
+    let month = time::Month::try_from(u8::try_from(m).ok()?).ok()?;
+    Date::from_calendar_date(y, month, u8::try_from(d).ok()?).ok()
+}
+
+/// What a row in Today does (R-4, R-14).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Act {
+    Done,
+    Drop,
+    /// Plan it for tomorrow.
+    Tomorrow,
+    /// Plan it for this day.
+    Move(Date),
+    Rename(String),
+    /// Keep a stale task in today, asking no more (R-14).
+    Keep,
+}
+
+/// Adds a task for today from Home's one-line field (R-1, R-4).
+pub async fn add_today(
+    store: &SqliteTaskStore,
+    title: &str,
+    today: Date,
+    now_ms: i64,
+) -> Result<TaskId, String> {
+    let title = title.trim();
+    if title.is_empty() {
+        return Err("Type what to do".to_owned());
+    }
+    let id = store
+        .add(NewTask {
+            title: title.to_owned(),
+            notes: None,
+            day: Some(today),
+            due: None,
+            source: Source::HyperMe,
+            blocked_by: Vec::new(),
+            created_at: now_ms,
+            arrived_day: today,
+        })
+        .await
+        .map_err(|e| e.to_string())?;
+    store
+        .count(today, hyperme_platform::task_store::DayCounter::Captured, 1)
+        .map_err(|e| e.to_string())?;
+    Ok(id)
+}
+
+/// Applies a row action and counts it in the day log (R-4, R-29).
+pub async fn act(
+    store: &SqliteTaskStore,
+    id: TaskId,
+    action: Act,
+    today: Date,
+    now_ms: i64,
+) -> Result<(), String> {
+    use hyperme_platform::task_store::DayCounter;
+    let e = |e: hyperme_core::tasks::TaskError| e.to_string();
+    let day = |day: Date| TaskUpdate {
+        title: None,
+        notes: None,
+        day: Some(Some(day)),
+        due: None,
+    };
+    match action {
+        Act::Done => {
+            store.finish(id, Finish::Done, now_ms).await.map_err(e)?;
+            store.count(today, DayCounter::Done, 1).map_err(e)?;
+        }
+        Act::Drop => {
+            store.finish(id, Finish::Dropped, now_ms).await.map_err(e)?;
+            store.count(today, DayCounter::Dropped, 1).map_err(e)?;
+        }
+        Act::Tomorrow | Act::Move(_) => {
+            let to = match action {
+                Act::Move(to) => to,
+                _ => today.next_day().ok_or("no tomorrow")?,
+            };
+            if to < today {
+                return Err("Pick today or a later day".to_owned());
+            }
+            store.update(id, day(to)).await.map_err(e)?;
+            if to > today {
+                store.count(today, DayCounter::Moved, 1).map_err(e)?;
+            }
+        }
+        Act::Rename(title) => {
+            let title = title.trim();
+            if title.is_empty() {
+                return Err("A task needs a title".to_owned());
+            }
+            store
+                .update(
+                    id,
+                    TaskUpdate {
+                        title: Some(title.to_owned()),
+                        notes: None,
+                        day: None,
+                        due: None,
+                    },
+                )
+                .await
+                .map_err(e)?;
+        }
+        Act::Keep => store.keep(id, today).map_err(e)?,
+    }
+    Ok(())
+}
+
 // --- The app's wiring ----------------------------------------------------------------------
 
 /// Sent to the pill when the morning card is built (slice C draws it).
@@ -195,6 +475,7 @@ pub const MORNING: &str = "tasks://morning";
 pub struct Tasks {
     commands: tokio::sync::mpsc::UnboundedSender<hyperme_core::scheduler::Command>,
     store: Arc<SqliteTaskStore>,
+    rules: DayRules,
 }
 
 fn config(app: &tauri::AppHandle) -> Result<hyperme_core::config::Config, String> {
@@ -251,7 +532,23 @@ pub fn start(app: &tauri::AppHandle) {
     app.manage(Tasks {
         commands,
         store: store.clone(),
+        rules,
     });
+    // Home showed Today: what arrived until now is no longer "new" (R-21), and the dot goes.
+    {
+        use tauri::Listener;
+        let (app, store) = (app.clone(), store.clone());
+        app.clone()
+            .listen_any(crate::home::BLOCK_VIEWED, move |event| {
+                if event.payload() != "\"today\"" {
+                    return;
+                }
+                let now = UtcDateTime::now();
+                let (today, _) = today_of(&MacClock, &rules, now);
+                let _ = store.mark_seen(today, ms(now));
+                crate::home::set_attention(&app, false);
+            });
+    }
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
         while let Some(signal) = signals.recv().await {
@@ -308,6 +605,77 @@ pub fn jobs_changed(app: &tauri::AppHandle) {
     });
 }
 
+// --- Commands from Home ----------------------------------------------------------------------
+
+fn state(app: &tauri::AppHandle) -> Result<(Arc<SqliteTaskStore>, DayRules), String> {
+    use tauri::Manager;
+    let tasks = app
+        .try_state::<Tasks>()
+        .ok_or("Daily tasks are off: the task store could not open")?;
+    Ok((tasks.store.clone(), tasks.rules))
+}
+
+async fn page_now(app: &tauri::AppHandle) -> Result<TodayPage, String> {
+    use hyperme_platform::presence::MacClock;
+    let (store, rules) = state(app)?;
+    let now = UtcDateTime::now();
+    let view = load_today(&store, &MacClock, &rules, now).await?;
+    let meetings = sync::meetings_on(&*store, view.date, &MacClock)?;
+    Ok(today_page(&view, &meetings, now, &MacClock))
+}
+
+/// The Today block for Home.
+#[tauri::command]
+pub async fn home_today(app: tauri::AppHandle) -> Result<TodayPage, String> {
+    page_now(&app).await
+}
+
+/// "Add a task": a title, for today.
+#[tauri::command]
+pub async fn tasks_add(app: tauri::AppHandle, title: String) -> Result<(), String> {
+    let (store, rules) = state(&app)?;
+    let now = UtcDateTime::now();
+    let (today, _) = today_of(&hyperme_platform::presence::MacClock, &rules, now);
+    add_today(&store, &title, today, ms(now)).await.map(drop)
+}
+
+/// A row action: `done`, `drop`, `tomorrow`, `keep`, `move` with `value` a `YYYY-MM-DD` day,
+/// or `rename` with `value` the new title.
+#[tauri::command]
+pub async fn tasks_act(
+    app: tauri::AppHandle,
+    id: TaskId,
+    action: String,
+    value: Option<String>,
+) -> Result<(), String> {
+    let (store, rules) = state(&app)?;
+    let now = UtcDateTime::now();
+    let (today, _) = today_of(&hyperme_platform::presence::MacClock, &rules, now);
+    let action = match (action.as_str(), value) {
+        ("done", _) => Act::Done,
+        ("drop", _) => Act::Drop,
+        ("tomorrow", _) => Act::Tomorrow,
+        ("keep", _) => Act::Keep,
+        ("rename", Some(title)) => Act::Rename(title),
+        ("move", Some(day)) => Act::Move(parse_day(&day).ok_or(format!("{day} is not a day"))?),
+        (other, _) => return Err(format!("{other} is not a task action")),
+    };
+    act(&store, id, action, today, ms(now)).await
+}
+
+/// Opens a meeting's link in the browser; only web links.
+#[tauri::command]
+pub fn tasks_open_meeting(url: String) -> Result<(), String> {
+    if !url.starts_with("https://") {
+        return Err("Only web links open from Home".to_owned());
+    }
+    std::process::Command::new("open")
+        .arg(url)
+        .status()
+        .map(drop)
+        .map_err(|e| e.to_string())
+}
+
 /// The store as the scheduler's job table.
 struct SharedStore(Arc<SqliteTaskStore>);
 
@@ -325,6 +693,15 @@ struct AppUi(tauri::AppHandle);
 impl Ui for AppUi {
     fn refresh(&self) {
         crate::home::refresh(&self.0, "home");
+        // Something new in Today lights the dot until Home shows it (R-21).
+        let app = self.0.clone();
+        tauri::async_runtime::spawn(async move {
+            if let Ok(page) = page_now(&app).await
+                && page.has_new
+            {
+                crate::home::set_attention(&app, true);
+            }
+        });
     }
     fn morning(&self, _card: &MorningCard, update: bool) {
         use tauri::Emitter;
@@ -758,5 +1135,176 @@ mod tests {
         let result = block_on(s.runner.run(&sync_job()));
         assert_eq!(result, Err("no network".to_owned()));
         assert_eq!(*s.ui.refreshes.lock().unwrap(), 0);
+    }
+
+    // --- Home's Today ---
+
+    fn meeting(title: &str, start: UtcDateTime, minutes: i64) -> sync::Meeting {
+        sync::Meeting {
+            title: title.into(),
+            start,
+            end: start + SignedDuration::minutes(minutes),
+            account: "google:personal".into(),
+            url: Some("https://meet.example/x".into()),
+        }
+    }
+
+    /// Owner, 27 November 2026: Home leads with today's meetings in local time; the next one
+    /// says "in n min" (rounded up), one under way says now, and past ones are marked.
+    #[test]
+    fn the_today_block_lists_meetings_with_the_next_one_in_minutes() {
+        let now = local(FRI, 9, 48);
+        let view = block_on(load_today(
+            &store("page_meetings"),
+            &FixedClock(now),
+            &DayRules::default(),
+            now,
+        ))
+        .unwrap();
+        let meetings = [
+            meeting("Standup", local(FRI, 9, 0), 15),
+            meeting("Review", local(FRI, 9, 40), 30),
+            meeting("Planning", local(FRI, 10, 0), 60),
+            meeting("1:1", local(FRI, 15, 0), 30),
+        ];
+        let page = today_page(&view, &meetings, now, &FixedClock(now));
+        let rows: Vec<(&str, &str, Option<i64>, bool, bool)> = page
+            .meetings
+            .iter()
+            .map(|m| {
+                (
+                    m.title.as_str(),
+                    m.start.as_str(),
+                    m.starts_in_min,
+                    m.now,
+                    m.past,
+                )
+            })
+            .collect();
+        assert_eq!(
+            rows,
+            [
+                ("Standup", "09:00", None, false, true),
+                ("Review", "09:40", None, true, false),
+                ("Planning", "10:00", Some(12), false, false),
+                ("1:1", "15:00", None, false, false),
+            ]
+        );
+        assert_eq!(page.meetings[2].end, "11:00");
+        assert_eq!(page.today, "2026-11-27");
+        assert_eq!(page.tomorrow, "2026-11-28");
+    }
+
+    /// AC-5, AC-10, R-10, R-11, R-21: lines carry "new" after the morning card until Today is
+    /// seen, "unblocked" or "blocker dropped", and due marks; a blocked task sits under
+    /// "Waiting on" with its blocker's title.
+    #[test]
+    fn the_today_block_marks_new_unblocked_and_waiting() {
+        let store = store("page_marks");
+        let ins = block_on(store.add(task("Call the insurance", day(FRI), day(FRI)))).unwrap();
+        let mut send = task("Send Ana the numbers", day(FRI), day(FRI));
+        send.blocked_by = vec![ins];
+        let send = block_on(store.add(send)).unwrap();
+        let morning = local(FRI, 7, 40);
+        store.mark_morning(day(FRI), ms(morning)).unwrap();
+        let mut later = task("Book the room", day(FRI), day(FRI));
+        later.created_at = ms(local(FRI, 15, 0));
+        block_on(store.add(later)).unwrap();
+
+        let now = local(FRI, 15, 30);
+        let clock = FixedClock(now);
+        let view = block_on(load_today(&store, &clock, &DayRules::default(), now)).unwrap();
+        let page = today_page(&view, &[], now, &clock);
+        assert_eq!(page.waiting.len(), 1);
+        assert_eq!(page.waiting[0].on, "Call the insurance");
+        let book = page
+            .lines
+            .iter()
+            .find(|l| l.title == "Book the room")
+            .unwrap();
+        assert_eq!(book.marks, ["new"]);
+        assert!(page.has_new);
+
+        block_on(act(&store, ins, Act::Drop, day(FRI), ms(now))).unwrap();
+        store.mark_seen(day(FRI), ms(now)).unwrap();
+        let view = block_on(load_today(&store, &clock, &DayRules::default(), now)).unwrap();
+        let page = today_page(&view, &[], now, &clock);
+        let unblocked = page.lines.iter().find(|l| l.id == send).unwrap();
+        assert_eq!(unblocked.marks, ["blocker dropped"]);
+        assert!(!page.has_new, "seen clears new");
+        assert!(page.waiting.is_empty());
+    }
+
+    /// R-4, R-29: Home's field adds a task for today, counted as captured; done, drop and
+    /// tomorrow count in the day log; rename changes the title; an empty title or a past day
+    /// is refused.
+    #[test]
+    fn row_actions_change_the_task_and_count_in_the_day_log() {
+        let store = store("acts");
+        let now_ms = ms(local(FRI, 11, 0));
+        assert!(block_on(add_today(&store, "  ", day(FRI), now_ms)).is_err());
+        let a = block_on(add_today(&store, " Call the dentist ", day(FRI), now_ms)).unwrap();
+        let b = block_on(add_today(&store, "Pay the bill", day(FRI), now_ms)).unwrap();
+        let c = block_on(add_today(&store, "Write the notes", day(FRI), now_ms)).unwrap();
+        let d = block_on(add_today(&store, "Old thing", day(FRI), now_ms)).unwrap();
+
+        block_on(act(&store, a, Act::Done, day(FRI), now_ms)).unwrap();
+        block_on(act(&store, b, Act::Drop, day(FRI), now_ms)).unwrap();
+        block_on(act(&store, c, Act::Tomorrow, day(FRI), now_ms)).unwrap();
+        block_on(act(
+            &store,
+            d,
+            Act::Rename("Old thing, renamed".into()),
+            day(FRI),
+            now_ms,
+        ))
+        .unwrap();
+        assert!(block_on(act(&store, d, Act::Rename(" ".into()), day(FRI), now_ms)).is_err());
+        assert!(block_on(act(&store, d, Act::Move(day(THU)), day(FRI), now_ms)).is_err());
+
+        let log = store.day_log(day(FRI)).unwrap();
+        assert_eq!(
+            (log.captured, log.done, log.dropped, log.moved),
+            (4, 1, 1, 1)
+        );
+        let tasks = block_on(store.snapshot(day(FRI), 0)).unwrap();
+        let title = |id| tasks.iter().find(|t| t.id == id).map(|t| t.title.clone());
+        assert_eq!(title(a).as_deref(), Some("Call the dentist"));
+        assert_eq!(title(d).as_deref(), Some("Old thing, renamed"));
+        assert!(title(c).is_none(), "moved to tomorrow, out of today");
+    }
+
+    /// AC-7 (UI), R-14: keep on a stale task keeps it in today and stops asking.
+    #[test]
+    fn keep_stops_asking_about_a_stale_task() {
+        let store = store("keep_stale");
+        let id = block_on(store.add(task("Renew the passport", day(25), day(25)))).unwrap();
+        for _ in 0..3 {
+            block_on(store.roll_over(day(FRI))).unwrap();
+        }
+        let now = local(FRI, 9, 0);
+        let clock = FixedClock(now);
+        let stale = |store: &SqliteTaskStore| {
+            let view = block_on(load_today(store, &clock, &DayRules::default(), now)).unwrap();
+            today_page(&view, &[], now, &clock)
+                .lines
+                .iter()
+                .find(|l| l.id == id)
+                .unwrap()
+                .stale
+        };
+        assert!(stale(&store));
+        block_on(act(&store, id, Act::Keep, day(FRI), ms(now))).unwrap();
+        assert!(!stale(&store));
+    }
+
+    #[test]
+    fn days_from_the_picker_parse() {
+        assert_eq!(
+            parse_day("2026-11-30"),
+            Some(Date::from_calendar_date(2026, Month::November, 30).unwrap())
+        );
+        assert_eq!(parse_day("2026-02-30"), None);
+        assert_eq!(parse_day("monday"), None);
     }
 }
