@@ -55,6 +55,13 @@
   .roles .key input[type=password] { min-width: 140px; flex: 1; }
   .roles .effort { margin-top: 6px; font-size: 12px; color: var(--muted); }
   .roles .effort select { width: auto; margin-left: 4px; }
+  /* Settings → Diagnostics (specs/200-diagnostics, slice 2). */
+  .diag { width: 100%; border-collapse: collapse; margin-top: 8px; }
+  .diag th { text-align: left; font-weight: 500; color: var(--muted); font-size: 12px; padding: 6px 8px 6px 0; border-bottom: 1px solid var(--line); }
+  .diag td { padding: 8px 8px 8px 0; border-bottom: 1px solid var(--line); }
+  .diag td.n { text-align: right; font-variant-numeric: tabular-nums; }
+  .faint { color: var(--muted); }
+  #diag-warnings { font: 11px ui-monospace, monospace; white-space: pre-wrap; color: var(--muted); margin: 8px 0 0; max-height: 240px; overflow: auto; }
   .toolbar { display: flex; justify-content: space-between; align-items: center; margin-top: 18px; }
   .add { display: flex; gap: 6px; margin-top: 8px; }
   .add input { flex: 1; min-width: 0; }
@@ -76,6 +83,7 @@
   <a href="#providers">Providers</a>
   <a href="#connectors">Connectors</a>
   <a href="#privacy">Privacy</a>
+  <a href="#diagnostics">Diagnostics</a>
   <a href="#advanced" id="nav-advanced" class="hidden">Advanced</a>
   <a href="#about">About</a>
 </nav>
@@ -213,6 +221,23 @@
     </div>
   </section>
 
+  <section id="diagnostics">
+    <div class="row" style="border:0;padding-top:0"><div><h1>Diagnostics</h1><p class="lead" style="margin:0">How fast your dictations are and what failed, from the timing traces on this Mac. Nothing is sent.</p></div><button id="diag-refresh">Refresh</button></div>
+    <p class="lead hidden" id="diag-off" data-words="diagnostics traces off empty"></p>
+    <div id="diag-body" class="hidden">
+      <p class="lead" style="margin:16px 0 4px">Key release to text</p>
+      <div id="diag-release" data-words="latency speed key release text median slow budget"></div>
+      <p class="state bad hidden" id="diag-slow"></p>
+      <p class="lead" style="margin:16px 0 4px">Stages, last 7 days</p>
+      <table class="diag" data-words="stages speech cleanup provider model median"><thead><tr><th>Stage</th><th>Provider</th><th class="n">Median</th><th class="n">90%</th><th class="n">Dictations</th></tr></thead><tbody id="diag-stages"></tbody></table>
+      <p class="lead" style="margin:16px 0 4px">Outcomes, last 7 days</p>
+      <div id="diag-outcomes" data-words="outcomes pasted copied failed cancelled failures errors"></div>
+    </div>
+    <p class="lead" style="margin:16px 0 4px">Warnings and errors</p>
+    <pre id="diag-warnings" data-words="warnings errors log"></pre>
+    <p class="state bad" id="diag-error"></p>
+  </section>
+
   <section id="advanced">
     <h1>Advanced</h1>
     <p class="lead">For tuning. Everything is also in the config file.</p>
@@ -254,6 +279,7 @@
       showAdvanced(true);
       setTimeout(() => { const row = $('role-' + item); if (row) row.scrollIntoView({ block: 'center' }); }, 0);
     }
+    if (id === 'diagnostics') showDiagnostics();
     document.querySelectorAll('section').forEach((s) => s.classList.toggle('on', s.id === id));
     document.querySelectorAll('nav a').forEach((a) => a.classList.toggle('on', a.getAttribute('href') === '#' + id));
   }
@@ -669,8 +695,56 @@
   // Spec 93, R-10 to R-13: Settings → Dictionary, the page shared with Home (dictionary.js).
   HyperDictionary.mount($('dict-root'), { invoke, onError: (m) => { $('error').textContent = m; } });
 
+  // Settings → Diagnostics (specs/200-diagnostics, R-1 to R-9): read when the section opens and
+  // on Refresh, never in the background.
+  const ms = (us) => Math.round(us / 1000) + ' ms';
+  const OUTCOME_NAMES = { pasted: 'Pasted', copied: 'Copied', failed: 'Failed', cancelled: 'Cancelled', nothing_heard: 'Nothing heard' };
+  const STAGE_NAMES = { mic_start: 'Microphone start', speech: 'Speech', dictionary: 'Dictionary', cleanup: 'Cleanup', insert: 'Paste', history_write: 'History write' };
+  function windowCells(w) {
+    if (w.state === 'too_few') return [el('span', { className: 'faint' }, w.count === 1 ? '1 dictation: too few to measure' : w.count + ' dictations: too few to measure')];
+    const p90 = el('span', { className: w.over_budget ? 'state bad' : '' }, ms(w.p90_us));
+    return [el('span', {}, 'median ' + ms(w.p50_us) + ' · 90% '), p90, el('span', { className: 'faint' }, ' · ' + w.count + ' dictations')];
+  }
+  async function showDiagnostics() {
+    let d;
+    try { d = await invoke('diagnostics_view'); } catch (e) { $('diag-error').textContent = String(e); return; }
+    $('diag-error').textContent = d.error || '';
+    $('diag-warnings').textContent = d.warnings.length ? d.warnings.join('\n') : 'None.';
+    const off = !d.shown || !d.keep || !d.view || d.view.empty;
+    $('diag-body').classList.toggle('hidden', off);
+    const note = $('diag-off');
+    note.classList.toggle('hidden', !off);
+    if (off) {
+      note.replaceChildren(!d.keep ? 'Timing traces are off, so there is nothing to show. ' : 'No dictations in the last 7 days yet. ',
+        el('a', { className: 'link', onclick: () => { location.hash = '#privacy'; } }, 'Keep timing traces'));
+      return;
+    }
+    const v = d.view;
+    $('diag-release').replaceChildren(
+      el('div', { className: 'row' }, el('div', { className: 'what' }, 'Last 24 hours'), el('span', {}, ...windowCells(v.last_day))),
+      el('div', { className: 'row' }, el('div', { className: 'what' }, 'Last 7 days'), el('span', {}, ...windowCells(v.last_week))));
+    const slow = $('diag-slow');
+    slow.classList.toggle('hidden', !v.slowest_stage);
+    slow.textContent = v.slowest_stage ? 'Over the 800 ms budget. The slowest stage is ' + (STAGE_NAMES[v.slowest_stage] || v.slowest_stage).toLowerCase() + '.' : '';
+    $('diag-stages').replaceChildren(...v.stages.map((s) => {
+      const ready = s.window.state === 'ready';
+      return el('tr', {},
+        el('td', {}, STAGE_NAMES[s.stage] || s.stage),
+        el('td', {}, s.provider ? s.provider + ' · ' + s.model : ''),
+        el('td', { className: 'n' }, ready ? ms(s.window.p50_us) : '—'),
+        el('td', { className: 'n' }, ready ? ms(s.window.p90_us) : '—'),
+        el('td', { className: 'n' }, String(s.window.count)));
+    }));
+    const failures = v.failures.map(([kind, n]) => kind.replaceAll('_', ' ') + ' ' + n).join(', ');
+    $('diag-outcomes').replaceChildren(
+      el('div', { className: 'row' }, el('div', { className: 'what' }, v.outcomes.map(([o, n]) => (OUTCOME_NAMES[o] || o) + ' ' + n).join(' · '))),
+      ...(failures ? [el('div', { className: 'row' }, el('div', { className: 'what' }, 'Failures by kind', el('small', {}, failures)))] : []));
+  }
+  $('diag-refresh').addEventListener('click', showDiagnostics);
+
   showSection();
   refresh().catch((e) => { $('error').textContent = String(e); });
+
 </script>
 <script src="connectors.js"></script>
 </body>

@@ -9,6 +9,8 @@ mod approvals;
 #[cfg(target_os = "macos")]
 mod connectors;
 #[cfg(target_os = "macos")]
+mod diagnostics;
+#[cfg(target_os = "macos")]
 mod dictionary;
 // Pure and tested everywhere; only the macOS app uses them until Linux and Windows follow.
 #[cfg(any(target_os = "macos", test))]
@@ -78,6 +80,7 @@ fn main() {
             home::home_delete,
             home::home_fix_word,
             runtime::pill_view,
+            diagnostics::diagnostics_view,
             runtime::pill_card,
             runtime::card_open_today,
             runtime::card_dismiss,
