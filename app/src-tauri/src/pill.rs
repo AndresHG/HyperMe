@@ -8,8 +8,8 @@ use serde::Serialize;
 /// The look of one state, sent to `pill.html` as an event.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct View {
-    /// `recording`, `working`, `done`, `raw`, `quiet`, `notice`, `error` or `retry`; the page
-    /// picks the icon and colour from it.
+    /// `recording`, `locked`, `working`, `done`, `raw`, `quiet`, `notice`, `error` or `retry`;
+    /// the page picks the icon and colour from it.
     pub kind: &'static str,
     /// The few words shown, or empty.
     pub label: String,
@@ -41,8 +41,9 @@ fn show(kind: &'static str, label: &str, hide_after_ms: Option<u64>) -> Change {
 /// The pill for a status, as docs/UX.md's table of states says.
 pub fn change_for(status: &Status) -> Change {
     match status {
-        // #167: hands-free looks the same until the pill gets its stop button.
-        Status::Recording | Status::Locked => show("recording", "", None),
+        Status::Recording => show("recording", "", None),
+        // #167 AC-6: hands-free, with ✕ (cancel) at the left and a stop button at the right.
+        Status::Locked => show("locked", "", None),
         Status::Transcribing | Status::Cleaning | Status::Pasting => show("working", "", None),
         Status::Done { raw: false } => show("done", "Pasted", Some(600)),
         // R-12, R-20.
@@ -88,6 +89,10 @@ pub fn rest(show_while_idle: bool) -> Change {
 /// itself takes clicks.
 pub const BEAD_WIDTH: f64 = 22.0;
 
+/// Width of the hands-free pill: the 63 pt bars with a 20 pt button and a little room on each
+/// side (#167 AC-6).
+pub const LOCKED_WIDTH: f64 = 140.0;
+
 /// "Speech: speechmatics: the connection dropped: ..." becomes "Connection lost" for the pill;
 /// the full message stays in the menu's status line.
 fn short(message: &str) -> &'static str {
@@ -104,6 +109,9 @@ fn short(message: &str) -> &'static str {
 pub fn width_for(view: &View) -> f64 {
     if view.kind == "idle" {
         return BEAD_WIDTH;
+    }
+    if view.kind == "locked" {
+        return LOCKED_WIDTH;
     }
     let chars = view.label.chars().count() as f64;
     if chars == 0.0 {
@@ -306,6 +314,13 @@ mod tests {
     #[test]
     fn the_states_match_the_ux_table() {
         assert_eq!(view(Status::Recording).kind, "recording");
+        // #167 AC-6: hands-free has its own look, wide enough for its two buttons.
+        let locked = view(Status::Locked);
+        assert_eq!(
+            (locked.kind, locked.label.as_str(), locked.hide_after_ms),
+            ("locked", "", None)
+        );
+        assert_eq!(width_for(&locked), LOCKED_WIDTH);
         assert_eq!(view(Status::Transcribing).kind, "working");
         assert_eq!(view(Status::Cleaning).kind, "working");
         let done = view(Status::Done { raw: false });

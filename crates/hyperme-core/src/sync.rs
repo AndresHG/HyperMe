@@ -294,20 +294,26 @@ fn time_at(text: &str, zone: &dyn Zone) -> Option<(UtcDateTime, bool)> {
 }
 
 /// The items of a tool's answer: the list at `pull.list`, or the answer itself.
-fn items<'a>(answer: &'a Value, pull: &Pull) -> Result<&'a Vec<Value>, String> {
+fn items<'a>(answer: &'a Value, pull: &Pull) -> Result<&'a [Value], String> {
     let list = if pull.list.is_empty() {
         Some(answer)
     } else {
         lookup(answer, &pull.list)
     };
-    list.and_then(Value::as_array).ok_or_else(|| {
-        let at = if pull.list.is_empty() {
-            "the answer".to_owned()
-        } else {
-            format!("\"{}\"", pull.list)
-        };
-        format!("{}: expected a list of items at {at}", pull.tool)
-    })
+    match list {
+        Some(Value::Array(items)) => Ok(items),
+        // An answer object without the list has no items: Google's JSON leaves empty lists out
+        // (live check, slice 1).
+        None if answer.is_object() && !pull.list.is_empty() => Ok(&[]),
+        _ => {
+            let at = if pull.list.is_empty() {
+                "the answer".to_owned()
+            } else {
+                format!("\"{}\"", pull.list)
+            };
+            Err(format!("{}: expected a list of items at {at}", pull.tool))
+        }
+    }
 }
 
 /// What one pull did.

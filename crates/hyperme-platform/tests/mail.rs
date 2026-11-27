@@ -29,11 +29,17 @@ struct FakeGmail;
 impl ToolCaller for FakeGmail {
     async fn call(&self, _: &str, _: &str, _: Value) -> Result<Value, SyncError> {
         let thread = |id: &str, last: &str| {
+            let labels: Vec<&str> = if last == "INBOX" {
+                vec!["INBOX"]
+            } else {
+                vec!["INBOX", last]
+            };
             json!({
-                "id": id, "subject": format!("Subject {id}"), "from": "sender@example.test",
-                "snippet": "a short snippet", "date": "2026-11-26T18:00:00Z",
-                "labels": ["INBOX"], "lastMessage": { "labels": [last] },
-                "body": BODY_MARKER,
+                "id": id, "messageCount": 1, "messages": [{
+                    "subject": format!("Subject {id}"), "sender": "sender@example.test",
+                    "snippet": "a short snippet", "internalDate": "1795716000000",
+                    "labelIds": labels, "plaintextBody": BODY_MARKER,
+                }],
             })
         };
         Ok(json!({ "threads": [thread("t1", "INBOX"), thread("t2", "SENT")] }))

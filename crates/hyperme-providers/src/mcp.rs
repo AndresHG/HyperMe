@@ -17,11 +17,11 @@ use std::time::Duration;
 
 use hyperme_core::connectors::RequestLog;
 use hyperme_core::secrets::SecretStore;
-use rmcp::model::{CallToolRequestParams, CallToolResult, JsonObject, Tool};
-use rmcp::service::{ClientInitializeError, RunningService};
+use rmcp::model::{CallToolRequestParams, CallToolResult, JsonObject, ProtocolVersion, Tool};
+use rmcp::service::{ClientInitializeError, ClientLifecycleMode, ClientServiceExt, RunningService};
 use rmcp::transport::StreamableHttpClientTransport;
 use rmcp::transport::streamable_http_client::StreamableHttpClientTransportConfig;
-use rmcp::{Peer, RoleClient, ServiceError, ServiceExt};
+use rmcp::{Peer, RoleClient, ServiceError};
 use time::Date;
 use tokio::sync::Mutex;
 
@@ -333,13 +333,23 @@ impl RemoteServer {
         let config = StreamableHttpClientTransportConfig::with_uri(self.url.as_str())
             .auth_header(token.secret());
         let transport = StreamableHttpClientTransport::with_client(self.http.clone(), config);
-        let service = ().serve(transport).await.map_err(|error| {
-            if error.is_authorization_required() {
-                Failure::Unauthorized(token.clone())
-            } else {
-                Failure::Other(initialize_error(error))
-            }
-        })?;
+        // Google's servers answer `initialize` with "Method not supported": they speak the
+        // stateless lifecycle (`server/discover`). Auto tries that first and falls back to
+        // `initialize` for older servers.
+        let lifecycle = ClientLifecycleMode::Auto {
+            preferred_versions: vec![ProtocolVersion::LATEST],
+            legacy_version: None,
+        };
+        let service =
+            ().serve_with_lifecycle(transport, lifecycle)
+                .await
+                .map_err(|error| {
+                    if error.is_authorization_required() {
+                        Failure::Unauthorized(token.clone())
+                    } else {
+                        Failure::Other(initialize_error(error))
+                    }
+                })?;
         let peer = service.peer().clone();
         *session = Some(Session {
             service,

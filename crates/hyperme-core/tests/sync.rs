@@ -59,7 +59,10 @@ impl ToolCaller for FakeCalendar {
             .lock()
             .unwrap()
             .push((server.to_owned(), tool.to_owned(), args));
-        Ok(json!({ "kind": "calendar#events", "items": self.items.lock().unwrap().clone() }))
+        // The live answer's shape (slice 1): {accessRole, events, summary, timeZone, ...}.
+        Ok(
+            json!({ "accessRole": "owner", "timeZone": "Europe/Madrid", "events": self.items.lock().unwrap().clone() }),
+        )
     }
 }
 
@@ -69,7 +72,7 @@ fn event(id: &str, title: &str, start: &str, end: &str) -> Value {
         "summary": title,
         "start": { "dateTime": start },
         "end": { "dateTime": end },
-        "hangoutLink": format!("https://meet.example/{id}"),
+        "conferenceUrl": format!("https://meet.example/{id}"),
         "htmlLink": format!("https://calendar.example/{id}"),
         "status": "confirmed",
     })
@@ -153,8 +156,8 @@ async fn the_pull_maps_the_answer_into_events() {
         (server.as_str(), tool.as_str()),
         ("calendar", "list_events")
     );
-    assert_eq!(args["timeMin"], "2026-11-27T00:00:00+01:00");
-    assert_eq!(args["timeMax"], "2026-12-05T00:00:00+01:00");
+    assert_eq!(args["startTime"], "2026-11-27T00:00:00+01:00");
+    assert_eq!(args["endTime"], "2026-12-05T00:00:00+01:00");
 
     let stored = store.between(None, utc(26, 0, 0), utc(30, 0, 0)).unwrap();
     assert_eq!(stored.len(), 2);
@@ -439,15 +442,34 @@ async fn mirrored_tasks_follow_their_source() {
 }
 
 /// A tool answer that is not the expected shape is an error naming the problem, and the cache
-/// is left as it was.
+/// is left as it was. An answer without the list is an empty list: Google's JSON leaves empty
+/// lists out (live check, slice 1).
 #[tokio::test]
 async fn a_wrong_answer_leaves_the_cache_alone() {
     struct Broken;
     impl ToolCaller for Broken {
         async fn call(&self, _: &str, _: &str, _: Value) -> Result<Value, SyncError> {
-            Ok(json!({ "unexpected": true }))
+            Ok(json!({ "events": "not a list" }))
         }
     }
+    struct Empty;
+    impl ToolCaller for Empty {
+        async fn call(&self, _: &str, _: &str, _: Value) -> Result<Value, SyncError> {
+            Ok(json!({ "accessRole": "owner", "timeZone": "Europe/Madrid" }))
+        }
+    }
+    let empty = sync::pull_events(
+        &Empty,
+        &MemoryEvents::default(),
+        &MemoryTaskStore::default(),
+        "google:work",
+        &google_pull(),
+        utc(27, 8, 0),
+        &Plus1,
+    )
+    .await
+    .unwrap();
+    assert_eq!(empty.events, 0);
     let store = MemoryEvents::default();
     let tasks = MemoryTaskStore::default();
     let error = sync::pull_events(
@@ -462,5 +484,5 @@ async fn a_wrong_answer_leaves_the_cache_alone() {
     .await
     .unwrap_err()
     .to_string();
-    assert!(error.contains("items"), "{error}");
+    assert!(error.contains("events"), "{error}");
 }

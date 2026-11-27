@@ -58,6 +58,7 @@ fn main() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             runtime::pill_clicked,
+            runtime::pill_hands_free,
             home::home_sections,
             home::home_blocks,
             home::home_attention,

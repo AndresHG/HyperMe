@@ -2,26 +2,29 @@
 # with the user's own OAuth client (specs/97-google-connectors, design.md, "The Google preset").
 # A preset is data: changing a tool or a scope here needs no Rust change.
 #
-# UNVERIFIED: the tool names below come from a third-party `tools/list` dump, not from Google.
-# Slice 1 checks them against the live servers; until then `tools_verified` stays false.
+# Tool names, arguments and answer shapes were checked against the live servers' tools/list
+# and their output schemas on 27 November 2026 (slice 1, docs/results/2026-11-27-google-live-check.md).
+# Servers use the stateless MCP lifecycle (server/discover). /mcp/v1self is the endpoint for
+# clients without MCP form elicitation; it has no send, reply, forward or delete tools.
 
 id = "google"
 name = "Google"
 kind = "oauth-mcp"
-tools_verified = false
+tools_verified = true
 auth_url = "https://accounts.google.com/o/oauth2/v2/auth"
 token_url = "https://oauth2.googleapis.com/token"
 revoke_url = "https://oauth2.googleapis.com/revoke"
 extra_auth_params = { access_type = "offline", prompt = "consent" }
 # Email is draft-only (CLAUDE.md, R-23): a tool that sends never runs, whatever is switched on.
-forbidden_tools = ["send_*", "*_send", "*_send_*"]
+forbidden_tools = ["send_*", "*_send", "*_send_*", "reply", "forward"]
 # R-14: never asked for, whatever is switched on.
 forbidden_scopes = ["https://www.googleapis.com/auth/gmail.send",
                     "https://www.googleapis.com/auth/gmail.modify",
                     "https://mail.google.com/"]
 
 # G-1: the user's own Google Cloud client. The gcloud commands make the project and turn on the
-# APIs; the OAuth client itself is made on the console page. UNVERIFIED until slice 1.
+# APIs; the OAuth client itself is made on the console page. Personal mode (the client page)
+# needs no consent screen or verification and has no "Testing" status (checked in slice 1).
 [setup]
 client_url = "https://developers.google.com/workspace/guides/configure-mcp-servers"
 production_url = "https://console.cloud.google.com/auth/audience"
@@ -33,9 +36,9 @@ commands = [
 [[servers]]
 id = "calendar"
 label = "Calendar: read your events"
-url = "https://calendarmcp.googleapis.com/mcp/v1"
-# R-20: the day's quota and what each call costs, in units. Reported numbers, UNVERIFIED
-# until slice 1 measures them.
+url = "https://calendarmcp.googleapis.com/mcp/v1self"
+# R-20: the day's quota and what each call costs, in units. Reported numbers: the live check
+# found no quota or cost in the console or the answers, so these stay unverified.
 daily_units = 5000
 scopes = ["https://www.googleapis.com/auth/calendar.calendarlist.readonly",
           "https://www.googleapis.com/auth/calendar.events.readonly"]
@@ -43,7 +46,7 @@ scopes = ["https://www.googleapis.com/auth/calendar.calendarlist.readonly",
 [[servers]]
 id = "gmail"
 label = "Mail: read your inbox"
-url = "https://gmailmcp.googleapis.com/mcp/v1"
+url = "https://gmailmcp.googleapis.com/mcp/v1self"
 daily_units = 5000
 units = { search_threads = 10, get_thread = 1, get_message = 1, create_draft = 10 }
 scopes = ["https://www.googleapis.com/auth/gmail.readonly"]
@@ -55,38 +58,46 @@ optional_labels = { drafts = "Mail: write drafts for you to send" }
 # tool matches more than one list, the strictest wins (off, then ask, then read). `*` matches
 # any run of characters.
 [tools]
-read = ["list_events", "search_threads", "get_thread", "get_message", "list_labels", "list_drafts", "get_draft"]
-ask = ["create_draft"]
-off = ["trash_*", "mark_*_spam", "label_*", "unlabel_*", "create_label", "update_message_labels"]
+read = ["list_events", "get_event", "list_calendars", "search_events", "suggest_time",
+        "search_threads", "get_thread", "get_message", "list_labels", "list_drafts", "get_draft",
+        "list_filters"]
+ask = ["create_draft", "update_draft", "respond_to_event", "create_event", "update_event",
+       "untrash_*", "unmark_*_spam"]
+off = ["trash_*", "mark_*_spam", "label_*", "unlabel_*", "apply_sensitive_*", "create_label",
+       "update_label", "update_message_labels", "create_filter", "delete_*"]
 
 # G-5: declarative pulls, run without a model, by the sync jobs of #92 (slices 7 and 8).
-# The answer's shape follows Google Calendar's events list; UNVERIFIED until slice 1.
+# list_events takes startTime and endTime and answers {events: [Event], nextPageToken, ...};
+# an Event has id, summary, start/end (dateTime or date), conferenceUrl, htmlLink and status.
 # {today_start} is this morning at 00:00 local time; {today_plus_7} the end of the 7th day after.
 [[pull]]
 server = "calendar"
 tool = "list_events"
-args = { timeMin = "{today_start}", timeMax = "{today_plus_7}" }
-keep = ["id", "summary", "start", "end", "hangoutLink", "htmlLink", "status", "organizer.email"]
-list = "items"
-fields = { id = "id", title = "summary", start = "start.dateTime|start.date", end = "end.dateTime|end.date", url = "hangoutLink|htmlLink", status = "status", calendar = "organizer.email" }
+args = { startTime = "{today_start}", endTime = "{today_plus_7}" }
+keep = ["id", "summary", "start", "end", "conferenceUrl", "htmlLink", "status", "organizer.email"]
+list = "events"
+fields = { id = "id", title = "summary", start = "start.dateTime|start.date", end = "end.dateTime|end.date", url = "conferenceUrl|htmlLink", status = "status", calendar = "organizer.email" }
 into = "events"
 
 # The inbox of the last 7 days outside Gmail's four categories (R-26). Threads to answer are
 # those whose last message is not SENT by the account; each is mirrored as a task (R-27). Bodies
-# are fetched only on demand, never stored (R-18). Shapes UNVERIFIED until slice 1.
+# are fetched only on demand, never stored (R-18). search_threads answers {threads: [Thread],
+# ...}; a Thread has id and messages, a Message subject, sender, snippet, internalDate and
+# labelIds. Without MCP form elicitation Google omits threads that need the user's approval
+# (DATA_PROTECTION_POLICY), so this pull returns little until the client supports it.
 [[pull]]
 server = "gmail"
 tool = "search_threads"
-args = { query = "in:inbox newer_than:7d -category:promotions -category:social -category:updates -category:forums" }
-keep = ["id", "subject", "from", "snippet", "date", "labels", "lastMessage.labels"]
+args = { query = "in:inbox newer_than:7d -category:promotions -category:social -category:updates -category:forums", view = "THREAD_VIEW_METADATA_ONLY" }
+keep = ["id", "messages[].subject", "messages[].sender", "messages[].snippet", "messages[].internalDate", "messages[].labelIds"]
 list = "threads"
-fields = { id = "id", subject = "subject", sender = "from", snippet = "snippet", date = "date", labels = "labels", last_labels = "lastMessage.labels" }
+fields = { id = "id", subject = "messages.0.subject", sender = "messages.-1.sender", snippet = "messages.-1.snippet", date = "messages.-1.internalDate|messages.-1.date", labels = "messages.-1.labelIds", last_labels = "messages.-1.labelIds" }
 exclude_labels = ["CATEGORY_PROMOTIONS", "CATEGORY_SOCIAL", "CATEGORY_UPDATES", "CATEGORY_FORUMS"]
 done_label = "SENT"
 link = "https://mail.google.com/mail/#all/{id}"
 body_tool = "get_thread"
-body_arg = "thread_id"
-body_path = "messages.-1.body"
+body_arg = "threadId"
+body_path = "messages.-1.plaintextBody"
 mirror = true
 into = "mail"
 

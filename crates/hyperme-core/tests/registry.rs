@@ -47,7 +47,8 @@ fn the_google_preset_is_built_in_data() {
     let google = registry.get("google").unwrap();
     assert_eq!(google.name, "Google");
     assert!(google.builtin);
-    assert!(!google.tools_verified);
+    // Checked against the live servers in slice 1 (27 November 2026).
+    assert!(google.tools_verified);
     let ids: Vec<&str> = google.servers.iter().map(|s| s.id.as_str()).collect();
     assert_eq!(ids, ["calendar", "gmail"]);
     let Auth::OAuth(endpoints) = &google.auth else {
@@ -62,7 +63,8 @@ fn the_google_preset_is_built_in_data() {
     let gmail = google.server("gmail").unwrap();
     assert_eq!(
         gmail.transport,
-        Transport::Http("https://gmailmcp.googleapis.com/mcp/v1".to_owned())
+        // /mcp/v1self: the endpoint for clients without MCP form elicitation (slice 1).
+        Transport::Http("https://gmailmcp.googleapis.com/mcp/v1self".to_owned())
     );
     assert_eq!(
         gmail.optional_scopes["drafts"],
