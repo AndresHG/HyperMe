@@ -14,6 +14,8 @@
     --line: color-mix(in srgb, CanvasText 12%, transparent);
     --muted: color-mix(in srgb, CanvasText 55%, transparent);
     --side: color-mix(in srgb, CanvasText 4%, Canvas);
+    --card: color-mix(in srgb, CanvasText 2%, Canvas);
+    --line2: color-mix(in srgb, CanvasText 18%, transparent);
   }
   * { box-sizing: border-box; }
   body { margin: 0; font: 13px -apple-system, system-ui, sans-serif; background: Canvas; color: CanvasText; display: grid; grid-template-columns: 200px 1fr; height: 100vh; }
@@ -55,14 +57,79 @@
   .roles .key input[type=password] { min-width: 140px; flex: 1; }
   .roles .effort { margin-top: 6px; font-size: 12px; color: var(--muted); }
   .roles .effort select { width: auto; margin-left: 4px; }
+  /* Settings → Diagnostics (specs/200-diagnostics, slice 2). */
+  .diag { width: 100%; border-collapse: collapse; margin-top: 8px; }
+  .diag th { text-align: left; font-weight: 500; color: var(--muted); font-size: 12px; padding: 6px 8px 6px 0; border-bottom: 1px solid var(--line); }
+  .diag td { padding: 8px 8px 8px 0; border-bottom: 1px solid var(--line); }
+  .diag td.n { text-align: right; font-variant-numeric: tabular-nums; }
+  .faint { color: var(--muted); }
+  /* Report a problem (specs/200-diagnostics, R-13 to R-16): the whole bundle, read before anything happens. */
+  #report { position: fixed; inset: 0; background: color-mix(in srgb, Canvas 70%, transparent); display: flex; align-items: center; justify-content: center; z-index: 10; }
+  #report > div { background: Canvas; border: 1px solid var(--line); border-radius: 12px; width: min(760px, 92vw); max-height: 88vh; display: flex; flex-direction: column; gap: 8px; padding: 16px 18px; box-shadow: 0 12px 40px rgba(0,0,0,.25); }
+  #report textarea { font: inherit; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--line); background: Canvas; color: inherit; min-height: 54px; resize: vertical; }
+  #report pre { font: 11px ui-monospace, monospace; white-space: pre-wrap; overflow: auto; flex: 1; min-height: 200px; margin: 0; padding: 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--side); }
+  #diag-warnings { font: 11px ui-monospace, monospace; white-space: pre-wrap; color: var(--muted); margin: 8px 0 0; max-height: 240px; overflow: auto; }
   .toolbar { display: flex; justify-content: space-between; align-items: center; margin-top: 18px; }
   .add { display: flex; gap: 6px; margin-top: 8px; }
   .add input { flex: 1; min-width: 0; }
   .add select { flex: 1; min-width: 0; }
   td.local { padding-top: 0; }
   a.link { color: var(--violet); cursor: pointer; text-decoration: none; }
+  /* Settings is a sheet over Home (V0.1 redesign): a rounded card in a transparent window, no
+     title bar, a close button and Esc. */
+  html { background: transparent; padding: 24px; height: 100vh; box-sizing: border-box; }
+  body { height: 100%; border-radius: 14px; overflow: hidden; box-shadow: 0 0 0 1px var(--line), 0 16px 44px rgb(0 0 0 / .32); box-sizing: border-box; grid-template-columns: 196px 1fr; }
+  nav { padding: 16px 10px; }
+  main { position: relative; padding: 20px 56px 20px 24px !important; }
+  #sheet-x { position: fixed; top: 36px; right: 38px; width: 28px; height: 28px; padding: 0; border-radius: 999px; border: 0; background: var(--line); font-size: 16px; line-height: 1; z-index: 5; }
+  #sheet-x:hover { background: var(--line2); }
+  /* V0.1 redesign: rows sit in grouped cards, switches instead of checkboxes, as in macOS
+     System Settings and Wispr Flow's settings. */
+  section > .row, section .card-rows > .row { border: 1px solid var(--line); border-top: 0; padding: 10px 14px; background: var(--card); }
+  section > .row:not(.row + .row), section .card-rows > .row:first-child { border-top: 1px solid var(--line); border-radius: 10px 10px 0 0; margin-top: 8px; }
+  section > .row:not(:has(+ .row)), section .card-rows > .row:last-child { border-radius: 0 0 10px 10px; margin-bottom: 14px; }
+  section > .row:not(.row + .row):not(:has(+ .row)) { border-radius: 10px; }
+  input[type=checkbox]:not([data-feature]) { appearance: none; width: 30px; height: 18px; border-radius: 9px; background: var(--line2); position: relative; margin: 0; flex: none; transition: background .15s; }
+  input[type=checkbox]:not([data-feature])::after { content: ''; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: white; box-shadow: 0 1px 2px rgb(0 0 0 / .3); transition: left .15s; }
+  input[type=checkbox]:not([data-feature]):checked { background: var(--violet); }
+  input[type=checkbox]:not([data-feature]):checked::after { left: 14px; }
+  /* The connect dialog. */
+  #connectors-oauth { display: flex; justify-content: center; padding-top: 8px; }
+  #connectors-oauth.hidden { display: none; }
+  .dialog { width: 100%; max-width: 520px; border: 1px solid var(--line); border-radius: 14px; background: var(--card); display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 10px 40px rgb(0 0 0 / .10); }
+  .dialog-head { display: flex; align-items: center; gap: 10px; padding: 14px 18px; border-bottom: 1px solid var(--line); }
+  .dialog-head h1 { flex: 1; margin: 0; font-size: 16px; }
+  .glyph { width: 28px; height: 28px; border-radius: 8px; background: var(--line); display: flex; align-items: center; justify-content: center; font-weight: 700; }
+  .step-count { font-size: 12px; color: var(--muted); }
+  .steps { display: flex; gap: 8px; margin: 0; padding: 12px 18px 0; list-style: none; }
+  .steps li { flex: 1; display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+  .steps .n { width: 18px; height: 18px; border-radius: 999px; background: var(--line); display: flex; align-items: center; justify-content: center; font-size: 11px; color: inherit; }
+  .steps li.now { color: CanvasText; font-weight: 600; }
+  .steps li.now .n { background: var(--violet); color: #fff; }
+  .steps li.done .n { background: var(--ok); color: #fff; }
+  .dialog-body { padding: 16px 18px; display: flex; flex-direction: column; gap: 14px; }
+  .dialog-body .lead { margin: 0; }
+  .dialog-body .small { font-size: 12px; }
+  .field { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
+  .field span { font-weight: 600; }
+  .field small { font-weight: 400; color: var(--muted); }
+  .field input { min-width: 0; width: 100%; padding: 7px 10px; border-radius: 8px; }
+  .choice { border: 0; margin: 0 0 14px; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+  .choice legend { padding: 0; margin-bottom: 8px; font-weight: 600; }
+  .chips { display: flex; gap: 8px; }
+  .chips label { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; height: 34px; border-radius: 8px; border: 1.5px solid var(--line2); }
+  .chips label:has(input:checked) { border-color: var(--violet); background: color-mix(in srgb, var(--violet) 10%, transparent); font-weight: 600; }
+  .chips input { margin: 0; accent-color: var(--violet); }
+  .choice .say { color: var(--muted); }
+  .choice .say:empty { display: none; }
+  .checks { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .checks label { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-top: 1px solid var(--line); }
+  .checks label:first-child { border-top: 0; }
+  .checks input { margin: 0; accent-color: var(--violet); }
+  .dialog-foot { display: flex; align-items: center; gap: 8px; padding: 12px 18px; border-top: 1px solid var(--line); }
+  .dialog-foot .state { flex: 1; text-align: right; }
+
 </style>
-<link rel="stylesheet" href="dictionary.css">
 </head>
 <body>
 <nav>
@@ -71,15 +138,16 @@
   <div class="group">Everyday</div>
   <a href="#general">General</a>
   <a href="#shortcuts">Shortcuts</a>
-  <a href="#dictionary">Dictionary</a>
   <div class="group">Setup</div>
   <a href="#providers">Providers</a>
   <a href="#connectors">Connectors</a>
   <a href="#privacy">Privacy</a>
+  <a href="#diagnostics">Diagnostics</a>
   <a href="#advanced" id="nav-advanced" class="hidden">Advanced</a>
   <a href="#about">About</a>
 </nav>
 <main>
+  <button id="sheet-x" aria-label="Close settings" title="Close (Esc)">×</button>
   <div id="banner"><span id="banner-text">Saved. Restart HyperMe to use the new settings.</span><button class="main" id="restart">Restart HyperMe</button></div>
 
   <section id="setup">
@@ -154,27 +222,57 @@
       </div>
       <p><button id="sheet-close">Cancel</button></p>
     </div>
+    <!-- Connect a preset (V0.1 redesign): a two-step dialog, the main button always bottom
+         right, the label a choice that cannot look filled in (#216). -->
     <div id="connectors-oauth" class="hidden">
-      <h1 id="oauth-title"></h1>
-      <div id="oauth-client">
-        <p class="lead">1 · Your client. HyperMe uses your own OAuth client, so nothing passes through us.</p>
-        <div class="row" data-words="google client cloud setup"><div class="what">Create your client<small>Opens the provider's setup guide.</small></div><span><button id="oauth-open-client">Open setup</button> <button id="oauth-gcloud">Use gcloud instead</button></span></div>
-        <div class="row" data-words="client id"><div class="what">Client ID<small class="state" id="oauth-client-state"></small></div><input type="text" id="oauth-client-id" autocomplete="off"></div>
-        <div class="row" data-words="client secret"><div class="what">Client secret<small>Kept in the macOS keychain, never shown again.</small></div><span style="white-space:nowrap"><input type="password" id="oauth-client-secret" autocomplete="off"> <button id="oauth-client-save">Save and test</button></span></div>
+      <div class="dialog" role="dialog" aria-labelledby="oauth-title">
+        <header class="dialog-head">
+          <span class="glyph" aria-hidden="true" id="oauth-glyph"></span>
+          <h1 id="oauth-title"></h1>
+          <span class="step-count" id="oauth-step"></span>
+        </header>
+        <ol class="steps" aria-label="Steps">
+          <li id="step-client"><span class="n">1</span>Your client</li>
+          <li id="step-signin"><span class="n">2</span>Account and access</li>
+        </ol>
+        <div class="dialog-body">
+          <div id="oauth-client">
+            <p class="lead">HyperMe signs in with your own OAuth client, so nothing passes through us. <a class="link" id="oauth-open-client">How to create it</a></p>
+            <label class="field"><span>Client ID <small class="state" id="oauth-client-state"></small></span><input type="text" id="oauth-client-id" autocomplete="off" placeholder="Paste the client ID"></label>
+            <label class="field"><span>Client secret <small>Kept in the macOS keychain.</small></span><input type="password" id="oauth-client-secret" autocomplete="off" placeholder="Paste the client secret"></label>
+            <p class="lead small"><a class="link" id="oauth-gcloud">Prefer the command line? Copy the gcloud steps</a></p>
+          </div>
+          <div id="oauth-signin">
+            <fieldset class="choice" id="oauth-label-choice">
+              <legend>What do you call this account?</legend>
+              <div class="chips">
+                <label><input type="radio" name="oauth-label-choice" value="personal">Personal</label>
+                <label><input type="radio" name="oauth-label-choice" value="work">Work</label>
+                <label><input type="radio" name="oauth-label-choice" value="other">Other…</label>
+              </div>
+              <input type="text" id="oauth-label" class="hidden" aria-label="Account name, one word" placeholder="One word, such as school">
+              <small class="say" id="oauth-say"></small>
+            </fieldset>
+            <fieldset class="choice">
+              <legend>What can Hyper use?</legend>
+              <div class="checks" id="oauth-features"></div>
+            </fieldset>
+          </div>
+          <div id="oauth-testing" class="hidden">
+            <p class="bad">Your project is in Testing, so you would be signed out every 7 days.</p>
+            <p class="lead">Set its publishing status to In production (no review is needed for your own account), then sign in again.</p>
+            <p><button id="oauth-open-production">Open the setting</button></p>
+          </div>
+          <div id="oauth-done" class="hidden"></div>
+        </div>
+        <footer class="dialog-foot">
+          <button id="oauth-close">Cancel</button>
+          <span class="state" id="oauth-wait"></span>
+          <button id="oauth-cancel" class="hidden">Stop waiting</button>
+          <button class="main" id="oauth-client-save">Save and continue</button>
+          <button class="main" id="oauth-go">Sign in</button>
+        </footer>
       </div>
-      <div id="oauth-signin">
-        <p class="lead" style="margin-top:14px">2 · Sign in, and choose what Hyper can see.</p>
-        <div class="row" data-words="account label personal work"><div class="what">Label<small>One word you can say: "in my work calendar".</small></div><input type="text" id="oauth-label" placeholder="personal"></div>
-        <div id="oauth-features"></div>
-        <div class="row" style="border:0"><span class="state" id="oauth-wait"></span><span><button id="oauth-cancel" class="hidden">Cancel</button> <button class="main" id="oauth-go">Sign in</button></span></div>
-      </div>
-      <div id="oauth-testing" class="hidden">
-        <p class="bad">Your project is in Testing, so you would be signed out every 7 days.</p>
-        <p class="lead">Set its publishing status to In production (no review is needed for your own account), then sign in again.</p>
-        <p><button id="oauth-open-production">Open the setting</button></p>
-      </div>
-      <div id="oauth-done" class="hidden"></div>
-      <p><button id="oauth-close">Close</button></p>
     </div>
     <div id="connectors-page" class="hidden">
       <p><a href="#connectors" id="page-back">‹ Connectors</a></p>
@@ -190,11 +288,6 @@
     </div>
   </section>
 
-  <section id="dictionary">
-    <h1>Dictionary</h1>
-    <p class="lead">Words HyperMe should always get right: names, products and jargon. Turn on "Correct a misspelling" to fix a word that keeps coming out wrong. Changes apply from your next dictation.</p>
-    <div id="dict-root"></div>
-  </section>
 
   <section id="privacy">
     <h1>Privacy</h1>
@@ -212,6 +305,35 @@
       <p class="lead" id="privacy-kept" style="margin:4px 0 0"></p>
     </div>
   </section>
+
+  <section id="diagnostics">
+    <div class="row" style="border:0;padding-top:0"><div><h1>Diagnostics</h1><p class="lead" style="margin:0">How fast your dictations are and what failed, from the timing traces on this Mac. Nothing is sent.</p></div><span style="white-space:nowrap"><button id="diag-refresh">Refresh</button> <button class="main" id="diag-report" data-words="report problem bug issue">Report a problem…</button></span></div>
+    <p class="lead hidden" id="diag-off" data-words="diagnostics traces off empty"></p>
+    <div id="diag-body" class="hidden">
+      <p class="lead" style="margin:16px 0 4px">Key release to text</p>
+      <div id="diag-release" data-words="latency speed key release text median slow budget"></div>
+      <p class="state bad hidden" id="diag-slow"></p>
+      <p class="lead" style="margin:16px 0 4px">Stages, last 7 days</p>
+      <table class="diag" data-words="stages speech cleanup provider model median"><thead><tr><th>Stage</th><th>Provider</th><th class="n">Median</th><th class="n">90%</th><th class="n">Dictations</th></tr></thead><tbody id="diag-stages"></tbody></table>
+      <p class="lead" style="margin:16px 0 4px">Outcomes, last 7 days</p>
+      <div id="diag-outcomes" data-words="outcomes pasted copied failed cancelled failures errors"></div>
+    </div>
+    <p class="lead" style="margin:16px 0 4px">Warnings and errors</p>
+    <pre id="diag-warnings" data-words="warnings errors log"></pre>
+    <p class="state bad" id="diag-error"></p>
+  </section>
+
+  <div id="report" class="hidden" role="dialog" aria-label="Report a problem">
+    <div>
+      <h1>Report a problem</h1>
+      <p class="lead" style="margin:0">This is everything in the report. Nothing is sent: Open issue opens a GitHub page in your browser and shows the saved file for you to attach.</p>
+      <textarea id="report-description" placeholder="What happened? (optional, goes in the file)"></textarea>
+      <label id="report-ips-row" class="hidden"><input type="checkbox" id="report-ips" checked> Include macOS crash reports</label>
+      <pre id="report-text">Building…</pre>
+      <p class="state" id="report-note"></p>
+      <div class="row" style="border:0;padding:0"><button id="report-cancel">Cancel</button><span><button id="report-save">Save…</button> <button class="main" id="report-issue">Open issue</button></span></div>
+    </div>
+  </div>
 
   <section id="advanced">
     <h1>Advanced</h1>
@@ -231,10 +353,18 @@
   </section>
   <p id="error" class="bad"></p>
 </main>
-<script src="dictionary.js"></script>
 <script>
   const invoke = window.__TAURI__.core.invoke;
   const $ = (id) => document.getElementById(id);
+  // The sheet closes with its × or Esc, unless Esc belongs to a field or the connect dialog.
+  $('sheet-x').addEventListener('click', () => invoke('settings_close'));
+  // A click in the transparent room around the card is a click on Home's dimmed page.
+  document.documentElement.addEventListener('mousedown', (e) => { if (e.target === document.documentElement) invoke('settings_close'); });
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' || e.defaultPrevented) return;
+    if (e.target instanceof HTMLInputElement && e.target.value) return;
+    invoke('settings_close');
+  });
   let view = null;
 
   function showSection() {
@@ -253,6 +383,11 @@
     if (id === 'providers' && item) {
       showAdvanced(true);
       setTimeout(() => { const row = $('role-' + item); if (row) row.scrollIntoView({ block: 'center' }); }, 0);
+    }
+    if (id === 'diagnostics') {
+      showDiagnostics();
+      // hyperme settings#diagnostics/report[/<history id>]: Home's Help, a failed item, the crash notice.
+      if (item && item.startsWith('report')) openReport(Number(item.split('/')[1]) || null);
     }
     document.querySelectorAll('section').forEach((s) => s.classList.toggle('on', s.id === id));
     document.querySelectorAll('nav a').forEach((a) => a.classList.toggle('on', a.getAttribute('href') === '#' + id));
@@ -666,11 +801,101 @@
     document.querySelectorAll('section').forEach((s) => s.classList.toggle('on', q ? !!s.querySelector('.row:not(.hidden)') : s.id === (location.hash || '#setup').slice(1)));
   });
 
-  // Spec 93, R-10 to R-13: Settings → Dictionary, the page shared with Home (dictionary.js).
-  HyperDictionary.mount($('dict-root'), { invoke, onError: (m) => { $('error').textContent = m; } });
+
+  // Settings → Diagnostics (specs/200-diagnostics, R-1 to R-9): read when the section opens and
+  // on Refresh, never in the background.
+  const ms = (us) => Math.round(us / 1000) + ' ms';
+  const OUTCOME_NAMES = { pasted: 'Pasted', copied: 'Copied', failed: 'Failed', cancelled: 'Cancelled', nothing_heard: 'Nothing heard' };
+  const STAGE_NAMES = { mic_start: 'Microphone start', speech: 'Speech', dictionary: 'Dictionary', cleanup: 'Cleanup', insert: 'Paste', history_write: 'History write' };
+  function windowCells(w) {
+    if (w.state === 'too_few') return [el('span', { className: 'faint' }, w.count === 1 ? '1 dictation: too few to measure' : w.count + ' dictations: too few to measure')];
+    const p90 = el('span', { className: w.over_budget ? 'state bad' : '' }, ms(w.p90_us));
+    return [el('span', {}, 'median ' + ms(w.p50_us) + ' · 90% '), p90, el('span', { className: 'faint' }, ' · ' + w.count + ' dictations')];
+  }
+  async function showDiagnostics() {
+    let d;
+    try { d = await invoke('diagnostics_view'); } catch (e) { $('diag-error').textContent = String(e); return; }
+    $('diag-error').textContent = d.error || '';
+    $('diag-warnings').textContent = d.warnings.length ? d.warnings.join('\n') : 'None.';
+    const off = !d.shown || !d.keep || !d.view || d.view.empty;
+    $('diag-body').classList.toggle('hidden', off);
+    const note = $('diag-off');
+    note.classList.toggle('hidden', !off);
+    if (off) {
+      note.replaceChildren(!d.keep ? 'Timing traces are off, so there is nothing to show. ' : 'No dictations in the last 7 days yet. ',
+        el('a', { className: 'link', onclick: () => { location.hash = '#privacy'; } }, 'Keep timing traces'));
+      return;
+    }
+    const v = d.view;
+    $('diag-release').replaceChildren(
+      el('div', { className: 'row' }, el('div', { className: 'what' }, 'Last 24 hours'), el('span', {}, ...windowCells(v.last_day))),
+      el('div', { className: 'row' }, el('div', { className: 'what' }, 'Last 7 days'), el('span', {}, ...windowCells(v.last_week))));
+    const slow = $('diag-slow');
+    slow.classList.toggle('hidden', !v.slowest_stage);
+    slow.textContent = v.slowest_stage ? 'Over the 800 ms budget. The slowest stage is ' + (STAGE_NAMES[v.slowest_stage] || v.slowest_stage).toLowerCase() + '.' : '';
+    $('diag-stages').replaceChildren(...v.stages.map((s) => {
+      const ready = s.window.state === 'ready';
+      return el('tr', {},
+        el('td', {}, STAGE_NAMES[s.stage] || s.stage),
+        el('td', {}, s.provider ? s.provider + ' · ' + s.model : ''),
+        el('td', { className: 'n' }, ready ? ms(s.window.p50_us) : '—'),
+        el('td', { className: 'n' }, ready ? ms(s.window.p90_us) : '—'),
+        el('td', { className: 'n' }, String(s.window.count)));
+    }));
+    const failures = v.failures.map(([kind, n]) => kind.replaceAll('_', ' ') + ' ' + n).join(', ');
+    $('diag-outcomes').replaceChildren(
+      el('div', { className: 'row' }, el('div', { className: 'what' }, v.outcomes.map(([o, n]) => (OUTCOME_NAMES[o] || o) + ' ' + n).join(' · '))),
+      ...(failures ? [el('div', { className: 'row' }, el('div', { className: 'what' }, 'Failures by kind', el('small', {}, failures)))] : []));
+  }
+  $('diag-refresh').addEventListener('click', showDiagnostics);
+
+  // Report a problem (R-12 to R-16, R-24): build on the Mac, show it all, then Save or Open issue.
+  let report = null;
+  let reportFrom = null;
+  let reportTimer = null;
+  async function buildReport() {
+    try {
+      report = await invoke('report_build', { description: $('report-description').value, includeReports: $('report-ips').checked, fromItem: reportFrom });
+    } catch (e) { $('report-note').textContent = String(e); return; }
+    $('report-text').textContent = report.text;
+    $('report-ips-row').classList.toggle('hidden', !report.has_reports);
+    $('report-note').textContent = report.trimmed.length ? 'Trimmed to 1 MB: ' + report.trimmed.join(', ') + '.' : '';
+  }
+  function openReport(from) {
+    reportFrom = from;
+    report = null;
+    $('report-description').value = '';
+    $('report-text').textContent = 'Building…';
+    $('report-note').textContent = '';
+    $('report').classList.remove('hidden');
+    buildReport();
+  }
+  function closeReport() {
+    $('report').classList.add('hidden');
+    if (location.hash.startsWith('#diagnostics/')) history.replaceState(null, '', '#diagnostics');
+  }
+  $('diag-report').addEventListener('click', () => openReport(null));
+  $('report-cancel').addEventListener('click', closeReport);
+  $('report-ips').addEventListener('change', buildReport);
+  $('report-description').addEventListener('input', () => { clearTimeout(reportTimer); reportTimer = setTimeout(buildReport, 400); });
+  $('report-save').addEventListener('click', async () => {
+    if (!report) return;
+    try {
+      const path = await invoke('report_save', { text: report.text });
+      if (path) $('report-note').textContent = 'Saved to ' + path + '.';
+    } catch (e) { $('report-note').textContent = String(e); }
+  });
+  $('report-issue').addEventListener('click', async () => {
+    if (!report) return;
+    try {
+      const path = await invoke('report_open_issue', { text: report.text, url: report.url });
+      $('report-note').textContent = 'Saved to ' + path + '. Attach it to the issue in your browser.';
+    } catch (e) { $('report-note').textContent = String(e); }
+  });
 
   showSection();
   refresh().catch((e) => { $('error').textContent = String(e); });
+
 </script>
 <script src="connectors.js"></script>
 </body>

@@ -40,3 +40,20 @@ fn r14_an_existing_file_counts() {
     RotatingFile::new(path.clone(), 100).write_line("new line here");
     assert_eq!(std::fs::read_to_string(&path).unwrap(), "new line here\n");
 }
+
+/// Spec 200 R-5: the last lines of the warnings file, newest first, reaching into the rotated
+/// copy when the current file holds fewer; a missing file gives none.
+#[test]
+fn the_last_lines_come_newest_first_across_the_rotation() {
+    let dir = temp_dir("last-lines");
+    let path = dir.join("warnings.log");
+    let file = RotatingFile::new(path.clone(), 100);
+    for i in 0..7 {
+        file.write_line(&format!("line {i:<33}")); // 40 bytes with its newline
+    }
+    let last = hyperme_platform::log_file::last_lines(&path, 3);
+    let trimmed: Vec<&str> = last.iter().map(|l| l.trim_end()).collect();
+    assert_eq!(trimmed, ["line 6", "line 5", "line 4"]);
+    assert_eq!(hyperme_platform::log_file::last_lines(&path, 100).len(), 3);
+    assert!(hyperme_platform::log_file::last_lines(&dir.join("missing.log"), 5).is_empty());
+}

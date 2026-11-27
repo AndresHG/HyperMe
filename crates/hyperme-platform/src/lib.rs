@@ -1,6 +1,7 @@
 //! HyperMe's platform code: the real implementations of `hyperme_core::traits`. Code that only
 //! works on one OS sits in a `cfg(target_os)` module.
 
+pub mod crash;
 pub mod dictionary_store;
 #[cfg(target_os = "macos")]
 pub mod field_watcher;

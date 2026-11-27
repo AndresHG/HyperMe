@@ -3,13 +3,33 @@
 
 use std::fs::{File, OpenOptions};
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Mutex, PoisonError};
 
 use hyperme_core::warnings::LineSink;
 
 /// The most a warnings file holds before it rotates (R-14).
 pub const LIMIT: u64 = 1024 * 1024;
+
+/// The last `n` lines of a rotating log file, newest first, reading the rotated copy when the
+/// current file holds fewer (spec 200 R-5). A missing file gives none.
+pub fn last_lines(path: &Path, n: usize) -> Vec<String> {
+    let mut rotated = path.as_os_str().to_owned();
+    rotated.push(".1");
+    let mut lines = Vec::new();
+    for file in [path.to_path_buf(), PathBuf::from(rotated)] {
+        let Ok(text) = std::fs::read_to_string(&file) else {
+            continue;
+        };
+        for line in text.lines().rev() {
+            if lines.len() == n {
+                return lines;
+            }
+            lines.push(line.to_owned());
+        }
+    }
+    lines
+}
 
 /// A log file that rotates at a size limit, keeping one older copy.
 #[derive(Debug)]

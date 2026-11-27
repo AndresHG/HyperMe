@@ -212,3 +212,15 @@ fn privacy_names_each_account_and_what_is_read() {
     assert!(block.kept.contains("14 days"));
     assert!(block.kept.contains("never"), "{}", block.kept);
 }
+
+/// #216: an empty Label (its "personal" is placeholder text) becomes "personal", and a label that
+/// can't be used is refused, both before the browser opens, so no unlabelled sign-in is stored.
+#[test]
+fn an_empty_label_becomes_personal_before_sign_in() {
+    use hyperme_core::connector_setup::account_label;
+    assert_eq!(account_label("").unwrap(), "personal");
+    assert_eq!(account_label("   ").unwrap(), "personal");
+    assert_eq!(account_label(" Work ").unwrap(), "work");
+    assert!(account_label("my work").is_err());
+    assert!(account_label("1st").is_err());
+}

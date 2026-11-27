@@ -12,6 +12,8 @@ use std::sync::mpsc::{Receiver, Sender, SyncSender, channel, sync_channel};
 use std::sync::{Arc, Mutex, PoisonError};
 
 use hyperme_core::config::Retention;
+use hyperme_core::diagnostics::{StageTime, TraceRow};
+use hyperme_core::trace;
 use hyperme_core::trace::{FieldValue, FinishedTrace, TraceSink};
 use hyperme_core::traits::{Error, ErrorKind};
 use rusqlite::{Connection, params};
@@ -273,26 +275,7 @@ impl TraceStore {
             Err(rusqlite::Error::QueryReturnedNoRows) => return Ok(None),
             Err(e) => return Err(error(e)),
         };
-        let mut query = db
-            .prepare(
-                "SELECT name, parent, start_us, duration_us, fields, events FROM span
-                 WHERE trace_id = ?1 ORDER BY idx",
-            )
-            .map_err(error)?;
-        let spans = query
-            .query_map(params![id], |r| {
-                Ok(StoredSpan {
-                    name: r.get(0)?,
-                    parent: r.get::<_, Option<i64>>(1)?.map(|p| p as usize),
-                    start_us: r.get::<_, i64>(2)? as u64,
-                    duration_us: r.get::<_, i64>(3)? as u64,
-                    fields: json_map(&r.get::<_, String>(4)?),
-                    events: json_map(&r.get::<_, String>(5)?),
-                })
-            })
-            .map_err(error)?
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(error)?;
+        let spans = spans_of(&db, id)?;
         Ok(Some(StoredTrace {
             history_id: Some(history_id),
             started_ms,
@@ -300,6 +283,63 @@ impl TraceStore {
             labels,
             spans,
         }))
+    }
+
+    /// The traces started at or after `since_ms`, newest first, at most `limit` (spec 200 R-2 to
+    /// R-4). Diagnostics reads a week with one call.
+    pub fn traces_since(&self, since_ms: i64, limit: usize) -> Result<Vec<StoredTrace>, Error> {
+        let db = self.reader()?;
+        let mut query = db
+            .prepare(
+                "SELECT id, history_id, started_ms, outcome, speech_provider, speech_model,
+                        cleanup_provider, cleanup_model, cleanup_level
+                 FROM trace WHERE started_ms >= ?1 ORDER BY started_ms DESC, id DESC LIMIT ?2",
+            )
+            .map_err(error)?;
+        let heads = query
+            .query_map(params![since_ms, limit as i64], |r| {
+                Ok((
+                    r.get::<_, i64>(0)?,
+                    r.get::<_, Option<i64>>(1)?,
+                    r.get::<_, i64>(2)?,
+                    r.get::<_, String>(3)?,
+                    labels_from(r, 4)?,
+                ))
+            })
+            .map_err(error)?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(error)?;
+        heads
+            .into_iter()
+            .map(|(id, history_id, started_ms, outcome, labels)| {
+                Ok(StoredTrace {
+                    history_id,
+                    started_ms,
+                    outcome,
+                    labels,
+                    spans: spans_of(&db, id)?,
+                })
+            })
+            .collect()
+    }
+
+    /// How many traces started at or after `since_ms` ended with each outcome, by outcome name
+    /// (spec 200 R-4). Counts every trace, past any limit of [`TraceStore::traces_since`].
+    pub fn outcome_counts(&self, since_ms: i64) -> Result<Vec<(String, usize)>, Error> {
+        let db = self.reader()?;
+        let mut query = db
+            .prepare(
+                "SELECT outcome, COUNT(*) FROM trace WHERE started_ms >= ?1
+                 GROUP BY outcome ORDER BY outcome",
+            )
+            .map_err(error)?;
+        query
+            .query_map(params![since_ms], |r| {
+                Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)? as usize))
+            })
+            .map_err(error)?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(error)
     }
 
     /// The median and p90 of each stage over the traces started at or after `since_ms`, by
@@ -364,6 +404,118 @@ impl TraceStore {
         db.query_row("SELECT COUNT(*) FROM trace", [], |r| r.get::<_, i64>(0))
             .map(|n| n as usize)
             .map_err(error)
+    }
+}
+
+/// The spans of one trace, its root first.
+fn spans_of(db: &Connection, trace_id: i64) -> Result<Vec<StoredSpan>, Error> {
+    let mut query = db
+        .prepare(
+            "SELECT name, parent, start_us, duration_us, fields, events FROM span
+             WHERE trace_id = ?1 ORDER BY idx",
+        )
+        .map_err(error)?;
+    query
+        .query_map(params![trace_id], |r| {
+            Ok(StoredSpan {
+                name: r.get(0)?,
+                parent: r.get::<_, Option<i64>>(1)?.map(|p| p as usize),
+                start_us: r.get::<_, i64>(2)? as u64,
+                duration_us: r.get::<_, i64>(3)? as u64,
+                fields: json_map(&r.get::<_, String>(4)?),
+                events: json_map(&r.get::<_, String>(5)?),
+            })
+        })
+        .map_err(error)?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(error)
+}
+
+/// One stage of a trace as a bar on a shared axis from key-down (spec 200 R-10).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StageBar {
+    pub stage: String,
+    pub start_us: u64,
+    pub duration_us: u64,
+}
+
+impl StoredTrace {
+    /// The stages Diagnostics names, as bars from the root's start (key-down), in the order
+    /// they started (spec 200 R-10).
+    pub fn bars(&self) -> Vec<StageBar> {
+        let origin = self.spans.first().map_or(0, |root| root.start_us);
+        let mut bars: Vec<StageBar> = self
+            .spans
+            .iter()
+            .skip(1)
+            .filter(|s| hyperme_core::diagnostics::STAGES.contains(&s.name.as_str()))
+            .map(|s| StageBar {
+                stage: s.name.clone(),
+                start_us: s.start_us.saturating_sub(origin),
+                duration_us: s.duration_us,
+            })
+            .collect();
+        bars.sort_by_key(|b| b.start_us);
+        bars
+    }
+
+    fn span(&self, name: &str) -> Option<&StoredSpan> {
+        self.spans.iter().skip(1).find(|s| s.name == name)
+    }
+
+    fn root_name(&self, field: &str) -> Option<&str> {
+        self.spans.first()?.fields.get(field)?.as_str()
+    }
+
+    /// The trace as Diagnostics reads it (spec 200): stage durations, the provider and model
+    /// that answered (a fallback's when one was used), and key release to text, the end of
+    /// `insert` after the end of `capture`, for a pasted or copied dictation.
+    pub fn row(&self) -> TraceRow {
+        let via = |provider: &str, model: &str, label: (&str, &str)| match (
+            self.root_name(provider),
+            self.root_name(model),
+        ) {
+            (Some(p), Some(m)) => Some((p.to_owned(), m.to_owned())),
+            _ if !label.0.is_empty() => Some((label.0.to_owned(), label.1.to_owned())),
+            _ => None,
+        };
+        let l = &self.labels;
+        let speech = self.span(trace::SPEECH).and_then(|_| {
+            via(
+                "speech_via",
+                "speech_via_model",
+                (&l.speech_provider, &l.speech_model),
+            )
+        });
+        let cleanup = self.span(trace::CLEANUP).and_then(|_| {
+            via(
+                "cleanup_via",
+                "cleanup_via_model",
+                (&l.cleanup_provider, &l.cleanup_model),
+            )
+        });
+        let end = |s: &StoredSpan| s.start_us + s.duration_us;
+        let release_to_text_us = match self.outcome.as_str() {
+            "pasted" | "copied" => self
+                .span(trace::CAPTURE)
+                .zip(self.span(trace::INSERT))
+                .map(|(capture, insert)| end(insert).saturating_sub(end(capture))),
+            _ => None,
+        };
+        TraceRow {
+            started_ms: self.started_ms,
+            outcome: self.outcome.clone(),
+            error_kind: self.root_name("error_kind").map(str::to_owned),
+            speech,
+            cleanup,
+            release_to_text_us,
+            stages: self
+                .spans
+                .iter()
+                .skip(1)
+                .map(|s| StageTime::new(&s.name, s.duration_us))
+                .collect(),
+        }
     }
 }
 
