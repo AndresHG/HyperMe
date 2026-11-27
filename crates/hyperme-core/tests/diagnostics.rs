@@ -181,3 +181,15 @@ fn a_p90_over_budget_is_marked_and_names_the_slowest_stage() {
     ));
     assert_eq!(view.slowest_stage, None);
 }
+
+/// Spec 200 R-2, R-6: the view reaches the Settings page as JSON, a window saying which state it
+/// is in.
+#[test]
+fn the_view_serialises_for_the_settings_page() {
+    let rows: Vec<TraceRow> = (1..=4).map(|i| pasted(i * HOUR_MS, 300, 100, 9)).collect();
+    let json = serde_json::to_value(compute(&rows, NOW)).unwrap();
+    assert_eq!(json["last_day"]["state"], "too_few");
+    assert_eq!(json["last_day"]["count"], 4);
+    assert_eq!(json["outcomes"][0][0], "pasted");
+    assert_eq!(json["stages"][0]["stage"], "mic_start");
+}

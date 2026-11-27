@@ -101,16 +101,26 @@ pub fn flush_exports() {
 /// information and above echoed to standard error.
 fn warnings_layer(app: &AppHandle) -> WarningsLayer {
     let home = app.path().home_dir().ok();
-    let dir = home
-        .as_ref()
-        .map(|home| home.join("Library").join("Logs").join("HyperMe"))
-        .unwrap_or_else(|| data_dir(app).join("logs"));
-    let file = RotatingFile::new(dir.join("warnings.log"), log_file::LIMIT);
+    let file = RotatingFile::new(warnings_path(app), log_file::LIMIT);
     WarningsLayer::new(
         Arc::new(file),
         home.map(|h| h.to_string_lossy().into_owned()),
     )
     .echo(Arc::new(Stderr))
+}
+
+/// `~/Library/Logs/HyperMe/warnings.log`, or the data folder's `logs` without a home folder.
+pub fn warnings_path(app: &AppHandle) -> PathBuf {
+    app.path()
+        .home_dir()
+        .map(|home| home.join("Library").join("Logs").join("HyperMe"))
+        .unwrap_or_else(|_| data_dir(app).join("logs"))
+        .join("warnings.log")
+}
+
+/// The trace store, when it opened (spec 182).
+pub fn trace_store(app: &AppHandle) -> Option<Arc<TraceStore>> {
+    lock(app).traces.clone()
 }
 
 /// HyperMe's data folder: `~/Library/Application Support/HyperMe` (design.md).
