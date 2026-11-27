@@ -5,7 +5,9 @@
 # Tool names, arguments and answer shapes were checked against the live servers' tools/list
 # and their output schemas on 27 November 2026 (slice 1, docs/results/2026-11-27-google-live-check.md).
 # Servers use the stateless MCP lifecycle (server/discover). /mcp/v1self is the endpoint for
-# clients without MCP form elicitation; it has no send, reply, forward or delete tools.
+# clients without MCP form elicitation; it has no send, reply, forward or delete tools. Gmail is
+# on /mcp/v1 (specs/166-gmail-approvals, A-2): HyperMe declares form elicitation, and /mcp/v1
+# gives full result sets once the user approves; its send tools stay forbidden below.
 
 id = "google"
 name = "Google"
@@ -46,7 +48,7 @@ scopes = ["https://www.googleapis.com/auth/calendar.calendarlist.readonly",
 [[servers]]
 id = "gmail"
 label = "Mail: read your inbox"
-url = "https://gmailmcp.googleapis.com/mcp/v1self"
+url = "https://gmailmcp.googleapis.com/mcp/v1"
 daily_units = 5000
 units = { search_threads = 10, get_thread = 1, get_message = 1, create_draft = 10 }
 scopes = ["https://www.googleapis.com/auth/gmail.readonly"]
@@ -83,8 +85,8 @@ into = "events"
 # those whose last message is not SENT by the account; each is mirrored as a task (R-27). Bodies
 # are fetched only on demand, never stored (R-18). search_threads answers {threads: [Thread],
 # ...}; a Thread has id and messages, a Message subject, sender, snippet, internalDate and
-# labelIds. Without MCP form elicitation Google omits threads that need the user's approval
-# (DATA_PROTECTION_POLICY), so this pull returns little until the client supports it.
+# labelIds. Threads that need the user's approval are held back (omittedContent,
+# DATA_PROTECTION_POLICY) until the user approves the pull once (specs/166).
 [[pull]]
 server = "gmail"
 tool = "search_threads"

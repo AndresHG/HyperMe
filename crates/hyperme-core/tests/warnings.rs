@@ -86,3 +86,20 @@ fn r14_only_hypermes_own_events_are_kept() {
     assert!(file.all().is_empty());
     assert!(echo.all().is_empty());
 }
+
+/// Spec 166, AC-12 and R-20: rmcp logs whole requests and results, which can hold a server's
+/// approval message, title and state; none of its events reach the warnings file, at any level.
+#[test]
+fn rmcp_events_never_reach_the_file() {
+    let (file, echo) = (Arc::new(Lines::default()), Arc::new(Lines::default()));
+    let secret = r#"approval_choice "Allow HyperMe to read 3 threads" requestState {"b":"b-1"}"#;
+    run(&file, &echo, || {
+        tracing::debug!(target: "rmcp::service", "{secret}");
+        tracing::info!(target: "rmcp::service", "{secret}");
+        tracing::warn!(target: "rmcp::service", "{secret}");
+        tracing::error!(target: "rmcp::transport::streamable_http_client", "{secret}");
+    });
+    let text = [file.all(), echo.all()].concat().join("\n");
+    assert!(!text.contains("3 threads"), "{text}");
+    assert!(!text.contains("b-1"), "{text}");
+}

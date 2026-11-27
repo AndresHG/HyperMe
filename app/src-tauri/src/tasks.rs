@@ -757,6 +757,31 @@ pub fn failed_alert(
     }
 }
 
+/// The "Needs your OK" alert (specs/166, R-8, docs/UX.md "Alerts"): which account's server
+/// waits for an approval, and Review opening that account's page in Settings → Connectors.
+pub fn needs_ok_alert(
+    connector: &hyperme_core::registry::Connector,
+    server: &hyperme_core::registry::Server,
+    label: &str,
+    account: &str,
+) -> crate::pill::AlertView {
+    let what = server
+        .label
+        .as_deref()
+        .and_then(|l| l.split(':').next())
+        .unwrap_or(&server.id)
+        .to_lowercase();
+    crate::pill::AlertView {
+        title: "Needs your OK".to_owned(),
+        detail: format!(
+            "{} {what} wants your OK before HyperMe reads it for {label}",
+            connector.name
+        ),
+        action: "Review".to_owned(),
+        link: Some(hyperme_core::connector_settings::link_for(account)),
+    }
+}
+
 /// The connectors changed (an account added, removed, switched): rebuild the job table.
 pub fn jobs_changed(app: &tauri::AppHandle) {
     use tauri::Manager;
@@ -920,7 +945,9 @@ struct McpSyncer {
 
 impl Syncer for McpSyncer {
     async fn sync(&self, id: &str, allowlist: &[String], now: UtcDateTime) -> Result<(), String> {
-        use hyperme_core::health::AccountStatusStore;
+        use hyperme_core::health::{
+            AccountStatusStore, PullEnd, ServerStatusStore, after_pull, pull_runs,
+        };
         use hyperme_platform::keychain::KeychainStore;
         use hyperme_platform::presence::MacClock;
         use hyperme_providers::mcp::{AccountAuth, McpCaller, RemoteServer};
@@ -945,6 +972,9 @@ impl Syncer for McpSyncer {
             hyperme_providers::setup::oauth_client(connector, &*keychain)
                 .map_err(|e| e.to_string())?,
         );
+        let today = now
+            .to_offset(hyperme_core::schedule::Zone::offset_at(&MacClock, now))
+            .date();
         let mut failures = Vec::new();
         for entry in config.connectors.accounts.iter().filter(|a| {
             a.enabled
@@ -954,6 +984,12 @@ impl Syncer for McpSyncer {
             let account = entry.id();
             if self.store.sign_in_needed(&account).unwrap_or(false) {
                 continue; // Settings shows "Sign in again" (specs/97, R-10).
+            }
+            // "Not allowed" and "Blocked" wait for the user; "Needs your OK" is tried once a
+            // day (specs/166, R-8, R-15, R-16).
+            let status = self.store.status(&account, &server.id).unwrap_or_default();
+            if !pull_runs(&status, today) {
+                continue;
             }
             let auth = Arc::new(AccountAuth::new(oauth.clone(), keychain.clone(), &account));
             let remote = RemoteServer::new(
@@ -969,6 +1005,7 @@ impl Syncer for McpSyncer {
             )
             .with_units(server.units.clone());
             let caller = McpCaller::new(vec![remote], allowlist.to_vec());
+            let mut end = PullEnd::Done { held_back: 0 };
             for pull in connector.pulls.iter().filter(|p| p.server == server.id) {
                 let result = match pull.into.as_str() {
                     "events" => sync::pull_events(
@@ -981,7 +1018,7 @@ impl Syncer for McpSyncer {
                         &MacClock,
                     )
                     .await
-                    .map(drop),
+                    .map(|_| 0),
                     "mail" => sync::pull_mail(
                         &caller,
                         &*self.store,
@@ -992,20 +1029,36 @@ impl Syncer for McpSyncer {
                         &MacClock,
                     )
                     .await
-                    .map(drop),
-                    _ => Ok(()),
+                    .map(|report| u32::try_from(report.held_back).unwrap_or(u32::MAX)),
+                    _ => Ok(0),
                 };
-                match result {
-                    Ok(()) => {}
-                    Err(sync::SyncError::SignInAgain) => {
-                        let _ = self.store.mark_sign_in_needed(&account, now);
-                        failures.push(format!("{account} needs a new sign-in"));
-                    }
-                    // Waits for the user's OK, refusal or admin (specs/166): not a failure
-                    // for the job-failed alert (R-16b); slice 2 shows it on the account page.
-                    Err(sync::SyncError::NeedsUser(_)) => {}
-                    Err(e) => failures.push(format!("{account}: {e}")),
+                if let Err(sync::SyncError::SignInAgain) = &result {
+                    let _ = self.store.mark_sign_in_needed(&account, now);
+                    failures.push(format!("{account} needs a new sign-in"));
+                } else if let Err(e @ sync::SyncError::Failed(_)) = &result {
+                    failures.push(format!("{account}: {e}"));
                 }
+                // "Needs your OK" and the like wait for the user (specs/166): never a failure
+                // for the job-failed alert (R-16b); the account page shows the state.
+                end = end.and(match result {
+                    Ok(held_back) => PullEnd::Done { held_back },
+                    Err(sync::SyncError::NeedsUser(state)) => PullEnd::NeedsUser(state),
+                    Err(_) => PullEnd::Failed,
+                });
+            }
+            match after_pull(&*self.store, &account, &server.id, end, today) {
+                Ok(true) => crate::runtime::show_card(
+                    &self.app,
+                    crate::pill::Card::Alert(needs_ok_alert(
+                        connector,
+                        server,
+                        &entry.label,
+                        &account,
+                    )),
+                    false,
+                ),
+                Ok(false) => {}
+                Err(e) => tracing::warn!("server state: {e}"),
             }
         }
         if failures.is_empty() {
@@ -1573,6 +1626,26 @@ mod tests {
                 .connectors;
         let registry = hyperme_core::connector_settings::registry(None, &connectors).unwrap();
         (registry, connectors)
+    }
+
+    /// specs/166 AC-3, R-8: the "Needs your OK" alert names the service and account, and
+    /// Review opens the account's page.
+    #[test]
+    fn the_needs_ok_alert_names_the_service_and_links_the_account() {
+        let (registry, _) = google_with(&["personal"]);
+        let google = registry.get("google").unwrap();
+        let gmail = google.server("gmail").unwrap();
+        let alert = needs_ok_alert(google, gmail, "personal", "google:personal");
+        assert_eq!(alert.title, "Needs your OK");
+        assert_eq!(
+            alert.detail,
+            "Google mail wants your OK before HyperMe reads it for personal"
+        );
+        assert_eq!(alert.action, "Review");
+        assert_eq!(
+            alert.link.as_deref(),
+            Some("hyperme://settings/connectors/google:personal")
+        );
     }
 
     /// AC-16, R-36: a sync job that failed twice says what it could not reach, and Fix opens

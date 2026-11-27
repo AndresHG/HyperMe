@@ -101,8 +101,8 @@ async fn the_store_uses_wal_and_a_schema_version_and_survives_reopening() {
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
     // 1 tasks, 2 jobs, 3 connector requests, 4 events, 5 mail, 6 sign-in state
-    // (specs/97-google-connectors), 7 when Today was seen.
-    assert_eq!(version, 7);
+    // (specs/97-google-connectors), 7 when Today was seen, 8 server states (specs/166).
+    assert_eq!(version, 8);
 
     let store = SqliteTaskStore::open(&path).unwrap();
     let snapshot = store.snapshot(day(WED), 0).await.unwrap();

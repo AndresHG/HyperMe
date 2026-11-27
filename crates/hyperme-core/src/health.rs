@@ -6,7 +6,7 @@ use std::collections::BTreeSet;
 use std::future::Future;
 use std::sync::Mutex;
 
-use time::{Duration, UtcDateTime};
+use time::{Date, Duration, UtcDateTime};
 
 use crate::connector_settings::link_for;
 use crate::connectors::Usage;
@@ -75,7 +75,7 @@ pub enum SyncOutcome<R> {
     /// The account is waiting for a new sign-in; nothing was tried (R-10).
     SignInNeeded,
     /// The server waits for the user (specs/166); not a failure (R-16b).
-    NeedsUser(String),
+    NeedsUser(ServerState),
     Failed(String),
 }
 
@@ -109,7 +109,7 @@ where
             Ok(false) => SyncOutcome::SignInNeeded,
             Err(error) => SyncOutcome::Failed(error),
         },
-        Err(SyncError::NeedsUser(reason)) => SyncOutcome::NeedsUser(reason),
+        Err(SyncError::NeedsUser(state)) => SyncOutcome::NeedsUser(state),
         Err(SyncError::Failed(reason)) => SyncOutcome::Failed(reason),
     }
 }
@@ -169,4 +169,169 @@ pub fn requests_line(usage: Usage, quota: Option<Quota>) -> String {
         ));
     }
     line
+}
+
+/// Why a connector server waits for the user (specs/166-gmail-approvals, R-8, R-15, R-16).
+/// The order is the precedence: a later state replaces an earlier one, never the reverse
+/// (R-16a).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum ServerState {
+    /// The server asked for an approval and nobody answered: "Needs your OK".
+    NeedsOk,
+    /// The user refused: "Not allowed".
+    NotAllowed,
+    /// The server's admin policy blocks it: "Blocked by your admin".
+    Blocked,
+}
+
+impl ServerState {
+    /// The words the account page shows (R-8, R-15, R-16).
+    pub fn words(self) -> &'static str {
+        match self {
+            ServerState::NeedsOk => "Needs your OK",
+            ServerState::NotAllowed => "Not allowed",
+            ServerState::Blocked => "Blocked by your admin",
+        }
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ServerState::NeedsOk => "needs_ok",
+            ServerState::NotAllowed => "not_allowed",
+            ServerState::Blocked => "blocked",
+        }
+    }
+
+    pub fn parse(text: &str) -> Option<Self> {
+        match text {
+            "needs_ok" => Some(ServerState::NeedsOk),
+            "not_allowed" => Some(ServerState::NotAllowed),
+            "blocked" => Some(ServerState::Blocked),
+            _ => None,
+        }
+    }
+}
+
+/// What the app keeps about one account's server between pulls (specs/166).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ServerStatus {
+    pub state: Option<ServerState>,
+    /// The local day of the last unattended pull tried while "Needs your OK" (R-8).
+    pub last_try: Option<Date>,
+    /// The local day of the last "Needs your OK" alert (R-8).
+    pub last_alert: Option<Date>,
+    /// Items the last pull's answer listed as held back (`omittedContent`, R-17).
+    pub held_back: u32,
+}
+
+/// The server states, per account and server. SQLite keeps it in the app; tests use memory.
+pub trait ServerStatusStore: Send + Sync {
+    fn status(&self, account: &str, server: &str) -> Result<ServerStatus, String>;
+    fn save(&self, account: &str, server: &str, status: &ServerStatus) -> Result<(), String>;
+    /// Forgets every server of the account: a new sign-in or a disconnect (R-16a).
+    fn clear_account(&self, account: &str) -> Result<(), String>;
+}
+
+/// An in-memory [`ServerStatusStore`] for tests.
+#[derive(Debug, Default)]
+pub struct MemoryServerStatus {
+    rows: Mutex<std::collections::BTreeMap<(String, String), ServerStatus>>,
+}
+
+impl ServerStatusStore for MemoryServerStatus {
+    fn status(&self, account: &str, server: &str) -> Result<ServerStatus, String> {
+        let rows = self.rows.lock().unwrap_or_else(|p| p.into_inner());
+        Ok(rows
+            .get(&(account.to_owned(), server.to_owned()))
+            .cloned()
+            .unwrap_or_default())
+    }
+
+    fn save(&self, account: &str, server: &str, status: &ServerStatus) -> Result<(), String> {
+        let mut rows = self.rows.lock().unwrap_or_else(|p| p.into_inner());
+        rows.insert((account.to_owned(), server.to_owned()), status.clone());
+        Ok(())
+    }
+
+    fn clear_account(&self, account: &str) -> Result<(), String> {
+        let mut rows = self.rows.lock().unwrap_or_else(|p| p.into_inner());
+        rows.retain(|(a, _), _| a != account);
+        Ok(())
+    }
+}
+
+/// Whether an unattended pull of this server runs `today` (R-8, R-15, R-16): never while "Not
+/// allowed" or "Blocked by your admin" (until Review, Ask again or a new sign-in); once a day
+/// while "Needs your OK", since only the user can change it; otherwise always.
+pub fn pull_runs(status: &ServerStatus, today: Date) -> bool {
+    match status.state {
+        None => true,
+        Some(ServerState::NeedsOk) => status.last_try != Some(today),
+        Some(ServerState::NotAllowed | ServerState::Blocked) => false,
+    }
+}
+
+/// How an unattended pull of one server ended, for [`after_pull`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PullEnd {
+    /// The pull worked; it held back this many items (R-17).
+    Done { held_back: u32 },
+    /// The server waits for the user.
+    NeedsUser(ServerState),
+    /// Any other failure: the state is left as it is.
+    Failed,
+}
+
+impl PullEnd {
+    /// Combines the ends of several pulls of one server: the strongest waiting state wins,
+    /// waiting wins over any other failure, a failure over success, and held-back counts add
+    /// up (R-16a).
+    pub fn and(self, next: PullEnd) -> PullEnd {
+        match (self, next) {
+            (PullEnd::NeedsUser(a), PullEnd::NeedsUser(b)) => PullEnd::NeedsUser(a.max(b)),
+            (PullEnd::NeedsUser(a), _) | (_, PullEnd::NeedsUser(a)) => PullEnd::NeedsUser(a),
+            (PullEnd::Failed, _) | (_, PullEnd::Failed) => PullEnd::Failed,
+            (PullEnd::Done { held_back: a }, PullEnd::Done { held_back: b }) => PullEnd::Done {
+                held_back: a.saturating_add(b),
+            },
+        }
+    }
+}
+
+/// Records how a pull ended and says whether the "Needs your OK" alert is due: a pull that
+/// works clears the state (R-16a); a higher state replaces a lower one; the alert comes at most
+/// once a day per account and server (R-8), and never for "Not allowed" or "Blocked" (R-15,
+/// R-16).
+pub fn after_pull(
+    store: &dyn ServerStatusStore,
+    account: &str,
+    server: &str,
+    end: PullEnd,
+    today: Date,
+) -> Result<bool, String> {
+    let mut status = store.status(account, server)?;
+    let alert = match end {
+        PullEnd::Done { held_back } => {
+            status = ServerStatus {
+                held_back,
+                ..ServerStatus::default()
+            };
+            false
+        }
+        PullEnd::NeedsUser(state) => {
+            if status.state.is_none_or(|old| state >= old) {
+                status.state = Some(state);
+            }
+            status.last_try = Some(today);
+            let due =
+                status.state == Some(ServerState::NeedsOk) && status.last_alert != Some(today);
+            if due {
+                status.last_alert = Some(today);
+            }
+            due
+        }
+        PullEnd::Failed => return Ok(false),
+    };
+    store.save(account, server, &status)?;
+    Ok(alert)
 }

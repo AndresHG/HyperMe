@@ -52,7 +52,8 @@
     if (!p) return;
     $('privacy-accounts').replaceChildren(...p.accounts.map((a) =>
       el('div', { class: 'row', 'data-words': 'connected account ' + a.title },
-        el('div', { class: 'what' }, a.title, el('small', {}, a.reads.join(' · '))))));
+        el('div', { class: 'what' }, a.title, el('small', {}, a.reads.join(' · ')),
+          el('small', {}, a.approvals || '')))));
     $('privacy-where').textContent = p.where_it_goes;
     $('privacy-kept').textContent = p.kept;
   }
@@ -92,6 +93,8 @@
     $('page-enabled').checked = page.enabled;
     $('page-token-row').classList.toggle('hidden', page.account || page.state !== 'Not signed in');
     $('page-unverified').classList.toggle('hidden', page.tools_verified);
+    $('page-approvals').replaceChildren(...(page.approvals || []).map((line) =>
+      el('div', { class: 'row', 'data-words': 'approval needs your ok not allowed blocked held back' }, el('div', { class: 'what' }, el('small', {}, line)))));
     $('page-requests').replaceChildren(...(page.requests || []).map((line) =>
       el('div', { class: 'row', 'data-words': 'requests quota today' }, el('div', { class: 'what' }, el('small', {}, line)))));
     $('page-oauth-row').classList.toggle('hidden', !(page.account && page.oauth));
