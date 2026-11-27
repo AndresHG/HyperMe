@@ -90,6 +90,9 @@ fn main() {
             settings::app_restart,
             dictionary::dictionary_view,
             dictionary::dictionary_save,
+            dictionary::dictionary_import,
+            dictionary::dictionary_export,
+            dictionary::dictionary_is_common,
             connectors::connectors_view,
             connectors::connectors_set_tool,
             connectors::connectors_set_enabled,
@@ -119,7 +122,10 @@ fn main() {
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
             #[cfg(target_os = "macos")]
             home::init(app.handle());
-            // Fix a word in History adds to the dictionary file (spec 93, D5).
+            // The dictionary store, with the old text file imported once (spec 93, D2).
+            #[cfg(target_os = "macos")]
+            dictionary::init(app.handle());
+            // Fix a word in History adds to the dictionary (spec 93, D5).
             #[cfg(target_os = "macos")]
             home::set_dictionary(
                 app.handle(),
