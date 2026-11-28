@@ -142,12 +142,15 @@ fn render() -> String {
 mod tests {
     use std::path::{Path, PathBuf};
 
-    fn sources(dir: &Path, out: &mut Vec<PathBuf>) {
-        for entry in std::fs::read_dir(dir).expect("app/web/src") {
+    fn sources(dir: &Path, extensions: &[&str], out: &mut Vec<PathBuf>) {
+        for entry in std::fs::read_dir(dir).expect("a source folder") {
             let path = entry.expect("entry").path();
             if path.is_dir() {
-                sources(&path, out);
-            } else if path.extension().is_some_and(|e| e == "ts" || e == "svelte") {
+                sources(&path, extensions, out);
+            } else if path
+                .extension()
+                .is_some_and(|e| extensions.iter().any(|x| e == *x))
+            {
                 out.push(path);
             }
         }
@@ -159,7 +162,7 @@ mod tests {
     fn only_the_bindings_call_tauri() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../web/src");
         let mut files = Vec::new();
-        sources(&root, &mut files);
+        sources(&root, &["ts", "svelte"], &mut files);
         assert!(files.len() > 20, "pages found");
         for path in files {
             if path.ends_with("lib/bindings.ts") {
@@ -225,13 +228,14 @@ mod tests {
             "settings_pending",
             "tasks_open_meeting",
         ];
-        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let mut files = Vec::new();
+        sources(
+            &Path::new(env!("CARGO_MANIFEST_DIR")).join("src"),
+            &["rs"],
+            &mut files,
+        );
         let mut on_main = Vec::new();
-        for entry in std::fs::read_dir(&root).expect("src") {
-            let path = entry.expect("entry").path();
-            if path.extension().is_none_or(|e| e != "rs") {
-                continue;
-            }
+        for path in files {
             let text = std::fs::read_to_string(&path).expect("source");
             let mut lines = text.lines();
             while let Some(line) = lines.next() {
