@@ -94,7 +94,10 @@ fn web_files(dir: &Path, found: &mut Vec<PathBuf>) {
         let path = entry.unwrap().path();
         if path.is_dir() {
             web_files(&path, found);
-        } else if path.extension().is_some_and(|e| e == "svelte" || e == "css") {
+        } else if path
+            .extension()
+            .is_some_and(|e| e == "svelte" || e == "css")
+        {
             found.push(path);
         }
     }
