@@ -1,16 +1,16 @@
-//! The design-token lint (docs/DESIGN.md, "Checks"): pages in `app/ui` take sizes, fonts and
-//! colours from `tokens.css` through `var(--…)`, never as raw values. A page joins `MIGRATED` when
-//! it moves to the tokens, so the check only ever grows.
+//! The design-token lint (docs/DESIGN.md, "Checks"): pages take sizes, fonts and colours from
+//! `tokens.css` through `var(--…)`, never as raw values. Every Svelte component in `app/web/src`
+//! is held to it (spec 257, AC-3); a page still in `app/ui` joins `MIGRATED` when it moves to the
+//! tokens, so the check only ever grows.
 
 use std::path::{Path, PathBuf};
 
-/// Files in `app/ui` held to the tokens. Each page is added as it moves onto `tokens.css`.
+/// Files in `app/ui` held to the tokens, besides every `.svelte` file in `app/web/src`.
 const MIGRATED: &[&str] = &[
     "components.css",
     "dictionary.css",
     "home.html",
     "onboarding.html",
-    "pill.html",
     "settings.html",
 ];
 
@@ -87,6 +87,18 @@ const NAMED_COLOURS: &[&str] = &[
 
 fn ui_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../ui")
+}
+
+/// Every Svelte component under `dir`, as paths.
+fn svelte_files(dir: &Path, found: &mut Vec<PathBuf>) {
+    for entry in std::fs::read_dir(dir).unwrap_or_else(|e| panic!("{}: {e}", dir.display())) {
+        let path = entry.unwrap().path();
+        if path.is_dir() {
+            svelte_files(&path, found);
+        } else if path.extension().is_some_and(|e| e == "svelte") {
+            found.push(path);
+        }
+    }
 }
 
 /// The CSS of a file: a stylesheet as is; for HTML, its `<style>` blocks and `style="…"`
@@ -202,12 +214,20 @@ fn violations(css: &str) -> Vec<String> {
 
 #[test]
 fn migrated_pages_use_the_tokens() {
+    let mut files: Vec<PathBuf> = MIGRATED.iter().map(|name| ui_dir().join(name)).collect();
+    let web = Path::new(env!("CARGO_MANIFEST_DIR")).join("../web/src");
+    let before = files.len();
+    svelte_files(&web, &mut files);
+    assert!(
+        files.len() > before,
+        "no Svelte component found in app/web/src"
+    );
     let mut report = Vec::new();
-    for name in MIGRATED {
-        assert_ne!(*name, "tokens.css", "tokens.css is where raw values live");
-        let text =
-            std::fs::read_to_string(ui_dir().join(name)).unwrap_or_else(|e| panic!("{name}: {e}"));
-        for v in violations(&css_of(name, &text)) {
+    for path in files {
+        let name = path.file_name().unwrap().to_string_lossy().into_owned();
+        assert_ne!(name, "tokens.css", "tokens.css is where raw values live");
+        let text = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{name}: {e}"));
+        for v in violations(&css_of(&name, &text)) {
             report.push(format!("{name}: {v}"));
         }
     }

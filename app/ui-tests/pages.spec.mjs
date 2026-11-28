@@ -105,7 +105,7 @@ test('onboarding', async ({ page }) => {
 
 test('pill', async ({ page }) => {
   await open(page, 'pill.html', { width: 360, height: 300 });
-  await page.evaluate(() => window.showCard({
+  await page.evaluate(() => window.__mockEmit('card', {
     title: 'Good morning', yesterday: 'Yesterday: 4 done, 1 rolled over', meetings: '3 meetings · first at 09:30',
     tasks: [
       { title: 'Review the tokens pull request', tone: 'due', mark: 'due today' },
@@ -117,6 +117,6 @@ test('pill', async ({ page }) => {
   await expect(page).toHaveScreenshot('pill-card.png');
   expect(await layoutProblems(page)).toEqual([]);
   await page.setViewportSize({ width: 200, height: 32 });
-  await page.evaluate(() => window.render({ kind: 'done', label: 'Pasted · 42 words' }));
+  await page.evaluate(() => window.__mockEmit('pill', { kind: 'done', label: 'Pasted · 42 words' }));
   await expect(page).toHaveScreenshot('pill.png');
 });

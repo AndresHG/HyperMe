@@ -165,11 +165,13 @@ Read on 27 November 2026.
 
 ## Checks
 
-- `cargo test -p hyperme-app --test design_tokens`: every file in the migrated list uses tokens
+- `cargo test -p hyperme-app --test design_tokens`: every Svelte component in `app/web/src` and
+  every file in the migrated list uses tokens
   for `border-radius`, `padding`, `margin`, `gap`, `font-size`, `font-family`, `font`, colours and
   shadows; only `0`, `auto` and CSS-wide keywords pass raw. A page joins the list when it moves to
   the tokens, so the check only ever grows.
-- `cd app/ui-tests && npm install && npm test` (about 10 s): every page in WebKit (the engine of
+- `cd app/ui-tests && npm install && npm test` (about 10 s): builds the pages (`app/web`), then
+  shows every page in WebKit (the engine of
   macOS's web view) at a fixed size, light and dark, with fixture data from `mock-tauri.js` in place
   of Tauri's API, compared with the approved images in `app/ui-tests/approved/`. Home, History,
   Dictionary, the Settings sheet, the walkthrough and the pill (its card and a state): twelve images.

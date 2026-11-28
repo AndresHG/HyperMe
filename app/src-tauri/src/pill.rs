@@ -6,7 +6,7 @@ use hyperme_core::config::{Config, Role};
 use hyperme_core::dictation::Status;
 use serde::Serialize;
 
-/// The look of one state, sent to `pill.html` as an event.
+/// The look of one state, sent to the pill's page (`app/web/src/pill`) as an event.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct View {
     /// `recording`, `locked`, `working`, `done`, `raw`, `quiet`, `notice`, `error` or `retry`;
@@ -162,7 +162,7 @@ pub struct CardLine {
     pub tone: &'static str,
 }
 
-/// The morning card as `pill.html` draws it (docs/ux/daily-cards.svg). Parts that do not
+/// The morning card as the pill's page draws it (docs/ux/daily-cards.svg). Parts that do not
 /// exist are `None` and take no room; parts waiting for a sync say "Updating…" (R-18).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct CardView {
@@ -292,7 +292,7 @@ impl Card {
     }
 }
 
-/// Heights in points; `pill.html` uses the same ones, so the panel fits the card exactly.
+/// Heights in points; the pill's `Card.svelte` uses the same ones, so the panel fits the card exactly.
 /// `--space-5` in the page.
 pub const CARD_PAD: f64 = 20.0;
 pub const CARD_TITLE: f64 = 24.0;
@@ -549,10 +549,12 @@ mod level_tests {
     /// recording bars in an opaque square (owner, 26 November 2026).
     #[test]
     fn the_page_asks_for_the_current_view_when_it_loads() {
-        let page = include_str!("../../ui/pill.html");
-        assert!(page.contains("invoke('pill_view')"));
+        let page = include_str!("../../web/src/pill/Pill.svelte");
+        let ipc = include_str!("../../web/src/lib/ipc.ts");
+        assert!(page.contains(".then(() => commands.pillView())"));
+        assert!(ipc.contains("pillView: () => invoke<PillView | null>('pill_view')"));
         // Hidden means nothing drawn: no capsule, no bars left over from the warm-up.
-        assert!(page.contains(".pill.hidden { display: none; }"));
+        assert!(page.contains(".pill.hidden, .pill.card { display: none; }"));
     }
 
     /// The native shadow is on for the capsule, its states and the card, off for the bead
@@ -571,7 +573,7 @@ mod level_tests {
     /// card exactly (docs/DESIGN.md, 4-point grid).
     #[test]
     fn the_card_padding_matches_the_page() {
-        let page = include_str!("../../ui/pill.html");
+        let page = include_str!("../../web/src/pill/Card.svelte");
         assert_eq!(CARD_PAD, 20.0);
         assert!(page.contains("padding: var(--space-5); border-radius: var(--radius-sheet);"));
     }
