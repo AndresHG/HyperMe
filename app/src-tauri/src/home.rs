@@ -196,10 +196,10 @@ pub fn actions(has_text: bool, has_audio: bool, dictionary: bool, sample: bool) 
         add("fix", "Fix a word", "⌘F");
     }
     if has_text && has_audio {
-        add("correct", "Correct", "⌘E");
+        add("correct", "Correct for ground truth", "⌘E");
     }
     if sample {
-        add("delete-sample", "Delete sample", "");
+        add("delete-sample", "Remove from ground truth", "");
     }
     add("delete", "Delete", "⌘⌫");
     list

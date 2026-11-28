@@ -3,7 +3,7 @@
 // missing here answers null.
 (() => {
   const now = Date.UTC(2026, 10, 27, 9, 30);
-  const item = (id, minutes, text, app) => ({ id, started_ms: now - minutes * 60000, app, language: 'en', text, state: 'done', message: null, has_audio: true, actions: [{ id: 'copy', label: 'Copy', key: 'C' }, { id: 'correct', label: 'Correct', key: '⌘E' }, { id: 'delete', label: 'Delete', key: '⌫' }] });
+  const item = (id, minutes, text, app) => ({ id, started_ms: now - minutes * 60000, app, language: 'en', text, state: 'done', message: null, has_audio: true, actions: [{ id: 'copy', label: 'Copy', key: 'C' }, { id: 'correct', label: 'Correct for ground truth', key: '⌘E' }, { id: 'delete', label: 'Delete', key: '⌫' }] });
   // Spec 267: the first Correct asks to keep samples; once agreed, it saves.
   let agreed = false;
   const fixtures = {

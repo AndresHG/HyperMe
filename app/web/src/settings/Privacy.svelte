@@ -16,7 +16,7 @@
   const what = (d: Destination) => (d.on_this_mac ? 'Stays on this Mac' : `${SENT[d.role]} go${d.role === 'speech' ? 'es' : ''} to ${d.name}`);
   const when = (d: Destination) => (d.fallback_for ? `Only if ${d.fallback_for} fails` : d.role === 'speech' ? 'Dictation speech' : 'Dictation cleanup');
 
-  // Spec 267, R-12: corrected dictations kept as samples, outside the history's retention.
+  // Spec 267, R-12: corrected dictations kept as ground truth, outside the history's retention.
   let samples = $state<SamplesView | null>(null);
   let confirmDelete = $state(false);
   const loadSamples = () => commands.samplesView().then((v) => (samples = v)).catch(() => (samples = null));
@@ -66,11 +66,11 @@
     <div class="what">Size limit (MB)<small>The oldest dictations go first.</small></div>
     <Setting section="history" key="size_limit_mb" field="size_limit_mb" type="number" min={10} />
   </div>
-  <div class="row" data-words="samples corrected benchmark ground truth keep audio">
+  <div class="row" data-words="ground truth golden samples corrected benchmark keep audio">
     <div class="what">
-      Samples<small
+      Ground truth<small
         >Dictations you corrected in History, kept with their audio for benchmarks until you delete them.{#if samples?.count}
-          {samples.count} {samples.count === 1 ? 'sample' : 'samples'}, {size(samples.bytes)}.{/if}</small
+          {samples.count} {samples.count === 1 ? 'dictation' : 'dictations'}, {size(samples.bytes)}.{/if}</small
       >
     </div>
     <span class="actions">
@@ -79,7 +79,7 @@
         <Button size="small" onclick={deleteSamples}>Delete {samples?.count ?? 0}</Button>
         <Button size="small" variant="borderless" onclick={() => (confirmDelete = false)}>Keep</Button>
       {:else}
-        <Button size="small" disabled={!samples?.count} onclick={() => (confirmDelete = true)}>Delete all samples</Button>
+        <Button size="small" disabled={!samples?.count} onclick={() => (confirmDelete = true)}>Delete all</Button>
       {/if}
     </span>
   </div>

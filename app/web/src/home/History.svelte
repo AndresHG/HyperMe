@@ -4,7 +4,7 @@
   // lists only the dictations still waiting for a retry.
   import { onDestroy, tick } from 'svelte';
   import { commands, on, type HomeInfo, type Item } from '../lib/ipc';
-  import { Menu, type MenuItem } from '../lib/ui';
+  import { Button, Menu, Sheet, type MenuItem } from '../lib/ui';
   import { queryWords } from './format';
   import HistoryList from './HistoryList.svelte';
   import Icon from './Icon.svelte';
@@ -23,6 +23,12 @@
   let list = $state<HistoryList>();
   let search = $state<HTMLInputElement>();
   let menu = $state({ open: false, x: 0, y: 0 });
+  // Spec 267, R-6: the dictation waiting for the one-time agreement to keep ground truth.
+  let agreeFor = $state<number | null>(null);
+  let keepButton = $state<HTMLButtonElement>();
+  $effect(() => {
+    if (agreeFor !== null) keepButton?.focus();
+  });
   let before: [number, number] | null = null;
   let done = false;
   let loading = false;
@@ -130,7 +136,7 @@
         await commands.homeDeleteSample(id);
         const item = await commands.homeItem(id);
         if (item) replace(item);
-        say(id, 'Sample deleted');
+        say(id, 'Removed from ground truth');
       }
       if (action === 'delete') state.mode = { kind: 'confirm-delete' };
     } catch (error) {
@@ -189,21 +195,22 @@
   }
 
   // Correct (spec 267, R-4 to R-7): the whole text as it should have been, kept with the audio as
-  // a sample for benchmarks. The first save explains what is kept and waits for a yes (R-6).
+  // ground truth for benchmarks. The first save explains what is kept, once, in a modal (R-6).
   async function sendCorrect(id: number, agreed: boolean) {
     const state = stateOf(id);
     const mode = state.mode;
-    if (!mode || (mode.kind !== 'correct' && mode.kind !== 'correct-agree')) return;
+    agreeFor = null;
+    if (mode?.kind !== 'correct') return;
     try {
       const outcome = await commands.homeCorrect(id, mode.text, agreed);
       if (outcome.outcome === 'needs_agreement') {
-        state.mode = { kind: 'correct-agree', text: mode.text };
+        agreeFor = id;
         return;
       }
       state.mode = null;
       const item = await commands.homeItem(id);
       if (item) replace(item);
-      say(id, outcome.changed ? 'Saved as a sample. Press ↵ to paste it again' : 'Saved as a sample');
+      say(id, outcome.changed ? 'Saved as ground truth. Press ↵ to paste it again' : 'Saved as ground truth');
     } catch (error) {
       say(id, String(error), true);
     }
@@ -211,6 +218,8 @@
 
   // ---- Keys (R-13) ----
   function onkeydown(e: KeyboardEvent) {
+    // The modal has its own keys: Esc closes it, ↵ presses its focused button.
+    if (agreeFor !== null) return;
     keys(e);
     typeToSearch(e);
   }
@@ -238,7 +247,6 @@
       e.preventDefault();
       if (mode?.kind === 'confirm-delete') confirmDelete(id);
       else if (mode?.kind === 'fix-confirm') sendFix(id, true);
-      else if (mode?.kind === 'correct-agree') sendCorrect(id, true);
       else if (!mode) run(id, 'paste');
       return;
     }
@@ -358,6 +366,21 @@
   <div class="more" id="more">{more}</div>
 </section>
 
+<Sheet bind:open={() => agreeFor !== null, (open) => !open && (agreeFor = null)} label="Keep ground truth" size="alert">
+  <div class="agree" id="agree">
+    <h2>Keep this as ground truth?</h2>
+    <p>
+      HyperMe keeps this dictation's audio, what was heard and your corrected text on this Mac, so future speech models and prompts can be measured
+      against it. It stays until you delete it, even after History deletes the dictation, and goes nowhere unless you run a benchmark with your own
+      providers.
+    </p>
+    <div class="buttons">
+      <Button onclick={() => (agreeFor = null)}>Not now</Button>
+      <Button variant="primary" bind:ref={keepButton} onclick={() => agreeFor !== null && sendCorrect(agreeFor, true)}>Keep ground truth</Button>
+    </div>
+  </div>
+</Sheet>
+
 <Menu
   bind:open={menu.open}
   x={menu.x}
@@ -374,5 +397,8 @@
   .search input { border: 0; outline: none; background: transparent; color: var(--color-label); font: inherit; flex: 1; min-width: 0; }
   .more { color: var(--color-label-secondary); font-size: var(--text-callout); padding: var(--space-3) 0; text-align: center; }
   .off { padding: var(--space-3) var(--space-3); border: 1px solid var(--color-separator); border-radius: var(--radius-sheet); background: var(--color-card-bg); margin-bottom: var(--space-3); color: var(--color-label-secondary); }
+  .agree h2 { font-size: var(--text-title3); font-weight: 600; text-transform: none; letter-spacing: normal; color: var(--color-label); margin: 0 0 var(--space-2); }
+  .agree p { margin: 0; color: var(--color-label-secondary); line-height: 1.45; }
+  .agree .buttons { display: flex; justify-content: flex-end; gap: var(--space-2); margin-top: var(--space-4); }
   .off a { color: var(--color-accent-text); text-decoration: none; }
 </style>

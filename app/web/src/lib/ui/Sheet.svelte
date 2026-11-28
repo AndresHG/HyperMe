@@ -8,9 +8,17 @@
   let {
     open = $bindable(false),
     label,
+    size = 'large',
     onclose,
     children,
-  }: { open?: boolean; label: string; onclose?: () => void; children: Snippet } = $props();
+  }: {
+    open?: boolean;
+    label: string;
+    /** `large` for a page such as Settings; `alert` for a short question with its buttons. */
+    size?: 'large' | 'alert';
+    onclose?: () => void;
+    children: Snippet;
+  } = $props();
 
   function close() {
     open = false;
@@ -22,7 +30,7 @@
 
 {#if open}
   <div class="dim" role="presentation" onmousedown={close}></div>
-  <div class="sheet" role="dialog" aria-modal="true" aria-label={label}>{@render children()}</div>
+  <div class="sheet" class:alert={size === 'alert'} role="dialog" aria-modal="true" aria-label={label}>{@render children()}</div>
 {/if}
 
 <style>
@@ -33,4 +41,5 @@
     height: clamp(420px, calc(100vh - var(--title-bar-height) - 2 * var(--space-8)), 760px);
     border-radius: var(--radius-sheet); overflow: hidden; box-shadow: var(--shadow-sheet); background: var(--color-content-bg);
   }
+  .sheet.alert { width: min(420px, calc(100vw - 2 * var(--space-8))); height: auto; padding: var(--space-5); }
 </style>

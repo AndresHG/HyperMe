@@ -44,6 +44,9 @@ leaves the Mac.
 - **Sample folder:** `~/Library/Application Support/HyperMe/samples/`, in the layout of a
   harness set (design.md, section 3).
 - **Correct:** the new History action. **Fix a word** stays as it is.
+- In the app the user sees **ground truth**, never "sample" (GT-5): the action is **Correct for
+  ground truth**, a row's tag **Ground truth**, the Settings row **Ground truth**. "Sample" stays
+  the word in the code and the harness, where a set is made of samples.
 
 ## Requirements
 
@@ -57,19 +60,18 @@ leaves the Mac.
 
 ### Correcting
 
-- R-3. For a selected done row with audio, History shall offer **Correct** (⌘E) next to Fix a word.
+- R-3. For a selected done row with audio, History shall offer **Correct for ground truth** (⌘E) next to Fix a word.
   It is offered whether or not a dictionary exists.
 - R-4. When the user chooses Correct, History shall open the row's text in an editor in place, the
-  whole text selected, with **Save as sample** (⌘↵) and **Cancel** (Esc).
+  whole text selected, with **Save as ground truth** (⌘↵) and **Cancel** (Esc).
 - R-5. When the user saves a text that differs from the row's text (apart from spacing), the app
   shall write a sample and show the corrected text in the row with a sample mark. Saving the same
   text keeps it and still writes a sample (a dictation that was right is a useful sample too).
-- R-6. The first time the user saves a sample, History shall explain under the row, before
-  anything is written (as it asks before Delete): what a sample keeps (audio and texts), that it stays on this Mac until they
+- R-6. The first time the user saves a sample, History shall explain in a small modal, once, before
+  anything is written: what a sample keeps (audio and texts), that it stays on this Mac until they
   delete it, even after the history deletes the dictation, and that only their own providers hear
-  it, and only when they run a benchmark. **Keep samples** (↵) writes it and does not ask again;
-  **Not now** (Esc) writes nothing. (GT-2; the owner chose "ask on first save". The ask sits in the
-  row like the other confirmations there, not in a separate sheet.)
+  it, and only when they run a benchmark. **Keep ground truth** (↵) writes it and does not ask
+  again; **Not now** (Esc) writes nothing. (GT-2; owner, 28 November 2026: a modal shown once.)
 - R-7. When the user corrects a row that already has a sample, the app shall replace that sample's
   corrected text and keep one sample per dictation.
 - R-8. Correct shall never change the personal dictionary. (Turning a correction into dictionary
@@ -86,7 +88,7 @@ leaves the Mac.
 - R-11. Samples shall not follow the history's retention or size limit. Deleting the history item
   shall keep its sample; the delete confirmation says so in one line.
 - R-12. Settings → Privacy, under the history settings, shall show the number of samples and their size, with **Show in
-  Finder** and **Delete all samples** (asks once). A sample row in History has **Delete sample**.
+  Finder** and **Delete all** (asks once). A row with ground truth has **Remove from ground truth**.
 - R-13. The Report a problem bundle (spec 200) and the trace store shall never read the sample
   folder. Samples go nowhere unless the user runs the harness on them.
 
@@ -117,11 +119,11 @@ leaves the Mac.
   history's audio) and the texts of R-10 to the sample folder; the row shows the corrected text.
   A second Correct replaces the text and leaves one sample. Correct with no audio is not offered.
   (R-3 to R-5, R-7, R-9, R-10)
-- AC-3 *(fake)*: Before the first sample, nothing is written until Keep samples; Not now writes
+- AC-3 *(fake)*: Before the first sample, nothing is written until Keep ground truth; Not now writes
   nothing and asks again next time. (R-6)
 - AC-4 *(fake)*: Correct sends nothing to the dictionary. (R-8)
 - AC-5 *(fake)*: The history's retention, size limit and Delete remove history items and leave
-  their samples; Delete sample and Delete all samples remove them. (R-11, R-12)
+  their samples; Remove from ground truth and Delete all remove them. (R-11, R-12)
 - AC-6 *(fake)*: A folder written by the sample store loads with `hyperme_quality::set::load`,
   with the corrections as gold texts and the speech transcripts as a `--reuse-raw` file; a
   replay through fakes scores it, with the speech-transcript column of R-15. (R-9, R-14, R-15)
@@ -141,7 +143,8 @@ leaves the Mac.
 - Correcting text the user edited after pasting it in another app (watching the field is spec 93's
   learning, not this).
 - Sharing, exporting or syncing samples; any upload. A user who wants to send a sample sends the
-  file themselves.
+  file themselves. An opt-in way to contribute ground truth to the project is Later, with its own
+  spec ([#288](https://github.com/AndresHG/hyperme/issues/288); owner, 28 November 2026).
 - A benchmark screen in the app. The harness stays a command-line tool for now.
 - Samples while history is off: with no history item there is nothing to correct.
 
@@ -166,4 +169,5 @@ It is three months later and this failed. Why?
 | GT-1 | Which version? | 0.1. It does not move the date: slices 1 to 3 are core, platform and harness; slice 4 is one page action after spec 257. And it is what makes the gate's number come from daily use instead of hand-edited JSON | Decided 28 November 2026, as recommended: 0.1 |
 | GT-2 | How does the user agree to keep audio past the history's retention? | The first Save as sample shows one sheet (R-6): each sample is a deliberate act, so a Settings switch that is off by default would only add a step. Rejected: keeping samples inside the history with a "pinned" flag, which ties a benchmark set to a store the user clears, and makes "delete my history" not mean what it says | Decided 28 November 2026, as recommended: the one-time sheet at the first save |
 | GT-3 | Does a correction change the row's shown text? | Yes, the row shows what the user said was right, with a sample mark; the first text is kept for the benchmark (R-1) | decided in the draft; the owner did not object, 28 November 2026 |
+| GT-5 | What the user sees it called | "Ground truth" in the app; "sample" only in code and the harness | Owner, 28 November 2026: "sample" was unclear, change the name |
 | GT-4 | One folder in the harness's set layout, or a table in SQLite? | The folder: the harness is the only reader, it already reads that layout, and the user can see and delete it in Finder. Samples are few and written one at a time; SQLite stays the history's store | decided in this draft |

@@ -38,7 +38,7 @@
     /** A selection in the text, maybe the word to fix (R-17). */
     onfixtext: () => void;
     onsendfix: () => void;
-    /** Save as sample (spec 267, R-4). */
+    /** Save as ground truth (spec 267, R-4). */
     onsendcorrect: () => void;
   } = $props();
 
@@ -138,7 +138,7 @@
             >{piece.text}</mark
           >{:else}{piece.text}{/if}{/each}{/if}
     </span>
-    <span class="app">{item.app || ''}{#if item.sample}<span class="sample" title="Kept as a sample for benchmarks">Sample</span>{/if}</span>
+    <span class="app">{item.app || ''}{#if item.sample}<span class="truth" title="Kept with its audio as ground truth for benchmarks">Ground truth</span>{/if}</span>
   </div>
   <!-- The tools on hover, as in Wispr Flow: Copy, Paste again and the rest under More (⌘K); a
        failed dictation shows Retry instead (R-13, R-16). -->
@@ -166,7 +166,7 @@
     <div class="bar">
       {#if row.mode?.kind === 'confirm-delete'}
         <span class="ask"
-          >Delete this dictation and its audio?{#if item.sample} Its sample stays.{/if} <kbd>↵</kbd> Delete · <kbd>Esc</kbd> Keep</span
+          >Delete this dictation and its audio?{#if item.sample} Its ground truth stays.{/if} <kbd>↵</kbd> Delete · <kbd>Esc</kbd> Keep</span
         >
       {:else if row.mode?.kind === 'correct'}
         {@const mode = row.mode}
@@ -188,12 +188,7 @@
             }
           }}
         ></textarea>
-        <span class="say">Type it as it should have been. <kbd>⌘↵</kbd> Save as sample · <kbd>Esc</kbd> Cancel</span>
-      {:else if row.mode?.kind === 'correct-agree'}
-        <span class="ask"
-          >A sample keeps this dictation's audio and texts on this Mac until you delete it, even after History deletes the dictation. It goes nowhere,
-          except to your own providers when you run a benchmark. <kbd>↵</kbd> Keep samples · <kbd>Esc</kbd> Not now</span
-        >
+        <span class="say">Type it as it should have been. <kbd>⌘↵</kbd> Save as ground truth · <kbd>Esc</kbd> Cancel</span>
       {:else if row.mode?.kind === 'fix-select'}
         <span class="say">Select the wrong word in the text, or double-click it. <kbd>Esc</kbd> Cancel</span>
       {:else if row.mode?.kind === 'fix-type'}
@@ -273,7 +268,7 @@
   .ask.warn { color: var(--color-orange-text); }
   kbd { font: var(--text-subheadline) var(--font-system); color: var(--color-label-secondary); padding: 0 var(--space-1); }
   textarea { flex: 1 1 100%; font: inherit; font-size: var(--text-body); line-height: 1.45; padding: var(--space-2); border-radius: var(--radius-control); border: 1px solid var(--color-accent); background: var(--color-content-bg); color: inherit; resize: vertical; }
-  .sample { margin-left: var(--space-2); padding: 0 var(--space-1); border-radius: var(--radius-small); background: var(--color-accent-soft); color: var(--color-accent-text); font-size: var(--text-caption); }
+  .truth { margin-left: var(--space-2); padding: 0 var(--space-1); border-radius: var(--radius-small); background: var(--color-accent-soft); color: var(--color-accent-text); font-size: var(--text-caption); }
   input { font: inherit; font-size: var(--text-callout); padding: var(--space-1) var(--space-2); border-radius: var(--radius-control); border: 1px solid var(--color-accent); background: var(--color-content-bg); color: inherit; width: 200px; }
   .row.working .text { color: var(--color-label-secondary); }
   mark { background: color-mix(in srgb, var(--color-accent) 28%, transparent); color: inherit; border-radius: var(--radius-small); padding: 0 0; }
