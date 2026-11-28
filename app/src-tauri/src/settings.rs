@@ -915,16 +915,18 @@ mod tests {
     /// in Settings any more (it lives in Home's sidebar).
     #[test]
     fn the_connect_dialog_label_is_a_choice_and_no_dictionary_in_settings() {
-        let page = include_str!("../../ui/settings.html");
+        let dialog = include_str!("../../web/src/settings/connectors/ConnectDialog.svelte");
+        assert!(dialog.contains("type=\"radio\"") && dialog.contains("name=\"oauth-label-choice\""));
         for value in ["personal", "work", "other"] {
             assert!(
-                page.contains(&format!("name=\"oauth-label-choice\" value=\"{value}\"")),
+                dialog.contains(&format!("['{value}', ")),
                 "missing the {value} choice"
             );
         }
-        assert!(!page.contains("placeholder=\"personal\""));
-        assert!(!page.contains("id=\"dictionary\""));
-        assert!(!page.contains("dictionary.js"));
+        assert!(!dialog.contains("placeholder=\"personal\""));
+        let settings = include_str!("../../web/src/settings/Settings.svelte");
+        assert!(!settings.contains("id: 'dictionary'"));
+        assert!(!settings.contains("Dictionary"));
     }
     /// Bug, 26 November 2026: the walkthrough's Test button saves a typed key, clears the field
     /// and waits for `providers-changed` to test it, but saving a key never sent that event, so

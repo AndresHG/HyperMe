@@ -27,13 +27,14 @@
     return { id, block: block ?? null };
   });
 
-  // Rust and the frame reach the sheet through these.
+  // Rust reaches the sheet through these.
   const w = window as Window & { openSettings?: (s: string) => void; closeSettings?: () => void };
   w.openSettings = openSettings;
   w.closeSettings = closeSettings;
 
   function onkeydown(e: KeyboardEvent) {
-    if (!e.metaKey || e.altKey || e.ctrlKey) return;
+    // The sheet keeps the keyboard while it is open, as its frame once did.
+    if (!e.metaKey || e.altKey || e.ctrlKey || sheet.open) return;
     // ⌘, opens Settings at the section closest to where you are (docs/UX.md).
     if (e.key === ',') {
       e.preventDefault();
@@ -47,10 +48,6 @@
       location.hash = target.id;
     }
   }
-
-  $effect(() => {
-    sheet.frame?.focus();
-  });
 
   // ---- Events from the app (R-16, R-22) ----
   on('home://attention', (on) => (attention = on));
@@ -107,12 +104,14 @@
     {/key}
   {/if}
 </main>
-<Sheet bind:open={() => sheet.src !== null, (open) => !open && closeSettings()} label="Settings">
-  <iframe bind:this={sheet.frame} title="Settings" src={sheet.src}></iframe>
+<Sheet bind:open={() => sheet.open, (open) => !open && closeSettings()} label="Settings">
+  <!-- Its own chunk, fetched the first time Settings opens (R-10). -->
+  {#await import('../settings/Settings.svelte') then { default: Settings }}
+    <Settings />
+  {/await}
 </Sheet>
 
 <style>
-  iframe { display: block; width: 100%; height: 100%; border: 0; }
   .dict-error { color: var(--color-red); margin: var(--space-2) 0 0; }
   .dict-error:empty { display: none; }
 </style>
