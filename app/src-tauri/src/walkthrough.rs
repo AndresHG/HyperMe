@@ -13,11 +13,12 @@ use hyperme_platform::microphone::CpalMicrophone;
 use hyperme_platform::permissions;
 use hyperme_providers::speechmatics::SAMPLE_RATE;
 use serde::Serialize;
-use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 use tokio::sync::mpsc;
 
 use crate::onboarding::{self, AtLaunch};
 use hyperme_core::cost;
+use tauri_specta::Event as _;
 
 /// The walkthrough window's label.
 pub const WALKTHROUGH: &str = "walkthrough";
@@ -105,7 +106,7 @@ pub fn open(app: &AppHandle, step: onboarding::Step) {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, specta::Type)]
 pub struct Permissions {
     accessibility: bool,
     input_monitoring: bool,
@@ -120,6 +121,7 @@ pub struct Permissions {
 
 /// The permission checks, polled by the Permissions screen so it turns green by itself.
 #[tauri::command]
+#[specta::specta]
 pub fn onboarding_checks(app: AppHandle) -> Permissions {
     log_permissions();
     let config = Config::load_or_create(&crate::runtime::data_dir(&app).join("config.toml")).ok();
@@ -141,6 +143,7 @@ pub fn onboarding_checks(app: AppHandle) -> Permissions {
 /// `onboarding-level`, so the user sees the microphone work. Starting it is also what makes
 /// macOS ask for the microphone permission.
 #[tauri::command]
+#[specta::specta]
 pub fn onboarding_mic(app: AppHandle, on: bool) -> Result<(), String> {
     let state = app.state::<MicTest>();
     let mut slot = state
@@ -163,11 +166,8 @@ pub fn onboarding_mic(app: AppHandle, on: bool) -> Result<(), String> {
         while let Some(event) = rx.recv().await {
             if let Event::Audio(frame) = event {
                 let level = crate::pill::level(&frame);
-                let _ = app.emit_to(
-                    WALKTHROUGH,
-                    "onboarding-level",
-                    (level, level >= onboarding::HEARD_LEVEL),
-                );
+                let _ = crate::events::OnboardingLevel(level, level >= onboarding::HEARD_LEVEL)
+                    .emit_to(&app, WALKTHROUGH);
             }
         }
     });
@@ -215,6 +215,7 @@ pub fn input_monitoring() -> bool {
 /// is not opened as well. Later clicks open the System Settings page directly. The page polls
 /// only the checks that never prompt, so the dialog never comes back by itself.
 #[tauri::command]
+#[specta::specta]
 pub fn onboarding_request(app: AppHandle, what: String, prompt: bool) -> Result<(), String> {
     if prompt {
         let allowed = match what.as_str() {
@@ -238,6 +239,7 @@ fn resume_file(app: &AppHandle) -> std::path::PathBuf {
 /// restart. Notes the screen, starts a fresh copy of HyperMe.app a moment after this one quits,
 /// and quits.
 #[tauri::command]
+#[specta::specta]
 pub fn onboarding_relaunch(app: AppHandle, step: String) -> Result<(), String> {
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
     let bundle = onboarding::bundle_of(&exe).ok_or_else(|| {
@@ -263,12 +265,13 @@ pub fn onboarding_relaunch(app: AppHandle, step: String) -> Result<(), String> {
 
 /// The Try it screen: starts the dictation with the keys just tested.
 #[tauri::command]
+#[specta::specta]
 pub fn onboarding_try(app: AppHandle) -> Result<(), String> {
     crate::runtime::ensure_running(&app)
 }
 
 /// One choice of the cost block (U-11).
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, specta::Type)]
 pub struct CostChoice {
     label: &'static str,
     /// Saved as `dictation.talking_minutes_per_day` when picked, for Settings' hints.
@@ -282,7 +285,7 @@ pub struct CostChoice {
 /// What the keys screen shows about the recommended setup: the provider names, the cost for
 /// each choice and the free-credit line, all worked out from the config (docs/UX.md, "Models
 /// and keys in onboarding").
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, specta::Type)]
 pub struct KeysScreen {
     speech: String,
     cleanup: String,
@@ -293,6 +296,7 @@ pub struct KeysScreen {
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn onboarding_keys_screen(app: AppHandle) -> Result<KeysScreen, String> {
     let config = Config::load_or_create(&crate::runtime::data_dir(&app).join("config.toml"))
         .map_err(|e| e.to_string())?;
@@ -321,6 +325,7 @@ pub fn onboarding_keys_screen(app: AppHandle) -> Result<KeysScreen, String> {
 
 /// "Get a key": opens the provider's key page from the config in the browser.
 #[tauri::command]
+#[specta::specta]
 pub fn onboarding_get_key(app: AppHandle, role: String) -> Result<(), String> {
     let config = Config::load_or_create(&crate::runtime::data_dir(&app).join("config.toml"))
         .map_err(|e| e.to_string())?;
@@ -342,6 +347,7 @@ pub fn onboarding_get_key(app: AppHandle, role: String) -> Result<(), String> {
 /// U-12: "Use other providers" opens Settings → Providers with Advanced showing; the wizard
 /// waits and tests again whenever Settings saves a provider or a key.
 #[tauri::command]
+#[specta::specta]
 pub fn onboarding_other_providers(app: AppHandle) {
     crate::settings::open(&app, "providers-advanced");
 }
@@ -349,11 +355,13 @@ pub fn onboarding_other_providers(app: AppHandle) {
 /// Whether Next may light up on `step`, given what the page's tests found (rules in
 /// `onboarding.rs`, so the page cannot skip a test).
 #[tauri::command]
+#[specta::specta]
 pub fn onboarding_can_continue(step: onboarding::Step, checks: onboarding::Checks) -> bool {
     onboarding::can_continue(step, &checks)
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn onboarding_done(app: AppHandle) {
     let _ = onboarding_mic(app.clone(), false);
     if let Some(window) = app.get_webview_window(WALKTHROUGH) {

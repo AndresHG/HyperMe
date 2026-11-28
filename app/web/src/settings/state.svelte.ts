@@ -70,7 +70,7 @@ export class Settings {
     if (this.connectors.error) this.fail(this.connectors.error);
   }
 
-  async save(section: string, key: string, value: unknown) {
+  async save(section: string, key: string, value: string | number | boolean) {
     try {
       await commands.settingsSet(section, key, value);
       this.error = '';

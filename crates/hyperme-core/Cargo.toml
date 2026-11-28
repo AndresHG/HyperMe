@@ -22,6 +22,12 @@ tracing = { version = "0.1.44", default-features = false, features = ["std"] }
 # The Layer and Registry that collect a dictation's spans into one trace (spec 182, design 5).
 # Registry only: no fmt, no env-filter, no regex.
 tracing-subscriber = { version = "0.3.23", default-features = false, features = ["registry", "std"] }
+# TypeScript types for the views the app sends to its pages (spec 257, R-9), only when the app
+# asks for them. Pinned exactly like the app's while it is a release candidate.
+specta = { version = "=2.0.0-rc.28", features = ["derive"], optional = true }
+
+[features]
+specta = ["dep:specta"]
 
 [dev-dependencies]
 # Tests run the state machine on a runtime with a paused, manually advanced clock.

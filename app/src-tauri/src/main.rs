@@ -7,11 +7,15 @@
 #[cfg(target_os = "macos")]
 mod approvals;
 #[cfg(target_os = "macos")]
+mod bindings;
+#[cfg(target_os = "macos")]
 mod connectors;
 #[cfg(target_os = "macos")]
 mod diagnostics;
 #[cfg(target_os = "macos")]
 mod dictionary;
+#[cfg(target_os = "macos")]
+mod events;
 // Pure and tested everywhere; only the macOS app uses them until Linux and Windows follow.
 #[cfg(any(target_os = "macos", test))]
 mod geometry;
@@ -101,100 +105,20 @@ fn main() {
     #[cfg(target_os = "macos")]
     install_crash_hook();
     let builder = tauri::Builder::default();
+    // The commands and events, typed for the pages (spec 257, R-8).
+    #[cfg(target_os = "macos")]
+    let specta = bindings::builder();
     #[cfg(target_os = "macos")]
     let builder = builder
         .activate_ignoring_other_apps(activate_at_launch())
         .plugin(tauri_nspanel::init())
         // Checks and installs signed updates when the user asks (docs/RELEASING.md).
         .plugin(tauri_plugin_updater::Builder::new().build())
-        .invoke_handler(tauri::generate_handler![
-            runtime::pill_clicked,
-            runtime::pill_hands_free,
-            home::home_sections,
-            home::home_blocks,
-            home::home_attention,
-            home::home_refresh,
-            home::home_stats,
-            home::home_page,
-            home::home_search,
-            home::home_info,
-            home::home_failed,
-            home::home_item,
-            home::home_copy,
-            home::home_paste,
-            home::home_retry,
-            home::home_delete,
-            home::home_fix_word,
-            runtime::pill_view,
-            diagnostics::diagnostics_view,
-            diagnostics::history_trace,
-            report::report_build,
-            report::report_save,
-            report::report_open_issue,
-            runtime::pill_card,
-            runtime::card_open_today,
-            runtime::card_dismiss,
-            runtime::card_action,
-            settings::settings_view,
-            settings::settings_set,
-            settings::microphones_list,
-            settings::microphones_set,
-            settings::key_set,
-            settings::key_test,
-            settings::provider_choose,
-            settings::fallback_set,
-            settings::fallback_clear,
-            settings::providers_reset,
-            settings::provider_add,
-            settings::provider_key_page,
-            settings::models_list,
-            settings::local_discover,
-            settings::local_use,
-            settings::provider_hint,
-            settings::result_open,
-            settings::settings_open,
-            settings::settings_pending,
-            settings::settings_opened,
-            settings::settings_closed,
-            settings::app_restart,
-            dictionary::dictionary_view,
-            dictionary::dictionary_save,
-            dictionary::dictionary_import,
-            dictionary::dictionary_export,
-            dictionary::dictionary_is_common,
-            dictionary::dictionary_suggestion,
-            dictionary::dictionary_learning,
-            dictionary::dictionary_suggested,
-            connectors::connectors_view,
-            connectors::connectors_set_tool,
-            connectors::connectors_set_enabled,
-            connectors::connectors_add_custom,
-            connectors::connectors_set_token,
-            connectors::connectors_open_link,
-            connectors::connectors_save_client,
-            connectors::connectors_sign_in,
-            connectors::connectors_cancel_sign_in,
-            connectors::connectors_disconnect,
-            connectors::connectors_review,
-            approvals::connectors_answer,
-            connectors::connectors_open_url,
-            tasks::home_today,
-            tasks::tasks_add,
-            tasks::tasks_act,
-            tasks::tasks_open_meeting,
-            walkthrough::onboarding_checks,
-            walkthrough::onboarding_mic,
-            walkthrough::onboarding_request,
-            walkthrough::onboarding_try,
-            walkthrough::onboarding_can_continue,
-            walkthrough::onboarding_keys_screen,
-            walkthrough::onboarding_get_key,
-            walkthrough::onboarding_other_providers,
-            walkthrough::onboarding_relaunch,
-            walkthrough::onboarding_done,
-        ]);
+        .invoke_handler(specta.invoke_handler());
     builder
-        .setup(|app| {
+        .setup(move |app| {
+            #[cfg(target_os = "macos")]
+            specta.mount_events(app);
             // R-22: a menu-bar app, no Dock icon until a window such as Home opens.
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);

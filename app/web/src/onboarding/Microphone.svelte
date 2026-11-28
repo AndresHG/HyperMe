@@ -15,7 +15,8 @@
   let text = $state('Listening…');
   let working = false;
 
-  const stop = on('onboarding-level', ([level, voice]) => {
+  const stop = on('onboarding-level', ([raw, voice]) => {
+    const level = raw ?? 0;
     live = level > 0.05;
     heights = shape.map((s) => Math.max(6, Math.round(60 * level * s * (0.75 + 0.25 * Math.random()))));
     if (voice && !working) {

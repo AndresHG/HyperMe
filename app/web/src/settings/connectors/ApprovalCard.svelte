@@ -45,12 +45,12 @@
     card = null;
   }
 
-  function answer(value: unknown) {
+  function answer(value: string | null | undefined) {
     if (!card) return;
     const id = card.id;
     close();
     commands
-      .connectorsAnswer(id, value)
+      .connectorsAnswer(id, value ?? null)
       .then((waiting) => {
         if (!waiting) s.fail('Took too long: Review to ask again.');
       })

@@ -68,6 +68,7 @@ pub struct TraceRow {
 /// The percentiles of one window, or why there are none.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(tag = "state", rename_all = "snake_case")]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 pub enum Window {
     /// Fewer than [`MIN_VALUES`] values (R-6).
     TooFew { count: usize },
@@ -83,6 +84,7 @@ pub enum Window {
 /// One stage's percentiles over the last 7 days, by provider and model for speech and cleanup
 /// (R-3).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 pub struct StageRow {
     pub stage: String,
     pub provider: Option<String>,
@@ -92,6 +94,7 @@ pub struct StageRow {
 
 /// Everything the Diagnostics section shows except the warnings, which come from their file.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 pub struct Diagnostics {
     /// No traces at all in the last 7 days (R-7).
     pub empty: bool,

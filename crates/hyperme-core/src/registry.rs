@@ -34,6 +34,7 @@ impl std::error::Error for RegistryError {}
 /// What a tool may do without the user (R-5).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 #[serde(rename_all = "lowercase")]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 pub enum ToolAccess {
     /// Runs on its own, and may be in a job's allowlist.
     Read,

@@ -113,6 +113,7 @@ impl Protocol {
 /// One job a model does (spec.md, "Requirements"). Answers and meeting cleanup join later.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 pub enum Role {
     Speech,
     Cleanup,
@@ -379,6 +380,7 @@ pub struct Cleanup {
 
 /// One provider dictation may send to (R-29), for the Privacy section.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 pub struct Destination {
     pub role: Role,
     /// As people write it: "Speechmatics".
