@@ -188,6 +188,79 @@ mod tests {
         }
     }
 
+    /// A plain `#[tauri::command]` runs on the main thread, where a slow database, keychain or
+    /// file call freezes every window. Only the commands below stay there: they touch windows,
+    /// in-memory state or the walkthrough, and return at once. Every other command is
+    /// `#[tauri::command(async)]` or an `async fn`, so it runs off the main thread.
+    #[test]
+    fn only_quick_commands_run_on_the_main_thread() {
+        const MAIN_THREAD: &[&str] = &[
+            "app_restart",
+            "card_action",
+            "card_dismiss",
+            "card_open_today",
+            "connectors_answer",
+            "connectors_cancel_sign_in",
+            "connectors_open_link",
+            "connectors_open_url",
+            "dictionary_is_common",
+            "home_attention",
+            "home_blocks",
+            "home_refresh",
+            "home_sections",
+            "onboarding_can_continue",
+            "onboarding_checks",
+            "onboarding_done",
+            "onboarding_get_key",
+            "onboarding_keys_screen",
+            "onboarding_mic",
+            "onboarding_other_providers",
+            "onboarding_relaunch",
+            "onboarding_request",
+            "onboarding_try",
+            "pill_card",
+            "pill_clicked",
+            "pill_hands_free",
+            "pill_view",
+            "provider_key_page",
+            "result_open",
+            "settings_closed",
+            "settings_open",
+            "settings_opened",
+            "settings_pending",
+            "tasks_open_meeting",
+        ];
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let mut on_main = Vec::new();
+        for entry in std::fs::read_dir(&root).expect("src") {
+            let path = entry.expect("entry").path();
+            if path.extension().is_none_or(|e| e != "rs") {
+                continue;
+            }
+            let text = std::fs::read_to_string(&path).expect("source");
+            let mut lines = text.lines();
+            while let Some(line) = lines.next() {
+                if line.trim() != "#[tauri::command]" {
+                    continue;
+                }
+                let signature = lines
+                    .by_ref()
+                    .find(|l| l.contains("fn "))
+                    .expect("a command's fn");
+                if signature.contains("async fn") {
+                    continue;
+                }
+                let name = signature.split("fn ").nth(1).expect("name");
+                on_main.push(name[..name.find('(').expect("(")].to_string());
+            }
+        }
+        on_main.sort();
+        assert_eq!(
+            on_main, MAIN_THREAD,
+            "make the new command #[tauri::command(async)]"
+        );
+    }
+
     /// AC-4: the checked-in bindings match the Rust commands, so a renamed argument fails here
     /// until the file is generated again.
     #[test]

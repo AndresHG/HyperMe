@@ -608,7 +608,7 @@ mod window {
     }
 
     /// The page's local time zone comes from the page, which knows it (R-7).
-    #[tauri::command]
+    #[tauri::command(async)]
     #[specta::specta]
     pub fn home_stats(app: AppHandle, utc_offset_minutes: i32) -> Result<StatsView, String> {
         crate::runtime::with_history(&app, |h| h.stats(now_ms(), utc_offset_minutes))
@@ -617,7 +617,7 @@ mod window {
 
     /// A page of History or Recent (R-8, R-10): items older than `before`, `[started_ms, id]`
     /// of the last item shown.
-    #[tauri::command]
+    #[tauri::command(async)]
     #[specta::specta]
     pub fn home_page(
         app: AppHandle,
@@ -629,7 +629,7 @@ mod window {
     }
 
     /// History's search (R-12).
-    #[tauri::command]
+    #[tauri::command(async)]
     #[specta::specta]
     pub fn home_search(
         app: AppHandle,
@@ -650,7 +650,7 @@ mod window {
         pub dictionary: bool,
     }
 
-    #[tauri::command]
+    #[tauri::command(async)]
     #[specta::specta]
     pub fn home_info(app: AppHandle) -> Info {
         Info {
@@ -660,14 +660,14 @@ mod window {
     }
 
     /// History while history is off: the failed dictations still waiting for a retry (R-19).
-    #[tauri::command]
+    #[tauri::command(async)]
     #[specta::specta]
     pub fn home_failed(app: AppHandle) -> Result<Vec<ItemView>, String> {
         crate::runtime::with_history(&app, |h| h.failed_with_audio()).map(|i| views(&app, i))
     }
 
     /// One item again, after an action changed it.
-    #[tauri::command]
+    #[tauri::command(async)]
     #[specta::specta]
     pub fn home_item(app: AppHandle, id: DictationId) -> Result<Option<ItemView>, String> {
         let item = crate::runtime::with_history(&app, |h| h.item(id))?;
@@ -737,14 +737,14 @@ mod window {
     }
 
     /// Retry (R-16): the engine sends the saved audio again; the row follows `home://retry`.
-    #[tauri::command]
+    #[tauri::command(async)]
     #[specta::specta]
     pub fn home_retry(app: AppHandle, id: DictationId) -> Result<(), String> {
         crate::runtime::retry_from_home(&app, id)
     }
 
     /// Delete (R-18, AC-12): the item's text and audio.
-    #[tauri::command]
+    #[tauri::command(async)]
     #[specta::specta]
     pub fn home_delete(app: AppHandle, id: DictationId) -> Result<(), String> {
         crate::runtime::with_history_mut(&app, |h| h.delete_item(id))
@@ -752,7 +752,7 @@ mod window {
 
     /// Fix a word (R-17, AC-11): the selection and what it should be go to the dictionary; on
     /// success the row's text in the store has the correction.
-    #[tauri::command]
+    #[tauri::command(async)]
     #[specta::specta]
     pub fn home_fix_word(
         app: AppHandle,

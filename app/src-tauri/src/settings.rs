@@ -2,9 +2,9 @@
 //! page, created when opened and dropped when closed, so it costs no memory while closed. Every change saves at once to `config.toml`; keys go straight to the keychain and are
 //! never sent back to the page.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Mutex, PoisonError};
+use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Instant;
 
 use hyperme_core::config::{self, Config, ConfigError, Hotkey, Retention, Role};
@@ -19,7 +19,7 @@ use tauri::{AppHandle, Manager};
 use tauri_specta::Event as _;
 
 fn config_path(app: &AppHandle) -> PathBuf {
-    crate::runtime::data_dir(app).join("config.toml")
+    crate::runtime::config_file(app).path().to_owned()
 }
 
 /// Whether the Settings sheet is showing in Home, so an approval card has somewhere to appear
@@ -290,17 +290,17 @@ fn roles_view(config: &Config, keys: &dyn SecretStore) -> Vec<RoleView> {
     .collect()
 }
 
-fn load(path: &Path) -> Result<Config, String> {
-    Config::load_or_create(path).map_err(|e| e.to_string())
+fn load(app: &AppHandle) -> Result<Arc<Config>, String> {
+    crate::runtime::config(app).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn settings_view(app: AppHandle) -> View {
     let path = config_path(&app);
-    let loaded = load(&path);
+    let loaded = load(&app);
     let keys = KeychainStore::new();
-    let config = loaded.as_ref().ok();
+    let config = loaded.as_deref().ok();
     // A provider that shares another's key (D-2) reads that one.
     let has_key = |provider: Option<&str>| {
         provider.is_some_and(|p| {
@@ -356,7 +356,7 @@ fn toml_string(s: &str) -> String {
 
 /// Saves one setting. A provider or model change reaches the next dictation at once (specs/96-
 /// provider-settings, R-8); other changes take effect after a restart, which the page offers.
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn settings_set(
     app: AppHandle,
@@ -423,11 +423,11 @@ fn microphones_view(
 }
 
 /// The microphones for Settings, read when the page asks: nothing watches devices meanwhile.
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn microphones_list(app: AppHandle) -> MicrophonesView {
-    let preferred = Config::load_or_create(&config_path(&app))
-        .map(|c| c.dictation.microphones)
+    let preferred = crate::runtime::config(&app)
+        .map(|c| c.dictation.microphones.clone())
         .unwrap_or_default();
     let (connected, default) = hyperme_platform::microphone::microphones();
     microphones_view(&preferred, &connected, default.as_deref())
@@ -435,7 +435,7 @@ pub fn microphones_list(app: AppHandle) -> MicrophonesView {
 
 /// Saves the user's order of microphones; an empty list is the system default (#221, AC-2).
 /// The next dictation uses it, without a restart.
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn microphones_set(app: AppHandle, names: Vec<String>) -> Result<(), String> {
     let list = names
@@ -456,12 +456,10 @@ fn rewrite_config(
     app: &AppHandle,
     change: impl FnOnce(&str) -> Result<String, ConfigError>,
 ) -> Result<(), String> {
-    let path = config_path(app);
-    let text = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
-    let updated = change(&text).map_err(|e| e.to_string())?;
-    let temp = path.with_extension("toml.new");
-    std::fs::write(&temp, updated).map_err(|e| format!("{}: {e}", temp.display()))?;
-    std::fs::rename(&temp, &path).map_err(|e| format!("{}: {e}", path.display()))
+    crate::runtime::config_file(app)
+        .rewrite(change)
+        .map(|_| ())
+        .map_err(|e| e.to_string())
 }
 
 /// Hands the providers now in the config to the next dictation (R-8), and tells a waiting
@@ -484,7 +482,7 @@ fn role_named(role: &str) -> Result<Role, String> {
 /// Picks a role's provider and model from the providers table (R-8). A provider with no key yet
 /// is not saved: the page shows the key field, and the role keeps the provider it has until the
 /// new one's key passes Test (R-12). Returns `saved` or `needs_key`.
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn provider_choose(
     app: AppHandle,
@@ -493,7 +491,7 @@ pub fn provider_choose(
     model: String,
 ) -> Result<&'static str, String> {
     let role = role_named(&role)?;
-    let config = load(&config_path(&app))?;
+    let config = load(&app)?;
     if !any::key_ready(&config, &provider, &KeychainStore::new()) {
         return Ok("needs_key");
     }
@@ -516,7 +514,9 @@ pub async fn fallback_set(
 ) -> Result<u64, String> {
     let role = role_named(&role)?;
     let path = config_path(&app);
-    let text = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let (text, _) = crate::runtime::config_file(&app)
+        .load_with_text()
+        .map_err(|e| e.to_string())?;
     let candidate =
         config::set_fallback(&text, role, Some((&provider, &model))).map_err(|e| e.to_string())?;
     let config = Config::parse(&candidate, &path).map_err(|e| e.to_string())?;
@@ -547,7 +547,7 @@ pub async fn fallback_set(
 }
 
 /// Removes a role's fallback.
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn fallback_clear(app: AppHandle, role: String) -> Result<(), String> {
     let role = role_named(&role)?;
@@ -557,7 +557,7 @@ pub fn fallback_clear(app: AppHandle, role: String) -> Result<(), String> {
 }
 
 /// "Reset to recommended": every role back to the recommended pair; keys stay (R-10).
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn providers_reset(app: AppHandle) -> Result<(), String> {
     rewrite_config(&app, config::reset_to_recommended)?;
@@ -567,7 +567,7 @@ pub fn providers_reset(app: AppHandle) -> Result<(), String> {
 
 /// "Add a custom endpoint…": a new OpenAI-compatible cleanup provider in `config.toml`.
 /// Returns its name in the catalogue. Nothing is sent to it until Test or a dictation (R-30).
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn provider_add(app: AppHandle, name: String, endpoint: String) -> Result<String, String> {
     let mut id = String::new();
@@ -592,7 +592,7 @@ pub struct LocalServerView {
 #[tauri::command]
 #[specta::specta]
 pub async fn local_discover(app: AppHandle) -> Result<Vec<LocalServerView>, String> {
-    let config = load(&config_path(&app))?;
+    let config = load(&app)?;
     let ports = config
         .provider("local")
         .map(|p| p.ports.clone())
@@ -610,7 +610,7 @@ pub async fn local_discover(app: AppHandle) -> Result<Vec<LocalServerView>, Stri
 
 /// Uses the local server at `endpoint`, found or typed, with `model` for cleanup (R-21, R-22).
 /// It needs no key, so the switch takes effect at once.
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn local_use(app: AppHandle, endpoint: String, model: String) -> Result<(), String> {
     let endpoint = endpoint.trim().trim_end_matches('/').to_owned();
@@ -655,7 +655,7 @@ pub async fn models_list(app: AppHandle, provider: String) -> Result<ModelMenuVi
     if let Some(menu) = cached {
         return Ok(menu);
     }
-    let config = load(&config_path(&app))?;
+    let config = load(&app)?;
     let menu =
         hyperme_providers::models::model_menu(&config, &provider, &KeychainStore::new()).await;
     let view = ModelMenuView {
@@ -683,7 +683,7 @@ pub struct HintView {
 
 /// The hint for `provider` and `model` in `role`: cost for the user's talking time, measured
 /// speed with its source, and, with the timing log on, the user's own median on that provider.
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn provider_hint(
     app: AppHandle,
@@ -692,7 +692,7 @@ pub fn provider_hint(
     model: String,
 ) -> Result<HintView, String> {
     let role = role_named(&role)?;
-    let config = load(&config_path(&app))?;
+    let config = load(&app)?;
     let own = if config.timing.log {
         let column = match role {
             Role::Speech => "speech_provider",
@@ -746,7 +746,7 @@ pub fn result_open(source: String) -> Result<(), String> {
 #[tauri::command]
 #[specta::specta]
 pub fn provider_key_page(app: AppHandle, provider: String) -> Result<(), String> {
-    let config = load(&config_path(&app))?;
+    let config = load(&app)?;
     let url = config
         .provider(&provider)
         .and_then(|p| p.key_url.clone())
@@ -767,7 +767,7 @@ fn providers_changed<R: tauri::Runtime>(app: &AppHandle<R>) {
 }
 
 fn provider_for(app: &AppHandle, role: &str) -> Result<(Config, String), String> {
-    let config = load(&config_path(app))?;
+    let config = (*load(app)?).clone();
     let provider = match role {
         "speech" => config.speech.provider.clone(),
         "cleanup" => config.cleanup.provider.clone(),
@@ -779,7 +779,7 @@ fn provider_for(app: &AppHandle, role: &str) -> Result<(Config, String), String>
 /// R-25: the key goes straight to the keychain; it is never returned, logged or stored
 /// elsewhere. `provider` is the one being picked in the providers table, when it is not yet
 /// the role's (R-12); otherwise the role's own provider gets the key.
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn key_set(
     app: AppHandle,
@@ -837,7 +837,9 @@ pub async fn key_test(
     // The same path the runtime builds its providers with, so Test and dictation agree.
     let (mut config, current) = provider_for(&app, &role)?;
     if let Some(provider) = provider.filter(|p| *p != current) {
-        let text = std::fs::read_to_string(config_path(&app)).map_err(|e| e.to_string())?;
+        let (text, _) = crate::runtime::config_file(&app)
+            .load_with_text()
+            .map_err(|e| e.to_string())?;
         let model = model.unwrap_or_default();
         let candidate = config::choose_provider(&text, role_named(&role)?, &provider, &model)
             .map_err(|e| e.to_string())?;
@@ -1001,7 +1003,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(
-            Config::parse(&text, Path::new("c.toml"))
+            Config::parse(&text, std::path::Path::new("c.toml"))
                 .unwrap()
                 .cleanup
                 .model,

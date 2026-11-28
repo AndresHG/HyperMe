@@ -57,7 +57,7 @@ fn home() -> Option<PathBuf> {
 
 /// Builds the bundle and the issue link. `from_item` is the History item a report started from:
 /// its trace leads the link (R-15a).
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn report_build(
     app: AppHandle,
@@ -93,8 +93,13 @@ pub fn report_build(
     }
     let traces: Vec<_> = stored.iter().map(|t| t.row()).collect();
 
-    let config_text =
-        std::fs::read_to_string(runtime::data_dir(&app).join("config.toml")).unwrap_or_default();
+    let config_text = runtime::config_file(&app)
+        .load_with_text()
+        .map(|(text, _)| text.to_string())
+        .unwrap_or_else(|_| {
+            // An invalid file is still worth showing in the report, as it is on disk.
+            std::fs::read_to_string(runtime::config_file(&app).path()).unwrap_or_default()
+        });
     let config = report::config_table(&config_text);
     let warnings = log_file::last_lines(&runtime::warnings_path(&app), report::WARNINGS);
     let home = home();
@@ -150,7 +155,14 @@ fn file_name() -> String {
 /// the bundle is written there. `None` when the user cancels (R-15).
 #[tauri::command]
 #[specta::specta]
-pub fn report_save(text: String) -> Result<Option<String>, String> {
+pub async fn report_save(text: String) -> Result<Option<String>, String> {
+    // The dialog waits on the user, so it holds a blocking thread, not the main one.
+    tauri::async_runtime::spawn_blocking(move || save_with_dialog(&text))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+fn save_with_dialog(text: &str) -> Result<Option<String>, String> {
     let script = format!(
         "POSIX path of (choose file name with prompt \"Save the problem report\" default name {} default location (path to downloads folder))",
         serde_json::json!(file_name())
@@ -165,7 +177,7 @@ pub fn report_save(text: String) -> Result<Option<String>, String> {
 
 /// Open issue: saves the bundle to Downloads, opens the new-issue page in the browser and shows
 /// the saved file in Finder so the user can attach it (R-15). Opens only links the core built.
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn report_open_issue(text: String, url: String) -> Result<String, String> {
     if !report::is_issue_url(&url) {

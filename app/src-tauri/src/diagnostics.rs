@@ -4,7 +4,6 @@
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use hyperme_core::config::Config;
 use hyperme_core::diagnostics::{self, Diagnostics};
 use hyperme_platform::log_file;
 use serde::Serialize;
@@ -31,10 +30,10 @@ pub struct DiagnosticsView {
     error: Option<String>,
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn diagnostics_view(app: AppHandle) -> DiagnosticsView {
-    let keep = Config::load_or_create(&runtime::data_dir(&app).join("config.toml"))
+    let keep = runtime::config(&app)
         .map(|c| c.history.keep_traces)
         .unwrap_or(true);
     let warnings = log_file::last_lines(&runtime::warnings_path(&app), WARNINGS);
@@ -86,7 +85,7 @@ pub struct TraceView {
 }
 
 /// The trace of one History item, or none: traces off, or older than their retention (R-11).
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn history_trace(app: AppHandle, id: i64) -> Result<Option<TraceView>, String> {
     let Some(store) = runtime::trace_store(&app) else {

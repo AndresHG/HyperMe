@@ -38,9 +38,9 @@ type Shared = Mutex<State>;
 pub fn init(app: &AppHandle) {
     let dir = crate::runtime::data_dir(app);
     let path = dir.join("dictionary.sqlite");
-    let config = Config::load_or_create(&dir.join("config.toml")).ok();
+    let config = crate::runtime::config(app).ok();
     let store = DictionaryStore::open(&path).and_then(|mut store| {
-        import_once(&mut store, &file(&dir, config.as_ref()))?;
+        import_once(&mut store, &file(&dir, config.as_deref()))?;
         Ok(store)
     });
     if let Err(why) = &store {
@@ -187,7 +187,7 @@ fn saved(
     Ok(shown)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn dictionary_view(app: AppHandle) -> View {
     let shared = app.state::<Shared>();
@@ -202,7 +202,7 @@ pub fn dictionary_view(app: AppHandle) -> View {
 }
 
 /// Saves the list from the page (R-11, R-15).
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn dictionary_save(app: AppHandle, entries: Vec<Entry>) -> Result<View, String> {
     saved(&app, |store| store.save(terms(entries), Source::Manual))
@@ -225,7 +225,7 @@ fn parse_import(name: &str, text: &str) -> Result<Vec<Term>, String> {
 }
 
 /// Import (R-13): a text or CSV file the page read, merged into the list.
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn dictionary_import(app: AppHandle, name: String, text: String) -> Result<View, String> {
     let incoming = parse_import(&name, &text)?;
@@ -245,7 +245,7 @@ fn export(dictionary: &Dictionary, format: &str) -> (&'static str, String) {
 }
 
 /// Export (R-13): writes the list to the Downloads folder and shows it in Finder.
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn dictionary_export(app: AppHandle, format: String) -> Result<String, String> {
     let dictionary = with_store(&app, |store, _| store.dictionary())?;
@@ -265,7 +265,7 @@ pub fn dictionary_export(app: AppHandle, format: String) -> Result<String, Strin
 
 /// Adds or dismisses a suggestion from the page (R-18, R-19). An added one is marked learned,
 /// so deleting it later dismisses it for good.
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn dictionary_suggestion(
     app: AppHandle,
@@ -289,7 +289,7 @@ pub fn dictionary_suggestion(
 }
 
 /// The "Learn from my edits" switch (R-16): sets it when `on` is given; returns it.
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn dictionary_learning(app: AppHandle, on: Option<bool>) -> Result<bool, String> {
     with_store(&app, |store, _| {
@@ -301,7 +301,7 @@ pub fn dictionary_learning(app: AppHandle, on: Option<bool>) -> Result<bool, Str
 }
 
 /// How many suggestions wait, for the Home page's line (R-22).
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn dictionary_suggested(app: AppHandle) -> usize {
     with_store(&app, |store, _| store.suggestions().map(|s| s.len())).unwrap_or(0)
