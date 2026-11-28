@@ -21,6 +21,6 @@ export default defineConfig({
     { name: 'light', use: { colorScheme: 'light' } },
     { name: 'dark', use: { colorScheme: 'dark' } },
   ],
-  // The pages are built first (app/web), then served with the stand-in for Tauri's API.
-  webServer: { command: 'npm --prefix ../web run build && node serve.mjs', url: 'http://localhost:4173/tokens.css', reuseExistingServer: true },
+  // The pages are built first (app/web, with the controls gallery), then served with the stand-in for Tauri's API.
+  webServer: { command: 'HYPERME_GALLERY=1 npm --prefix ../web run build && node serve.mjs', url: 'http://localhost:4173/tokens.css', reuseExistingServer: true },
 });

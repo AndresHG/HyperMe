@@ -103,6 +103,17 @@ test('onboarding', async ({ page }) => {
   expect(await layoutProblems(page)).toEqual([]);
 });
 
+// The shared controls (app/web/src/lib/ui), in a gallery built only for these checks.
+for (const [name, query] of [['controls', ''], ['controls-menu', '?menu'], ['controls-sheet', '?sheet']]) {
+  test(name, async ({ page }) => {
+    await open(page, `gallery.html${query}`, { width: 760, height: 720 });
+    await expect(page.locator('main')).toBeVisible();
+    await expect(page).toHaveScreenshot(`${name}.png`);
+    // The sheet is modal and covers the gallery on purpose, so only the gallery is checked.
+    if (!query) expect(await layoutProblems(page)).toEqual([]);
+  });
+}
+
 test('pill', async ({ page }) => {
   await open(page, 'pill.html', { width: 360, height: 300 });
   await page.evaluate(() => window.__mockEmit('card', {

@@ -1,6 +1,6 @@
 //! The first-launch walkthrough (spec R-27, docs/UX.md "Onboarding"): five short screens in one
 //! window, each tested before Next lights up. This file holds the rules, pure and tested; the
-//! window and its checks are in `walkthrough.rs` and `onboarding.html`.
+//! window and its checks are in `walkthrough.rs` and `app/web/src/onboarding/`.
 
 use serde::Deserialize;
 
