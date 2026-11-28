@@ -232,6 +232,15 @@ fn main() {
             if let Some(section) = std::env::var_os("HYPERME_OPEN_SETTINGS") {
                 settings::open(app.handle(), &section.to_string_lossy());
             }
+            // `HYPERME_PILL_DEMO=done` shows that pill state once the page has loaded.
+            #[cfg(target_os = "macos")]
+            if let Ok(which) = std::env::var("HYPERME_PILL_DEMO") {
+                let handle = app.handle().clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_secs(5));
+                    runtime::demo(&handle, &which);
+                });
+            }
             Ok(())
         })
         .build(tauri::generate_context!())

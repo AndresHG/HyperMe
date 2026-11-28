@@ -20,6 +20,14 @@ pub struct View {
     pub retry: bool,
 }
 
+/// Whether the panel shows macOS's own shadow for this view (docs/DESIGN.md, "Windows"; the
+/// spike in docs/results/2026-11-28-pill-shadow.md). macOS draws it from the panel's pixels, so
+/// it follows the capsule and the card; the 14-point bead stays without one, because its outline
+/// comes out jagged at that size.
+pub fn wants_shadow(kind: &str) -> bool {
+    kind != "idle"
+}
+
 /// What the panel does for a status.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Change {
@@ -545,6 +553,16 @@ mod level_tests {
         assert!(page.contains("invoke('pill_view')"));
         // Hidden means nothing drawn: no capsule, no bars left over from the warm-up.
         assert!(page.contains(".pill.hidden { display: none; }"));
+    }
+
+    /// The native shadow is on for the capsule, its states and the card, off for the bead
+    /// (spike of 28 November 2026: the bead's shadow outline was jagged).
+    #[test]
+    fn the_shadow_is_native_except_for_the_bead() {
+        for kind in ["recording", "locked", "working", "done", "error", "card"] {
+            assert!(super::wants_shadow(kind), "{kind}");
+        }
+        assert!(!super::wants_shadow("idle"));
     }
 
     // ---- The morning card ----

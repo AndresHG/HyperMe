@@ -578,6 +578,7 @@ fn show(app: &AppHandle, view: View) {
         (shared.generation, was_pill)
     };
     let width = pill::width_for(&view);
+    shadow(app, pill::wants_shadow(view.kind));
     if view.kind == "idle" && was_pill {
         // The page shrinks the capsule into the bead (the 180 ms spring); the panel follows once
         // it is done, so the animation is not cut off.
@@ -635,6 +636,7 @@ pub fn show_card(app: &AppHandle, card: pill::Card, update: bool) {
     }
     let _ = app.emit_to(PILL, "card", &card);
     on_panel(app, |panel| panel.show());
+    shadow(app, pill::wants_shadow("card"));
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
         tokio::time::sleep(Duration::from_millis(pill::CARD_LINGER_MS)).await;
@@ -713,6 +715,43 @@ fn place(app: &AppHandle, width: f64) {
         )));
         let _ = window.set_position(Position::Logical(LogicalPosition::new(x, y)));
     }
+}
+
+/// `HYPERME_PILL_DEMO=done|error|idle`: shows that pill state at launch, for checking its shape
+/// and shadow by eye or with `scripts/check-corners.swift` (CONTRIBUTING.md).
+pub fn demo(app: &AppHandle, which: &str) {
+    let (kind, label) = match which {
+        "error" => ("error", "Speech service failed"),
+        "idle" => ("idle", ""),
+        _ => ("done", "Pasted · 42 words"),
+    };
+    show(
+        app,
+        View {
+            kind,
+            label: label.to_owned(),
+            hide_after_ms: None,
+            retry: false,
+        },
+    );
+}
+
+/// Turns the panel's native shadow on or off. macOS computes it from the panel's pixels when asked,
+/// so it is asked again once the page has drawn the new size (after the 180 ms spring); otherwise
+/// it would keep the outline of the previous state.
+fn shadow(app: &AppHandle, on: bool) {
+    if !on {
+        on_panel(app, |panel| panel.set_has_shadow(false));
+        return;
+    }
+    on_panel(app, |panel| panel.set_has_shadow(true));
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        for ms in [40, 220] {
+            tokio::time::sleep(Duration::from_millis(ms)).await;
+            on_panel(&app, |panel| panel.as_panel().invalidateShadow());
+        }
+    });
 }
 
 /// After a state: the bead when "Show while idle" is on, otherwise hidden.
