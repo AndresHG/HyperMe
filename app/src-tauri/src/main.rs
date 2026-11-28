@@ -119,6 +119,14 @@ fn main() {
         .setup(move |app| {
             #[cfg(target_os = "macos")]
             specta.mount_events(app);
+            // One shared config.toml for every command (read once, reloaded when it changes).
+            #[cfg(target_os = "macos")]
+            tauri::Manager::manage(
+                app,
+                hyperme_core::config_file::ConfigFile::new(
+                    runtime::data_dir(app.handle()).join("config.toml"),
+                ),
+            );
             // R-22: a menu-bar app, no Dock icon until a window such as Home opens.
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);

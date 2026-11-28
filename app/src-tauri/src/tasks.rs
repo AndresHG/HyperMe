@@ -584,9 +584,8 @@ pub struct Tasks {
     rules: DayRules,
 }
 
-fn config(app: &tauri::AppHandle) -> Result<hyperme_core::config::Config, String> {
-    hyperme_core::config::Config::load_or_create(&crate::runtime::data_dir(app).join("config.toml"))
-        .map_err(|e| e.to_string())
+fn config(app: &tauri::AppHandle) -> Result<std::sync::Arc<hyperme_core::config::Config>, String> {
+    crate::runtime::config(app).map_err(|e| e.to_string())
 }
 
 fn registry(

@@ -93,8 +93,13 @@ pub fn report_build(
     }
     let traces: Vec<_> = stored.iter().map(|t| t.row()).collect();
 
-    let config_text =
-        std::fs::read_to_string(runtime::data_dir(&app).join("config.toml")).unwrap_or_default();
+    let config_text = runtime::config_file(&app)
+        .load_with_text()
+        .map(|(text, _)| text.to_string())
+        .unwrap_or_else(|_| {
+            // An invalid file is still worth showing in the report, as it is on disk.
+            std::fs::read_to_string(runtime::config_file(&app).path()).unwrap_or_default()
+        });
     let config = report::config_table(&config_text);
     let warnings = log_file::last_lines(&runtime::warnings_path(&app), report::WARNINGS);
     let home = home();

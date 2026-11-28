@@ -2,9 +2,9 @@
 //! page, created when opened and dropped when closed, so it costs no memory while closed. Every change saves at once to `config.toml`; keys go straight to the keychain and are
 //! never sent back to the page.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Mutex, PoisonError};
+use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Instant;
 
 use hyperme_core::config::{self, Config, ConfigError, Hotkey, Retention, Role};
@@ -19,7 +19,7 @@ use tauri::{AppHandle, Manager};
 use tauri_specta::Event as _;
 
 fn config_path(app: &AppHandle) -> PathBuf {
-    crate::runtime::data_dir(app).join("config.toml")
+    crate::runtime::config_file(app).path().to_owned()
 }
 
 /// Whether the Settings sheet is showing in Home, so an approval card has somewhere to appear
@@ -290,17 +290,17 @@ fn roles_view(config: &Config, keys: &dyn SecretStore) -> Vec<RoleView> {
     .collect()
 }
 
-fn load(path: &Path) -> Result<Config, String> {
-    Config::load_or_create(path).map_err(|e| e.to_string())
+fn load(app: &AppHandle) -> Result<Arc<Config>, String> {
+    crate::runtime::config(app).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 #[specta::specta]
 pub fn settings_view(app: AppHandle) -> View {
     let path = config_path(&app);
-    let loaded = load(&path);
+    let loaded = load(&app);
     let keys = KeychainStore::new();
-    let config = loaded.as_ref().ok();
+    let config = loaded.as_deref().ok();
     // A provider that shares another's key (D-2) reads that one.
     let has_key = |provider: Option<&str>| {
         provider.is_some_and(|p| {
@@ -426,8 +426,8 @@ fn microphones_view(
 #[tauri::command]
 #[specta::specta]
 pub fn microphones_list(app: AppHandle) -> MicrophonesView {
-    let preferred = Config::load_or_create(&config_path(&app))
-        .map(|c| c.dictation.microphones)
+    let preferred = crate::runtime::config(&app)
+        .map(|c| c.dictation.microphones.clone())
         .unwrap_or_default();
     let (connected, default) = hyperme_platform::microphone::microphones();
     microphones_view(&preferred, &connected, default.as_deref())
@@ -456,12 +456,10 @@ fn rewrite_config(
     app: &AppHandle,
     change: impl FnOnce(&str) -> Result<String, ConfigError>,
 ) -> Result<(), String> {
-    let path = config_path(app);
-    let text = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
-    let updated = change(&text).map_err(|e| e.to_string())?;
-    let temp = path.with_extension("toml.new");
-    std::fs::write(&temp, updated).map_err(|e| format!("{}: {e}", temp.display()))?;
-    std::fs::rename(&temp, &path).map_err(|e| format!("{}: {e}", path.display()))
+    crate::runtime::config_file(app)
+        .rewrite(change)
+        .map(|_| ())
+        .map_err(|e| e.to_string())
 }
 
 /// Hands the providers now in the config to the next dictation (R-8), and tells a waiting
@@ -493,7 +491,7 @@ pub fn provider_choose(
     model: String,
 ) -> Result<&'static str, String> {
     let role = role_named(&role)?;
-    let config = load(&config_path(&app))?;
+    let config = load(&app)?;
     if !any::key_ready(&config, &provider, &KeychainStore::new()) {
         return Ok("needs_key");
     }
@@ -516,7 +514,9 @@ pub async fn fallback_set(
 ) -> Result<u64, String> {
     let role = role_named(&role)?;
     let path = config_path(&app);
-    let text = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let (text, _) = crate::runtime::config_file(&app)
+        .load_with_text()
+        .map_err(|e| e.to_string())?;
     let candidate =
         config::set_fallback(&text, role, Some((&provider, &model))).map_err(|e| e.to_string())?;
     let config = Config::parse(&candidate, &path).map_err(|e| e.to_string())?;
@@ -592,7 +592,7 @@ pub struct LocalServerView {
 #[tauri::command]
 #[specta::specta]
 pub async fn local_discover(app: AppHandle) -> Result<Vec<LocalServerView>, String> {
-    let config = load(&config_path(&app))?;
+    let config = load(&app)?;
     let ports = config
         .provider("local")
         .map(|p| p.ports.clone())
@@ -655,7 +655,7 @@ pub async fn models_list(app: AppHandle, provider: String) -> Result<ModelMenuVi
     if let Some(menu) = cached {
         return Ok(menu);
     }
-    let config = load(&config_path(&app))?;
+    let config = load(&app)?;
     let menu =
         hyperme_providers::models::model_menu(&config, &provider, &KeychainStore::new()).await;
     let view = ModelMenuView {
@@ -692,7 +692,7 @@ pub fn provider_hint(
     model: String,
 ) -> Result<HintView, String> {
     let role = role_named(&role)?;
-    let config = load(&config_path(&app))?;
+    let config = load(&app)?;
     let own = if config.timing.log {
         let column = match role {
             Role::Speech => "speech_provider",
@@ -746,7 +746,7 @@ pub fn result_open(source: String) -> Result<(), String> {
 #[tauri::command]
 #[specta::specta]
 pub fn provider_key_page(app: AppHandle, provider: String) -> Result<(), String> {
-    let config = load(&config_path(&app))?;
+    let config = load(&app)?;
     let url = config
         .provider(&provider)
         .and_then(|p| p.key_url.clone())
@@ -767,7 +767,7 @@ fn providers_changed<R: tauri::Runtime>(app: &AppHandle<R>) {
 }
 
 fn provider_for(app: &AppHandle, role: &str) -> Result<(Config, String), String> {
-    let config = load(&config_path(app))?;
+    let config = (*load(app)?).clone();
     let provider = match role {
         "speech" => config.speech.provider.clone(),
         "cleanup" => config.cleanup.provider.clone(),
@@ -837,7 +837,9 @@ pub async fn key_test(
     // The same path the runtime builds its providers with, so Test and dictation agree.
     let (mut config, current) = provider_for(&app, &role)?;
     if let Some(provider) = provider.filter(|p| *p != current) {
-        let text = std::fs::read_to_string(config_path(&app)).map_err(|e| e.to_string())?;
+        let (text, _) = crate::runtime::config_file(&app)
+            .load_with_text()
+            .map_err(|e| e.to_string())?;
         let model = model.unwrap_or_default();
         let candidate = config::choose_provider(&text, role_named(&role)?, &provider, &model)
             .map_err(|e| e.to_string())?;
@@ -1001,7 +1003,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(
-            Config::parse(&text, Path::new("c.toml"))
+            Config::parse(&text, std::path::Path::new("c.toml"))
                 .unwrap()
                 .cleanup
                 .model,

@@ -3,7 +3,8 @@
 //! the config and the keychain, and saves the `[connectors]` part of the config. Tokens are
 //! never sent to the page: only whether one is there.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
+use std::sync::Arc;
 
 use hyperme_core::config::{Config, Connectors};
 use hyperme_core::connector_settings::{
@@ -20,10 +21,6 @@ use time::UtcDateTime;
 
 /// The keychain service of connector tokens (design.md, "Signing in").
 pub const KEYCHAIN_SERVICE: &str = "ai.hyperme.connector";
-
-fn config_path(app: &AppHandle) -> PathBuf {
-    crate::runtime::data_dir(app).join("config.toml")
-}
 
 /// Preset files the user added, beside the config.
 fn presets_dir(app: &AppHandle) -> Option<PathBuf> {
@@ -267,10 +264,10 @@ fn build_view(
     }
 }
 
-fn load(path: &Path) -> Result<(String, Config), String> {
-    let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
-    let config = Config::parse(&text, path).map_err(|e| e.to_string())?;
-    Ok((text, config))
+fn load(app: &AppHandle) -> Result<(Arc<str>, Arc<Config>), String> {
+    crate::runtime::config_file(app)
+        .load_with_text()
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -288,7 +285,7 @@ pub fn connectors_view(app: AppHandle) -> View {
         ),
         error: Some(error),
     };
-    let (_, config) = match load(&config_path(&app)) {
+    let (_, config) = match load(&app) {
         Ok(loaded) => loaded,
         Err(error) => return empty(error),
     };
@@ -316,16 +313,14 @@ fn save(
     app: &AppHandle,
     change: impl FnOnce(&mut Connectors, &Registry) -> Result<(), String>,
 ) -> Result<(), String> {
-    let path = config_path(app);
-    let (text, mut config) = load(&path)?;
+    let (_, config) = load(app)?;
+    let mut connectors = config.connectors.clone();
     let registry =
-        cs::registry(presets_dir(app).as_deref(), &config.connectors).map_err(|e| e.to_string())?;
-    change(&mut config.connectors, &registry)?;
-    let updated = cs::write_connectors(&text, &config.connectors).map_err(|e| e.to_string())?;
-    // Write beside the file, then rename, so a crash never leaves half a config.
-    let temp = path.with_extension("toml.new");
-    std::fs::write(&temp, updated).map_err(|e| format!("{}: {e}", temp.display()))?;
-    std::fs::rename(&temp, &path).map_err(|e| format!("{}: {e}", path.display()))?;
+        cs::registry(presets_dir(app).as_deref(), &connectors).map_err(|e| e.to_string())?;
+    change(&mut connectors, &registry)?;
+    crate::runtime::config_file(app)
+        .rewrite(|text| cs::write_connectors(text, &connectors))
+        .map_err(|e| e.to_string())?;
     // An account added, removed or switched brings or takes its sync jobs (#92).
     crate::tasks::jobs_changed(app);
     Ok(())
@@ -386,7 +381,7 @@ pub fn connectors_set_token(
     connector: String,
     token: String,
 ) -> Result<(), String> {
-    let (_, config) = load(&config_path(&app))?;
+    let (_, config) = load(&app)?;
     let bearer = config.connectors.custom.iter().any(|server| {
         server.id == connector && server.auth == hyperme_core::registry::CustomAuth::Bearer
     });
@@ -406,7 +401,7 @@ fn account_data(app: &AppHandle) -> Result<hyperme_platform::task_store::SqliteT
 }
 
 fn connector_of(app: &AppHandle, id: &str) -> Result<hyperme_core::registry::Connector, String> {
-    let (_, config) = load(&config_path(app))?;
+    let (_, config) = load(app)?;
     let registry =
         cs::registry(presets_dir(app).as_deref(), &config.connectors).map_err(|e| e.to_string())?;
     registry
@@ -711,9 +706,12 @@ mod tests {
     }
 
     fn connectors(extra: &str) -> Connectors {
-        Config::parse(&format!("{DEFAULT_CONFIG}\n{extra}"), Path::new("c.toml"))
-            .unwrap()
-            .connectors
+        Config::parse(
+            &format!("{DEFAULT_CONFIG}\n{extra}"),
+            std::path::Path::new("c.toml"),
+        )
+        .unwrap()
+        .connectors
     }
 
     /// AC-13, R-9: an account without a token shows "Not signed in" and links to its row; with
