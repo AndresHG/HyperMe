@@ -45,11 +45,23 @@
     settings_view: {
       config: { hotkey: 'fn', min_hold_ms: 150, max_length_s: 300, short_dictation_words: 4, sounds: true, show_while_idle: true, speech_provider: 'groq', speech_model: 'whisper-large-v3-turbo', speech_endpoint: '', cleanup_provider: 'groq', cleanup_model: 'llama-3.3-70b-versatile', cleanup_endpoint: '', reasoning_effort: 'none', deadline_ms: 800, history: true, retention_days: 30, size_limit_mb: 500, keep_traces: true, timing_log: false },
       config_error: null, config_path: '~/Library/Application Support/HyperMe/config.toml',
-      keys: { speech: true, cleanup: true }, roles: [], destinations: [],
+      keys: { speech: true, cleanup: true }, destinations: [],
+      roles: [
+        { role: 'speech', label: 'Speech', provider: 'groq', model: 'whisper-large-v3-turbo', reasoning_effort: null, fallback: null, providers: [
+          { id: 'groq', name: 'Groq', recommended: true, key_required: true, has_key: true, has_key_page: true, key_note: null, models: [{ id: 'whisper-large-v3-turbo', reasoning_effort: [] }] },
+          { id: 'speechmatics', name: 'Speechmatics', recommended: false, key_required: true, has_key: false, has_key_page: true, key_note: null, models: [{ id: 'melia-1', reasoning_effort: [] }] } ] },
+        { role: 'cleanup', label: 'Cleanup', provider: 'groq', model: 'llama-3.3-70b-versatile', reasoning_effort: 'off',
+          fallback: { provider: 'openai', name: 'OpenAI', model: 'gpt-5-mini', ready: true }, providers: [
+          { id: 'groq', name: 'Groq', recommended: true, key_required: true, has_key: true, has_key_page: true, key_note: null, models: [{ id: 'llama-3.3-70b-versatile', reasoning_effort: [] }, { id: 'openai/gpt-oss-120b', reasoning_effort: ['low', 'medium', 'high'] }] },
+          { id: 'openai', name: 'OpenAI', recommended: false, key_required: true, has_key: true, has_key_page: true, key_note: null, models: [{ id: 'gpt-5-mini', reasoning_effort: ['low'] }] },
+          { id: 'local', name: 'Local server', recommended: false, key_required: false, has_key: false, has_key_page: false, key_note: null, models: [] } ] },
+      ],
       setup: { accessibility: true, input_monitoring: true, host_app: null }, version: '0.1.0',
     },
     connectors_view: { rows: [], setup: [], choices: [{ id: 'google', name: 'Google', note: 'Mail and calendar', ready: true }], privacy: null, pages: [], sheets: {} },
     diagnostics_view: { stages: [], warnings: '' },
+    models_list: { models: [], notice: null },
+    provider_hint: { cost: 'About $0.40 a month for 30 minutes a day', speed: '310 ms median', source: null, mine: null },
   };
   window.__mockCalls = [];
   window.__TAURI__ = {

@@ -96,9 +96,44 @@ from `tokens.css`. Every page looks and behaves as it does today, and the memory
 - AC-7 (R-13, R-15). Idle memory and pill first-frame time measured after each page's pull request
   and written to `docs/results/`.
 
+## Amendment: AI models pages (owner, 28 November 2026)
+
+The owner approved one redesign inside slice 6: Settings → Providers becomes an "AI models" group
+with a Speech to text page and a Language model page, after `docs/ux/settings-models/` (layout
+patterns borrowed from OpenWhispr's settings, not its branding), and asked for a way to use any
+model by name with a small Test button.
+
+- R-16. Settings shall have an "AI models" group with two pages, Speech to text (the speech role)
+  and Language model (the cleanup role), in place of Providers. The places the app opens
+  (`providers`, `providers-advanced`, `providers/<role>`) shall land on the matching page.
+- R-17. Each page shall show, in order: where the model runs (Cloud providers, or On this Mac,
+  for a role that offers a local server) with the one in use marked Active; the cloud providers
+  as tabs, with Custom for an OpenAI-compatible endpoint where the role takes one; the key, masked
+  with Test and Edit when one is saved (the key itself never comes back from the keychain), or a
+  field with Save and test when not; the model list with the model in use marked Active; an
+  "Other model…" field with Test; the hint line; reasoning effort for cleanup; and the fallback,
+  one line with Change and Remove.
+- R-18. The model list shall be the provider's curated models first, then the models its key
+  lists where the provider can list them (`models_list`), and always the model in use; past eight
+  it shall fold behind "Show all".
+- R-19. "Other model…" shall test the typed name with the provider's key (`key_test` with that
+  model) and offer Use it only once the test passes.
+- R-20. The rules of specs/96-provider-settings shall hold unchanged: a provider without a key
+  waits until its key passes Test (R-12 there), a fallback is saved only once its Test passes
+  (R-24 there), and choices reach the next dictation at once.
+
+- AC-8 (R-16 to R-20). The pages match the mockup's layout in light and dark; choosing a provider,
+  a model, Other model with Test, the key's Edit, On this Mac and the fallback call the same
+  commands as the table did; `settings.png` changes only by the sidebar's AI models group.
+
+Not in this amendment: the mockup's future tabs (Meetings, Voice edits, Commands), the "Clean up
+dictations" switch, which has no setting yet, the last four characters of a key, and a line of
+description per model, which the catalogue does not have.
+
 ## Non-goals
 
-- No visual redesign. The pages keep today's look; the design thread owns changes to it.
+- No visual redesign, except the AI models pages below. The pages keep today's look; the design
+  thread owns changes to it.
 - No SvelteKit, router library or server-side rendering: these are three small desktop windows.
 - No CSS framework (Tailwind and similar): `tokens.css` and component styles are the system.
 - No change to what leaves the machine.
