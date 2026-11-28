@@ -122,6 +122,12 @@ own look for a control. The file is `app/ui/components.css`; every page links `t
 `ui-switch`, `ui-segmented`, `ui-row`, `ui-card`, `ui-menu`), and it holds the behaviour every page
 shares (arrow cursor, non-selectable interface text, focus ring, no page bounce).
 
+Pages written in Svelte (spec 257) use the same controls as components in `app/web/src/lib/ui/`:
+`Button`, `Field`, `Select`, `Switch`, `Segmented`, `Row`, `Card` with `CardRow`, `Menu` and
+`Sheet`, each with its own styles from the tokens. `app/web/gallery.html` shows every one in its
+states; the screenshot checks build it (`HYPERME_GALLERY=1`), the app never does. When the last
+page leaves `app/ui`, `components.css` keeps only the shared behaviour.
+
 ## Other platforms (later)
 
 Linux gets `tokens-linux.css` from the GNOME HIG (Adwaita) and Windows `tokens-windows.css` from
