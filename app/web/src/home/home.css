@@ -1,0 +1,23 @@
+/* Home's page-wide look (docs/UX.md, "Home" and "Visual language", V0.1 redesign, owner approved
+   the mockups, 27 November 2026): Wispr Flow's layout in HyperMe's look. The system's light or
+   dark colours, Hyper violet for focus and what waits, SF Pro. Dictation text arrives only
+   through commands and is never stored by the page (spec 98, R-24). Each part's own styles live
+   in its component. */
+html, body { height: 100%; }
+body { margin: 0; font: var(--text-body) var(--font-system); background: var(--color-content-bg); color: var(--color-label); display: grid; grid-template-columns: 208px 1fr; overflow: hidden; -webkit-user-select: none; user-select: none; }
+:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
+button { font: inherit; color: inherit; cursor: default; }
+/* The overlay title bar (docs/DESIGN.md, "Windows"): macOS draws the traffic lights over the page;
+   this strip drags the window. */
+#titlebar { position: fixed; top: 0; left: 0; right: 0; height: var(--title-bar-height); z-index: 30; }
+main { overflow: auto; padding: var(--space-8) var(--space-8) var(--space-8); }
+section { max-width: 860px; }
+header { display: flex; justify-content: space-between; align-items: flex-end; gap: var(--space-6); margin-bottom: var(--space-5); }
+h1 { font: 700 var(--text-large-title) var(--font-system); margin: 0 0 var(--space-1); }
+.lead { color: var(--color-label-secondary); margin: 0; }
+h2 { font-size: var(--text-subheadline); font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--color-label-secondary); margin: 0 0 var(--space-2); }
+.empty { color: var(--color-label-secondary); padding: var(--space-5) 0; }
+.error { color: var(--color-red); padding: var(--space-2) 0; }
+.tag { font-size: var(--text-subheadline); padding: var(--space-1) var(--space-2); border-radius: var(--radius-capsule); background: var(--color-fill); color: var(--color-label-secondary); white-space: nowrap; }
+.tag.new { background: var(--color-accent-selected); color: var(--color-accent-text); }
+.tag.warn { background: var(--color-orange-soft); color: var(--color-orange-text); }

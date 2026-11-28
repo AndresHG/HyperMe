@@ -85,8 +85,9 @@ fn only_the_pill_is_transparent_and_every_window_has_native_chrome() {
 #[test]
 fn settings_is_not_a_window() {
     assert!(!builders().iter().any(|b| b.label.contains("SETTINGS")));
-    let home = include_str!("../../ui/home.html");
-    assert!(home.contains("id=\"sheet\"") && home.contains("settings.html"));
+    let home = include_str!("../../web/src/home/Home.svelte");
+    let open = include_str!("../../web/src/home/settings.svelte.ts");
+    assert!(home.contains("<Sheet") && open.contains("'settings.html#'"));
     let settings = include_str!("../../ui/settings.html");
     assert!(!settings.contains("html { background: transparent"));
 }

@@ -76,7 +76,7 @@ for (const [name, url] of home) {
 test('settings', async ({ page }) => {
   await open(page, 'home.html#home');
   await page.evaluate(() => window.openSettings('general'));
-  const frame = page.frameLocator('#sheet iframe');
+  const frame = page.frameLocator('iframe[title="Settings"]');
   await expect(frame.locator('#general')).toBeVisible();
   await expect(page).toHaveScreenshot('settings.png');
   const settings = page.frames().find((f) => f.url().includes('settings.html'));

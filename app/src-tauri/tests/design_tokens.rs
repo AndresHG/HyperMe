@@ -6,12 +6,7 @@
 use std::path::{Path, PathBuf};
 
 /// Files in `app/ui` held to the tokens, besides every `.svelte` and `.css` file in `app/web/src`.
-const MIGRATED: &[&str] = &[
-    "components.css",
-    "dictionary.css",
-    "home.html",
-    "settings.html",
-];
+const MIGRATED: &[&str] = &["components.css", "settings.html"];
 
 /// Properties whose lengths must be tokens (`0`, `auto` and keywords pass).
 const SIZED: &[&str] = &[
