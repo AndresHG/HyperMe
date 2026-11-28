@@ -32,7 +32,8 @@ fn presets_dir(app: &AppHandle) -> Option<PathBuf> {
 }
 
 /// One account's or custom server's page.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, specta::Type)]
+#[serde(rename = "ConnectorPage")]
 pub struct Page {
     id: String,
     title: String,
@@ -57,7 +58,7 @@ pub struct Page {
 }
 
 /// The setup sheet for one OAuth preset.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, specta::Type)]
 pub struct SetupSheet {
     connector: String,
     name: String,
@@ -71,7 +72,7 @@ pub struct SetupSheet {
 }
 
 /// One server's state on the account page, with the key that resolves it (specs/166, A-3).
-#[derive(Debug, Serialize, PartialEq, Eq)]
+#[derive(Debug, Serialize, PartialEq, Eq, specta::Type)]
 pub struct ApprovalLine {
     server: String,
     text: String,
@@ -81,7 +82,8 @@ pub struct ApprovalLine {
 }
 
 /// What the Connectors section and its Setup check rows show.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, specta::Type)]
+#[serde(rename = "ConnectorsView")]
 pub struct View {
     rows: Vec<Row>,
     setup: Vec<Row>,
@@ -272,6 +274,7 @@ fn load(path: &Path) -> Result<(String, Config), String> {
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn connectors_view(app: AppHandle) -> View {
     let empty = |error: String| View {
         rows: Vec::new(),
@@ -338,6 +341,7 @@ fn access(text: &str) -> Result<ToolAccess, String> {
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn connectors_set_tool(
     app: AppHandle,
     connector: String,
@@ -351,6 +355,7 @@ pub fn connectors_set_tool(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn connectors_set_enabled(
     app: AppHandle,
     account: String,
@@ -363,6 +368,7 @@ pub fn connectors_set_enabled(
 
 /// Adds a custom server and returns its id; its bearer token, if any, is entered next.
 #[tauri::command]
+#[specta::specta]
 pub fn connectors_add_custom(app: AppHandle, form: CustomForm) -> Result<String, String> {
     let mut id = String::new();
     save(&app, |connectors, registry| {
@@ -374,6 +380,7 @@ pub fn connectors_add_custom(app: AppHandle, form: CustomForm) -> Result<String,
 
 /// A custom server's bearer token goes straight to the keychain; it is never sent back.
 #[tauri::command]
+#[specta::specta]
 pub fn connectors_set_token(
     app: AppHandle,
     connector: String,
@@ -411,6 +418,7 @@ fn connector_of(app: &AppHandle, id: &str) -> Result<hyperme_core::registry::Con
 /// Step 1 of the sheet: saves the user's client in the keychain and checks it against the
 /// provider, without a sign-in. Returns the time the check took in ms.
 #[tauri::command]
+#[specta::specta]
 pub async fn connectors_save_client(
     app: AppHandle,
     connector: String,
@@ -439,7 +447,7 @@ pub async fn connectors_save_client(
 }
 
 /// What a finished sign-in shows (the sheet's Done step).
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, specta::Type)]
 pub struct SignInResult {
     account: String,
     /// One line per server: "Calendar: read your events · 12 tools" or the error.
@@ -447,7 +455,7 @@ pub struct SignInResult {
 }
 
 /// Why a sign-in stopped, for the sheet: `testing` shows the fix step.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, specta::Type)]
 pub struct SignInError {
     message: String,
     testing: bool,
@@ -476,6 +484,7 @@ static SIGN_IN: std::sync::Mutex<Option<tauri::async_runtime::JoinHandle<()>>> =
 /// Step 2: signs the account in through the system browser (R-7), with only the switched-on
 /// scopes, and adds it to the config. Then calls `tools/list` on each switched-on server.
 #[tauri::command]
+#[specta::specta]
 pub async fn connectors_sign_in(
     app: AppHandle,
     connector: String,
@@ -579,6 +588,7 @@ pub async fn connectors_sign_in(
 /// Review, or Ask again, on the account page: runs the server's pulls now, with the approval
 /// card answering what the server asks (specs/166, R-8, A-3). Returns the check line.
 #[tauri::command]
+#[specta::specta]
 pub async fn connectors_review(
     app: AppHandle,
     account: String,
@@ -612,6 +622,7 @@ fn ui_approver(
 
 /// Cancel in the "Finish in your browser" step: stops waiting and closes the listener.
 #[tauri::command]
+#[specta::specta]
 pub fn connectors_cancel_sign_in() {
     if let Some(task) = SIGN_IN.lock().unwrap_or_else(|p| p.into_inner()).take() {
         task.abort();
@@ -622,6 +633,7 @@ pub fn connectors_cancel_sign_in() {
 /// deletes what HyperMe kept from the account and removes it from the config. When the
 /// provider cannot be reached the account is still removed here, and the error says so.
 #[tauri::command]
+#[specta::specta]
 pub async fn connectors_disconnect(app: AppHandle, account: String) -> Result<(), String> {
     let connector = account.split(':').next().unwrap_or_default().to_owned();
     let preset = connector_of(&app, &connector)?;
@@ -646,6 +658,7 @@ pub async fn connectors_disconnect(app: AppHandle, account: String) -> Result<()
 
 /// Opens a page the setup sheet links to (the client setup or the production setting).
 #[tauri::command]
+#[specta::specta]
 pub fn connectors_open_url(app: AppHandle, connector: String, which: String) -> Result<(), String> {
     let preset = connector_of(&app, &connector)?;
     let help = preset.setup.ok_or("no setup help for this connector")?;
@@ -672,6 +685,7 @@ pub fn open_link(app: &AppHandle, url: &str) -> Result<(), String> {
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn connectors_open_link(app: AppHandle, url: String) -> Result<(), String> {
     open_link(&app, &url)
 }

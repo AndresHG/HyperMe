@@ -18,7 +18,7 @@ const LIMIT: usize = 5_000;
 /// Warnings shown (R-5).
 const WARNINGS: usize = 20;
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, specta::Type)]
 pub struct DiagnosticsView {
     /// The trace store exists, so the section is shown (R-1).
     shown: bool,
@@ -32,6 +32,7 @@ pub struct DiagnosticsView {
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn diagnostics_view(app: AppHandle) -> DiagnosticsView {
     let keep = Config::load_or_create(&runtime::data_dir(&app).join("config.toml"))
         .map(|c| c.history.keep_traces)
@@ -67,7 +68,7 @@ pub fn diagnostics_view(app: AppHandle) -> DiagnosticsView {
 }
 
 /// One stage bar of a History item (R-10), in milliseconds from key-down.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, specta::Type)]
 pub struct BarView {
     stage: String,
     start_ms: f64,
@@ -76,7 +77,7 @@ pub struct BarView {
 
 /// A History item's trace for its stage bars (R-10): the bars, the providers and models that
 /// answered, and the outcome.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, specta::Type)]
 pub struct TraceView {
     bars: Vec<BarView>,
     speech: Option<(String, String)>,
@@ -86,6 +87,7 @@ pub struct TraceView {
 
 /// The trace of one History item, or none: traces off, or older than their retention (R-11).
 #[tauri::command]
+#[specta::specta]
 pub fn history_trace(app: AppHandle, id: i64) -> Result<Option<TraceView>, String> {
     let Some(store) = runtime::trace_store(&app) else {
         return Ok(None);

@@ -88,6 +88,7 @@ impl Approver for Unattended {
 /// Serialised as `{"kind": "text" | "bold" | "italic" | "code" | "break" | "item" | "link",
 /// "text": ..., "url": ...}`.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "specta", derive(specta::Type), specta(type = SpanShape))]
 pub enum Span {
     Text(String),
     Bold(String),
@@ -101,6 +102,33 @@ pub enum Span {
         text: String,
         url: String,
     },
+}
+
+/// The shape `Span` is serialised as, for the app's TypeScript bindings (spec 257, R-9).
+#[cfg(feature = "specta")]
+#[derive(serde::Serialize, specta::Type)]
+#[serde(rename = "Span")]
+#[allow(dead_code)]
+struct SpanShape {
+    kind: SpanKind,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    text: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    url: Option<String>,
+}
+
+#[cfg(feature = "specta")]
+#[derive(serde::Serialize, specta::Type)]
+#[serde(rename_all = "lowercase")]
+#[allow(dead_code)]
+enum SpanKind {
+    Text,
+    Bold,
+    Italic,
+    Code,
+    Break,
+    Item,
+    Link,
 }
 
 impl serde::Serialize for Span {

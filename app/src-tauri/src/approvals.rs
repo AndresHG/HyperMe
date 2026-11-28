@@ -15,18 +15,17 @@ use hyperme_core::approval::{
     Approval, ApprovalAsk, ApprovalFuture, Approver, Span, default_choice, spans,
 };
 use serde::Serialize;
-use tauri::{AppHandle, Emitter};
+use tauri::AppHandle;
+use tauri_specta::Event as _;
+
+use crate::events::{ConnectorApproval, ConnectorApprovalClosed};
 use tokio::sync::oneshot;
 
-/// The event that opens a card in the Settings window.
-pub const ASK: &str = "connector-approval";
-/// The event that closes a card that timed out.
-pub const CLOSED: &str = "connector-approval-closed";
 /// How long a card waits for the user (R-9).
 pub const WAIT: Duration = Duration::from_secs(5 * 60);
 
 /// One choice as the card draws it.
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, PartialEq, Eq, specta::Type)]
 pub struct ChoiceView {
     pub value: String,
     pub label: String,
@@ -34,7 +33,8 @@ pub struct ChoiceView {
 }
 
 /// What the card shows (R-10). Its `Debug` leaves out the title and message (R-20).
-#[derive(Clone, Serialize, PartialEq, Eq)]
+#[derive(Clone, Serialize, PartialEq, Eq, specta::Type)]
+#[serde(rename = "ApprovalCard")]
 pub struct CardView {
     pub id: u64,
     /// "Google · personal · Mail"
@@ -168,10 +168,11 @@ impl Approver for UiApprover {
                     |id| card_view(id, &ask, &who, self.read),
                     WAIT,
                     |view| {
-                        let _ = self.app.emit_to(crate::home::HOME, ASK, view);
+                        let _ =
+                            ConnectorApproval(view.clone()).emit_to(&self.app, crate::home::HOME);
                     },
                     |id| {
-                        let _ = self.app.emit_to(crate::home::HOME, CLOSED, id);
+                        let _ = ConnectorApprovalClosed(id).emit_to(&self.app, crate::home::HOME);
                     },
                 )
                 .await
@@ -181,6 +182,7 @@ impl Approver for UiApprover {
 
 /// The card's answer: a choice's value, or nothing for Esc (R-13).
 #[tauri::command]
+#[specta::specta]
 pub fn connectors_answer(id: u64, value: Option<String>) -> bool {
     PENDING.answer(id, value)
 }

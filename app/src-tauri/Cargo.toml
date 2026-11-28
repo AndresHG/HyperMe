@@ -25,10 +25,16 @@ tauri = { version = "2.12.7", features = ["macos-private-api", "tray-icon"] }
 # tauri::generate_context! writes serde_json calls for the plugins' config (the updater's), so
 # every platform needs it, not only macOS.
 serde_json.workspace = true
+# Typed bindings for the web pages (spec 257, R-8 and R-9): the TypeScript types and command
+# functions are generated from the commands' Rust signatures. Pinned exactly while they are
+# release candidates, so an update is a deliberate change with a diff in bindings.ts.
+specta = { version = "=2.0.0-rc.28", features = ["derive", "serde_json"] }
+specta-typescript = "=0.0.15"
+tauri-specta = { version = "=2.0.0-rc.29", features = ["derive", "typescript"] }
 
 # The dictation, settings and walkthrough run on macOS only until Linux and Windows follow.
 [target.'cfg(target_os = "macos")'.dependencies]
-hyperme-core.workspace = true
+hyperme-core = { workspace = true, features = ["specta"] }
 hyperme-platform = { path = "../../crates/hyperme-platform" }
 hyperme-providers = { path = "../../crates/hyperme-providers" }
 serde.workspace = true

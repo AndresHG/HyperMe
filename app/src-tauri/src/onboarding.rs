@@ -5,7 +5,7 @@
 use serde::Deserialize;
 
 /// The screens, in order.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, specta::Type)]
 #[serde(rename_all = "lowercase")]
 pub enum Step {
     Welcome,
@@ -27,7 +27,7 @@ const STEPS: [Step; 5] = [
 
 /// What has been tested so far. Each flag is set only by a real test, never by the user saying
 /// so (R-27: "test each before saying it is ready").
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, specta::Type)]
 pub struct Checks {
     /// A live level above silence came from the microphone.
     pub microphone: bool,
