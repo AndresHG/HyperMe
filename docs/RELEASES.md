@@ -27,7 +27,7 @@ In conversation, "version 3" means 0.3.
 | **0.3** | 4 (email) | Email: Google mail triage, draft-only replies, approvals from connector servers; research on cleaning text while the user speaks (#220); Home sidebar: Calendar with list and board views (#232) | A week of daily mail drafts | late February 2027 |
 | **0.4** | 5 | Meetings: on-device live transcript, "Transcribe?" on a call, notes to proposed tickets, the Meetings page | Tickets from a real meeting accepted with few edits | April 2027 |
 | **1.0** | | The four above, stable | A month with no breaking change | after 0.4 |
-| Later | | Memory ("Hyper, remember …"), self-learning facts, the graph view and contexts; a Claude Code or Codex hand-off, local speech models, Linux and Windows, Microsoft 365 | | |
+| Later | | Memory ("Hyper, remember …"), self-learning facts, the graph view and contexts; a Claude Code or Codex hand-off, local speech models and self-hosted providers on your own network (#261), Linux and Windows, Microsoft 365 | | |
 
 Order set by the owner on 27 November 2026: dictation first, then voice commands and the to-do list, then email and meetings; memory, facts, the graph and contexts after 1.0.
 
@@ -94,6 +94,7 @@ recommendation.
 | HyperMe as an MCP server: what to expose | 0.2 or 0.3 | ROADMAP phase 3 |
 | Microsoft 365 mail and calendar through MCP | Later | PRD Q-7 |
 | Linux and Windows: overlay, hotkey, paste and keychain | Later | ROADMAP Later |
+| Self-hosted providers: your own speech and model server on your network (#261) | Later, with local speech models | Owner, 28 November 2026 |
 
 ## Optimization and research passes
 
