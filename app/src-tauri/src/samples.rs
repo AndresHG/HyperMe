@@ -160,7 +160,7 @@ mod commands {
     }
 
     /// Delete sample on a row (R-12).
-    #[tauri::command]
+    #[tauri::command(async)]
     #[specta::specta]
     pub fn home_delete_sample(app: AppHandle, id: DictationId) -> Result<(), String> {
         with_store(&app, |store| store.delete(id).map_err(|e| e.message))
@@ -183,7 +183,7 @@ mod commands {
         pub agreed: bool,
     }
 
-    #[tauri::command]
+    #[tauri::command(async)]
     #[specta::specta]
     pub fn samples_view(app: AppHandle) -> Result<SamplesView, String> {
         with_store(&app, |store| {
@@ -197,14 +197,14 @@ mod commands {
     }
 
     /// Delete all samples (R-12); the page asks once before calling.
-    #[tauri::command]
+    #[tauri::command(async)]
     #[specta::specta]
     pub fn samples_delete_all(app: AppHandle) -> Result<(), String> {
         with_store(&app, |store| store.delete_all().map_err(|e| e.message))
     }
 
     /// Show in Finder (R-12).
-    #[tauri::command]
+    #[tauri::command(async)]
     #[specta::specta]
     pub fn samples_reveal(app: AppHandle) -> Result<(), String> {
         let dir = folder(&app);
