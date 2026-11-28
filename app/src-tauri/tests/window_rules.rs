@@ -88,7 +88,10 @@ fn settings_is_not_a_window() {
     assert!(!builders().iter().any(|b| b.label.contains("SETTINGS")));
     let home = include_str!("../../web/src/home/Home.svelte");
     assert!(home.contains("<Sheet") && home.contains("import('../settings/Settings.svelte')"));
-    assert!(!home.contains("<iframe"), "Settings is not a frame any more");
+    assert!(
+        !home.contains("<iframe"),
+        "Settings is not a frame any more"
+    );
     let settings = include_str!("../../web/src/settings/settings.css");
     assert!(!settings.contains("background: transparent"));
 }

@@ -916,7 +916,9 @@ mod tests {
     #[test]
     fn the_connect_dialog_label_is_a_choice_and_no_dictionary_in_settings() {
         let dialog = include_str!("../../web/src/settings/connectors/ConnectDialog.svelte");
-        assert!(dialog.contains("type=\"radio\"") && dialog.contains("name=\"oauth-label-choice\""));
+        assert!(
+            dialog.contains("type=\"radio\"") && dialog.contains("name=\"oauth-label-choice\"")
+        );
         for value in ["personal", "work", "other"] {
             assert!(
                 dialog.contains(&format!("['{value}', ")),
