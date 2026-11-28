@@ -45,14 +45,17 @@ itself; a later version may hand a task to Claude Code ([docs/PRD.md](docs/PRD.m
   27 November 2026; approved 28 November 2026)
 - `specs/267-ground-truth-samples/`: spec for correcting a whole dictation in History and
   keeping it, with its audio, as a sample the quality harness scores new models against (approved 28 November 2026)
+- `specs/27-voice-commands/`: 0.2 spec for voice commands: the router, three stages (keywords, a
+  classifier, a small model for the fields), local actions with undo, outside actions behind a
+  preview, and the commands that ship in 0.2 (approved 28 November 2026)
 - `docs/RELEASING.md`: how a release is built, signed, notarised and published, and how updates work
 - `docs/FIELD.md`: existing projects and what to borrow from each
 - `docs/research/2026-11-27-telemetry-and-tracing.md`: local tracing, what other users' copies may
   send, and backends (research; PRD Q-18 decided: no telemetry, a report bundle)
 - `docs/UX.md`: UX and UI by phase (one shape at the bottom centre: dot, pill, card and quick sheet; the Home window; settings and menus), with mockups in `docs/ux/` (draft)
 - `docs/DESIGN.md`: the macOS design system (native window chrome, the type scale, the 4-point
-  grid, radii, semantic colours, behaviour rules) and `app/ui/tokens.css`. Required reading
-  before any UI work; a test holds migrated pages to the tokens
+  grid, radii, semantic colours, behaviour rules) and `app/web/src/lib/ui/tokens.css`. Required
+  reading before any UI work; a test holds every page to the tokens
 - `docs/RESEARCH.md`: verdict, product focus, pitch and field map from the research of
   24 November 2026
 - `KICKOFF.md`: the first two sessions, step by step

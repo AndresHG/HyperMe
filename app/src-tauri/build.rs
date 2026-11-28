@@ -18,8 +18,6 @@ fn build_pages() {
         "vite.config.ts",
         "svelte.config.js",
         "tsconfig.json",
-        // Pages not yet moved to Svelte, copied as they are (vite.config.ts, publicDir).
-        "../ui",
     ] {
         println!("cargo:rerun-if-changed={}", web.join(watched).display());
     }

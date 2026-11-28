@@ -1,5 +1,5 @@
-// Serves the built pages (app/web/dist, spec 257) for the checks, with mock-tauri.js put into every top page in place of Tauri's
-// API. settings.html is not given it: it runs in Home's frame and borrows Home's, as in the app.
+// Serves the built pages (app/web/dist, spec 257) for the checks, with mock-tauri.js put into every
+// page in place of Tauri's API.
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -15,7 +15,7 @@ http.createServer((req, res) => {
   fs.readFile(file, (err, data) => {
     if (err) { res.writeHead(404); res.end(); return; }
     let body = data;
-    if (file.endsWith('.html') && !file.endsWith('settings.html')) {
+    if (file.endsWith('.html')) {
       body = data.toString().replace('<head>', `<head><script>${mock}</script>`);
     }
     res.writeHead(200, { 'content-type': types[path.extname(file)] || 'application/octet-stream' });
