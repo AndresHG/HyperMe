@@ -4,7 +4,7 @@
 
 use std::sync::Mutex;
 
-use hyperme_core::config::{Config, Role};
+use hyperme_core::config::Role;
 use hyperme_core::dictation::Event;
 use hyperme_core::secrets::SecretStore;
 use hyperme_core::traits::Microphone;
@@ -28,7 +28,7 @@ pub const WALKTHROUGH: &str = "walkthrough";
 struct MicTest(Mutex<Option<CpalMicrophone>>);
 
 fn at_launch(app: &AppHandle) -> AtLaunch {
-    let config = Config::load_or_create(&crate::runtime::data_dir(app).join("config.toml")).ok();
+    let config = crate::runtime::config(app).ok();
     let keys = KeychainStore::new();
     // A provider that shares another's key reads that one (specs/96, D-2).
     let saved = |provider: Option<&str>| {
@@ -124,7 +124,7 @@ pub struct Permissions {
 #[specta::specta]
 pub fn onboarding_checks(app: AppHandle) -> Permissions {
     log_permissions();
-    let config = Config::load_or_create(&crate::runtime::data_dir(&app).join("config.toml")).ok();
+    let config = crate::runtime::config(&app).ok();
     Permissions {
         accessibility: permissions::accessibility(),
         input_monitoring: input_monitoring(),
@@ -298,8 +298,7 @@ pub struct KeysScreen {
 #[tauri::command]
 #[specta::specta]
 pub fn onboarding_keys_screen(app: AppHandle) -> Result<KeysScreen, String> {
-    let config = Config::load_or_create(&crate::runtime::data_dir(&app).join("config.toml"))
-        .map_err(|e| e.to_string())?;
+    let config = crate::runtime::config(&app).map_err(|e| e.to_string())?;
     let choices = cost::CHOICES
         .iter()
         .map(|choice| {
@@ -327,8 +326,7 @@ pub fn onboarding_keys_screen(app: AppHandle) -> Result<KeysScreen, String> {
 #[tauri::command]
 #[specta::specta]
 pub fn onboarding_get_key(app: AppHandle, role: String) -> Result<(), String> {
-    let config = Config::load_or_create(&crate::runtime::data_dir(&app).join("config.toml"))
-        .map_err(|e| e.to_string())?;
+    let config = crate::runtime::config(&app).map_err(|e| e.to_string())?;
     let url = match role.as_str() {
         "speech" => config.speech.key_url(),
         "cleanup" => config.cleanup.key_url(),

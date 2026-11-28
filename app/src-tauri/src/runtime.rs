@@ -7,7 +7,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
-use hyperme_core::config::Config;
+use hyperme_core::config::{Config, ConfigError};
+use hyperme_core::config_file::ConfigFile;
 use hyperme_core::dictation::{
     DictionaryUpdates, Engine, Event, Parts, Providers, Settings, Status,
 };
@@ -131,6 +132,16 @@ pub fn trace_store(app: &AppHandle) -> Option<Arc<TraceStore>> {
 }
 
 /// HyperMe's data folder: `~/Library/Application Support/HyperMe` (design.md).
+/// The shared `config.toml`, read once and again only when it changes (managed at launch).
+pub fn config_file(app: &AppHandle) -> tauri::State<'_, ConfigFile> {
+    app.state::<ConfigFile>()
+}
+
+/// The current config.
+pub fn config(app: &AppHandle) -> Result<Arc<Config>, ConfigError> {
+    config_file(app).load()
+}
+
 pub fn data_dir(app: &AppHandle) -> PathBuf {
     app.path()
         .data_dir()
@@ -170,7 +181,7 @@ pub fn start(app: &AppHandle, menu: TrayMenu) {
         }),
     ];
     // The trace store shares the history's file; one that cannot open only loses traces.
-    let config = Config::load_or_create(&data_dir(app).join("config.toml")).unwrap_or_default();
+    let config = config(app).unwrap_or_default();
     let traces = TraceStore::open(
         &data_dir(app).join("history").join("history.sqlite3"),
         TraceSettings::from_config(&config.history),
@@ -192,8 +203,7 @@ pub fn start(app: &AppHandle, menu: TrayMenu) {
         generation: 0,
         history: history.clone(),
         menu,
-        show_while_idle: Config::load_or_create(&data_dir(app).join("config.toml"))
-            .map_or(true, |config| config.dictation.show_while_idle),
+        show_while_idle: self::config(app).map_or(true, |config| config.dictation.show_while_idle),
         _hotkey: None,
         providers: None,
         timing,
@@ -201,8 +211,7 @@ pub fn start(app: &AppHandle, menu: TrayMenu) {
         traces,
         busy: false,
         home_retry: None,
-        history_enabled: Config::load_or_create(&data_dir(app).join("config.toml"))
-            .map_or(true, |config| config.history.enabled),
+        history_enabled: self::config(app).map_or(true, |config| config.history.enabled),
         dictionary: None,
         card: None,
         fallback_notice: None,
@@ -212,7 +221,7 @@ pub fn start(app: &AppHandle, menu: TrayMenu) {
     settle(app);
     // Home shows the history even before the keys are in, or when one cannot be read.
     let dir = data_dir(app);
-    if let Ok(config) = Config::load_or_create(&dir.join("config.toml")) {
+    if let Ok(config) = self::config(app) {
         open_history(&history, &dir, &config);
     }
     match wire(app, history) {
@@ -250,8 +259,7 @@ fn open_history(history: &Mutex<HistoryInner>, dir: &std::path::Path, config: &C
 
 fn wire(app: &AppHandle, history: Arc<Mutex<HistoryInner>>) -> Result<(), String> {
     let dir = data_dir(app);
-    let config =
-        Config::load_or_create(&dir.join("config.toml")).map_err(|e| format!("Config: {e}"))?;
+    let config = config(app).map_err(|e| format!("Config: {e}"))?;
     // An unreadable dictionary store leaves dictation working without it; Settings shows why.
     let dictionary = crate::dictionary::current(app);
     let providers = with_dictionary(
@@ -347,8 +355,7 @@ pub fn reload_providers(app: &AppHandle) -> Result<(), String> {
     let Some(switch) = lock(app).providers.clone() else {
         return Ok(());
     };
-    let config = Config::load_or_create(&data_dir(app).join("config.toml"))
-        .map_err(|e| format!("Config: {e}"))?;
+    let config = config(app).map_err(|e| format!("Config: {e}"))?;
     let dictionary = crate::dictionary::current(app);
     let providers = with_dictionary(
         any::resolve(&config, &KeychainStore::new()).map_err(|e| e.message)?,
@@ -378,7 +385,7 @@ pub fn reload_providers(app: &AppHandle) -> Result<(), String> {
 pub fn refresh_traces(app: &AppHandle) {
     let traces = lock(app).traces.clone();
     let Some(store) = traces else { return };
-    let config = Config::load_or_create(&data_dir(app).join("config.toml")).unwrap_or_default();
+    let config = config(app).unwrap_or_default();
     store.set_settings(TraceSettings::from_config(&config.history));
 }
 
@@ -421,8 +428,7 @@ impl TraceSink for Streaks {
             .unwrap_or_else(PoisonError::into_inner)
             .observe(trace);
         let Some(role) = roles.first() else { return };
-        let config =
-            Config::load_or_create(&data_dir(&self.app).join("config.toml")).unwrap_or_default();
+        let config = config(&self.app).unwrap_or_default();
         lock(&self.app).fallback_notice = Some(pill::fallback_notice(&config, *role));
     }
 }

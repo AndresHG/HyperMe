@@ -6,6 +6,7 @@ pub mod approval;
 pub mod audio;
 pub mod brief;
 pub mod config;
+pub mod config_file;
 pub mod connector_settings;
 pub mod connector_setup;
 pub mod connectors;

@@ -4,7 +4,6 @@
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use hyperme_core::config::Config;
 use hyperme_core::diagnostics::{self, Diagnostics};
 use hyperme_platform::log_file;
 use serde::Serialize;
@@ -34,7 +33,7 @@ pub struct DiagnosticsView {
 #[tauri::command]
 #[specta::specta]
 pub fn diagnostics_view(app: AppHandle) -> DiagnosticsView {
-    let keep = Config::load_or_create(&runtime::data_dir(&app).join("config.toml"))
+    let keep = runtime::config(&app)
         .map(|c| c.history.keep_traces)
         .unwrap_or(true);
     let warnings = log_file::last_lines(&runtime::warnings_path(&app), WARNINGS);

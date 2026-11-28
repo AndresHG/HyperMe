@@ -38,9 +38,9 @@ type Shared = Mutex<State>;
 pub fn init(app: &AppHandle) {
     let dir = crate::runtime::data_dir(app);
     let path = dir.join("dictionary.sqlite");
-    let config = Config::load_or_create(&dir.join("config.toml")).ok();
+    let config = crate::runtime::config(app).ok();
     let store = DictionaryStore::open(&path).and_then(|mut store| {
-        import_once(&mut store, &file(&dir, config.as_ref()))?;
+        import_once(&mut store, &file(&dir, config.as_deref()))?;
         Ok(store)
     });
     if let Err(why) = &store {
