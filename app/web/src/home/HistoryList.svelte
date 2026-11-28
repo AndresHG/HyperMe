@@ -22,6 +22,7 @@
     onmenu,
     onfixtext,
     onsendfix,
+    onsendcorrect,
   }: {
     items: Item[];
     words: string[];
@@ -33,6 +34,7 @@
     onmenu: () => void;
     onfixtext: (id: number) => void;
     onsendfix: (id: number) => void;
+    onsendcorrect: (id: number) => void;
   } = $props();
 
   type Entry =
@@ -129,6 +131,7 @@
         {onmenu}
         onfixtext={() => onfixtext(id)}
         onsendfix={() => onsendfix(id)}
+        onsendcorrect={() => onsendcorrect(id)}
       />
     {/if}
   {/each}

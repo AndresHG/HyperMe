@@ -3,7 +3,9 @@
 // missing here answers null.
 (() => {
   const now = Date.UTC(2026, 10, 27, 9, 30);
-  const item = (id, minutes, text, app) => ({ id, started_ms: now - minutes * 60000, app, language: 'en', text, state: 'done', message: null, has_audio: true, actions: [{ id: 'copy', label: 'Copy', key: 'C' }, { id: 'delete', label: 'Delete', key: '⌫' }] });
+  const item = (id, minutes, text, app) => ({ id, started_ms: now - minutes * 60000, app, language: 'en', text, state: 'done', message: null, has_audio: true, actions: [{ id: 'copy', label: 'Copy', key: 'C' }, { id: 'correct', label: 'Correct', key: '⌘E' }, { id: 'delete', label: 'Delete', key: '⌫' }] });
+  // Spec 267: the first Correct asks to keep samples; once agreed, it saves.
+  let agreed = false;
   const fixtures = {
     home_info: { history: true, dictionary: true },
     home_sections: [
@@ -16,6 +18,12 @@
     home_stats: { words_this_week: 1840, seconds_saved: 2460 },
     home_page: [item(3, 12, 'Send the weekly update to the team before lunch.', 'Mail'), item(2, 95, 'Remind me to review the design tokens pull request.', 'Slack'), item(1, 1500, 'The quick brown fox jumps over the lazy dog.', 'Notes')],
     home_search: [],
+    home_correct: ({ text, agreed: yes }) => {
+      if (!agreed && !yes) return { outcome: 'needs_agreement' };
+      agreed = true;
+      return { outcome: 'saved', text: text.trim(), changed: true };
+    },
+    home_item: ({ id }) => ({ ...item(id, 12, 'Send the weekly update to the whole team before lunch.', 'Mail'), sample: true }),
     home_failed: [],
     home_today: {
       lines: [

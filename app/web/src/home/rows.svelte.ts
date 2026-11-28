@@ -6,7 +6,10 @@ export type Mode =
   | { kind: 'confirm-delete' }
   | { kind: 'fix-select' }
   | { kind: 'fix-type'; heard: string; wanted: string }
-  | { kind: 'fix-confirm'; heard: string; wanted: string };
+  | { kind: 'fix-confirm'; heard: string; wanted: string }
+  // Spec 267: Correct edits the whole text; the first save asks before keeping anything (R-6).
+  | { kind: 'correct'; text: string }
+  | { kind: 'correct-agree'; text: string };
 
 export interface RowState {
   mode: Mode | null;

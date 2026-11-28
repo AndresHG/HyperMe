@@ -180,8 +180,9 @@ pub struct Action {
 }
 
 /// The actions a row offers (R-13): Copy and Paste again need text, Retry needs the audio
-/// (R-16, AC-10), Fix a word needs a dictionary and text (R-17, R-21), Delete is always there.
-pub fn actions(has_text: bool, has_audio: bool, dictionary: bool) -> Vec<Action> {
+/// (R-16, AC-10), Fix a word needs a dictionary and text (R-17, R-21), Correct needs text and
+/// audio (spec 267, R-3), Delete sample needs a sample (spec 267, R-12), Delete is always there.
+pub fn actions(has_text: bool, has_audio: bool, dictionary: bool, sample: bool) -> Vec<Action> {
     let mut list = Vec::new();
     let mut add = |id, label, key| list.push(Action { id, label, key });
     if has_text {
@@ -193,6 +194,12 @@ pub fn actions(has_text: bool, has_audio: bool, dictionary: bool) -> Vec<Action>
     }
     if has_text && dictionary {
         add("fix", "Fix a word", "⌘F");
+    }
+    if has_text && has_audio {
+        add("correct", "Correct", "⌘E");
+    }
+    if sample {
+        add("delete-sample", "Delete sample", "");
     }
     add("delete", "Delete", "⌘⌫");
     list
@@ -543,14 +550,17 @@ mod window {
         pub message: Option<String>,
         /// Whether Retry can be offered (R-16).
         pub has_audio: bool,
+        /// A sample keeps this dictation's correction (spec 267, R-5).
+        pub sample: bool,
         /// What the row offers when selected, with keys (R-13).
         pub actions: Vec<Action>,
     }
 
-    fn view(item: Item, dictionary: bool) -> ItemView {
+    fn view(item: Item, dictionary: bool, sample: bool) -> ItemView {
         let has_text = item.state == "done" && item.text.as_deref().is_some_and(|t| !t.is_empty());
         ItemView {
-            actions: actions(has_text, item.has_audio, dictionary),
+            actions: actions(has_text, item.has_audio, dictionary, sample),
+            sample,
             id: item.id,
             started_ms: item.started_ms,
             app: item.app,
@@ -586,7 +596,15 @@ mod window {
 
     fn views(app: &AppHandle, items: Vec<Item>) -> Vec<ItemView> {
         let dictionary = has_dictionary(app);
-        items.into_iter().map(|i| view(i, dictionary)).collect()
+        let ids: Vec<DictationId> = items.iter().map(|i| i.id).collect();
+        let samples = crate::samples::sampled(app, &ids);
+        items
+            .into_iter()
+            .map(|i| {
+                let sample = samples.contains(&i.id);
+                view(i, dictionary, sample)
+            })
+            .collect()
     }
 
     /// The page's local time zone comes from the page, which knows it (R-7).
@@ -652,8 +670,8 @@ mod window {
     #[tauri::command]
     #[specta::specta]
     pub fn home_item(app: AppHandle, id: DictationId) -> Result<Option<ItemView>, String> {
-        let dictionary = has_dictionary(&app);
-        crate::runtime::with_history(&app, |h| h.item(id)).map(|i| i.map(|i| view(i, dictionary)))
+        let item = crate::runtime::with_history(&app, |h| h.item(id))?;
+        Ok(item.map(|i| views(&app, vec![i]).remove(0)))
     }
 
     /// The text of a finished dictation, from the store, not from the page.
@@ -807,6 +825,7 @@ mod window {
                     message: None,
                 },
                 false,
+                false,
             );
             let json = serde_json::to_value(&view).unwrap();
             let mut keys: Vec<&str> = json
@@ -825,6 +844,7 @@ mod window {
                     "id",
                     "language",
                     "message",
+                    "sample",
                     "started_ms",
                     "state",
                     "text"
@@ -1059,20 +1079,28 @@ mod tests {
     fn rows_offer_only_what_they_can_do() {
         let ids = |list: Vec<Action>| -> Vec<&str> { list.iter().map(|a| a.id).collect() };
         assert_eq!(
-            ids(actions(true, true, false)),
-            ["copy", "paste", "retry", "delete"]
+            ids(actions(true, true, false, false)),
+            ["copy", "paste", "retry", "correct", "delete"]
         );
         assert_eq!(
-            ids(actions(true, false, false)),
+            ids(actions(true, false, false, false)),
             ["copy", "paste", "delete"]
         );
         assert_eq!(
-            ids(actions(true, true, true)),
-            ["copy", "paste", "retry", "fix", "delete"]
+            ids(actions(true, true, true, false)),
+            ["copy", "paste", "retry", "fix", "correct", "delete"]
         );
-        assert_eq!(ids(actions(false, true, true)), ["retry", "delete"]);
-        let keys: Vec<&str> = actions(true, true, true).iter().map(|a| a.key).collect();
-        assert_eq!(keys, ["⌘C", "↵", "⌘R", "⌘F", "⌘⌫"]);
+        assert_eq!(ids(actions(false, true, true, false)), ["retry", "delete"]);
+        // Spec 267, AC-2 (R-3, R-12): Correct needs text and audio; a sample can be deleted.
+        assert_eq!(
+            ids(actions(true, false, false, true)),
+            ["copy", "paste", "delete-sample", "delete"]
+        );
+        let keys: Vec<&str> = actions(true, true, true, false)
+            .iter()
+            .map(|a| a.key)
+            .collect();
+        assert_eq!(keys, ["⌘C", "↵", "⌘R", "⌘F", "⌘E", "⌘⌫"]);
     }
 
     /// A dictionary that records corrections and answers from a queue (`Added` when empty).

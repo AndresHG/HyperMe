@@ -64,11 +64,12 @@ leaves the Mac.
 - R-5. When the user saves a text that differs from the row's text (apart from spacing), the app
   shall write a sample and show the corrected text in the row with a sample mark. Saving the same
   text keeps it and still writes a sample (a dictation that was right is a useful sample too).
-- R-6. The first time the user saves a sample, History shall explain in one sheet, before
-  anything is written: what a sample keeps (audio and texts), that it stays on this Mac until they
+- R-6. The first time the user saves a sample, History shall explain under the row, before
+  anything is written (as it asks before Delete): what a sample keeps (audio and texts), that it stays on this Mac until they
   delete it, even after the history deletes the dictation, and that only their own providers hear
-  it, and only when they run a benchmark. **Keep samples** writes it and does not ask again;
-  **Not now** writes nothing. (GT-2)
+  it, and only when they run a benchmark. **Keep samples** (↵) writes it and does not ask again;
+  **Not now** (Esc) writes nothing. (GT-2; the owner chose "ask on first save". The ask sits in the
+  row like the other confirmations there, not in a separate sheet.)
 - R-7. When the user corrects a row that already has a sample, the app shall replace that sample's
   corrected text and keep one sample per dictation.
 - R-8. Correct shall never change the personal dictionary. (Turning a correction into dictionary
@@ -131,7 +132,7 @@ leaves the Mac.
 - AC-9 *(live)*: Save 10 samples from the owner's history; `hyperme-quality run --set samples`
   scores them; saving takes under 200 ms each. Numbers only to `docs/results/`. (R-14, R-17)
 - AC-10 *(fake)*: Page tests (spec 257's harness): Correct opens the editor with the text selected,
-  ⌘↵ saves, Esc cancels, and the first-save sheet appears once. (R-4, R-6)
+  ⌘↵ saves, Esc cancels, and the first-save ask appears once. (R-4, R-6)
 
 ## Non-goals
 

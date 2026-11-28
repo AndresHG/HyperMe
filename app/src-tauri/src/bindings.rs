@@ -31,7 +31,6 @@ pub fn builder() -> Builder<tauri::Wry> {
         crate::home::home_fix_word,
         crate::samples::home_correct,
         crate::samples::home_delete_sample,
-        crate::samples::home_samples_of,
         crate::samples::samples_view,
         crate::samples::samples_delete_all,
         crate::samples::samples_reveal,

@@ -125,6 +125,13 @@
         state.mode = { kind: 'fix-select' };
         offerFix(id);
       }
+      if (action === 'correct') state.mode = { kind: 'correct', text: itemOf(id)?.text ?? '' };
+      if (action === 'delete-sample') {
+        await commands.homeDeleteSample(id);
+        const item = await commands.homeItem(id);
+        if (item) replace(item);
+        say(id, 'Sample deleted');
+      }
       if (action === 'delete') state.mode = { kind: 'confirm-delete' };
     } catch (error) {
       say(id, String(error), true);
@@ -181,6 +188,27 @@
     }
   }
 
+  // Correct (spec 267, R-4 to R-7): the whole text as it should have been, kept with the audio as
+  // a sample for benchmarks. The first save explains what is kept and waits for a yes (R-6).
+  async function sendCorrect(id: number, agreed: boolean) {
+    const state = stateOf(id);
+    const mode = state.mode;
+    if (!mode || (mode.kind !== 'correct' && mode.kind !== 'correct-agree')) return;
+    try {
+      const outcome = await commands.homeCorrect(id, mode.text, agreed);
+      if (outcome.outcome === 'needs_agreement') {
+        state.mode = { kind: 'correct-agree', text: mode.text };
+        return;
+      }
+      state.mode = null;
+      const item = await commands.homeItem(id);
+      if (item) replace(item);
+      say(id, outcome.changed ? 'Saved as a sample. Press ↵ to paste it again' : 'Saved as a sample');
+    } catch (error) {
+      say(id, String(error), true);
+    }
+  }
+
   // ---- Keys (R-13) ----
   function onkeydown(e: KeyboardEvent) {
     keys(e);
@@ -188,7 +216,7 @@
   }
 
   function keys(e: KeyboardEvent) {
-    const typing = e.target instanceof HTMLInputElement;
+    const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement;
     const inSearch = e.target === search;
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
       if (typing && !inSearch) return;
@@ -210,6 +238,7 @@
       e.preventDefault();
       if (mode?.kind === 'confirm-delete') confirmDelete(id);
       else if (mode?.kind === 'fix-confirm') sendFix(id, true);
+      else if (mode?.kind === 'correct-agree') sendCorrect(id, true);
       else if (!mode) run(id, 'paste');
       return;
     }
@@ -223,6 +252,9 @@
     } else if (e.key === 'f') {
       e.preventDefault();
       run(id, 'fix');
+    } else if (e.key === 'e') {
+      e.preventDefault();
+      run(id, 'correct');
     } else if (e.key === 'Backspace') {
       e.preventDefault();
       run(id, 'delete');
@@ -236,7 +268,7 @@
   // field kept about 20 MB of graphics memory alive (AC-2).
   function typeToSearch(e: KeyboardEvent) {
     if (e.metaKey || e.ctrlKey || e.altKey) return;
-    if (e.target instanceof HTMLInputElement || e.key.length !== 1 || !info.history) return;
+    if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.key.length !== 1 || !info.history) return;
     if (selected !== null && stateOf(selected).mode) return;
     search?.focus();
   }
@@ -321,6 +353,7 @@
     onmenu={openMenu}
     onfixtext={offerFix}
     onsendfix={(id) => sendFix(id, false)}
+    onsendcorrect={(id) => sendCorrect(id, false)}
   />
   <div class="more" id="more">{more}</div>
 </section>

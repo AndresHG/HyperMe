@@ -68,8 +68,6 @@ export const commands = {
 	homeCorrect: (id: number, text: string, agreed: boolean, options?: InvokeOptions) => __TAURI_INVOKE<CorrectOutcome>("home_correct", { id, text, agreed }, options),
 	/**  Delete sample on a row (R-12). */
 	homeDeleteSample: (id: number, options?: InvokeOptions) => __TAURI_INVOKE<null>("home_delete_sample", { id }, options),
-	/**  Which of these history items have a sample, for the sample mark (R-5). */
-	homeSamplesOf: (ids: number[], options?: InvokeOptions) => __TAURI_INVOKE<number[]>("home_samples_of", { ids }, options),
 	samplesView: (options?: InvokeOptions) => __TAURI_INVOKE<SamplesView>("samples_view", undefined, options),
 	/**  Delete all samples (R-12); the page asks once before calling. */
 	samplesDeleteAll: (options?: InvokeOptions) => __TAURI_INVOKE<null>("samples_delete_all", undefined, options),
@@ -867,6 +865,8 @@ export type ItemView_Deserialize = {
 	message?: string | null,
 	/**  Whether Retry can be offered (R-16). */
 	has_audio: boolean,
+	/**  A sample keeps this dictation's correction (spec 267, R-5). */
+	sample: boolean,
 	/**  What the row offers when selected, with keys (R-13). */
 	actions: Action[],
 };
@@ -885,6 +885,8 @@ export type ItemView_Serialize = {
 	message: string | null,
 	/**  Whether Retry can be offered (R-16). */
 	has_audio: boolean,
+	/**  A sample keeps this dictation's correction (spec 267, R-5). */
+	sample: boolean,
 	/**  What the row offers when selected, with keys (R-13). */
 	actions: Action[],
 };

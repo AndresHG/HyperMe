@@ -74,6 +74,29 @@ for (const [name, url] of home) {
   });
 }
 
+// Spec 267, AC-10 (R-4, R-6): Correct opens the whole text selected; Esc cancels; ⌘↵ saves, and
+// the first save asks once before anything is kept; the row then shows its sample mark.
+test('history-correct', async ({ page }) => {
+  await open(page, 'home.html#history');
+  const row = page.locator('.row[data-id="3"]');
+  await row.locator('time').click();
+  await page.keyboard.press('Meta+e');
+  const editor = row.locator('textarea');
+  await expect(editor).toBeFocused();
+  expect(await editor.evaluate((t) => t.selectionEnd - t.selectionStart)).toBe('Send the weekly update to the team before lunch.'.length);
+  await page.keyboard.press('Escape');
+  await expect(editor).toHaveCount(0);
+
+  await page.keyboard.press('Meta+e');
+  await editor.fill('Send the weekly update to the whole team before lunch.');
+  await page.keyboard.press('Meta+Enter');
+  await expect(row.locator('.ask')).toContainText('A sample keeps');
+  await page.keyboard.press('Enter');
+  await expect(row.locator('.say')).toHaveText('Saved as a sample. Press ↵ to paste it again');
+  await expect(row.locator('.sample')).toBeVisible();
+  await expect(row.locator('.text')).toHaveText('Send the weekly update to the whole team before lunch.');
+});
+
 test('settings', async ({ page }) => {
   await open(page, 'home.html#home');
   await page.evaluate(() => window.openSettings('general'));

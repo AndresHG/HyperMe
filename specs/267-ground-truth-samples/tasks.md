@@ -13,3 +13,5 @@ Tests first; each cites its AC.
 | 5 | Live: 10 samples from the owner's history, one harness run, save time | AC-9 | `docs/results/` (numbers only) |
 
 Slices 1 to 3 touch no page, so they can run while spec 257 finishes.
+
+Done in PR #268: slices 1 to 4 (28 November 2026). Left: slice 5, the live check.

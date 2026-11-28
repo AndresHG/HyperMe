@@ -90,6 +90,7 @@ pub use commands::*;
 
 #[cfg(target_os = "macos")]
 mod commands {
+    use std::collections::HashSet;
     use std::path::PathBuf;
     use std::sync::{Mutex, PoisonError};
 
@@ -165,16 +166,13 @@ mod commands {
         with_store(&app, |store| store.delete(id).map_err(|e| e.message))
     }
 
-    /// Which of these history items have a sample, for the sample mark (R-5).
-    #[tauri::command]
-    #[specta::specta]
-    pub fn home_samples_of(
-        app: AppHandle,
-        ids: Vec<DictationId>,
-    ) -> Result<Vec<DictationId>, String> {
-        with_store(&app, |store| {
-            Ok(ids.into_iter().filter(|id| store.has(*id)).collect())
+    /// Which of these history items have a sample, for the sample mark on History rows (R-5).
+    /// A store that cannot be read marks none.
+    pub fn sampled(app: &AppHandle, ids: &[DictationId]) -> HashSet<DictationId> {
+        with_store(app, |store| {
+            Ok(ids.iter().copied().filter(|id| store.has(*id)).collect())
         })
+        .unwrap_or_default()
     }
 
     /// The samples row in Settings → Privacy (R-12).
