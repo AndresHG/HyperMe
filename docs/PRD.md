@@ -236,6 +236,10 @@ designed: a design proposal will compare how other assistants build memory, befo
   Amazon" files a to-do or a fact in one place (owner, N-2 to N-4,
   [research](research/2026-11-27-notes-memory-tags.md)).
 - **The dictionary** learns from corrections and can be edited by hand.
+- **HyperMe is the one that learns.** Learning, facts, notes and the growing memory belong to
+  HyperMe: it is about growing, working and getting things done. Searching what the user already
+  has (files, documents, bookmarks) and asking questions over it is out of scope (section 8).
+  Other tools may read this memory through HyperMe's MCP server (owner, 27 November 2026).
 
 | Feature | Phase | Priority | Notes |
 | --- | --- | --- | --- |
@@ -267,6 +271,12 @@ adds already works (owner, 26 November 2026).
 - Window text or screenshots by default (only behind a visible switch, off by default).
 - Mobile apps.
 - A closed or paid edition.
+- Indexing or searching the user's files, documents or bookmarks, or answering questions over
+  them. A file-search or document-question app that offers an MCP server can be added as a
+  connector like any other; HyperMe works fully without one and holds no code for any (owner,
+  27 November 2026).
+- Chat apps (Telegram, WhatsApp and similar) as a source, an inbox or a gateway (owner,
+  27 November 2026).
 
 ## 9. Privacy, keys and trust
 

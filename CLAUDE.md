@@ -130,6 +130,11 @@ passes, update this section and record the evidence in `docs/results/`.
   by their plan's monthly API credits on Max, Ultra and Team. Launching a Claude Code or Codex task by
   voice uses their own command line on the user's login, never an embedded interface; it stays in Later, after the first-wave commands. See
   `docs/research/2026-11-27-paid-accounts-and-agent-sessions.md`.
+- HyperMe stays standalone (owner, 27 November 2026): it is the one that learns and grows
+  (facts, notes, memory, contexts), and other tools may read that memory through its MCP server.
+  It never indexes or searches the user's files or answers questions over them, and has no
+  chat-app sources. A separate app with an MCP server is reached as an ordinary connector, never
+  through shared code.
 - Meetings run on device first: Apple's on-device recognizer for the live transcript, and a
   cleanup setting of cloud (Groq, default), local model, or off (owner, 26 November 2026). See
   `docs/ROADMAP.md`, "Meetings on device". Dictation stays on cloud speech.
