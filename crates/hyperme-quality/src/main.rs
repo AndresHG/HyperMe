@@ -29,7 +29,9 @@ usage:
   hyperme-quality import --set DIR [--history DIR] [--days N]
 
 Keys come from SPEECHMATICS_API_KEY / GROQ_API_KEY (the provider name in capitals, then
-_API_KEY), or else from the keychain entries the app uses.";
+_API_KEY), or else from the keychain entries the app uses.
+
+`--set samples` is the app's own sample folder: the dictations you corrected in History.";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -81,7 +83,7 @@ impl Options {
                     .map_err(|_| format!("{flag} takes a number, not {v:?}"))
             };
             match flag.as_str() {
-                "--set" => o.set = Some(value()?.into()),
+                "--set" => o.set = Some(set_dir(&value()?)),
                 "--names" => o.names = Some(value()?.into()),
                 "--dictionary" => o.dictionary = Some(value()?.into()),
                 "--reuse-raw" => o.reuse_raw = Some(value()?.into()),
@@ -119,6 +121,16 @@ impl Options {
         self.set
             .as_deref()
             .ok_or_else(|| format!("--set is required\n\n{USAGE}"))
+    }
+}
+
+/// `--set samples` is the app's sample folder, the dictations corrected in History (spec 267,
+/// R-14); anything else is a path. A local folder named `samples` is `./samples`.
+fn set_dir(value: &str) -> PathBuf {
+    if value == "samples" {
+        data_dir().join("samples")
+    } else {
+        PathBuf::from(value)
     }
 }
 
@@ -525,6 +537,14 @@ fn line(r: &Replayed) -> String {
 
 fn import(o: &Options) -> Result<(), String> {
     let dir = o.set()?;
+    // Spec 267, R-16: the app writes its sample folder; the harness only reads it.
+    if dir == data_dir().join("samples") {
+        return Err(
+            "the app's sample folder is written by HyperMe itself: correct a dictation \
+                    in History, or import into another folder"
+                .to_owned(),
+        );
+    }
     std::fs::create_dir_all(dir).map_err(|e| format!("creating {}: {e}", dir.display()))?;
     set::check_location(dir)?;
     let history = o

@@ -18,6 +18,7 @@ pub mod paste;
 pub mod permissions;
 #[cfg(target_os = "macos")]
 pub mod presence;
+pub mod sample_store;
 #[cfg(target_os = "macos")]
 pub mod sounds;
 pub mod task_store;

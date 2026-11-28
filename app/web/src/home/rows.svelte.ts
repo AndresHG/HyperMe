@@ -6,7 +6,9 @@ export type Mode =
   | { kind: 'confirm-delete' }
   | { kind: 'fix-select' }
   | { kind: 'fix-type'; heard: string; wanted: string }
-  | { kind: 'fix-confirm'; heard: string; wanted: string };
+  | { kind: 'fix-confirm'; heard: string; wanted: string }
+  // Spec 267: Correct edits the whole text as it should have been (R-4).
+  | { kind: 'correct'; text: string };
 
 export interface RowState {
   mode: Mode | null;

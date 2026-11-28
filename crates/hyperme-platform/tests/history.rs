@@ -61,7 +61,7 @@ fn dictate(store: &mut SqliteHistory, text: &str, ms: usize) -> i64 {
     for frame in tone(ms).chunks(480) {
         store.append(id, frame).unwrap();
     }
-    store.done(id, text, Some("en")).unwrap();
+    store.done(id, text, "heard", Some("en")).unwrap();
     id
 }
 
@@ -178,7 +178,9 @@ fn history_off_keeps_failed_audio_for_24_hours() {
     store.append(retried, &tone(300)).unwrap();
     store.failed(retried, "connection dropped").unwrap();
     assert_eq!(store.audio(retried).unwrap(), tone(300));
-    store.done(retried, "Retried text.", Some("en")).unwrap();
+    store
+        .done(retried, "Retried text.", "heard", Some("en"))
+        .unwrap();
     assert!(store.audio(retried).is_err());
     assert_eq!(audio_files(&dir), 0);
 
@@ -579,4 +581,70 @@ fn app_of_a_dictation() {
     assert_eq!(store.app(id).unwrap().as_deref(), Some("TextEdit"));
     assert_eq!(store.app(none).unwrap(), None);
     assert!(store.app(9999).is_err());
+}
+
+/// Spec 267, AC-1 (R-1, R-2): a finished dictation keeps its speech transcript and first text;
+/// a retry or a fix changes the shown text and leaves both; a failed dictation retried later
+/// gets them from its first success; with history off nothing is kept.
+#[test]
+fn benchmark_texts_survive_retry_and_fix() {
+    let dir = temp_dir("benchmark-texts");
+    let (mut store, _) = open_store(&dir, on(Retention::Days(30), 1024));
+    let id = store.begin(Some("TextEdit")).unwrap();
+    store.append(id, &tone(300)).unwrap();
+    store
+        .done(id, "Send the report.", "send the report", Some("en"))
+        .unwrap();
+    store
+        .replace_text(id, "Send the reports.", Some("en"))
+        .unwrap();
+    let texts = store.benchmark_texts(id).unwrap().unwrap();
+    assert_eq!(texts.transcript.as_deref(), Some("send the report"));
+    assert_eq!(texts.first_text.as_deref(), Some("Send the report."));
+    assert_eq!(
+        store.item(id).unwrap().unwrap().text.as_deref(),
+        Some("Send the reports.")
+    );
+
+    let failed = fail(&mut store, "connection dropped", 300);
+    assert_eq!(
+        store.benchmark_texts(failed).unwrap().unwrap().first_text,
+        None
+    );
+    store
+        .done(failed, "Recovered.", "recovered", Some("en"))
+        .unwrap();
+    store.done(failed, "Again.", "again", Some("en")).unwrap();
+    let texts = store.benchmark_texts(failed).unwrap().unwrap();
+    assert_eq!(texts.first_text.as_deref(), Some("Recovered."));
+    assert_eq!(texts.transcript.as_deref(), Some("recovered"));
+    assert_eq!(store.benchmark_texts(9999).unwrap(), None);
+
+    let dir = temp_dir("benchmark-texts-off");
+    let (mut store, _) = open_store(&dir, off());
+    let id = store.begin(None).unwrap();
+    store.done(id, "Private.", "private", Some("en")).unwrap();
+    assert_eq!(store.benchmark_texts(id).unwrap(), None);
+}
+
+/// Spec 267, R-1: an index made before the benchmark columns gains them at open; its rows read
+/// as `None`.
+#[test]
+fn an_old_index_gains_the_benchmark_columns() {
+    let dir = temp_dir("benchmark-old-index");
+    {
+        let db = rusqlite::Connection::open(dir.join("history.sqlite3")).unwrap();
+        db.execute_batch(
+            "CREATE TABLE dictations (
+                id INTEGER PRIMARY KEY, started_ms INTEGER NOT NULL, finished_ms INTEGER,
+                app TEXT, language TEXT, text TEXT,
+                state TEXT NOT NULL CHECK (state IN ('recording', 'done', 'failed')),
+                message TEXT, audio_bytes INTEGER NOT NULL DEFAULT 0);
+             INSERT INTO dictations (started_ms, text, state) VALUES (100, 'Old.', 'done');",
+        )
+        .unwrap();
+    }
+    let (store, _) = open_store(&dir, on(Retention::Unlimited, 1024));
+    let texts = store.benchmark_texts(1).unwrap().unwrap();
+    assert_eq!((texts.transcript, texts.first_text), (None, None));
 }

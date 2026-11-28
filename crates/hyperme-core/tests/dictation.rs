@@ -1359,3 +1359,40 @@ async fn a_pasted_dictation_is_told_for_learning() {
         }
     );
 }
+
+/// Spec 267, AC-1 (R-1): the history gets the speech provider's transcript as it came, before
+/// the dictionary, next to the pasted text, so a benchmark sees what the speech model heard.
+#[tokio::test(start_paused = true)]
+async fn history_gets_the_transcript_before_the_dictionary() {
+    let log = Log::new();
+    let speech = FakeSpeech::new(&log, "send the sun trix report today");
+    let cleanup = FakeCleanup::new(&log, "Send the Zentrix report today.");
+    let history = FakeHistory::new(&log);
+    let mut h = Harness::start_full(
+        &log,
+        speech,
+        cleanup,
+        with_dictionary(),
+        FakeFocus::textedit(),
+        history.clone(),
+    );
+
+    h.send(Event::KeyDown).await;
+    tokio::time::sleep(ms(1000)).await;
+    h.send(Event::KeyUp).await;
+    h.until(&Status::Done {
+        raw: false,
+        via: None,
+    })
+    .await;
+    assert!(log.has("history done 1: Send the Zentrix report today. (en)"));
+    assert_eq!(
+        history
+            .transcripts
+            .lock()
+            .unwrap()
+            .get(&1)
+            .map(String::as_str),
+        Some("send the sun trix report today")
+    );
+}

@@ -7,16 +7,19 @@
     variant = 'default',
     size = 'regular',
     type = 'button',
+    ref = $bindable(),
     children,
     ...rest
   }: HTMLButtonAttributes & {
     variant?: 'default' | 'primary' | 'borderless';
     size?: 'small' | 'regular' | 'large';
+    /** The button element, for focus. */
+    ref?: HTMLButtonElement;
     children: Snippet;
   } = $props();
 </script>
 
-<button {type} class="button {variant} {size}" {...rest}>{@render children()}</button>
+<button bind:this={ref} {type} class="button {variant} {size}" {...rest}>{@render children()}</button>
 
 <style>
   .button {

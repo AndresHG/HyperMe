@@ -123,3 +123,24 @@ fn texts_and_gold_draft_hold_the_texts() {
     // A failed sample has no draft.
     assert!(draft.get("en-02").is_none());
 }
+
+/// Spec 267, AC-6 (R-15): each row also scores the speech transcript against the gold text,
+/// so a speech model can be compared without cleanup.
+#[test]
+fn rows_score_the_speech_transcript_too() {
+    let results = vec![
+        done("es-h1", "hola mundo", "Hola mundo.", false, 300, 600),
+        done("es-h2", "adiós", "Adiós.", false, 300, 600),
+    ];
+    let gold = BTreeMap::from([
+        ("es-h1".to_owned(), "Hola mundo.".to_owned()),
+        ("es-h2".to_owned(), "Adiós.".to_owned()),
+    ]);
+    let rows = summarise(&results, &gold, &[]);
+    let speech = rows[0].speech_gold.unwrap();
+    let pasted = rows[0].gold.unwrap().2;
+    assert!(speech > pasted, "speech {speech} vs pasted {pasted}");
+    assert!(table(&rows).contains("| Speech edits per 100 |"));
+    let no_gold = summarise(&results, &BTreeMap::new(), &[]);
+    assert_eq!(no_gold[0].speech_gold, None);
+}

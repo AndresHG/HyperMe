@@ -1,7 +1,8 @@
 <script lang="ts">
   // Privacy: where audio and text go (specs/96, R-29: every provider set, fallbacks included, and
   // what each one receives), what stays on this Mac, and the connected accounts' rules.
-  import type { Destination } from '../lib/ipc';
+  import { commands, type Destination, type SamplesView } from '../lib/ipc';
+  import { Button } from '../lib/ui';
   import Setting from './Setting.svelte';
   import { useSettings } from './state.svelte';
 
@@ -14,6 +15,20 @@
   const SENT = { speech: 'Your audio', cleanup: 'The transcript, the app name and your dictionary' };
   const what = (d: Destination) => (d.on_this_mac ? 'Stays on this Mac' : `${SENT[d.role]} go${d.role === 'speech' ? 'es' : ''} to ${d.name}`);
   const when = (d: Destination) => (d.fallback_for ? `Only if ${d.fallback_for} fails` : d.role === 'speech' ? 'Dictation speech' : 'Dictation cleanup');
+
+  // Spec 267, R-12: corrected dictations kept as ground truth, outside the history's retention.
+  let samples = $state<SamplesView | null>(null);
+  let confirmDelete = $state(false);
+  const loadSamples = () => commands.samplesView().then((v) => (samples = v)).catch(() => (samples = null));
+  $effect(() => {
+    if (on) loadSamples();
+  });
+  const size = (bytes: number) => (bytes < 1_000_000 ? `${Math.ceil(bytes / 1000)} KB` : `${(bytes / 1_000_000).toFixed(1)} MB`);
+  async function deleteSamples() {
+    confirmDelete = false;
+    await commands.samplesDeleteAll().catch(() => {});
+    await loadSamples();
+  }
 
   function keep(e: Event & { currentTarget: HTMLSelectElement }) {
     const v = e.currentTarget.value;
@@ -51,6 +66,23 @@
     <div class="what">Size limit (MB)<small>The oldest dictations go first.</small></div>
     <Setting section="history" key="size_limit_mb" field="size_limit_mb" type="number" min={10} />
   </div>
+  <div class="row" data-words="ground truth golden samples corrected benchmark keep audio">
+    <div class="what">
+      Ground truth<small
+        >Dictations you corrected in History, kept with their audio for benchmarks until you delete them.{#if samples?.count}
+          {samples.count} {samples.count === 1 ? 'dictation' : 'dictations'}, {size(samples.bytes)}.{/if}</small
+      >
+    </div>
+    <span class="actions">
+      <Button size="small" onclick={() => commands.samplesReveal()}>Show in Finder</Button>
+      {#if confirmDelete}
+        <Button size="small" onclick={deleteSamples}>Delete {samples?.count ?? 0}</Button>
+        <Button size="small" variant="borderless" onclick={() => (confirmDelete = false)}>Keep</Button>
+      {:else}
+        <Button size="small" disabled={!samples?.count} onclick={() => (confirmDelete = true)}>Delete all</Button>
+      {/if}
+    </span>
+  </div>
   <div class="row" data-words="timing traces stages measure keep">
     <div class="what">Keep timing traces<small>Stage timings of each dictation for 30 days, even with history off. Numbers only, never text.</small></div>
     <Setting section="history" key="keep_traces" field="keep_traces" />
@@ -72,3 +104,7 @@
     <p class="lead" style="margin:var(--space-1) 0 0">{privacy?.kept ?? ''}</p>
   </div>
 </section>
+
+<style>
+  .actions { display: flex; gap: var(--space-2); flex: none; }
+</style>

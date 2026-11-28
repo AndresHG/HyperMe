@@ -22,6 +22,7 @@
     onmenu,
     onfixtext,
     onsendfix,
+    onsendcorrect,
   }: {
     item: Item;
     words: string[];
@@ -37,6 +38,8 @@
     /** A selection in the text, maybe the word to fix (R-17). */
     onfixtext: () => void;
     onsendfix: () => void;
+    /** Save as ground truth (spec 267, R-4). */
+    onsendcorrect: () => void;
   } = $props();
 
   const row = $derived(stateOf(item.id));
@@ -45,6 +48,7 @@
   const has = (id: string) => item.actions.some((a) => a.id === id);
   let node = $state<HTMLDivElement>();
   let fixInput = $state<HTMLInputElement>();
+  let correctInput = $state<HTMLTextAreaElement>();
 
   // The open row is measured, so the rows under it move down.
   $effect(() => {
@@ -68,6 +72,13 @@
 
   $effect(() => {
     if (row.mode?.kind === 'fix-type') fixInput?.focus();
+  });
+
+  // Spec 267, R-4: Correct opens the whole text, selected, ready to type over.
+  $effect(() => {
+    if (row.mode?.kind !== 'correct' || !correctInput) return;
+    correctInput.focus();
+    correctInput.select();
   });
 
   const STAGE_NAMES: Record<string, string> = {
@@ -127,7 +138,7 @@
             >{piece.text}</mark
           >{:else}{piece.text}{/if}{/each}{/if}
     </span>
-    <span class="app">{item.app || ''}</span>
+    <span class="app">{item.app || ''}{#if item.sample}<span class="truth" title="Kept with its audio as ground truth for benchmarks">Ground truth</span>{/if}</span>
   </div>
   <!-- The tools on hover, as in Wispr Flow: Copy, Paste again and the rest under More (⌘K); a
        failed dictation shows Retry instead (R-13, R-16). -->
@@ -154,7 +165,30 @@
     {#if row.mode || row.working || failed || row.say}
     <div class="bar">
       {#if row.mode?.kind === 'confirm-delete'}
-        <span class="ask">Delete this dictation and its audio? <kbd>↵</kbd> Delete · <kbd>Esc</kbd> Keep</span>
+        <span class="ask"
+          >Delete this dictation and its audio?{#if item.sample} Its ground truth stays.{/if} <kbd>↵</kbd> Delete · <kbd>Esc</kbd> Keep</span
+        >
+      {:else if row.mode?.kind === 'correct'}
+        {@const mode = row.mode}
+        <textarea
+          bind:this={correctInput}
+          bind:value={mode.text}
+          rows="3"
+          aria-label="The text as it should have been"
+          onkeydown={(e) => {
+            if (e.key === 'Enter' && e.metaKey) {
+              e.preventDefault();
+              e.stopPropagation();
+              onsendcorrect();
+            }
+            if (e.key === 'Escape') {
+              e.preventDefault();
+              e.stopPropagation();
+              row.mode = null;
+            }
+          }}
+        ></textarea>
+        <span class="say">Type it as it should have been. <kbd>⌘↵</kbd> Save as ground truth · <kbd>Esc</kbd> Cancel</span>
       {:else if row.mode?.kind === 'fix-select'}
         <span class="say">Select the wrong word in the text, or double-click it. <kbd>Esc</kbd> Cancel</span>
       {:else if row.mode?.kind === 'fix-type'}
@@ -233,6 +267,8 @@
   .ask { color: var(--color-label); }
   .ask.warn { color: var(--color-orange-text); }
   kbd { font: var(--text-subheadline) var(--font-system); color: var(--color-label-secondary); padding: 0 var(--space-1); }
+  textarea { flex: 1 1 100%; font: inherit; font-size: var(--text-body); line-height: 1.45; padding: var(--space-2); border-radius: var(--radius-control); border: 1px solid var(--color-accent); background: var(--color-content-bg); color: inherit; resize: vertical; }
+  .truth { margin-left: var(--space-2); padding: 0 var(--space-1); border-radius: var(--radius-small); background: var(--color-accent-soft); color: var(--color-accent-text); font-size: var(--text-caption); }
   input { font: inherit; font-size: var(--text-callout); padding: var(--space-1) var(--space-2); border-radius: var(--radius-control); border: 1px solid var(--color-accent); background: var(--color-content-bg); color: inherit; width: 200px; }
   .row.working .text { color: var(--color-label-secondary); }
   mark { background: color-mix(in srgb, var(--color-accent) 28%, transparent); color: inherit; border-radius: var(--radius-small); padding: 0 0; }

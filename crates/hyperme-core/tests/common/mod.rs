@@ -270,6 +270,8 @@ pub struct FakeHistory {
     pub audio: Arc<Mutex<BTreeMap<DictationId, Vec<i16>>>>,
     /// The app each dictation was dictated into.
     apps: Arc<Mutex<BTreeMap<DictationId, Option<String>>>>,
+    /// The speech transcript each `done` was given (spec 267, R-1).
+    pub transcripts: Arc<Mutex<BTreeMap<DictationId, String>>>,
     next: Arc<Mutex<DictationId>>,
 }
 
@@ -279,6 +281,7 @@ impl FakeHistory {
             log: log.clone(),
             audio: Arc::default(),
             apps: Arc::default(),
+            transcripts: Arc::default(),
             next: Arc::default(),
         }
     }
@@ -312,7 +315,17 @@ impl History for FakeHistory {
         Ok(())
     }
 
-    fn done(&mut self, id: DictationId, text: &str, language: Option<&str>) -> Result<(), Error> {
+    fn done(
+        &mut self,
+        id: DictationId,
+        text: &str,
+        transcript: &str,
+        language: Option<&str>,
+    ) -> Result<(), Error> {
+        self.transcripts
+            .lock()
+            .unwrap()
+            .insert(id, transcript.to_owned());
         self.log.push(format!(
             "history done {id}: {text} ({})",
             language.unwrap_or("-")

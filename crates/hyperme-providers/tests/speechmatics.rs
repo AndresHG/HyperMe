@@ -422,6 +422,7 @@ impl History for NoHistory {
         &mut self,
         _id: DictationId,
         _text: &str,
+        _transcript: &str,
         _language: Option<&str>,
     ) -> Result<(), Error> {
         Ok(())

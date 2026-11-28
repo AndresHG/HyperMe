@@ -362,14 +362,9 @@ pub struct Imported {
 }
 
 /// The sample name for a history item: `es-h12`, `en-h12`, or `xx-h12` when the language is
-/// not known.
+/// not known. The same name the app gives a sample (spec 267, R-9).
 fn history_name(item: &HistoryItem) -> String {
-    let lang = match item.language.as_deref().map(str::to_lowercase) {
-        Some(code) if code.starts_with("es") => "es",
-        Some(code) if code.starts_with("en") => "en",
-        _ => "xx",
-    };
-    format!("{lang}-h{}", item.id)
+    hyperme_core::samples::sample_name(item.id, item.language.as_deref())
 }
 
 /// AC-4: copies each item's audio into the set and adds its pasted text to `gold-draft.json`,

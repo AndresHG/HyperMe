@@ -74,6 +74,38 @@ for (const [name, url] of home) {
   });
 }
 
+// Spec 267, AC-10 (R-4, R-6): Correct opens the whole text selected; Esc cancels; ⌘↵ saves, and
+// the first save asks once, in a modal, before anything is kept; the row then shows its mark.
+test('history-correct', async ({ page }) => {
+  await open(page, 'home.html#history');
+  const row = page.locator('.row[data-id="3"]');
+  await row.locator('time').click();
+  await page.keyboard.press('Meta+e');
+  const editor = row.locator('textarea');
+  await expect(editor).toBeFocused();
+  expect(await editor.evaluate((t) => t.selectionEnd - t.selectionStart)).toBe('Send the weekly update to the team before lunch.'.length);
+  await page.keyboard.press('Escape');
+  await expect(editor).toHaveCount(0);
+
+  await page.keyboard.press('Meta+e');
+  await editor.fill('Send the weekly update to the whole team before lunch.');
+  await page.keyboard.press('Meta+Enter');
+  // The one-time modal (R-6): Esc closes it and keeps nothing; the next save asks again.
+  const modal = page.locator('#agree');
+  await expect(modal).toBeVisible();
+  expect(await layoutProblems(page, '.sheet')).toEqual([]);
+  await page.keyboard.press('Escape');
+  await expect(modal).toHaveCount(0);
+  await expect(editor).toBeVisible();
+  await editor.press('Meta+Enter');
+  await expect(modal).toBeVisible();
+  await page.keyboard.press('Enter');
+  await expect(modal).toHaveCount(0);
+  await expect(row.locator('.say')).toHaveText('Saved as ground truth. Press ↵ to paste it again');
+  await expect(row.locator('.truth')).toHaveText('Ground truth');
+  await expect(row.locator('.text')).toHaveText('Send the weekly update to the whole team before lunch.');
+});
+
 test('settings', async ({ page }) => {
   await open(page, 'home.html#home');
   await page.evaluate(() => window.openSettings('general'));

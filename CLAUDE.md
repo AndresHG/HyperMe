@@ -43,6 +43,8 @@ itself; a later version may hand a task to Claude Code ([docs/PRD.md](docs/PRD.m
 - `specs/257-ui-framework/`: spec for moving the UI to Svelte 5, TypeScript and Vite, with
   typed command bindings and Settings inside Home (owner asked for state-of-the-art libraries,
   27 November 2026; approved 28 November 2026)
+- `specs/267-ground-truth-samples/`: spec for correcting a whole dictation in History and
+  keeping it, with its audio, as a sample the quality harness scores new models against (approved 28 November 2026)
 - `specs/27-voice-commands/`: 0.2 spec for voice commands: the router, three stages (keywords, a
   classifier, a small model for the fields), local actions with undo, outside actions behind a
   preview, and the commands that ship in 0.2 (approved 28 November 2026)

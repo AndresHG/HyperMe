@@ -125,8 +125,15 @@ pub trait History {
     fn begin(&mut self, app: Option<&str>) -> Result<DictationId, Error>;
     /// Appends captured audio: mono PCM16 at the speech provider's rate.
     fn append(&mut self, id: DictationId, pcm: &[i16]) -> Result<(), Error>;
-    /// The text was pasted or copied.
-    fn done(&mut self, id: DictationId, text: &str, language: Option<&str>) -> Result<(), Error>;
+    /// The text was pasted or copied. `transcript` is the speech provider's text before the
+    /// dictionary, kept for benchmarks (spec 267, R-1).
+    fn done(
+        &mut self,
+        id: DictationId,
+        text: &str,
+        transcript: &str,
+        language: Option<&str>,
+    ) -> Result<(), Error>;
     /// The dictation failed; its audio stays for a retry.
     fn failed(&mut self, id: DictationId, message: &str) -> Result<(), Error>;
     /// Cancelled, or nothing was heard: the dictation and its audio are deleted.

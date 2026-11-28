@@ -203,7 +203,13 @@ impl History for NoHistory {
     fn append(&mut self, _id: DictationId, _pcm: &[i16]) -> Result<(), Error> {
         Err(no_history())
     }
-    fn done(&mut self, _id: DictationId, _text: &str, _lang: Option<&str>) -> Result<(), Error> {
+    fn done(
+        &mut self,
+        _id: DictationId,
+        _text: &str,
+        _transcript: &str,
+        _lang: Option<&str>,
+    ) -> Result<(), Error> {
         Err(no_history())
     }
     fn failed(&mut self, _id: DictationId, _message: &str) -> Result<(), Error> {

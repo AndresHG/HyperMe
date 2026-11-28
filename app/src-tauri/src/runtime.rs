@@ -1031,10 +1031,16 @@ impl History for SharedHistory {
         self.inner().store()?.append(id, pcm)
     }
 
-    fn done(&mut self, id: DictationId, text: &str, language: Option<&str>) -> Result<(), Error> {
+    fn done(
+        &mut self,
+        id: DictationId,
+        text: &str,
+        transcript: &str,
+        language: Option<&str>,
+    ) -> Result<(), Error> {
         let mut inner = self.inner();
         inner.last_text = Some(text.to_owned());
-        inner.store()?.done(id, text, language)
+        inner.store()?.done(id, text, transcript, language)
     }
 
     fn failed(&mut self, id: DictationId, message: &str) -> Result<(), Error> {

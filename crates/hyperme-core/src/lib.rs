@@ -22,6 +22,7 @@ pub mod learning;
 pub mod microphones;
 pub mod registry;
 pub mod report;
+pub mod samples;
 pub mod schedule;
 pub mod scheduler;
 pub mod secrets;

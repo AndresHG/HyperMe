@@ -62,6 +62,18 @@ export const commands = {
 	 */
 	homeFixWord: (id: number, heard: string, wanted: string, confirmedCommon: boolean, options?: InvokeOptions) => __TAURI_INVOKE<FixOutcome>("home_fix_word", { id, heard, wanted, confirmedCommon }, options),
 	/**
+	 *  Correct (R-3 to R-7): saves the sample, then shows the corrected text in the row.
+	 *  Async so the copy runs off the main thread (R-17).
+	 */
+	homeCorrect: (id: number, text: string, agreed: boolean, options?: InvokeOptions) => __TAURI_INVOKE<CorrectOutcome>("home_correct", { id, text, agreed }, options),
+	/**  Delete sample on a row (R-12). */
+	homeDeleteSample: (id: number, options?: InvokeOptions) => __TAURI_INVOKE<null>("home_delete_sample", { id }, options),
+	samplesView: (options?: InvokeOptions) => __TAURI_INVOKE<SamplesView>("samples_view", undefined, options),
+	/**  Delete all samples (R-12); the page asks once before calling. */
+	samplesDeleteAll: (options?: InvokeOptions) => __TAURI_INVOKE<null>("samples_delete_all", undefined, options),
+	/**  Show in Finder (R-12). */
+	samplesReveal: (options?: InvokeOptions) => __TAURI_INVOKE<null>("samples_reveal", undefined, options),
+	/**
 	 *  The pill's current view, for the page once it has loaded: an event sent before its listeners
 	 *  exist is lost, and the bead is sent at launch (26 November 2026, the bead showed the hidden
 	 *  recording bars instead).
@@ -610,6 +622,13 @@ export type ConnectorsView_Serialize = {
 	error: string | null,
 };
 
+/**  What Correct did. */
+export type CorrectOutcome = 
+/**  The first sample: show the sheet, then send again agreed (R-6). Nothing was written. */
+{ outcome: "needs_agreement" } | 
+/**  Saved. `changed` when the row's text should become `text` (R-5, GT-3). */
+{ outcome: "saved"; text: string; changed: boolean };
+
 /**  One choice of the cost block (U-11). */
 export type CostChoice = {
 	label: string,
@@ -846,6 +865,8 @@ export type ItemView_Deserialize = {
 	message?: string | null,
 	/**  Whether Retry can be offered (R-16). */
 	has_audio: boolean,
+	/**  A sample keeps this dictation's correction (spec 267, R-5). */
+	sample: boolean,
 	/**  What the row offers when selected, with keys (R-13). */
 	actions: Action[],
 };
@@ -864,6 +885,8 @@ export type ItemView_Serialize = {
 	message: string | null,
 	/**  Whether Retry can be offered (R-16). */
 	has_audio: boolean,
+	/**  A sample keeps this dictation's correction (spec 267, R-5). */
+	sample: boolean,
 	/**  What the row offers when selected, with keys (R-13). */
 	actions: Action[],
 };
@@ -1281,6 +1304,13 @@ export type RoleView_Serialize = {
 	 *  which turns its row red in the Setup check (R-24a).
 	 */
 	fallback: FallbackView | null,
+};
+
+/**  The samples row in Settings → Privacy (R-12). */
+export type SamplesView = {
+	count: number,
+	bytes: number,
+	agreed: boolean,
 };
 
 /**  One section in the sidebar (R-5). Only sections whose feature exists are listed. */

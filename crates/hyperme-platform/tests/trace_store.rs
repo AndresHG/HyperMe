@@ -92,7 +92,7 @@ fn traces_are_kept_and_read_back() {
     let mut h = history(&dir, true);
     let (store, _) = open(&dir, settings(true));
     let id = h.begin(Some("TextEdit")).unwrap();
-    h.done(id, "hello there", Some("en")).unwrap();
+    h.done(id, "hello there", "heard", Some("en")).unwrap();
     dictation(&store, Some(id), Outcome::Pasted);
     dictation(&store, None, Outcome::Cancelled);
     assert_eq!(store.count().unwrap(), 2);
@@ -134,7 +134,7 @@ fn the_trace_tables_hold_no_text() {
     let mut h = history(&dir, true);
     let (store, _) = open(&dir, settings(true));
     let id = h.begin(Some("SecretApp")).unwrap();
-    h.done(id, "confidential quarterly numbers", Some("en"))
+    h.done(id, "confidential quarterly numbers", "heard", Some("en"))
         .unwrap();
     dictation(&store, Some(id), Outcome::Pasted);
     let trace = store.trace_for(id).unwrap().unwrap();
@@ -152,7 +152,7 @@ fn traces_follow_their_history_items_and_retention() {
     let mut h = history(&dir, true);
     let (store, clock) = open(&dir, settings(true));
     let id = h.begin(Some("TextEdit")).unwrap();
-    h.done(id, "keep me", Some("en")).unwrap();
+    h.done(id, "keep me", "heard", Some("en")).unwrap();
     dictation(&store, Some(id), Outcome::Pasted);
     let gone = h.begin(Some("TextEdit")).unwrap();
     h.discard(gone).unwrap();
@@ -179,7 +179,7 @@ fn history_off_keeps_traces_thirty_days_and_the_switch_stops_them() {
     let mut h = history(&dir, false);
     let (store, clock) = open(&dir, settings(false));
     let id = h.begin(Some("TextEdit")).unwrap();
-    h.done(id, "gone at once", Some("en")).unwrap();
+    h.done(id, "gone at once", "heard", Some("en")).unwrap();
     h.cleanup().unwrap();
     dictation(&store, Some(id), Outcome::Pasted);
     store.cleanup();
@@ -335,7 +335,7 @@ fn a_history_items_trace_gives_one_bar_per_stage() {
     let mut h = history(&dir, true);
     let (store, _) = open(&dir, settings(true));
     let id = h.begin(Some("TextEdit")).unwrap();
-    h.done(id, "hello", Some("en")).unwrap();
+    h.done(id, "hello", "heard", Some("en")).unwrap();
     dictation(&store, Some(id), Outcome::Pasted);
     let trace = store.trace_for(id).unwrap().unwrap();
     let bars = trace.bars();
