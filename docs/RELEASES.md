@@ -91,7 +91,8 @@ recommendation.
 | Quick notes: memory folder, task list or both | 0.2 (task side), Later (memory) | PRD Q-15 |
 | How Hyper notices facts to remember | Later | PRD Q-16 |
 | "Continue with ChatGPT" in onboarding: latency of answers | 0.2 | PRD Q-17 |
-| HyperMe as an MCP server: what to expose | 0.2 or 0.3 | ROADMAP phase 3 |
+| HyperMe as an MCP server: what to expose, and how it is added to Claude desktop | 0.2 or 0.3 | ROADMAP phase 3 |
+| Drafting through the user's own Claude or ChatGPT: a smoother hand-off than "Review in Claude, then press Send" ([first look](research/2026-11-28-email-drafts-through-claude.md)); the owner finds the extra Send step weak | 0.3 | Owner, 28 November 2026 |
 | Microsoft 365 mail and calendar through MCP | Later | PRD Q-7 |
 | Linux and Windows: overlay, hotkey, paste and keychain | Later | ROADMAP Later |
 | Self-hosted providers: your own speech and model server on your network (#261) | Later, with local speech models | Owner, 28 November 2026 |
