@@ -30,8 +30,10 @@
     'Everyday',
     { id: 'general', title: 'General' },
     { id: 'shortcuts', title: 'Shortcuts' },
+    'AI models',
+    { id: 'speech', title: 'Speech to text' },
+    { id: 'language', title: 'Language model' },
     'Setup',
-    { id: 'providers', title: 'Providers' },
     { id: 'connectors', title: 'Connectors' },
     { id: 'privacy', title: 'Privacy' },
     { id: 'diagnostics', title: 'Diagnostics' },
@@ -42,11 +44,9 @@
   /** Whether a section shows: the one chosen, or while searching, each with a matching row. */
   const shown = (id: string) => (query.trim() ? found.includes(id) : s.section === id);
 
-  // Each visit opens its section at the top. From the walkthrough's "Use other providers"
-  // (U-12): Providers, with Advanced showing.
+  // Each visit opens its section at the top.
   $effect(() => {
     void sheet.visit;
-    if (sheet.place === 'providers-advanced') s.advanced = true;
     requestAnimationFrame(() => main && (main.scrollTop = 0));
   });
 
@@ -56,7 +56,7 @@
     tick().then(() => {
       if (!root) return;
       const sections: string[] = [];
-      for (const row of root.querySelectorAll<HTMLElement>('main .row')) {
+      for (const row of root.querySelectorAll<HTMLElement>('main :is(.row, [data-search])')) {
         const miss = !!q && !(row.textContent + ' ' + (row.dataset.words ?? '')).toLowerCase().includes(q);
         row.classList.toggle('miss', miss);
         if (!miss && !row.classList.contains('hidden')) sections.push(row.closest('section')?.id ?? '');
@@ -98,7 +98,7 @@
     <Setup on={shown('setup')} />
     <General on={shown('general')} />
     <Shortcuts on={shown('shortcuts')} />
-    <Providers on={shown('providers')} />
+    <Providers {shown} />
     <Connectors on={shown('connectors')} />
     <Privacy on={shown('privacy')} />
     <Diagnostics on={shown('diagnostics')} />

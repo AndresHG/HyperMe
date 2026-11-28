@@ -20,4 +20,6 @@ check`, the screenshot checks) and measured where it touches a page.
    model…" row for any model name with a Test button (`key_test` with that model). The model list
    is the provider's curated list plus, where the provider can list models, the live list
    (`models_list`). The spec gets an amendment for this redesign in that pull request.
+   Split in two: 6a moves Settings as it is (PR 265); 6b builds the AI models pages (R-16 to
+   R-20, AC-8).
 7. **Clean-up.** `app/ui` removed, docs (DESIGN.md, CONTRIBUTING.md, README) updated. AC-1.

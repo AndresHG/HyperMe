@@ -25,7 +25,7 @@ export class Settings {
   error = $state('');
   /** A saved setting needs a restart. */
   banner = $state(false);
-  /** Show advanced: the providers table and the Advanced section. */
+  /** Show advanced: the Advanced section. */
   advanced = $state(false);
   /** A provider picked without a key waits here, per role, until its key passes Test (R-12). */
   pending = $state<Partial<Record<Role, { provider: string; model: string }>>>({});
@@ -34,8 +34,11 @@ export class Settings {
 
   /** The section shown, and the item after its slash (`connectors/<id>`). */
   readonly section = $derived.by(() => {
-    const id = sheet.place.split('/')[0];
-    return id === 'providers-advanced' ? 'providers' : id;
+    const [id = 'setup', item] = sheet.place.split('/');
+    // The old Providers places (the walkthrough, menus, the "keeps failing" notice) land on the
+    // AI models pages: cleanup on Language model, the rest on Speech to text.
+    if (id === 'providers' || id === 'providers-advanced') return item === 'cleanup' ? 'language' : 'speech';
+    return id;
   });
   readonly item = $derived(sheet.place.includes('/') ? sheet.place.slice(sheet.place.indexOf('/') + 1) : null);
 
