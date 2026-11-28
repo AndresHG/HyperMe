@@ -939,7 +939,9 @@ mod tests {
         }
         let list = include_str!("../../web/src/home/HistoryList.svelte");
         assert_eq!(list.matches("<HistoryRow").count(), 1);
-        let each = list.find("{#each visible").expect("rows drawn from the visible ones");
+        let each = list
+            .find("{#each visible")
+            .expect("rows drawn from the visible ones");
         assert!(each < list.find("<HistoryRow").unwrap());
         assert!(list.contains("const OVERSCAN"));
     }
