@@ -77,14 +77,15 @@ pub fn current(app: &AppHandle) -> Dictionary {
     with_store(app, |store, _| store.dictionary()).unwrap_or_default()
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename = "DictionaryEntry")]
 pub struct Entry {
     written: String,
     heard: Vec<String>,
 }
 
 /// A suggestion as the page shows it (R-18): `heard → written · fixed 2 times in Slack`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, specta::Type)]
 pub struct Suggested {
     written: String,
     heard: String,
@@ -94,14 +95,15 @@ pub struct Suggested {
 
 /// A learned row, for its mark and Undo: `heard` is empty for a learned word with no
 /// misspelling.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, specta::Type)]
 pub struct Learned {
     written: String,
     heard: String,
 }
 
 /// What the page shows.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, specta::Type)]
+#[serde(rename = "DictionaryView")]
 pub struct View {
     path: String,
     entries: Vec<Entry>,
@@ -186,6 +188,7 @@ fn saved(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn dictionary_view(app: AppHandle) -> View {
     let shared = app.state::<Shared>();
     let state = shared.lock().unwrap_or_else(PoisonError::into_inner);
@@ -200,12 +203,14 @@ pub fn dictionary_view(app: AppHandle) -> View {
 
 /// Saves the list from the page (R-11, R-15).
 #[tauri::command]
+#[specta::specta]
 pub fn dictionary_save(app: AppHandle, entries: Vec<Entry>) -> Result<View, String> {
     saved(&app, |store| store.save(terms(entries), Source::Manual))
 }
 
 /// The add dialog's warning (R-17): a common misspelling would be replaced everywhere.
 #[tauri::command]
+#[specta::specta]
 pub fn dictionary_is_common(word: String) -> bool {
     is_common_word(&word)
 }
@@ -221,6 +226,7 @@ fn parse_import(name: &str, text: &str) -> Result<Vec<Term>, String> {
 
 /// Import (R-13): a text or CSV file the page read, merged into the list.
 #[tauri::command]
+#[specta::specta]
 pub fn dictionary_import(app: AppHandle, name: String, text: String) -> Result<View, String> {
     let incoming = parse_import(&name, &text)?;
     saved(&app, |store| {
@@ -240,6 +246,7 @@ fn export(dictionary: &Dictionary, format: &str) -> (&'static str, String) {
 
 /// Export (R-13): writes the list to the Downloads folder and shows it in Finder.
 #[tauri::command]
+#[specta::specta]
 pub fn dictionary_export(app: AppHandle, format: String) -> Result<String, String> {
     let dictionary = with_store(&app, |store, _| store.dictionary())?;
     let dir = app
@@ -259,6 +266,7 @@ pub fn dictionary_export(app: AppHandle, format: String) -> Result<String, Strin
 /// Adds or dismisses a suggestion from the page (R-18, R-19). An added one is marked learned,
 /// so deleting it later dismisses it for good.
 #[tauri::command]
+#[specta::specta]
 pub fn dictionary_suggestion(
     app: AppHandle,
     written: String,
@@ -282,6 +290,7 @@ pub fn dictionary_suggestion(
 
 /// The "Learn from my edits" switch (R-16): sets it when `on` is given; returns it.
 #[tauri::command]
+#[specta::specta]
 pub fn dictionary_learning(app: AppHandle, on: Option<bool>) -> Result<bool, String> {
     with_store(&app, |store, _| {
         if let Some(on) = on {
@@ -293,6 +302,7 @@ pub fn dictionary_learning(app: AppHandle, on: Option<bool>) -> Result<bool, Str
 
 /// How many suggestions wait, for the Home page's line (R-22).
 #[tauri::command]
+#[specta::specta]
 pub fn dictionary_suggested(app: AppHandle) -> usize {
     with_store(&app, |store, _| store.suggestions().map(|s| s.len())).unwrap_or(0)
 }

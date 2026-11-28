@@ -16,6 +16,7 @@ use hyperme_providers::any;
 use serde::Serialize;
 use serde_json::Value;
 use tauri::{AppHandle, Manager};
+use tauri_specta::Event as _;
 
 fn config_path(app: &AppHandle) -> PathBuf {
     crate::runtime::data_dir(app).join("config.toml")
@@ -53,6 +54,7 @@ pub fn open(app: &AppHandle, section: &str) {
 
 /// The section a freshly loaded Home page should open the sheet at, if any.
 #[tauri::command]
+#[specta::specta]
 pub fn settings_pending() -> Option<String> {
     PENDING
         .lock()
@@ -62,6 +64,7 @@ pub fn settings_pending() -> Option<String> {
 
 /// The page tells Rust the sheet is showing.
 #[tauri::command]
+#[specta::specta]
 pub fn settings_opened() {
     PENDING
         .lock()
@@ -72,6 +75,7 @@ pub fn settings_opened() {
 
 /// The page tells Rust the sheet closed: its × button, Esc, or a click on Home's dimmed page.
 #[tauri::command]
+#[specta::specta]
 pub fn settings_closed() {
     sheet_gone();
 }
@@ -85,7 +89,8 @@ pub fn sheet_gone() {
 }
 
 /// What the page shows. Never holds a key: only whether one is set.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, specta::Type)]
+#[serde(rename = "SettingsView")]
 pub struct View {
     config: Option<ConfigView>,
     /// Why the config could not be read, if it could not.
@@ -101,7 +106,7 @@ pub struct View {
 }
 
 /// One row of the providers table: a role, what it uses, and what it could use.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, specta::Type)]
 struct RoleView {
     role: &'static str,
     label: &'static str,
@@ -116,7 +121,7 @@ struct RoleView {
     fallback: Option<FallbackView>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, specta::Type)]
 struct FallbackView {
     provider: String,
     name: String,
@@ -125,7 +130,7 @@ struct FallbackView {
 }
 
 /// A provider in a role's menu. Never holds a key: only whether one is set.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, specta::Type)]
 struct ProviderView {
     id: String,
     name: String,
@@ -138,13 +143,13 @@ struct ProviderView {
     models: Vec<ModelView>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, specta::Type)]
 struct ModelView {
     id: String,
     reasoning_effort: Vec<String>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, specta::Type)]
 struct ConfigView {
     hotkey: String,
     min_hold_ms: u64,
@@ -168,13 +173,13 @@ struct ConfigView {
     timing_log: bool,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, specta::Type)]
 struct KeysView {
     speech: bool,
     cleanup: bool,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, specta::Type)]
 struct SetupView {
     accessibility: bool,
     input_monitoring: bool,
@@ -290,6 +295,7 @@ fn load(path: &Path) -> Result<Config, String> {
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn settings_view(app: AppHandle) -> View {
     let path = config_path(&app);
     let loaded = load(&path);
@@ -351,6 +357,7 @@ fn toml_string(s: &str) -> String {
 /// Saves one setting. A provider or model change reaches the next dictation at once (specs/96-
 /// provider-settings, R-8); other changes take effect after a restart, which the page offers.
 #[tauri::command]
+#[specta::specta]
 pub fn settings_set(
     app: AppHandle,
     section: String,
@@ -374,7 +381,7 @@ pub fn settings_set(
 }
 
 /// One microphone in Settings: connected now or only remembered from the user's order.
-#[derive(Debug, Serialize, PartialEq)]
+#[derive(Debug, Serialize, PartialEq, specta::Type)]
 pub struct MicrophoneView {
     name: String,
     connected: bool,
@@ -384,7 +391,7 @@ pub struct MicrophoneView {
 
 /// The user's order first, then the other connected microphones (#221, AC-2, AC-3). `ordered`
 /// says whether the user has set an order; without one the system default is used.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, specta::Type)]
 pub struct MicrophonesView {
     ordered: bool,
     microphones: Vec<MicrophoneView>,
@@ -417,6 +424,7 @@ fn microphones_view(
 
 /// The microphones for Settings, read when the page asks: nothing watches devices meanwhile.
 #[tauri::command]
+#[specta::specta]
 pub fn microphones_list(app: AppHandle) -> MicrophonesView {
     let preferred = Config::load_or_create(&config_path(&app))
         .map(|c| c.dictation.microphones)
@@ -428,6 +436,7 @@ pub fn microphones_list(app: AppHandle) -> MicrophonesView {
 /// Saves the user's order of microphones; an empty list is the system default (#221, AC-2).
 /// The next dictation uses it, without a restart.
 #[tauri::command]
+#[specta::specta]
 pub fn microphones_set(app: AppHandle, names: Vec<String>) -> Result<(), String> {
     let list = names
         .iter()
@@ -476,6 +485,7 @@ fn role_named(role: &str) -> Result<Role, String> {
 /// is not saved: the page shows the key field, and the role keeps the provider it has until the
 /// new one's key passes Test (R-12). Returns `saved` or `needs_key`.
 #[tauri::command]
+#[specta::specta]
 pub fn provider_choose(
     app: AppHandle,
     role: String,
@@ -497,6 +507,7 @@ pub fn provider_choose(
 /// Sets a role's fallback (R-24a): tests the provider and model first, with the key it has,
 /// and saves only when Test passes. Returns the time Test took in ms.
 #[tauri::command]
+#[specta::specta]
 pub async fn fallback_set(
     app: AppHandle,
     role: String,
@@ -537,6 +548,7 @@ pub async fn fallback_set(
 
 /// Removes a role's fallback.
 #[tauri::command]
+#[specta::specta]
 pub fn fallback_clear(app: AppHandle, role: String) -> Result<(), String> {
     let role = role_named(&role)?;
     rewrite_config(&app, |text| config::set_fallback(text, role, None))?;
@@ -546,6 +558,7 @@ pub fn fallback_clear(app: AppHandle, role: String) -> Result<(), String> {
 
 /// "Reset to recommended": every role back to the recommended pair; keys stay (R-10).
 #[tauri::command]
+#[specta::specta]
 pub fn providers_reset(app: AppHandle) -> Result<(), String> {
     rewrite_config(&app, config::reset_to_recommended)?;
     use_new_providers(&app);
@@ -555,6 +568,7 @@ pub fn providers_reset(app: AppHandle) -> Result<(), String> {
 /// "Add a custom endpoint…": a new OpenAI-compatible cleanup provider in `config.toml`.
 /// Returns its name in the catalogue. Nothing is sent to it until Test or a dictation (R-30).
 #[tauri::command]
+#[specta::specta]
 pub fn provider_add(app: AppHandle, name: String, endpoint: String) -> Result<String, String> {
     let mut id = String::new();
     rewrite_config(&app, |text| {
@@ -566,7 +580,7 @@ pub fn provider_add(app: AppHandle, name: String, endpoint: String) -> Result<St
 }
 
 /// A server found on this Mac, for the page (R-22).
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 pub struct LocalServerView {
     port: u16,
     endpoint: String,
@@ -576,6 +590,7 @@ pub struct LocalServerView {
 /// When the user picks Local server: looks on the usual ports on this Mac, all at once, and
 /// returns the servers that answer with their models (R-22). Nothing leaves the Mac.
 #[tauri::command]
+#[specta::specta]
 pub async fn local_discover(app: AppHandle) -> Result<Vec<LocalServerView>, String> {
     let config = load(&config_path(&app))?;
     let ports = config
@@ -596,6 +611,7 @@ pub async fn local_discover(app: AppHandle) -> Result<Vec<LocalServerView>, Stri
 /// Uses the local server at `endpoint`, found or typed, with `model` for cleanup (R-21, R-22).
 /// It needs no key, so the switch takes effect at once.
 #[tauri::command]
+#[specta::specta]
 pub fn local_use(app: AppHandle, endpoint: String, model: String) -> Result<(), String> {
     let endpoint = endpoint.trim().trim_end_matches('/').to_owned();
     rewrite_config(&app, |text| {
@@ -611,7 +627,7 @@ pub fn local_use(app: AppHandle, endpoint: String, model: String) -> Result<(), 
 }
 
 /// A model menu for the page: the models, and one line when the listing failed.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 pub struct ModelMenuView {
     models: Vec<String>,
     notice: Option<String>,
@@ -629,6 +645,7 @@ fn model_cache() -> &'static std::sync::Mutex<std::collections::HashMap<String, 
 /// The model menu of `provider`, fetched when the page opens the menu, never on the dictation
 /// path (R-15 to R-17).
 #[tauri::command]
+#[specta::specta]
 pub async fn models_list(app: AppHandle, provider: String) -> Result<ModelMenuView, String> {
     let cached = model_cache()
         .lock()
@@ -655,7 +672,7 @@ pub async fn models_list(app: AppHandle, provider: String) -> Result<ModelMenuVi
 }
 
 /// The hint line under a role (R-18 to R-20).
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, specta::Type)]
 pub struct HintView {
     cost: String,
     speed: String,
@@ -667,6 +684,7 @@ pub struct HintView {
 /// The hint for `provider` and `model` in `role`: cost for the user's talking time, measured
 /// speed with its source, and, with the timing log on, the user's own median on that provider.
 #[tauri::command]
+#[specta::specta]
 pub fn provider_hint(
     app: AppHandle,
     role: String,
@@ -704,6 +722,7 @@ pub fn provider_hint(
 
 /// Opens a measurement the hint line cites, from the project's published results.
 #[tauri::command]
+#[specta::specta]
 pub fn result_open(source: String) -> Result<(), String> {
     let name = source
         .strip_prefix("docs/results/")
@@ -725,6 +744,7 @@ pub fn result_open(source: String) -> Result<(), String> {
 
 /// "Get a key" for any provider in the catalogue: opens its key page in the browser.
 #[tauri::command]
+#[specta::specta]
 pub fn provider_key_page(app: AppHandle, provider: String) -> Result<(), String> {
     let config = load(&config_path(&app))?;
     let url = config
@@ -743,8 +763,7 @@ pub fn provider_key_page(app: AppHandle, provider: String) -> Result<(), String>
 
 /// Tells a waiting walkthrough to test the providers again (U-12).
 fn providers_changed<R: tauri::Runtime>(app: &AppHandle<R>) {
-    use tauri::Emitter;
-    let _ = app.emit_to(crate::walkthrough::WALKTHROUGH, "providers-changed", ());
+    let _ = crate::events::ProvidersChanged.emit_to(app, crate::walkthrough::WALKTHROUGH);
 }
 
 fn provider_for(app: &AppHandle, role: &str) -> Result<(Config, String), String> {
@@ -761,6 +780,7 @@ fn provider_for(app: &AppHandle, role: &str) -> Result<(Config, String), String>
 /// elsewhere. `provider` is the one being picked in the providers table, when it is not yet
 /// the role's (R-12); otherwise the role's own provider gets the key.
 #[tauri::command]
+#[specta::specta]
 pub fn key_set(
     app: AppHandle,
     role: String,
@@ -807,6 +827,7 @@ fn save_key<R: tauri::Runtime>(
 /// (no audio is sent), or has the cleanup model clean one word. Returns the time it took in ms. With `provider` and `model`, tests the
 /// pair being picked in the providers table without saving it (R-12).
 #[tauri::command]
+#[specta::specta]
 pub async fn key_test(
     app: AppHandle,
     role: String,
@@ -844,6 +865,7 @@ pub async fn key_test(
 
 /// Opens a System Settings page or the config file.
 #[tauri::command]
+#[specta::specta]
 pub fn settings_open(app: AppHandle, what: String) -> Result<(), String> {
     let target = match what.as_str() {
         "config" => config_path(&app).display().to_string(),
@@ -870,6 +892,7 @@ pub fn settings_open(app: AppHandle, what: String) -> Result<(), String> {
 
 /// Restarts HyperMe so saved settings take effect.
 #[tauri::command]
+#[specta::specta]
 pub fn app_restart(app: AppHandle) {
     app.restart();
 }
@@ -941,6 +964,7 @@ mod tests {
         use tauri::Listener;
 
         let app = tauri::test::mock_app();
+        crate::bindings::events().mount_events(app.handle());
         let heard = Arc::new(AtomicUsize::new(0));
         let counter = heard.clone();
         app.listen_any("providers-changed", move |_| {

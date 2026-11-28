@@ -11,7 +11,7 @@ use hyperme_platform::trace_store::Labels;
 use serde::Serialize;
 
 /// What Correct did.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, specta::Type)]
 #[serde(tag = "outcome", rename_all = "snake_case")]
 pub enum CorrectOutcome {
     /// The first sample: show the sheet, then send again agreed (R-6). Nothing was written.
@@ -129,6 +129,7 @@ mod commands {
     /// Correct (R-3 to R-7): saves the sample, then shows the corrected text in the row.
     /// Async so the copy runs off the main thread (R-17).
     #[tauri::command]
+    #[specta::specta]
     pub async fn home_correct(
         app: AppHandle,
         id: DictationId,
@@ -159,12 +160,14 @@ mod commands {
 
     /// Delete sample on a row (R-12).
     #[tauri::command]
+    #[specta::specta]
     pub fn home_delete_sample(app: AppHandle, id: DictationId) -> Result<(), String> {
         with_store(&app, |store| store.delete(id).map_err(|e| e.message))
     }
 
     /// Which of these history items have a sample, for the sample mark (R-5).
     #[tauri::command]
+    #[specta::specta]
     pub fn home_samples_of(
         app: AppHandle,
         ids: Vec<DictationId>,
@@ -175,7 +178,7 @@ mod commands {
     }
 
     /// The samples row in Settings → Privacy (R-12).
-    #[derive(Debug, Clone, Serialize)]
+    #[derive(Debug, Clone, Serialize, specta::Type)]
     pub struct SamplesView {
         pub count: usize,
         pub bytes: u64,
@@ -183,6 +186,7 @@ mod commands {
     }
 
     #[tauri::command]
+    #[specta::specta]
     pub fn samples_view(app: AppHandle) -> Result<SamplesView, String> {
         with_store(&app, |store| {
             let (count, bytes) = store.summary().map_err(|e| e.message)?;
@@ -196,12 +200,14 @@ mod commands {
 
     /// Delete all samples (R-12); the page asks once before calling.
     #[tauri::command]
+    #[specta::specta]
     pub fn samples_delete_all(app: AppHandle) -> Result<(), String> {
         with_store(&app, |store| store.delete_all().map_err(|e| e.message))
     }
 
     /// Show in Finder (R-12).
     #[tauri::command]
+    #[specta::specta]
     pub fn samples_reveal(app: AppHandle) -> Result<(), String> {
         let dir = folder(&app);
         std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;

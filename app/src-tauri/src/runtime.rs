@@ -32,12 +32,13 @@ use hyperme_platform::timing::{FileTimingLog, Names};
 use hyperme_platform::trace_store::{Labels, TraceSettings, TraceStore};
 use hyperme_providers::any;
 use hyperme_providers::speechmatics::SAMPLE_RATE;
-use tauri::{AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, Position, Size};
+use tauri::{AppHandle, LogicalPosition, LogicalSize, Manager, Position, Size};
 use tauri_nspanel::ManagerExt;
 use tokio::sync::{mpsc, watch};
 
 use crate::pill::{self, Change, View};
-use crate::{PILL, TrayMenu, geometry};
+use crate::{PILL, TrayMenu, events, geometry};
+use tauri_specta::Event as _;
 
 /// The meter refreshes at most this often (docs/UX.md: 30 fps).
 const LEVEL_EVERY: Duration = Duration::from_millis(33);
@@ -499,7 +500,7 @@ async fn forward_audio(
             && last.elapsed() >= LEVEL_EVERY
         {
             last = Instant::now();
-            let _ = app.emit_to(PILL, "level", pill::level(frame));
+            let _ = events::Level(pill::level(frame)).emit_to(&app, PILL);
         }
         if events.send(event).await.is_err() {
             return;
@@ -522,7 +523,8 @@ async fn show_statuses(app: AppHandle, mut statuses: mpsc::UnboundedReceiver<Sta
             Status::Done { .. } => {
                 if let Some(at) = released.take() {
                     let ms = at.elapsed().as_millis() as u64;
-                    let _ = app.emit_to(crate::walkthrough::WALKTHROUGH, "dictation-pasted", ms);
+                    let _ =
+                        events::DictationPasted(ms).emit_to(&app, crate::walkthrough::WALKTHROUGH);
                 }
             }
             Status::Idle => {
@@ -582,7 +584,7 @@ fn show(app: &AppHandle, view: View) {
     if view.kind == "idle" && was_pill {
         // The page shrinks the capsule into the bead (the 180 ms spring); the panel follows once
         // it is done, so the animation is not cut off.
-        let _ = app.emit_to(PILL, "pill", &view);
+        let _ = events::Pill(view.clone()).emit_to(app, PILL);
         let app = app.clone();
         tauri::async_runtime::spawn(async move {
             tokio::time::sleep(Duration::from_millis(200)).await;
@@ -593,7 +595,7 @@ fn show(app: &AppHandle, view: View) {
     } else {
         // Growing: the panel takes the pill's size first, then the page grows the capsule.
         place(app, width);
-        let _ = app.emit_to(PILL, "pill", &view);
+        let _ = events::Pill(view.clone()).emit_to(app, PILL);
     }
     on_panel(app, |panel| panel.show());
     if let Some(ms) = view.hide_after_ms {
@@ -634,7 +636,7 @@ pub fn show_card(app: &AppHandle, card: pill::Card, update: bool) {
         let _ = window.set_size(Size::Logical(LogicalSize::new(width, height)));
         let _ = window.set_position(Position::Logical(LogicalPosition::new(x, y)));
     }
-    let _ = app.emit_to(PILL, "card", &card);
+    let _ = events::Card(card.clone()).emit_to(app, PILL);
     on_panel(app, |panel| panel.show());
     shadow(app, pill::wants_shadow("card"));
     let app = app.clone();
@@ -667,12 +669,14 @@ fn card_origin(app: &AppHandle, size: (f64, f64)) -> (f64, f64) {
 /// The card on screen, for the page once it has loaded (a card sent at launch can come before
 /// its listeners).
 #[tauri::command]
+#[specta::specta]
 pub fn pill_card(app: AppHandle) -> Option<pill::Card> {
     lock(&app).card.clone()
 }
 
 /// "Open Today" on the card: Home at Today, and the card goes back into the dot (R-19).
 #[tauri::command]
+#[specta::specta]
 pub fn card_open_today(app: AppHandle) {
     settle(&app);
     crate::home::open(&app, "today");
@@ -681,6 +685,7 @@ pub fn card_open_today(app: AppHandle) {
 /// The main button of an alert: Fix opens Settings where the fix is (R-36), Join a meeting's
 /// web link, Open Today Home at Today (R-22). The card goes back into the dot.
 #[tauri::command]
+#[specta::specta]
 pub fn card_action(app: AppHandle) {
     let link = match &lock(&app).card {
         Some(pill::Card::Alert(alert)) => alert.link.clone(),
@@ -701,6 +706,7 @@ pub fn card_action(app: AppHandle) {
 
 /// "Later" on the card.
 #[tauri::command]
+#[specta::specta]
 pub fn card_dismiss(app: AppHandle) {
     settle(&app);
 }
@@ -771,7 +777,7 @@ fn hide(app: &AppHandle) {
         shared.card = None;
     }
     // The page stops drawing the voice, so nothing runs while the pill is hidden.
-    let _ = app.emit_to(PILL, "pill-hidden", ());
+    let _ = events::PillHidden.emit_to(app, PILL);
     on_panel(app, |panel| panel.hide());
 }
 
@@ -791,6 +797,7 @@ fn on_panel(app: &AppHandle, action: fn(&dyn tauri_nspanel::Panel)) {
 /// exist is lost, and the bead is sent at launch (26 November 2026, the bead showed the hidden
 /// recording bars instead).
 #[tauri::command]
+#[specta::specta]
 pub fn pill_view(app: AppHandle) -> Option<View> {
     lock(&app).view.clone()
 }
@@ -798,6 +805,7 @@ pub fn pill_view(app: AppHandle) -> Option<View> {
 /// The hands-free pill's buttons (#167 AC-4): `stop` stops and pastes, otherwise ✕ cancels.
 /// The panel never takes focus, so the app being dictated into keeps it (AC-6).
 #[tauri::command]
+#[specta::specta]
 pub fn pill_hands_free(app: AppHandle, stop: bool) {
     if let Some(events) = lock(&app).events.clone() {
         let _ = events.try_send(if stop { Event::Stop } else { Event::Esc });
@@ -808,6 +816,7 @@ pub fn pill_hands_free(app: AppHandle, stop: bool) {
 /// nothing while hands-free, whose buttons have their own command; otherwise the state goes
 /// away.
 #[tauri::command]
+#[specta::specta]
 pub fn pill_clicked(app: AppHandle) {
     let (retry, idle, locked, events) = {
         let shared = lock(&app);

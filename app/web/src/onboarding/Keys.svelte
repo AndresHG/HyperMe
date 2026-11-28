@@ -76,7 +76,7 @@
   <div class="cost">
     <strong id="cost-total">{choice?.shown_as ?? ''}</strong>
     <span class="faint" id="cost-detail">
-      {#if choice && screen}{screen.speech} about ${choice.speech_usd.toFixed(2)} · {screen.cleanup} about ${choice.cleanup_usd.toFixed(2)}{/if}
+      {#if choice && screen}{screen.speech} about ${(choice.speech_usd ?? 0).toFixed(2)} · {screen.cleanup} about ${(choice.cleanup_usd ?? 0).toFixed(2)}{/if}
     </span>
   </div>
   <p class="faint" id="free-credit">{error || screen?.free_credit || ''}</p>

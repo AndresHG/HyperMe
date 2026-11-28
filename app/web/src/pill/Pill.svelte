@@ -71,7 +71,7 @@
         heard = true;
         showCard(view);
       }),
-      on('level', (level) => voice.level(level)),
+      on('level', (level) => voice.level(level ?? 0)),
     ])
       .then(() => commands.pillView())
       .then((view) => {

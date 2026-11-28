@@ -326,7 +326,7 @@ pub fn nudge_card(
 // --- Home's Today (slice 8) -----------------------------------------------------------------
 
 /// One of today's meetings as Home lists it.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, specta::Type)]
 pub struct MeetingRow {
     pub title: String,
     /// Local times, `09:30`.
@@ -343,7 +343,7 @@ pub struct MeetingRow {
 }
 
 /// One task line in Today.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, specta::Type)]
 pub struct LineRow {
     pub id: TaskId,
     pub title: String,
@@ -356,7 +356,7 @@ pub struct LineRow {
 }
 
 /// A task under "Waiting on", with the blocker's title (R-10).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, specta::Type)]
 pub struct WaitingRow {
     pub id: TaskId,
     pub title: String,
@@ -365,7 +365,7 @@ pub struct WaitingRow {
 }
 
 /// The Today block: meetings, then the tasks in order, then "Waiting on".
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, specta::Type)]
 pub struct TodayPage {
     /// `YYYY-MM-DD`, today and tomorrow, for the day picker.
     pub today: String,
@@ -642,18 +642,17 @@ pub fn start(app: &tauri::AppHandle) {
     });
     // Home showed Today: what arrived until now is no longer "new" (R-21), and the dot goes.
     {
-        use tauri::Listener;
+        use tauri_specta::Event as _;
         let (app, store) = (app.clone(), store.clone());
-        app.clone()
-            .listen_any(crate::home::BLOCK_VIEWED, move |event| {
-                if event.payload() != "\"today\"" {
-                    return;
-                }
-                let now = UtcDateTime::now();
-                let (today, _) = today_of(&MacClock, &rules, now);
-                let _ = store.mark_seen(today, ms(now));
-                crate::home::set_attention(&app, false);
-            });
+        crate::events::HomeBlockViewed::listen_any(&app.clone(), move |event| {
+            if event.payload.0 != "today" {
+                return;
+            }
+            let now = UtcDateTime::now();
+            let (today, _) = today_of(&MacClock, &rules, now);
+            let _ = store.mark_seen(today, ms(now));
+            crate::home::set_attention(&app, false);
+        });
     }
     let app = app.clone();
     {
@@ -1052,12 +1051,14 @@ async fn page_now(app: &tauri::AppHandle) -> Result<TodayPage, String> {
 
 /// The Today block for Home.
 #[tauri::command]
+#[specta::specta]
 pub async fn home_today(app: tauri::AppHandle) -> Result<TodayPage, String> {
     page_now(&app).await
 }
 
 /// "Add a task": a title, for today.
 #[tauri::command]
+#[specta::specta]
 pub async fn tasks_add(app: tauri::AppHandle, title: String) -> Result<(), String> {
     let (store, rules) = state(&app)?;
     let now = UtcDateTime::now();
@@ -1070,6 +1071,7 @@ pub async fn tasks_add(app: tauri::AppHandle, title: String) -> Result<(), Strin
 /// A row action: `done`, `drop`, `tomorrow`, `keep`, `move` with `value` a `YYYY-MM-DD` day,
 /// or `rename` with `value` the new title.
 #[tauri::command]
+#[specta::specta]
 pub async fn tasks_act(
     app: tauri::AppHandle,
     id: TaskId,
@@ -1095,6 +1097,7 @@ pub async fn tasks_act(
 
 /// Opens a meeting's link in the browser; only web links.
 #[tauri::command]
+#[specta::specta]
 pub fn tasks_open_meeting(url: String) -> Result<(), String> {
     if !url.starts_with("https://") {
         return Err("Only web links open from Home".to_owned());

@@ -83,6 +83,7 @@ pub enum AccountHealth {
 /// The colour of a state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 pub enum Tone {
     Ok,
     Warn,
@@ -92,6 +93,8 @@ pub enum Tone {
 
 /// One row of the list page or of Setup check.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[cfg_attr(feature = "specta", serde(rename = "ConnectorRow"))]
 pub struct Row {
     /// `google:personal` for an account, the connector id otherwise.
     pub id: String,
@@ -296,6 +299,7 @@ pub fn parse_link(url: &str) -> Option<Link> {
 
 /// One tool on the account page.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 pub struct ToolRow {
     pub name: String,
     pub access: ToolAccess,
@@ -374,6 +378,8 @@ pub fn set_enabled(
 
 /// One choice in the Add connector sheet.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[cfg_attr(feature = "specta", serde(rename = "ConnectorChoice"))]
 pub struct Choice {
     pub id: String,
     pub name: String,
@@ -413,6 +419,7 @@ pub fn add_choices(registry: &Registry, connectors: &Connectors) -> Vec<Choice> 
 
 /// The Custom MCP server form.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 pub struct CustomForm {
     pub name: String,
     pub url: String,

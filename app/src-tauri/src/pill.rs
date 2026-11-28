@@ -7,7 +7,8 @@ use hyperme_core::dictation::Status;
 use serde::Serialize;
 
 /// The look of one state, sent to the pill's page (`app/web/src/pill`) as an event.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, specta::Type)]
+#[serde(rename = "PillView")]
 pub struct View {
     /// `recording`, `locked`, `working`, `done`, `raw`, `quiet`, `notice`, `error` or `retry`;
     /// the page picks the icon and colour from it.
@@ -153,7 +154,7 @@ pub const CARD_WIDTH: f64 = 360.0;
 pub const CARD_LINGER_MS: u64 = 60_000;
 
 /// One task on the morning card.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, specta::Type)]
 pub struct CardLine {
     pub title: String,
     /// `due 10:00`, `overdue`, `unblocked`, `rolled 2`, or empty.
@@ -164,7 +165,8 @@ pub struct CardLine {
 
 /// The morning card as the pill's page draws it (docs/ux/daily-cards.svg). Parts that do not
 /// exist are `None` and take no room; parts waiting for a sync say "Updating…" (R-18).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, specta::Type)]
+#[serde(rename = "MorningCard")]
 pub struct CardView {
     pub title: String,
     pub yesterday: Option<String>,
@@ -261,7 +263,8 @@ pub fn morning_view(card: &MorningCard) -> CardView {
 
 /// An alert from the dot (docs/UX.md, "Alerts"): a title, one line, and a button that opens
 /// where the fix is. Never takes focus.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, specta::Type)]
+#[serde(rename = "AlertCard")]
 pub struct AlertView {
     pub title: String,
     pub detail: String,
@@ -272,8 +275,9 @@ pub struct AlertView {
 }
 
 /// A card the pill grows into: the morning card or an alert.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, specta::Type)]
 #[serde(tag = "kind", rename_all = "lowercase")]
+#[serde(rename = "PillCard")]
 pub enum Card {
     Morning(CardView),
     Alert(AlertView),
@@ -550,9 +554,7 @@ mod level_tests {
     #[test]
     fn the_page_asks_for_the_current_view_when_it_loads() {
         let page = include_str!("../../web/src/pill/Pill.svelte");
-        let ipc = include_str!("../../web/src/lib/ipc.ts");
         assert!(page.contains(".then(() => commands.pillView())"));
-        assert!(ipc.contains("pillView: () => invoke<PillView | null>('pill_view')"));
         // Hidden means nothing drawn: no capsule, no bars left over from the warm-up.
         assert!(page.contains(".pill.hidden, .pill.card { display: none; }"));
     }

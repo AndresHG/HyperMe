@@ -25,7 +25,7 @@
   export async function test() {
     show('busy', 'Testing…');
     try {
-      const ms = await commands.keyTest(role);
+      const ms = await commands.keyTest(role, null, null);
       show('ok', `Works · ${ms} ms`);
       saved = true;
       tested(true);
@@ -40,7 +40,7 @@
   async function save() {
     if (!value.trim()) return test();
     try {
-      await commands.keySet(role, value);
+      await commands.keySet(role, value, null);
       value = '';
     } catch (e) {
       show('bad', 'Not saved', String(e));

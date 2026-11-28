@@ -17,7 +17,7 @@ use crate::runtime;
 
 const DAY_MS: i64 = 24 * 60 * 60 * 1000;
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, specta::Type)]
 pub struct ReportView {
     /// The whole bundle, shown before anything else happens (R-13).
     text: String,
@@ -58,6 +58,7 @@ fn home() -> Option<PathBuf> {
 /// Builds the bundle and the issue link. `from_item` is the History item a report started from:
 /// its trace leads the link (R-15a).
 #[tauri::command]
+#[specta::specta]
 pub fn report_build(
     app: AppHandle,
     description: String,
@@ -148,6 +149,7 @@ fn file_name() -> String {
 /// Save…: macOS's own save panel picks the file (through `osascript`, so no new crate), then
 /// the bundle is written there. `None` when the user cancels (R-15).
 #[tauri::command]
+#[specta::specta]
 pub fn report_save(text: String) -> Result<Option<String>, String> {
     let script = format!(
         "POSIX path of (choose file name with prompt \"Save the problem report\" default name {} default location (path to downloads folder))",
@@ -164,6 +166,7 @@ pub fn report_save(text: String) -> Result<Option<String>, String> {
 /// Open issue: saves the bundle to Downloads, opens the new-issue page in the browser and shows
 /// the saved file in Finder so the user can attach it (R-15). Opens only links the core built.
 #[tauri::command]
+#[specta::specta]
 pub fn report_open_issue(text: String, url: String) -> Result<String, String> {
     if !report::is_issue_url(&url) {
         return Err("Not an issue link".to_owned());

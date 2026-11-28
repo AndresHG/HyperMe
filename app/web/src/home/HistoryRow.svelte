@@ -79,7 +79,7 @@
     history_write: 'History write',
   };
   const trace = $derived(row.trace || null);
-  const end = $derived(trace ? Math.max(...trace.bars.map((b) => b.start_ms + b.duration_ms)) || 1 : 1);
+  const end = $derived(trace ? Math.max(...trace.bars.map((b) => (b.start_ms ?? 0) + (b.duration_ms ?? 0))) || 1 : 1);
   const via = $derived(
     trace
       ? [
@@ -194,8 +194,8 @@
       <div class="stages">
         {#each trace.bars as b, i (i)}
           <span>{STAGE_NAMES[b.stage] || b.stage}</span>
-          <div class="track"><div class="fill" style:left="{(100 * b.start_ms) / end}%" style:width="{(100 * b.duration_ms) / end}%"></div></div>
-          <span class="ms">{Math.round(b.duration_ms)} ms</span>
+          <div class="track"><div class="fill" style:left="{(100 * (b.start_ms ?? 0)) / end}%" style:width="{(100 * (b.duration_ms ?? 0)) / end}%"></div></div>
+          <span class="ms">{Math.round(b.duration_ms ?? 0)} ms</span>
         {/each}
         <span class="via">{via}</span>
       </div>

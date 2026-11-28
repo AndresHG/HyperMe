@@ -18,6 +18,7 @@ const TESTING_REFRESH_LIMIT_S: u64 = 8 * 86_400;
 
 /// One switch in the sheet's "What Hyper can see" step.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 pub struct Feature {
     /// A server id (`calendar`), or `server.feature` for an optional scope (`gmail.drafts`).
     pub id: String,
@@ -215,6 +216,7 @@ pub fn in_testing(refresh_expires_in: Option<u64>) -> bool {
 
 /// One connected account in the Privacy block.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 pub struct PrivacyAccount {
     pub title: String,
     /// What Hyper reads, in the sheet's words.
@@ -226,6 +228,7 @@ pub struct PrivacyAccount {
 
 /// Privacy → Connected accounts (R-24), in plain words.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 pub struct Privacy {
     pub accounts: Vec<PrivacyAccount>,
     pub where_it_goes: String,

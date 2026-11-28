@@ -12,7 +12,7 @@ use serde::Serialize;
 pub const HOME: &str = "home";
 
 /// One section in the sidebar (R-5). Only sections whose feature exists are listed.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, specta::Type)]
 pub struct Section {
     pub id: &'static str,
     pub title: &'static str,
@@ -54,7 +54,7 @@ pub fn sections(dictionary_present: bool) -> Vec<Section> {
 }
 
 /// One block on the Home page, above Recent (R-9).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, specta::Type)]
 pub struct Block {
     pub id: &'static str,
     pub title: &'static str,
@@ -134,7 +134,7 @@ pub trait Focuser {
 }
 
 /// What Paste again did, for the page.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, specta::Type)]
 pub struct PasteOutcome {
     pub pasted: bool,
     pub notice: Option<String>,
@@ -172,7 +172,7 @@ pub async fn paste_again<I: Inserter>(
 }
 
 /// One action on a selected row, with its key (R-13).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, specta::Type)]
 pub struct Action {
     pub id: &'static str,
     pub label: &'static str,
@@ -199,7 +199,7 @@ pub fn actions(has_text: bool, has_audio: bool, dictionary: bool) -> Vec<Action>
 }
 
 /// What Fix a word did (R-17, AC-11).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, specta::Type)]
 #[serde(tag = "outcome", rename_all = "snake_case")]
 pub enum FixOutcome {
     /// Added: the row's text with the correction, to store and show.
@@ -288,21 +288,15 @@ mod window {
     use hyperme_platform::paste::macos::{self as mac, CmdV, MacPasteboard};
     use hyperme_platform::paste::{ClipboardInserter, RESTORE_AFTER};
     use serde::{Deserialize, Serialize};
-    use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent};
+    use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent};
+    use tauri_specta::Event as _;
+
+    use crate::events;
 
     use super::{
         Action, Block, FixOutcome, Focuser, FrontApp, HOME, PasteOutcome, Section, actions, blocks,
         fix_word, hash, paste_again, resolve, sections,
     };
-
-    /// Sent to the page when the attention dot changes (R-22).
-    pub const ATTENTION: &str = "home://attention";
-    /// Sent to the page to reload a block or a section while Home is open (R-22).
-    pub const REFRESH: &str = "home://refresh";
-    /// The page emits this with a block's id once the block has been on screen (R-22). Other
-    /// modules (#92's Waiting for you, for example) listen with `app.listen_any(BLOCK_VIEWED,
-    /// ...)`; Home itself does nothing with it.
-    pub const BLOCK_VIEWED: &str = "home://block-viewed";
 
     const DEFAULT_SIZE: (f64, f64) = (900.0, 600.0);
     const MIN_SIZE: (f64, f64) = (720.0, 480.0);
@@ -310,10 +304,6 @@ mod window {
     const MAX_LIMIT: usize = 200;
     /// How long Paste again waits for the recorded app to come to the front (R-15).
     const FRONT_WAIT: Duration = Duration::from_millis(500);
-    /// Sent to the page when a dictation is added or changed outside Home (R-22, AC-15).
-    pub const CHANGED: &str = "home://changed";
-    /// Sent to the page as a retry from Home goes, keyed by the item's id (R-16).
-    pub const RETRY: &str = "home://retry";
 
     /// Home's state while the app runs.
     #[derive(Default)]
@@ -351,7 +341,7 @@ mod window {
     }
 
     /// The window's size and position, kept between openings (R-4).
-    #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+    #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, specta::Type)]
     pub struct Geometry {
         pub x: f64,
         pub y: f64,
@@ -501,22 +491,24 @@ mod window {
     /// Shows or hides the violet dot on Home in the sidebar (R-22). For other modules.
     pub fn set_attention(app: &AppHandle, on: bool) {
         state(app).attention = on;
-        let _ = app.emit_to(HOME, ATTENTION, on);
+        let _ = events::HomeAttention(on).emit_to(app, HOME);
     }
 
     /// Makes the open page reload a block or a section (R-22). For other modules.
     pub fn refresh(app: &AppHandle, target: &str) {
-        let _ = app.emit_to(HOME, REFRESH, target);
+        let _ = events::HomeRefresh(target.to_string()).emit_to(app, HOME);
     }
 
     /// The sidebar's sections (R-5).
     #[tauri::command]
+    #[specta::specta]
     pub fn home_sections(app: AppHandle) -> Vec<Section> {
         sections(has_dictionary(&app))
     }
 
     /// The Home page's blocks (R-9).
     #[tauri::command]
+    #[specta::specta]
     pub fn home_blocks() -> Vec<Block> {
         blocks()
     }
@@ -524,6 +516,7 @@ mod window {
     /// Sets the attention dot when `on` is given; returns it either way, so the page can ask on
     /// load.
     #[tauri::command]
+    #[specta::specta]
     pub fn home_attention(app: AppHandle, on: Option<bool>) -> bool {
         if let Some(on) = on {
             set_attention(&app, on);
@@ -532,13 +525,14 @@ mod window {
     }
 
     #[tauri::command]
+    #[specta::specta]
     pub fn home_refresh(app: AppHandle, target: String) {
         refresh(&app, &target);
     }
 
     /// One dictation as the page sees it (R-24, AC-14): its text and facts, never a path to its
     /// audio or anything about keys.
-    #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+    #[derive(Debug, Clone, PartialEq, Eq, Serialize, specta::Type)]
     pub struct ItemView {
         pub id: i64,
         pub started_ms: i64,
@@ -569,7 +563,7 @@ mod window {
     }
 
     /// The Home page's numbers (R-7).
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, specta::Type)]
     pub struct StatsView {
         pub words_this_week: u64,
         pub seconds_saved: i64,
@@ -597,6 +591,7 @@ mod window {
 
     /// The page's local time zone comes from the page, which knows it (R-7).
     #[tauri::command]
+    #[specta::specta]
     pub fn home_stats(app: AppHandle, utc_offset_minutes: i32) -> Result<StatsView, String> {
         crate::runtime::with_history(&app, |h| h.stats(now_ms(), utc_offset_minutes))
             .map(StatsView::from)
@@ -605,6 +600,7 @@ mod window {
     /// A page of History or Recent (R-8, R-10): items older than `before`, `[started_ms, id]`
     /// of the last item shown.
     #[tauri::command]
+    #[specta::specta]
     pub fn home_page(
         app: AppHandle,
         before: Option<(i64, i64)>,
@@ -616,6 +612,7 @@ mod window {
 
     /// History's search (R-12).
     #[tauri::command]
+    #[specta::specta]
     pub fn home_search(
         app: AppHandle,
         query: String,
@@ -627,7 +624,8 @@ mod window {
     }
 
     /// What the page needs to know once (R-19, R-21).
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, specta::Type)]
+    #[serde(rename = "HomeInfo")]
     pub struct Info {
         /// History is on; while it is off, History lists only failed items with audio.
         pub history: bool,
@@ -635,6 +633,7 @@ mod window {
     }
 
     #[tauri::command]
+    #[specta::specta]
     pub fn home_info(app: AppHandle) -> Info {
         Info {
             history: crate::runtime::history_enabled(&app),
@@ -644,12 +643,14 @@ mod window {
 
     /// History while history is off: the failed dictations still waiting for a retry (R-19).
     #[tauri::command]
+    #[specta::specta]
     pub fn home_failed(app: AppHandle) -> Result<Vec<ItemView>, String> {
         crate::runtime::with_history(&app, |h| h.failed_with_audio()).map(|i| views(&app, i))
     }
 
     /// One item again, after an action changed it.
     #[tauri::command]
+    #[specta::specta]
     pub fn home_item(app: AppHandle, id: DictationId) -> Result<Option<ItemView>, String> {
         let dictionary = has_dictionary(&app);
         crate::runtime::with_history(&app, |h| h.item(id)).map(|i| i.map(|i| view(i, dictionary)))
@@ -671,6 +672,7 @@ mod window {
 
     /// Copy (R-14).
     #[tauri::command]
+    #[specta::specta]
     pub async fn home_copy(app: AppHandle, id: DictationId) -> Result<(), String> {
         let (text, _) = text_of(&app, id)?;
         inserter().copy(&text).await.map_err(|e| e.message)
@@ -701,6 +703,7 @@ mod window {
     /// Paste again (R-15, AC-9): back to the app in front before Home, paste there; Home stays
     /// open behind it. Copies with a notice when that app is gone.
     #[tauri::command]
+    #[specta::specta]
     pub async fn home_paste(app: AppHandle, id: DictationId) -> Result<PasteOutcome, String> {
         let (text, _) = text_of(&app, id)?;
         let recorded = state(&app).front_app.clone();
@@ -717,12 +720,14 @@ mod window {
 
     /// Retry (R-16): the engine sends the saved audio again; the row follows `home://retry`.
     #[tauri::command]
+    #[specta::specta]
     pub fn home_retry(app: AppHandle, id: DictationId) -> Result<(), String> {
         crate::runtime::retry_from_home(&app, id)
     }
 
     /// Delete (R-18, AC-12): the item's text and audio.
     #[tauri::command]
+    #[specta::specta]
     pub fn home_delete(app: AppHandle, id: DictationId) -> Result<(), String> {
         crate::runtime::with_history_mut(&app, |h| h.delete_item(id))
     }
@@ -730,6 +735,7 @@ mod window {
     /// Fix a word (R-17, AC-11): the selection and what it should be go to the dictionary; on
     /// success the row's text in the store has the correction.
     #[tauri::command]
+    #[specta::specta]
     pub fn home_fix_word(
         app: AppHandle,
         id: DictationId,
@@ -763,7 +769,7 @@ mod window {
     }
 
     /// A retry from Home moved on (R-16): the page updates that row.
-    #[derive(Debug, Clone, Serialize)]
+    #[derive(Debug, Clone, Serialize, specta::Type)]
     pub struct RetryEvent {
         pub id: DictationId,
         /// `working`, `done`, `failed` or `ended`.
@@ -773,12 +779,12 @@ mod window {
     }
 
     pub fn emit_retry(app: &AppHandle, event: RetryEvent) {
-        let _ = app.emit_to(HOME, RETRY, event);
+        let _ = events::HomeRetry(event).emit_to(app, HOME);
     }
 
     /// Tells an open Home that the history changed outside it (AC-15).
     pub fn emit_changed(app: &AppHandle) {
-        let _ = app.emit_to(HOME, CHANGED, ());
+        let _ = events::HomeChanged.emit_to(app, HOME);
     }
 
     #[cfg(test)]
@@ -923,7 +929,7 @@ mod tests {
         }
         // The page emits the event other modules listen for (R-22).
         let ipc = include_str!("../../web/src/lib/ipc.ts");
-        assert!(ipc.contains("emit('home://block-viewed'"));
+        assert!(ipc.contains("events.homeBlockViewed.emit("));
         let page = include_str!("../../web/src/home/TodayPage.svelte");
         assert!(page.contains("tell.blockViewed("));
     }

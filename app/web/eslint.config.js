@@ -9,5 +9,5 @@ export default ts.config(
   ...svelte.configs.recommended,
   { languageOptions: { globals: globals.browser } },
   { files: ['**/*.svelte', '**/*.svelte.ts'], languageOptions: { parserOptions: { parser: ts.parser } } },
-  { ignores: ['dist/', 'node_modules/'] },
+  { ignores: ['dist/', 'node_modules/', 'src/lib/bindings.ts'] },
 );
