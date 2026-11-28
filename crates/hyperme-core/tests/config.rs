@@ -74,7 +74,11 @@ fn defaults_are_the_owner_decisions() {
 fn no_provider_or_model_names_in_code() {
     let sources = [
         ("lib.rs", include_str!("../src/lib.rs")),
-        ("config.rs", include_str!("../src/config.rs")),
+        ("config/mod.rs", include_str!("../src/config/mod.rs")),
+        ("config/edit.rs", include_str!("../src/config/edit.rs")),
+        ("config/providers.rs", include_str!("../src/config/providers.rs")),
+        ("config/sections.rs", include_str!("../src/config/sections.rs")),
+        ("config/validate.rs", include_str!("../src/config/validate.rs")),
         ("secrets.rs", include_str!("../src/secrets.rs")),
         ("traits.rs", include_str!("../src/traits.rs")),
         ("dictation.rs", include_str!("../src/dictation.rs")),
