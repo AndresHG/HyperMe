@@ -294,7 +294,7 @@ fn load(app: &AppHandle) -> Result<Arc<Config>, String> {
     crate::runtime::config(app).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn settings_view(app: AppHandle) -> View {
     let path = config_path(&app);
@@ -356,7 +356,7 @@ fn toml_string(s: &str) -> String {
 
 /// Saves one setting. A provider or model change reaches the next dictation at once (specs/96-
 /// provider-settings, R-8); other changes take effect after a restart, which the page offers.
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn settings_set(
     app: AppHandle,
@@ -423,7 +423,7 @@ fn microphones_view(
 }
 
 /// The microphones for Settings, read when the page asks: nothing watches devices meanwhile.
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn microphones_list(app: AppHandle) -> MicrophonesView {
     let preferred = crate::runtime::config(&app)
@@ -435,7 +435,7 @@ pub fn microphones_list(app: AppHandle) -> MicrophonesView {
 
 /// Saves the user's order of microphones; an empty list is the system default (#221, AC-2).
 /// The next dictation uses it, without a restart.
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn microphones_set(app: AppHandle, names: Vec<String>) -> Result<(), String> {
     let list = names
@@ -482,7 +482,7 @@ fn role_named(role: &str) -> Result<Role, String> {
 /// Picks a role's provider and model from the providers table (R-8). A provider with no key yet
 /// is not saved: the page shows the key field, and the role keeps the provider it has until the
 /// new one's key passes Test (R-12). Returns `saved` or `needs_key`.
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn provider_choose(
     app: AppHandle,
@@ -547,7 +547,7 @@ pub async fn fallback_set(
 }
 
 /// Removes a role's fallback.
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn fallback_clear(app: AppHandle, role: String) -> Result<(), String> {
     let role = role_named(&role)?;
@@ -557,7 +557,7 @@ pub fn fallback_clear(app: AppHandle, role: String) -> Result<(), String> {
 }
 
 /// "Reset to recommended": every role back to the recommended pair; keys stay (R-10).
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn providers_reset(app: AppHandle) -> Result<(), String> {
     rewrite_config(&app, config::reset_to_recommended)?;
@@ -567,7 +567,7 @@ pub fn providers_reset(app: AppHandle) -> Result<(), String> {
 
 /// "Add a custom endpoint…": a new OpenAI-compatible cleanup provider in `config.toml`.
 /// Returns its name in the catalogue. Nothing is sent to it until Test or a dictation (R-30).
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn provider_add(app: AppHandle, name: String, endpoint: String) -> Result<String, String> {
     let mut id = String::new();
@@ -610,7 +610,7 @@ pub async fn local_discover(app: AppHandle) -> Result<Vec<LocalServerView>, Stri
 
 /// Uses the local server at `endpoint`, found or typed, with `model` for cleanup (R-21, R-22).
 /// It needs no key, so the switch takes effect at once.
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn local_use(app: AppHandle, endpoint: String, model: String) -> Result<(), String> {
     let endpoint = endpoint.trim().trim_end_matches('/').to_owned();
@@ -683,7 +683,7 @@ pub struct HintView {
 
 /// The hint for `provider` and `model` in `role`: cost for the user's talking time, measured
 /// speed with its source, and, with the timing log on, the user's own median on that provider.
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn provider_hint(
     app: AppHandle,
@@ -779,7 +779,7 @@ fn provider_for(app: &AppHandle, role: &str) -> Result<(Config, String), String>
 /// R-25: the key goes straight to the keychain; it is never returned, logged or stored
 /// elsewhere. `provider` is the one being picked in the providers table, when it is not yet
 /// the role's (R-12); otherwise the role's own provider gets the key.
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn key_set(
     app: AppHandle,

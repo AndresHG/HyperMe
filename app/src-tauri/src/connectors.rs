@@ -270,7 +270,7 @@ fn load(app: &AppHandle) -> Result<(Arc<str>, Arc<Config>), String> {
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn connectors_view(app: AppHandle) -> View {
     let empty = |error: String| View {
@@ -335,7 +335,7 @@ fn access(text: &str) -> Result<ToolAccess, String> {
     }
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn connectors_set_tool(
     app: AppHandle,
@@ -349,7 +349,7 @@ pub fn connectors_set_tool(
     })
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn connectors_set_enabled(
     app: AppHandle,
@@ -362,7 +362,7 @@ pub fn connectors_set_enabled(
 }
 
 /// Adds a custom server and returns its id; its bearer token, if any, is entered next.
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn connectors_add_custom(app: AppHandle, form: CustomForm) -> Result<String, String> {
     let mut id = String::new();
@@ -374,7 +374,7 @@ pub fn connectors_add_custom(app: AppHandle, form: CustomForm) -> Result<String,
 }
 
 /// A custom server's bearer token goes straight to the keychain; it is never sent back.
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn connectors_set_token(
     app: AppHandle,
