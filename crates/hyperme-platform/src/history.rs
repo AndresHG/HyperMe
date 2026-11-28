@@ -62,6 +62,13 @@ pub struct Item {
     pub message: Option<String>,
 }
 
+/// The texts a benchmark sample needs (spec 267, R-1).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BenchmarkTexts {
+    pub transcript: Option<String>,
+    pub first_text: Option<String>,
+}
+
 /// The two numbers on the Home page (#98 R-7).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Stats {
@@ -132,6 +139,27 @@ impl fmt::Debug for SqliteHistory {
     }
 }
 
+/// Spec 267, R-1: the speech transcript and the first text, added to an index made before
+/// them. Old rows stay `NULL`.
+fn add_benchmark_columns(db: &Connection) -> Result<(), Error> {
+    let has = |column: &str| {
+        db.query_row(
+            "SELECT COUNT(*) FROM pragma_table_info('dictations') WHERE name = ?1",
+            params![column],
+            |r| r.get::<_, i64>(0),
+        )
+        .map(|n| n > 0)
+        .map_err(|e| error(format!("reading the index: {e}")))
+    };
+    for column in ["transcript", "first_text"] {
+        if !has(column)? {
+            db.execute_batch(&format!("ALTER TABLE dictations ADD COLUMN {column} TEXT;"))
+                .map_err(|e| error(format!("updating the index: {e}")))?;
+        }
+    }
+    Ok(())
+}
+
 fn error(what: impl fmt::Display) -> Error {
     Error {
         kind: ErrorKind::Device,
@@ -197,6 +225,7 @@ impl SqliteHistory {
             "CREATE INDEX IF NOT EXISTS dictations_started ON dictations (started_ms, id);",
         )
         .map_err(|e| error(format!("creating the index: {e}")))?;
+        add_benchmark_columns(&db)?;
         let mut store = SqliteHistory {
             dir: dir.to_owned(),
             db,
@@ -455,6 +484,26 @@ impl SqliteHistory {
         Ok(self.query_items(&sql, params![id])?.pop())
     }
 
+    /// What a benchmark needs of a dictation (spec 267, R-1): the speech transcript before the
+    /// dictionary and the text first pasted, neither changed by Retry, Fix a word or Correct.
+    /// `None` for an unknown id; the fields are `None` for dictations made before them.
+    pub fn benchmark_texts(&self, id: DictationId) -> Result<Option<BenchmarkTexts>, Error> {
+        Self::sql(
+            self.db
+                .query_row(
+                    "SELECT transcript, first_text FROM dictations WHERE id = ?1",
+                    params![id],
+                    |r| {
+                        Ok(BenchmarkTexts {
+                            transcript: r.get(0)?,
+                            first_text: r.get(1)?,
+                        })
+                    },
+                )
+                .optional(),
+        )
+    }
+
     /// Deletes a dictation's text and audio (#98 R-18, AC-12).
     pub fn delete_item(&mut self, id: DictationId) -> Result<(), Error> {
         self.delete(id)
@@ -499,7 +548,13 @@ impl History for SqliteHistory {
             .map_err(|e| error(format!("writing audio: {e}")))
     }
 
-    fn done(&mut self, id: DictationId, text: &str, language: Option<&str>) -> Result<(), Error> {
+    fn done(
+        &mut self,
+        id: DictationId,
+        text: &str,
+        transcript: &str,
+        language: Option<&str>,
+    ) -> Result<(), Error> {
         if !self.settings.enabled {
             // R-28: with history off, a successful dictation leaves nothing behind.
             return self.delete(id);
@@ -507,9 +562,12 @@ impl History for SqliteHistory {
         self.finalize(id)?;
         let now = (self.now)();
         Self::sql(self.db.execute(
+            // Spec 267, R-1: the first text and transcript are never overwritten, so a failed
+            // dictation retried later keeps what its first success gave.
             "UPDATE dictations SET state = 'done', text = ?2, language = ?3, finished_ms = ?4,
-             message = NULL WHERE id = ?1",
-            params![id, text, language, now],
+             message = NULL, first_text = COALESCE(first_text, ?2),
+             transcript = COALESCE(transcript, ?5) WHERE id = ?1",
+            params![id, text, language, now, transcript],
         ))?;
         self.cleanup()
     }

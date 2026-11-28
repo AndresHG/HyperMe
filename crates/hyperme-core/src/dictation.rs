@@ -271,6 +271,9 @@ enum NoText {
 /// The text to insert. Stage timings are on the dictation's trace (spec 182, R-13).
 struct Text {
     text: String,
+    /// The speech provider's transcript before the dictionary, kept in the history for
+    /// benchmarks (spec 267, R-1).
+    heard: String,
     /// The transcript after the dictionary, and the entries it used (spec 93, D6).
     transcript: String,
     used: Vec<String>,
@@ -604,7 +607,9 @@ where
         trace.end(Outcome::Pasted);
         tell(pasted.as_ref(), &text, app);
         if let Some(id) = id {
-            let _ = trace.history_write(|| history.done(id, &text.text, text.language.as_deref()));
+            let _ = trace.history_write(|| {
+                history.done(id, &text.text, &text.heard, text.language.as_deref())
+            });
         }
         emit(Status::Done {
             raw: text.raw,
@@ -738,8 +743,9 @@ where
         if same_app {
             tell(pasted.as_ref(), &text, failed.app);
         }
-        let _ =
-            trace.history_write(|| history.done(failed.id, &text.text, text.language.as_deref()));
+        let _ = trace.history_write(|| {
+            history.done(failed.id, &text.text, &text.heard, text.language.as_deref())
+        });
         emit(if same_app {
             Status::Done {
                 raw: text.raw,
@@ -902,6 +908,7 @@ async fn transcribe_and_clean<L: LiveSession, C: CleanupProvider>(
     let language = transcript.language.clone();
     // Spec 93, R-1: the dictionary fixes the raw transcript once, so the short path, the
     // cleanup and the raw fallback all get the user's words.
+    let heard = transcript.text.trim().to_owned();
     let substituted = settings.dictionary.substitute(transcript.text.trim());
     trace.dictionary(substituted.made);
     let raw = substituted.text.as_str();
@@ -930,6 +937,7 @@ async fn transcribe_and_clean<L: LiveSession, C: CleanupProvider>(
             raw: false,
             language,
             transcript: raw.to_owned(),
+            heard: heard.clone(),
             used: used.clone(),
             via: speech_via,
         });
@@ -972,6 +980,7 @@ async fn transcribe_and_clean<L: LiveSession, C: CleanupProvider>(
                 raw: false,
                 language,
                 transcript: raw.to_owned(),
+                heard: heard.clone(),
                 used: used.clone(),
                 via: joined_via(speech_via, via.map(|v| v.name)),
             })
@@ -984,6 +993,7 @@ async fn transcribe_and_clean<L: LiveSession, C: CleanupProvider>(
                 raw: true,
                 language,
                 transcript: raw.to_owned(),
+                heard: heard.clone(),
                 used: used.clone(),
                 via: speech_via,
             })
