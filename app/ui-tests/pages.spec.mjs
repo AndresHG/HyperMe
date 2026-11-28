@@ -78,6 +78,11 @@ test('settings', async ({ page }) => {
   await open(page, 'home.html#home');
   await page.evaluate(() => window.openSettings('general'));
   await expect(page.locator('#general')).toBeVisible();
+  // The sidebar's words, checked as text: a short change in light grey on dark slips under the
+  // screenshot's tolerance (PR 266, where settings-dark.png passed still showing "Providers").
+  await expect(page.locator('.settings nav')).toHaveText(
+    /Setup check\s*Everyday\s*General\s*Shortcuts\s*AI models\s*Speech to text\s*Language model\s*Setup\s*Connectors\s*Privacy\s*Diagnostics\s*About/i,
+  );
   await expect(page).toHaveScreenshot('settings.png');
   expect(await layoutProblems(page, '.settings')).toEqual([]);
   // Regressions (27 November 2026): the section opened scrolled down to its anchor, and the
