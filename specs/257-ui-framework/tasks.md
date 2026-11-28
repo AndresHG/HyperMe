@@ -14,4 +14,10 @@ check`, the screenshot checks) and measured where it touches a page.
 4. **Walkthrough.** onboarding as components. AC-6, AC-7.
 5. **Home.** sidebar, Today, History (with its virtual list) and Dictionary. AC-6, AC-7.
 6. **Settings in Home.** Settings as an on-demand component inside Home, no iframe. AC-5, AC-6.
+   Includes the one redesign the owner approved (28 November 2026): an "AI models" group with
+   Speech to text and Language model pages after `docs/ux/settings-models/` (mode rows, provider
+   tabs, masked key with Edit, model list with an Active badge, fallback row), and an "Other
+   model…" row for any model name with a Test button (`key_test` with that model). The model list
+   is the provider's curated list plus, where the provider can list models, the live list
+   (`models_list`). The spec gets an amendment for this redesign in that pull request.
 7. **Clean-up.** `app/ui` removed, docs (DESIGN.md, CONTRIBUTING.md, README) updated. AC-1.

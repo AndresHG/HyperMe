@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Settings: AI models (mock)</title>
+<link rel="stylesheet" href="../../../app/ui/tokens.css">
+<style>
+  /* Mock for spec 257 slice 6: the Settings sheet with an "AI models" group, after the layout
+     patterns the owner pointed to (grouped sidebar, mode rows with radios, provider tabs, a masked
+     key with Edit, a model list with an Active badge). Built only from tokens.css. */
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--color-window-bg); font: var(--weight-regular) var(--text-body) / var(--leading-body) var(--font-system); color: var(--color-label); -webkit-font-smoothing: antialiased; }
+  .sheet { display: flex; width: 860px; height: 720px; margin: var(--space-5); border-radius: var(--radius-sheet); overflow: hidden; background: var(--color-content-bg); box-shadow: var(--shadow-sheet); border: var(--border-width) solid var(--color-separator); }
+  nav { width: 212px; flex: none; background: var(--color-sidebar-bg); border-right: var(--border-width) solid var(--color-separator); padding: var(--space-5) var(--space-3); }
+  nav input { width: 100%; height: var(--control-height); border-radius: var(--radius-control); border: var(--border-width) solid var(--color-control-border); background: var(--color-control-bg); padding: 0 var(--field-padding-x); font: inherit; color: var(--color-label-tertiary); margin-bottom: var(--space-3); }
+  nav .group { font-size: var(--text-caption); font-weight: var(--weight-semibold); letter-spacing: .06em; text-transform: uppercase; color: var(--color-label-tertiary); margin: var(--space-4) var(--space-2) var(--space-1); }
+  nav a { display: flex; align-items: center; gap: var(--space-2); height: var(--row-height); padding: 0 var(--space-2); border-radius: var(--radius-control); color: var(--color-label); text-decoration: none; }
+  nav a.on { background: var(--color-selected); }
+  nav a svg { color: var(--color-label-secondary); flex: none; }
+  nav a.on svg { color: var(--color-accent); }
+  main { flex: 1; padding: var(--space-6) var(--space-8); overflow: hidden; position: relative; }
+  .x { position: absolute; top: var(--space-4); right: var(--space-4); color: var(--color-label-tertiary); font-size: var(--text-title3); }
+  h1 { margin: 0; font-size: var(--text-headline); font-weight: var(--weight-semibold); }
+  .sub { margin: var(--space-1) 0 var(--space-4); color: var(--color-label-secondary); }
+  .tabs { display: flex; gap: var(--space-2); margin-bottom: var(--space-4); }
+  .tab { display: inline-flex; align-items: center; gap: var(--space-2); height: var(--control-height-large); padding: 0 var(--control-padding-x-large); border-radius: var(--radius-capsule); border: var(--border-width) solid var(--color-separator); color: var(--color-label-secondary); font-size: var(--text-callout); }
+  .tab.on { background: var(--color-accent-soft); border-color: transparent; color: var(--color-accent-text); font-weight: var(--weight-medium); }
+  .tab small { font-size: var(--text-caption); color: var(--color-label-tertiary); }
+  .modes { border: var(--border-width) solid var(--color-separator); border-radius: var(--radius-card); overflow: hidden; margin-bottom: var(--space-4); background: var(--color-card-bg); }
+  .mode { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); }
+  .mode + .mode { border-top: var(--border-width) solid var(--color-separator); }
+  .mode .ic { width: 32px; height: 32px; border-radius: var(--radius-control); background: var(--color-fill); display: grid; place-items: center; color: var(--color-label-secondary); flex: none; }
+  .mode.on .ic { background: var(--color-accent-soft); color: var(--color-accent); }
+  .mode .t { flex: 1; }
+  .mode .t b { font-weight: var(--weight-medium); }
+  .mode .t div { color: var(--color-label-secondary); font-size: var(--text-callout); }
+  .badge { display: inline-block; margin-left: var(--space-2); padding: 0 var(--space-2); border-radius: var(--radius-small); background: var(--color-accent-soft); color: var(--color-accent-text); font-size: var(--text-caption); font-weight: var(--weight-medium); line-height: 18px; vertical-align: 1px; }
+  .radio { width: 16px; height: 16px; border-radius: var(--radius-capsule); box-shadow: inset 0 0 0 1.5px var(--color-control-border); flex: none; }
+  .radio.on { box-shadow: inset 0 0 0 5px var(--color-accent); }
+  .providers { display: flex; gap: var(--space-2); flex-wrap: wrap; margin-bottom: var(--space-4); }
+  .prov { display: inline-flex; align-items: center; gap: var(--space-2); height: var(--control-height-large); padding: 0 var(--space-3) 0 var(--space-1); font-size: var(--text-subheadline); border-radius: var(--radius-capsule); border: var(--border-width) solid var(--color-separator); font-size: var(--text-callout); }
+  .prov.on { background: var(--color-selected); border-color: transparent; font-weight: var(--weight-medium); }
+  .mono { width: 22px; height: 22px; border-radius: var(--radius-capsule); display: grid; place-items: center; background: var(--color-fill); color: var(--color-label-secondary); font-size: var(--text-caption); font-weight: var(--weight-bold); }
+  .prov.on .mono { background: var(--color-accent); color: var(--color-on-accent); }
+  .label { display: flex; justify-content: space-between; align-items: baseline; font-weight: var(--weight-medium); margin-bottom: var(--space-2); }
+  .label a { color: var(--color-accent-text); font-weight: var(--weight-regular); font-size: var(--text-callout); text-decoration: none; }
+  .key { display: flex; align-items: center; gap: var(--space-2); height: var(--control-height-large); padding: 0 var(--field-padding-x); border-radius: var(--radius-control); border: var(--border-width) solid var(--color-control-border); background: var(--color-control-bg); font-family: var(--font-mono); margin-bottom: var(--space-1); }
+  .key span { flex: 1; }
+  .key em { font-style: normal; font-family: var(--font-system); color: var(--color-accent-text); font-size: var(--text-callout); }
+  .ok { color: var(--color-green-text); font-size: var(--text-footnote); margin-bottom: var(--space-4); }
+  .models { display: grid; gap: var(--space-1); margin-bottom: var(--space-4); }
+  .model { display: flex; align-items: center; gap: var(--space-2); height: 38px; padding: 0 var(--space-3); border-radius: var(--radius-control); border: var(--border-width) solid var(--color-separator); background: var(--color-card-bg); }
+  .model i { width: 6px; height: 6px; border-radius: var(--radius-capsule); background: var(--color-label-quaternary); }
+  .model.on { border-color: var(--color-accent); background: var(--color-accent-soft); }
+  .model.on i { background: var(--color-accent); }
+  .model b { font-weight: var(--weight-medium); }
+  .model span:not(.badge) { flex: 1; color: var(--color-label-secondary); font-size: var(--text-callout); }
+  .switchrow { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); border: var(--border-width) solid var(--color-separator); border-radius: var(--radius-card); background: var(--color-card-bg); margin-bottom: var(--space-4); }
+  .switchrow div { flex: 1; } .switchrow small { display: block; color: var(--color-label-secondary); font-size: var(--text-callout); }
+  .switch { width: 38px; height: 22px; border-radius: var(--radius-capsule); background: var(--color-accent); position: relative; }
+  .switch::after { content: ''; position: absolute; right: 2px; top: 2px; width: 18px; height: 18px; border-radius: var(--radius-capsule); background: var(--color-on-accent); box-shadow: var(--shadow-card); }
+  .fallback { display: flex; align-items: center; justify-content: space-between; color: var(--color-label-secondary); font-size: var(--text-callout); border-top: var(--border-width) solid var(--color-separator); padding-top: var(--space-3); }
+  .fallback b { color: var(--color-label); font-weight: var(--weight-medium); }
+  .fallback a { color: var(--color-accent-text); text-decoration: none; }
+  .page { display: none; } .page.on { display: block; }
+</style>
+</head>
+<body>
+<div class="sheet">
+  <nav>
+    <input value="Search settings" aria-label="Search settings">
+    <div class="group">App</div>
+    <a href="#"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3 4h10M3 8h10M3 12h10"/><circle cx="6" cy="4" r="1.3"/><circle cx="10" cy="8" r="1.3"/><circle cx="5" cy="12" r="1.3"/></svg>General</a>
+    <a href="#"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2" y="4" width="12" height="8" rx="1.5"/><path d="M5 7h1M8 7h0M10 7h1M5 9.5h6"/></svg>Shortcuts</a>
+    <div class="group">AI models</div>
+    <a href="#" id="nav-speech"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="6" y="2" width="4" height="8" rx="2"/><path d="M3.5 8a4.5 4.5 0 0 0 9 0M8 12.5V14"/></svg>Speech to text</a>
+    <a href="#" id="nav-lm"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 2.5l1.4 3.1 3.1 1.4-3.1 1.4L8 11.5 6.6 8.4 3.5 7l3.1-1.4z"/><path d="M12.5 11v3M11 12.5h3"/></svg>Language model</a>
+    <div class="group">Accounts</div>
+    <a href="#"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2.5" y="2.5" width="4.5" height="4.5" rx="1"/><rect x="9" y="2.5" width="4.5" height="4.5" rx="1"/><rect x="2.5" y="9" width="4.5" height="4.5" rx="1"/><path d="M11.25 9v4.5M9 11.25h4.5"/></svg>Connectors</a>
+    <div class="group">System</div>
+    <a href="#"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 2l5 2v4c0 3-2.2 5.2-5 6-2.8-.8-5-3-5-6V4z"/></svg>Privacy &amp; data</a>
+    <a href="#"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 9h3l1.5-4 3 7L11 9h3"/></svg>Diagnostics</a>
+    <a href="#"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="6"/><path d="M8 7.5v3.5M8 5h0"/></svg>About</a>
+  </nav>
+  <main>
+    <span class="x">×</span>
+
+    <section class="page" id="speech">
+      <h1>Speech to text</h1>
+      <p class="sub">The engine that turns your voice into words.</p>
+      <div class="tabs"><span class="tab on">Dictation</span><span class="tab">Meetings <small>in 0.4</small></span></div>
+      <div class="modes">
+        <div class="mode on"><span class="ic"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="5.5" cy="10.5" r="3"/><path d="M7.7 8.3 13 3M11 5l1.5 1.5"/></svg></span><div class="t"><b>Cloud providers</b><span class="badge">Active</span><div>Your own API key. Fastest.</div></div><span class="radio on"></span></div>
+        <div class="mode"><span class="ic"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="5.5" y="2" width="5" height="4" rx="1"/><rect x="2" y="10" width="5" height="4" rx="1"/><rect x="9" y="10" width="5" height="4" rx="1"/><path d="M8 6v2M4.5 10V8h7v2"/></svg></span><div class="t"><b>Self-hosted</b><div>An OpenAI-compatible server on your network.</div></div><span class="radio"></span></div>
+      </div>
+      <div class="providers"><span class="prov on"><span class="mono">S</span>Speechmatics</span><span class="prov"><span class="mono">O</span>OpenAI</span><span class="prov"><span class="mono">+</span>Custom</span></div>
+      <div class="label">API key <a href="#">Get a key →</a></div>
+      <div class="key"><span>••••••••••••3f9a</span><em>Edit</em></div>
+      <div class="ok">✓ Works · answered in 210 ms</div>
+      <div class="label">Model</div>
+      <div class="models">
+        <div class="model on"><i></i><b>Enhanced</b><span>Most accurate, Spanish and English</span><span class="badge">Active</span></div>
+        <div class="model"><i></i><b>Standard</b><span>Faster, a little less accurate</span></div>
+      </div>
+      <div class="fallback"><span>If it fails, try <b>OpenAI · gpt-4o-mini-transcribe</b></span><a href="#">Change</a></div>
+    </section>
+
+    <section class="page" id="lm">
+      <h1>Language model</h1>
+      <p class="sub">The model that cleans up your words and runs your commands.</p>
+      <div class="tabs"><span class="tab on">Cleanup</span><span class="tab">Voice edits</span><span class="tab">Commands <small>in 0.2</small></span></div>
+      <div class="switchrow"><div>Clean up dictations<small>Removes filler words, fixes grammar and punctuation, keeps your tone.</small></div><span class="switch"></span></div>
+      <div class="modes">
+        <div class="mode on"><span class="ic"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="5.5" cy="10.5" r="3"/><path d="M7.7 8.3 13 3M11 5l1.5 1.5"/></svg></span><div class="t"><b>Cloud providers</b><span class="badge">Active</span><div>Your own API key.</div></div><span class="radio on"></span></div>
+        <div class="mode"><span class="ic"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="3.5" y="3.5" width="9" height="9" rx="1.5"/><rect x="6" y="6" width="4" height="4"/><path d="M6 1.5v2M10 1.5v2M6 12.5v2M10 12.5v2M1.5 6h2M1.5 10h2M12.5 6h2M12.5 10h2"/></svg></span><div class="t"><b>On this Mac</b><div>A model server such as Ollama or LM Studio. Fully private.</div></div><span class="radio"></span></div>
+        <div class="mode"><span class="ic"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="5.5" y="2" width="5" height="4" rx="1"/><rect x="2" y="10" width="5" height="4" rx="1"/><rect x="9" y="10" width="5" height="4" rx="1"/><path d="M8 6v2M4.5 10V8h7v2"/></svg></span><div class="t"><b>Self-hosted</b><div>An OpenAI-compatible server on your network.</div></div><span class="radio"></span></div>
+      </div>
+      <div class="providers"><span class="prov on"><span class="mono">G</span>Groq</span><span class="prov"><span class="mono">O</span>OpenAI</span><span class="prov"><span class="mono">A</span>Anthropic</span><span class="prov"><span class="mono">G</span>Gemini</span><span class="prov"><span class="mono">R</span>OpenRouter</span><span class="prov"><span class="mono">+</span>Custom</span></div>
+      <div class="label">API key <a href="#">Get a key →</a></div>
+      <div class="key"><span>••••••••••••a71c</span><em>Edit</em></div>
+      <div class="label" style="margin-top: var(--space-3)">Model</div>
+      <div class="models">
+        <div class="model on"><i></i><b>llama-3.3-70b-versatile</b><span>Fast, good cleanup</span><span class="badge">Active</span></div>
+        <div class="model"><i></i><b>openai/gpt-oss-120b</b><span>Smarter, a little slower</span></div>
+      </div>
+    </section>
+  </main>
+</div>
+<script>
+  const which = location.search.slice(1) || 'speech';
+  document.getElementById(which).classList.add('on');
+  document.getElementById('nav-' + which).classList.add('on');
+</script>
+</body>
+</html>
