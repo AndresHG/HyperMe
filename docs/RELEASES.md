@@ -24,7 +24,7 @@ In conversation, "version 3" means 0.3.
 | --- | --- | --- | --- | --- |
 | **0.1** | 1 and 2 | Dictation as good as Wispr Flow: hold or hands-free, cleanup levels, personal dictionary with Wispr Flow import, provider settings with any key or a local server, Home and History, local traces and **Report a problem**, in-app updates; tone per app (#219), microphone handling (#221). First public release | Edits per 100 characters at or below Wispr Flow's 11.6, internal names right, a week of daily use | mid-December 2026, under review after #219 and #221 are sized |
 | **0.2** | 3 and 4 (tasks) | Voice commands and the to-do list: one key for dictation, questions and commands; "Hyper, remind me to …"; the task list with dependencies, the morning card and nudges, with calendar events; voice edits of selected text; answers in a card; GitHub tickets; Home sidebar: Commands, the commands run and what the agent did (#231); Insights, usage stats modeled on Wispr Flow's plus commands run and tasks done (#235, needs a spec first) | Commands and the to-do list every day for two weeks | late January 2027 |
-| **0.3** | 4 (email) | Email: Google mail triage, draft-only replies, approvals from connector servers; **Review in Claude**: hand an email to the user's own Claude app, which drafts the reply and returns it through HyperMe's MCP server into the preview (proposed, [research](research/2026-11-28-email-drafts-through-claude.md)); research on cleaning text while the user speaks (#220); Home sidebar: Calendar with list and board views (#232) | A week of daily mail drafts | late February 2027 |
+| **0.3** | 4 (email) | Email: Google mail triage, draft-only replies, approvals from connector servers; research on cleaning text while the user speaks (#220); Home sidebar: Calendar with list and board views (#232) | A week of daily mail drafts | late February 2027 |
 | **0.4** | 5 | Meetings: on-device live transcript, "Transcribe?" on a call, notes to proposed tickets, the Meetings page | Tickets from a real meeting accepted with few edits | April 2027 |
 | **1.0** | | The four above, stable | A month with no breaking change | after 0.4 |
 | Later | | Memory ("Hyper, remember …"), self-learning facts, the graph view and contexts; a Claude Code or Codex hand-off, local speech models and self-hosted providers on your own network (#261), Linux and Windows, Microsoft 365 | | |
@@ -52,7 +52,6 @@ gantt
   0.2.0 release :milestone, 2027-01-28, 0d
   section 0.3 Email
   Mail triage, draft replies, approvals :c1, 2026-11-27, 2027-02-24
-  Review in Claude, MCP server for mail :c3, 2027-02-01, 2027-02-24
   Home sidebar, Calendar list and board :c2, 2027-02-01, 2027-02-24
   0.3.0 release :milestone, 2027-02-25, 0d
   section 0.4 Meetings
@@ -92,7 +91,8 @@ recommendation.
 | Quick notes: memory folder, task list or both | 0.2 (task side), Later (memory) | PRD Q-15 |
 | How Hyper notices facts to remember | Later | PRD Q-16 |
 | "Continue with ChatGPT" in onboarding: latency of answers | 0.2 | PRD Q-17 |
-| HyperMe as an MCP server: what to expose, and how it is added to Claude desktop (needed by Review in Claude) | 0.3 at the latest | ROADMAP phase 3; [email drafts through Claude](research/2026-11-28-email-drafts-through-claude.md) |
+| HyperMe as an MCP server: what to expose, and how it is added to Claude desktop | 0.2 or 0.3 | ROADMAP phase 3 |
+| Drafting through the user's own Claude or ChatGPT: a smoother hand-off than "Review in Claude, then press Send" ([first look](research/2026-11-28-email-drafts-through-claude.md)); the owner finds the extra Send step weak | 0.3 | Owner, 28 November 2026 |
 | Microsoft 365 mail and calendar through MCP | Later | PRD Q-7 |
 | Linux and Windows: overlay, hotkey, paste and keychain | Later | ROADMAP Later |
 | Self-hosted providers: your own speech and model server on your network (#261) | Later, with local speech models | Owner, 28 November 2026 |

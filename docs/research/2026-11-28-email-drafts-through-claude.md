@@ -4,6 +4,10 @@ Research of 28 November 2026, at the owner's request. It follows the
 [paid accounts research](2026-11-27-paid-accounts-and-agent-sessions.md) of the day before and
 does not repeat it.
 
+**Owner's answer, 28 November 2026:** the extra step of pressing Send in Claude is weak; not a
+0.3 feature for now. A deeper research thread for 0.3 looks for a smoother hand-off
+([RELEASES.md](../RELEASES.md), research threads).
+
 **The ask.** For the email feature (0.3), and later for other chosen tasks: instead of drafting a
 reply with HyperMe's own model on an API key, hand the email to the user's Claude (or ChatGPT),
 which already knows their projects, have it review the email in depth and draft the reply, and get
