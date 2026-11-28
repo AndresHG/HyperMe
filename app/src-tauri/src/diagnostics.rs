@@ -30,7 +30,7 @@ pub struct DiagnosticsView {
     error: Option<String>,
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn diagnostics_view(app: AppHandle) -> DiagnosticsView {
     let keep = runtime::config(&app)
@@ -85,7 +85,7 @@ pub struct TraceView {
 }
 
 /// The trace of one History item, or none: traces off, or older than their retention (R-11).
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn history_trace(app: AppHandle, id: i64) -> Result<Option<TraceView>, String> {
     let Some(store) = runtime::trace_store(&app) else {
