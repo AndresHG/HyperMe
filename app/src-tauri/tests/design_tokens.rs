@@ -8,8 +8,6 @@ use std::path::{Path, PathBuf};
 /// Files in `app/ui` held to the tokens, besides every `.svelte` and `.css` file in `app/web/src`.
 const MIGRATED: &[&str] = &[
     "components.css",
-    "dictionary.css",
-    "home.html",
     "settings.html",
 ];
 

@@ -5,7 +5,7 @@ import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { resolve } from 'node:path';
 
 const page = (name: string) => resolve(import.meta.dirname, `${name}.html`);
-const pages: Record<string, string> = { pill: page('pill'), onboarding: page('onboarding') };
+const pages: Record<string, string> = { pill: page('pill'), onboarding: page('onboarding'), home: page('home') };
 // The controls gallery, for the screenshot checks only (app/ui-tests): never in the app.
 if (process.env.HYPERME_GALLERY) pages.gallery = page('gallery');
 

@@ -16,7 +16,7 @@ pub const HOME: &str = "home";
 pub struct Section {
     pub id: &'static str,
     pub title: &'static str,
-    /// The page that draws it; the Home page itself is part of `home.html`.
+    /// The page that draws it; the Home page itself is part of `home.html` (app/web/src/home).
     pub page: &'static str,
     /// ⌘1 to ⌘5, by position.
     pub shortcut: &'static str,
@@ -898,27 +898,50 @@ mod tests {
         assert_eq!(hash(("history", None)), "history");
     }
 
+    /// The Home page's sources (app/web/src/home, spec 257), by name.
+    fn page_sources() -> Vec<(String, String)> {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../web/src/home");
+        let mut files: Vec<(String, String)> = std::fs::read_dir(&dir)
+            .expect("app/web/src/home")
+            .map(|e| e.expect("entry").path())
+            .map(|p| {
+                let name = p.file_name().unwrap().to_string_lossy().into_owned();
+                (name, std::fs::read_to_string(&p).expect("readable"))
+            })
+            .collect();
+        files.sort();
+        files
+    }
+
     /// AC-14 (R-24): the page keeps no dictation text in the web view's storage.
     #[test]
     fn the_page_uses_no_web_storage() {
-        let page = include_str!("../../ui/home.html");
-        for banned in ["localStorage", "sessionStorage", "indexedDB"] {
-            assert!(!page.contains(banned), "home.html mentions {banned}");
+        for (name, text) in page_sources() {
+            for banned in ["localStorage", "sessionStorage", "indexedDB"] {
+                assert!(!text.contains(banned), "{name} mentions {banned}");
+            }
         }
         // The page emits the event other modules listen for (R-22).
-        assert!(page.contains("'home://block-viewed'"));
+        let ipc = include_str!("../../web/src/lib/ipc.ts");
+        assert!(ipc.contains("emit('home://block-viewed'"));
+        let page = include_str!("../../web/src/home/TodayPage.svelte");
+        assert!(page.contains("tell.blockViewed("));
     }
 
     /// AC-2: rows are made only by the list that keeps the rows near the viewport, never for a
     /// whole page of items at once.
     #[test]
     fn rows_are_made_only_by_the_list() {
-        let page = include_str!("../../ui/home.html");
-        // The definition, and the one call inside the list's render.
-        assert_eq!(page.matches("rowNode(").count(), 2);
-        let render = &page[page.find("    render() {").unwrap()..];
-        assert!(render.find("rowNode(").unwrap() < render.find("\n    node(id)").unwrap());
-        assert!(page.contains("const OVERSCAN"));
+        for (name, text) in page_sources() {
+            if name != "HistoryList.svelte" {
+                assert!(!text.contains("<HistoryRow"), "{name} draws rows itself");
+            }
+        }
+        let list = include_str!("../../web/src/home/HistoryList.svelte");
+        assert_eq!(list.matches("<HistoryRow").count(), 1);
+        let each = list.find("{#each visible").expect("rows drawn from the visible ones");
+        assert!(each < list.find("<HistoryRow").unwrap());
+        assert!(list.contains("const OVERSCAN"));
     }
 
     // ---- Slice 4 ----
