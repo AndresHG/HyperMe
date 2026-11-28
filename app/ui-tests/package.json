@@ -1,7 +1,7 @@
 {
   "name": "hyperme-ui-tests",
   "private": true,
-  "description": "Page screenshot checks for app/ui in WebKit (docs/DESIGN.md, \"Checks\").",
+  "description": "Page screenshot checks for the built pages (app/web) in WebKit (docs/DESIGN.md, \"Checks\").",
   "license": "MIT OR Apache-2.0",
   "type": "module",
   "scripts": {

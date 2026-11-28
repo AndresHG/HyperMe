@@ -1,12 +1,8 @@
 //! The design-token lint (docs/DESIGN.md, "Checks"): pages take sizes, fonts and colours from
 //! `tokens.css` through `var(--…)`, never as raw values. Every Svelte component and stylesheet in
-//! `app/web/src` is held to it (spec 257, AC-3); a page still in `app/ui` joins `MIGRATED` when it moves to the
-//! tokens, so the check only ever grows.
+//! `app/web/src` is held to it (spec 257, AC-3), the shared `components.css` included.
 
 use std::path::{Path, PathBuf};
-
-/// Files in `app/ui` held to the tokens, besides every `.svelte` and `.css` file in `app/web/src`.
-const MIGRATED: &[&str] = &["components.css"];
 
 /// Properties whose lengths must be tokens (`0`, `auto` and keywords pass).
 const SIZED: &[&str] = &[
@@ -79,8 +75,14 @@ const NAMED_COLOURS: &[&str] = &[
     "graytext",
 ];
 
-fn ui_dir() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../ui")
+/// Where the pages' sources live.
+fn web_src() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../web/src")
+}
+
+/// The one file where raw values live.
+fn tokens_path() -> PathBuf {
+    web_src().join("lib/ui/tokens.css")
 }
 
 /// Every Svelte component and stylesheet under `dir`, as paths.
@@ -211,18 +213,22 @@ fn violations(css: &str) -> Vec<String> {
 
 #[test]
 fn migrated_pages_use_the_tokens() {
-    let mut files: Vec<PathBuf> = MIGRATED.iter().map(|name| ui_dir().join(name)).collect();
-    let web = Path::new(env!("CARGO_MANIFEST_DIR")).join("../web/src");
-    let before = files.len();
-    web_files(&web, &mut files);
+    let mut files = Vec::new();
+    web_files(&web_src(), &mut files);
+    files.retain(|path| *path != tokens_path());
     assert!(
-        files.len() > before,
+        files.iter().any(|p| p.ends_with("lib/ui/components.css")),
+        "components.css is held to the tokens"
+    );
+    assert!(
+        files
+            .iter()
+            .any(|p| p.extension().is_some_and(|e| e == "svelte")),
         "no Svelte component found in app/web/src"
     );
     let mut report = Vec::new();
     for path in files {
         let name = path.file_name().unwrap().to_string_lossy().into_owned();
-        assert_ne!(name, "tokens.css", "tokens.css is where raw values live");
         let text = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{name}: {e}"));
         for v in violations(&css_of(&name, &text)) {
             report.push(format!("{name}: {v}"));
@@ -258,7 +264,7 @@ fn the_lint_catches_raw_values() {
 /// and only the system font.
 #[test]
 fn the_tokens_hold_the_scale() {
-    let tokens = std::fs::read_to_string(ui_dir().join("tokens.css")).unwrap();
+    let tokens = std::fs::read_to_string(tokens_path()).unwrap();
     for token in [
         "--font-system: -apple-system, BlinkMacSystemFont",
         "--text-large-title: 26px",

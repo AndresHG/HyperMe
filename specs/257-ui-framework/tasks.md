@@ -8,7 +8,8 @@ check`, the screenshot checks) and measured where it touches a page.
    screenshot checks served from the build; the token lint reads `.svelte` styles. AC-1, AC-2,
    AC-3, AC-6, AC-7.
 2. **Bindings.** tauri-specta on every command and event; generated `bindings.ts`, checked in, and
-   the staleness test; the pill uses them. AC-4.
+   the staleness test; the pill uses them. AC-4. Done in PR 272: every page, not only the pill,
+   uses them; the file is generated on a Mac, where the commands compile.
 3. **Shared controls.** `lib/ui/`: Button, Switch, Field, Segmented, Card, Row, Menu, Sheet, from
    `components.css`. AC-3.
 4. **Walkthrough.** onboarding as components. AC-6, AC-7.
@@ -23,3 +24,5 @@ check`, the screenshot checks) and measured where it touches a page.
    Split in two: 6a moves Settings as it is (PR 265); 6b builds the AI models pages (R-16 to
    R-20, AC-8).
 7. **Clean-up.** `app/ui` removed, docs (DESIGN.md, CONTRIBUTING.md, README) updated. AC-1.
+   `tokens.css` and `components.css` move to `app/web/src/lib/ui/` and are imported by each page;
+   the build no longer copies a public folder.

@@ -85,7 +85,8 @@ These are design targets. Measured numbers, with date, machine and network, are 
 
 ## Quick start
 
-You need macOS, a Rust toolchain, and two API keys:
+You need macOS, a Rust toolchain, Node 22 or later with npm (the build makes the pages), and two
+API keys:
 [Speechmatics](https://www.speechmatics.com/) (speech) and [Groq](https://groq.com/) (cleanup).
 
 ```sh
