@@ -107,7 +107,6 @@ pub enum Span {
 /// The shape `Span` is serialised as, for the app's TypeScript bindings (spec 257, R-9).
 #[cfg(feature = "specta")]
 #[derive(serde::Serialize, specta::Type)]
-#[serde(rename = "Span")]
 #[allow(dead_code)]
 struct SpanShape {
     kind: SpanKind,
