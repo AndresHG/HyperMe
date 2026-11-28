@@ -1,0 +1,39 @@
+/* Settings' shared look (docs/UX.md: the system's light or dark colours, one signature colour):
+   the sidebar, the section, and rows in grouped cards. Every rule sits under `.settings`, so none
+   reaches Home's page; each part's own styles live in its component. Loaded with Settings' chunk. */
+:where(.settings) {
+  height: 100%; font: var(--text-body) var(--font-system); background: var(--color-content-bg); color: var(--color-label);
+  display: grid; grid-template-columns: 196px 1fr; overflow: hidden; outline: none;
+  /* Home's own page rules, which Settings does not share. */
+  & section { max-width: none; }
+  & :focus-visible { outline: var(--focus-ring-width) solid var(--color-focus-ring); outline-offset: 0; }
+}
+:where(.settings) nav { background: var(--color-sidebar-bg); border-right: 1px solid var(--color-separator); padding: var(--space-4) var(--space-3); display: flex; flex-direction: column; gap: var(--space-1); }
+:where(.settings) nav input { width: 100%; margin-bottom: var(--space-3); padding: var(--space-2) var(--space-2); border-radius: var(--radius-control); border: 1px solid var(--color-separator); background: var(--color-content-bg); color: inherit; }
+:where(.settings) nav .group { font-size: var(--text-subheadline); color: var(--color-label-secondary); margin: var(--space-3) var(--space-2) var(--space-1); text-transform: uppercase; letter-spacing: 0.04em; }
+:where(.settings) nav a { display: flex; align-items: center; min-height: var(--row-height); padding: 0 var(--space-2); border-radius: var(--radius-control); color: inherit; text-decoration: none; }
+:where(.settings) nav a.on { background: var(--color-accent-selected); }
+/* Room on the right for the close button. */
+:where(.settings) > main { overflow: auto; position: relative; padding: var(--space-5) calc(var(--space-8) + var(--space-6)) var(--space-5) var(--space-6); }
+:where(.settings) h1 { font: 600 var(--text-title3) var(--font-system); margin: 0 0 var(--space-1); }
+:where(.settings) .lead { color: var(--color-label-secondary); margin: 0 0 var(--space-4); }
+:where(.settings) section { display: none; }
+:where(.settings) section.on { display: block; }
+:where(.settings) .row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); padding: var(--space-3) 0; border-bottom: 1px solid var(--color-separator); }
+:where(.settings) .row .what small { display: block; color: var(--color-label-secondary); margin-top: var(--space-1); }
+:where(.settings) .state { font-size: var(--text-callout); }
+:where(.settings) .ok { color: var(--color-green); }
+:where(.settings) .bad { color: var(--color-red); }
+:where(.settings) .warn { color: var(--color-orange); }
+:where(.settings) .hidden, :where(.settings) .miss { display: none !important; }
+:where(.settings) code { font-size: var(--text-callout); }
+:where(.settings) .faint { color: var(--color-label-secondary); }
+:where(.settings) a.link { color: var(--color-accent); cursor: pointer; text-decoration: none; }
+/* V0.1 redesign: rows sit in grouped cards, switches instead of checkboxes, as in macOS System
+   Settings and Wispr Flow's settings. */
+:where(.settings) section > .row, :where(.settings) section .card-rows > .row { border: 1px solid var(--color-separator); border-top: 0; padding: var(--space-3) var(--space-4); background: var(--color-card-bg); }
+:where(.settings) section > .row:not(.row + .row), :where(.settings) section .card-rows > .row:first-child { border-top: 1px solid var(--color-separator); border-radius: var(--radius-card) var(--radius-card) 0 0; margin-top: var(--space-2); }
+:where(.settings) section > .row:not(:has(+ .row)), :where(.settings) section .card-rows > .row:last-child { border-radius: 0 0 var(--radius-card) var(--radius-card); margin-bottom: var(--space-4); }
+:where(.settings) section > .row:not(.row + .row):not(:has(+ .row)) { border-radius: var(--radius-card); }
+/* Selects keep the shared control's own width (components.css wins over a bare `select`). */
+:where(.settings) :is(input[type=text], input[type=number], input[type=password]) { min-width: 180px; }

@@ -3,11 +3,12 @@
 // Run: npm test. Update the approved images after a change you mean: npm run update.
 import { test, expect } from '@playwright/test';
 
-// Text that runs out of its box or lies on other text, in the document `root` (a page or a frame).
-async function layoutProblems(root) {
-  return root.evaluate(() => {
+// Text that runs out of its box or lies on other text, in the page `root`, inside the elements
+// that `scope` selects (a sheet, over a page whose text it covers).
+async function layoutProblems(root, scope = 'body') {
+  return root.evaluate((scope) => {
     const problems = [];
-    const leaves = [...document.querySelectorAll('body *')].filter((el) => {
+    const leaves = [...document.querySelectorAll(`${scope} *`)].filter((el) => {
       if (!el.offsetParent && getComputedStyle(el).position !== 'fixed') return false;
       const own = [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim());
       if (!own) return false;
@@ -50,7 +51,7 @@ async function layoutProblems(root) {
       }
     }
     return problems;
-  });
+  }, scope);
 }
 
 async function open(page, url, size = { width: 900, height: 600 }) {
@@ -76,19 +77,17 @@ for (const [name, url] of home) {
 test('settings', async ({ page }) => {
   await open(page, 'home.html#home');
   await page.evaluate(() => window.openSettings('general'));
-  const frame = page.frameLocator('iframe[title="Settings"]');
-  await expect(frame.locator('#general')).toBeVisible();
+  await expect(page.locator('#general')).toBeVisible();
   await expect(page).toHaveScreenshot('settings.png');
-  const settings = page.frames().find((f) => f.url().includes('settings.html'));
-  expect(await layoutProblems(settings)).toEqual([]);
+  expect(await layoutProblems(page, '.settings')).toEqual([]);
   // Regressions (27 November 2026): the section opened scrolled down to its anchor, and the
   // microphone rows (#221) sat outside General's grouped card.
-  const layout = await settings.evaluate(() => {
+  const layout = await page.evaluate(() => {
     const box = (el) => el.getBoundingClientRect();
     const card = box(document.querySelector('#general .card-rows'));
     const mics = [...document.querySelectorAll('#mic-list .row')].map(box);
     return {
-      scrollTop: document.querySelector('main').scrollTop,
+      scrollTop: document.querySelector('.settings > main').scrollTop,
       mics: mics.length,
       inside: mics.every((m) => m.left >= card.left && m.right <= card.right && m.top >= card.top && m.bottom <= card.bottom),
     };

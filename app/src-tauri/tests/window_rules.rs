@@ -81,13 +81,17 @@ fn only_the_pill_is_transparent_and_every_window_has_native_chrome() {
 }
 
 /// Settings is a sheet inside Home's page, not a window of its own, so its rounded corners sit
-/// inside Home's native frame (V0.1 redesign).
+/// inside Home's native frame (V0.1 redesign); and it is a component loaded when it first opens,
+/// not a page in a frame (spec 257, R-10, AC-5).
 #[test]
 fn settings_is_not_a_window() {
     assert!(!builders().iter().any(|b| b.label.contains("SETTINGS")));
     let home = include_str!("../../web/src/home/Home.svelte");
-    let open = include_str!("../../web/src/home/settings.svelte.ts");
-    assert!(home.contains("<Sheet") && open.contains("'settings.html#'"));
-    let settings = include_str!("../../ui/settings.html");
-    assert!(!settings.contains("html { background: transparent"));
+    assert!(home.contains("<Sheet") && home.contains("import('../settings/Settings.svelte')"));
+    assert!(
+        !home.contains("<iframe"),
+        "Settings is not a frame any more"
+    );
+    let settings = include_str!("../../web/src/settings/settings.css");
+    assert!(!settings.contains("background: transparent"));
 }

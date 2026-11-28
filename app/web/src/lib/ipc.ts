@@ -210,6 +210,236 @@ export interface RetryEvent {
   message: string | null;
 }
 
+// ---- Settings (settings.rs, connectors.rs, diagnostics.rs, report.rs, approvals.rs) ----
+
+/** The config values Settings shows (settings.rs, `ConfigView`). */
+export interface ConfigView {
+  hotkey: string;
+  min_hold_ms: number;
+  max_length_s: number;
+  short_dictation_words: number;
+  sounds: boolean;
+  show_while_idle: boolean;
+  mute_while_dictating: boolean;
+  speech_provider: string;
+  speech_model: string;
+  speech_endpoint: string;
+  cleanup_provider: string;
+  cleanup_model: string;
+  cleanup_endpoint: string;
+  reasoning_effort: string;
+  deadline_ms: number;
+  history: boolean;
+  retention_days: number | null;
+  size_limit_mb: number;
+  keep_traces: boolean;
+  timing_log: boolean;
+}
+
+/** A model in a provider's catalogue (settings.rs, `ModelView`). */
+export interface ModelView {
+  id: string;
+  reasoning_effort: string[];
+}
+
+/** A provider in a role's menu, never with its key (settings.rs, `ProviderView`). */
+export interface ProviderView {
+  id: string;
+  name: string;
+  recommended: boolean;
+  key_required: boolean;
+  has_key: boolean;
+  has_key_page: boolean;
+  key_note: string | null;
+  models: ModelView[];
+}
+
+/** A role's fallback (settings.rs, `FallbackView`). */
+export interface FallbackView {
+  provider: string;
+  name: string;
+  model: string;
+  ready: boolean;
+}
+
+/** One row of the providers table (settings.rs, `RoleView`). */
+export interface RoleView {
+  role: Role;
+  label: string;
+  provider: string;
+  model: string;
+  reasoning_effort: string | null;
+  providers: ProviderView[];
+  fallback: FallbackView | null;
+}
+
+/** Where dictation may send something (config.rs, `Destination`). */
+export interface Destination {
+  role: Role;
+  name: string;
+  model: string;
+  fallback_for: string | null;
+  on_this_mac: boolean;
+}
+
+/** What Settings shows (settings.rs, `View`). Never holds a key. */
+export interface SettingsView {
+  config: ConfigView | null;
+  config_error: string | null;
+  config_path: string;
+  keys: { speech: boolean; cleanup: boolean };
+  roles: RoleView[];
+  destinations: Destination[];
+  setup: { accessibility: boolean; input_monitoring: boolean; host_app: string | null };
+  version: string;
+}
+
+/** The microphone order (settings.rs, `MicrophonesView`). */
+export interface MicrophonesView {
+  ordered: boolean;
+  microphones: { name: string; connected: boolean; default: boolean }[];
+}
+
+/** A provider's live model list (settings.rs, `ModelMenuView`). */
+export interface ModelMenu {
+  models: string[];
+  notice: string | null;
+}
+
+/** Cost and speed under a role (settings.rs, `HintView`). */
+export interface ProviderHint {
+  cost: string;
+  speed: string;
+  source: string | null;
+  mine: string | null;
+}
+
+/** A model server found on this Mac (settings.rs, `LocalServerView`). */
+export interface LocalServer {
+  port: number;
+  endpoint: string;
+  models: string[];
+}
+
+export type Tone = 'ok' | 'warn' | 'bad' | 'off';
+
+/** A connector account's row (connector_settings.rs, `Row`). */
+export interface ConnectorRow {
+  id: string;
+  connector: string;
+  title: string;
+  state: string;
+  tone: Tone;
+  link: string;
+}
+
+export type ToolAccess = 'read' | 'ask' | 'off';
+
+/** A line on a connector page about a server's approvals (connectors.rs, `ApprovalLine`). */
+export interface ApprovalLine {
+  server: string;
+  text: string;
+  action: string | null;
+}
+
+/** A connector account's page (connectors.rs, `Page`). */
+export interface ConnectorPage {
+  id: string;
+  title: string;
+  state: string;
+  tone: Tone;
+  account: boolean;
+  enabled: boolean;
+  oauth: boolean;
+  label: string;
+  features: string[];
+  tools_verified: boolean;
+  tools: { name: string; access: ToolAccess; default: ToolAccess; changed: boolean }[];
+  approvals: ApprovalLine[];
+  requests: string[];
+}
+
+/** The two-step connect dialog of an OAuth preset (connectors.rs, `SetupSheet`). */
+export interface SetupSheet {
+  connector: string;
+  name: string;
+  client_saved: boolean;
+  client_id: string | null;
+  client_url: string | null;
+  production_url: string | null;
+  commands: string[];
+  features: { id: string; label: string; on_by_default: boolean }[];
+}
+
+/** Settings → Connectors (connectors.rs, `View`). */
+export interface ConnectorsView {
+  rows: ConnectorRow[];
+  setup: ConnectorRow[];
+  choices: { id: string; name: string; ready: boolean; note: string }[];
+  privacy: {
+    accounts: { title: string; reads: string[]; approvals: string }[];
+    where_it_goes: string;
+    kept: string;
+  } | null;
+  sheets: SetupSheet[];
+  pages: ConnectorPage[];
+  error: string | null;
+}
+
+/** A finished sign-in (connectors.rs, `SignInResult`). */
+export interface SignInResult {
+  account: string;
+  checks: string[];
+}
+
+/** A run of text in an approval message (approval.rs, `Span`). */
+export interface Span {
+  kind: 'text' | 'bold' | 'italic' | 'code' | 'break' | 'item' | 'link';
+  text: string;
+  url?: string;
+}
+
+/** What a connector server asks (approvals.rs, `CardView`). */
+export interface ApprovalCard {
+  id: number;
+  who: string;
+  title: string;
+  message: Span[];
+  choices: { label: string; value: unknown }[];
+  default: number | null;
+  note: string | null;
+}
+
+/** Percentiles over a window (diagnostics.rs, `Window`). */
+export type Window =
+  | { state: 'too_few'; count: number }
+  | { state: 'ready'; count: number; p50_us: number; p90_us: number; over_budget: boolean };
+
+/** Settings → Diagnostics (diagnostics.rs, `DiagnosticsView`). */
+export interface DiagnosticsView {
+  shown: boolean;
+  keep: boolean;
+  view: {
+    empty: boolean;
+    last_day: Window;
+    last_week: Window;
+    stages: { stage: string; provider: string | null; model: string | null; window: Window }[];
+    outcomes: [string, number][];
+    failures: [string, number][];
+    slowest_stage: string | null;
+  } | null;
+  warnings: string[];
+  error: string | null;
+}
+
+/** Report a problem's bundle (report.rs, `ReportView`). */
+export interface ReportView {
+  text: string;
+  trimmed: string[];
+  url: string;
+  has_reports: boolean;
+}
+
 export const commands = {
   pillView: () => invoke<PillView | null>('pill_view'),
   pillCard: () => invoke<Card | null>('pill_card'),
@@ -228,8 +458,8 @@ export const commands = {
   onboardingGetKey: (role: Role) => invoke<void>('onboarding_get_key', { role }),
   onboardingOtherProviders: () => invoke<void>('onboarding_other_providers'),
   onboardingDone: () => invoke<void>('onboarding_done'),
-  keyTest: (role: Role) => invoke<number>('key_test', { role }),
-  keySet: (role: Role, key: string) => invoke<void>('key_set', { role, key }),
+  keyTest: (role: Role, provider?: string, model?: string) => invoke<number>('key_test', { role, provider, model }),
+  keySet: (role: Role, key: string, provider?: string) => invoke<void>('key_set', { role, key, provider }),
   settingsSet: (section: string, key: string, value: unknown) => invoke<void>('settings_set', { section, key, value }),
   homeSections: () => invoke<Section[]>('home_sections'),
   homeBlocks: () => invoke<Block[]>('home_blocks'),
@@ -264,6 +494,45 @@ export const commands = {
   settingsPending: () => invoke<string | null>('settings_pending'),
   settingsOpened: () => invoke<void>('settings_opened'),
   settingsClosed: () => invoke<void>('settings_closed'),
+  settingsView: () => invoke<SettingsView>('settings_view'),
+  settingsOpen: (what: string) => invoke<void>('settings_open', { what }),
+  appRestart: () => invoke<void>('app_restart'),
+  microphonesList: () => invoke<MicrophonesView>('microphones_list'),
+  microphonesSet: (names: string[]) => invoke<void>('microphones_set', { names }),
+  providerChoose: (role: Role, provider: string, model: string) =>
+    invoke<'saved' | 'needs_key'>('provider_choose', { role, provider, model }),
+  providerAdd: (name: string, endpoint: string) => invoke<string>('provider_add', { name, endpoint }),
+  providerHint: (role: Role, provider: string, model: string) => invoke<ProviderHint>('provider_hint', { role, provider, model }),
+  providerKeyPage: (provider: string) => invoke<void>('provider_key_page', { provider }),
+  providersReset: () => invoke<void>('providers_reset'),
+  modelsList: (provider: string) => invoke<ModelMenu>('models_list', { provider }),
+  localDiscover: () => invoke<LocalServer[]>('local_discover'),
+  localUse: (endpoint: string, model: string) => invoke<void>('local_use', { endpoint, model }),
+  fallbackSet: (role: Role, provider: string, model: string) => invoke<number>('fallback_set', { role, provider, model }),
+  fallbackClear: (role: Role) => invoke<void>('fallback_clear', { role }),
+  resultOpen: (source: string) => invoke<void>('result_open', { source }),
+  connectorsView: () => invoke<ConnectorsView>('connectors_view'),
+  connectorsOpenLink: (url: string) => invoke<void>('connectors_open_link', { url }),
+  connectorsOpenUrl: (connector: string, which: 'client' | 'production') => invoke<void>('connectors_open_url', { connector, which }),
+  connectorsReview: (account: string, server: string) => invoke<string>('connectors_review', { account, server }),
+  connectorsSetTool: (connector: string, tool: string, access: ToolAccess) =>
+    invoke<void>('connectors_set_tool', { connector, tool, access }),
+  connectorsAnswer: (id: number, value: unknown) => invoke<boolean>('connectors_answer', { id, value }),
+  connectorsAddCustom: (form: { name: string; url: string; command: string; auth: string }) =>
+    invoke<string>('connectors_add_custom', { form }),
+  connectorsSetEnabled: (account: string, enabled: boolean) => invoke<void>('connectors_set_enabled', { account, enabled }),
+  connectorsSetToken: (connector: string, token: string) => invoke<void>('connectors_set_token', { connector, token }),
+  connectorsSaveClient: (connector: string, clientId: string, clientSecret: string) =>
+    invoke<number>('connectors_save_client', { connector, clientId, clientSecret }),
+  connectorsSignIn: (connector: string, label: string, features: string[]) =>
+    invoke<SignInResult>('connectors_sign_in', { connector, label, features }),
+  connectorsCancelSignIn: () => invoke<void>('connectors_cancel_sign_in'),
+  connectorsDisconnect: (account: string) => invoke<void>('connectors_disconnect', { account }),
+  diagnosticsView: () => invoke<DiagnosticsView>('diagnostics_view'),
+  reportBuild: (description: string, includeReports: boolean, fromItem: number | null) =>
+    invoke<ReportView>('report_build', { description, includeReports, fromItem }),
+  reportSave: (text: string) => invoke<string | null>('report_save', { text }),
+  reportOpenIssue: (text: string, url: string) => invoke<string>('report_open_issue', { text, url }),
 };
 
 export interface Events {
@@ -280,6 +549,10 @@ export interface Events {
   'home://refresh': null;
   'home://changed': null;
   'home://retry': RetryEvent;
+  /** A connector server asks something (specs/166). */
+  'connector-approval': ApprovalCard;
+  /** The question with this id is over. */
+  'connector-approval-closed': number;
 }
 
 /** Listens to one of the app's events with its payload typed. */
