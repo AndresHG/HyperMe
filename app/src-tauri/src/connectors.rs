@@ -296,9 +296,9 @@ pub fn connectors_view(app: AppHandle) -> View {
                 &registry,
                 &KeychainStore::with_service(KEYCHAIN_SERVICE),
                 &Local {
-                    status: &data,
-                    log: &data,
-                    servers: &data,
+                    status: &*data,
+                    log: &*data,
+                    servers: &*data,
                 },
                 UtcDateTime::now(),
             ),
@@ -394,10 +394,12 @@ pub fn connectors_set_token(
 }
 
 /// The connector store: the app's SQLite file, which holds the request counts and, with the
-/// pulls, the cached events and mail.
-fn account_data(app: &AppHandle) -> Result<hyperme_platform::task_store::SqliteTaskStore, String> {
-    let path = crate::runtime::data_dir(app).join("hyperme.sqlite3");
-    hyperme_platform::task_store::SqliteTaskStore::open(&path).map_err(|e| e.to_string())
+/// pulls, the cached events and mail. It is the daily tasks' connection, shared.
+fn account_data(
+    app: &AppHandle,
+) -> Result<Arc<hyperme_platform::task_store::SqliteTaskStore>, String> {
+    crate::tasks::shared_store(app)
+        .ok_or_else(|| "The app's data file could not open; restart HyperMe".to_owned())
 }
 
 fn connector_of(app: &AppHandle, id: &str) -> Result<hyperme_core::registry::Connector, String> {
@@ -533,9 +535,9 @@ pub async fn connectors_sign_in(
     .map_err(fail)?;
     // A new sign-in clears "Sign in again" (R-10).
     let data = account_data(&app).map_err(fail)?;
-    hyperme_core::health::AccountStatusStore::clear(&data, &account).map_err(fail)?;
+    hyperme_core::health::AccountStatusStore::clear(&*data, &account).map_err(fail)?;
     // A new sign-in starts the account's servers afresh (specs/166, R-16a).
-    hyperme_core::health::ServerStatusStore::clear_account(&data, &account).map_err(fail)?;
+    hyperme_core::health::ServerStatusStore::clear_account(&*data, &account).map_err(fail)?;
 
     let auth = std::sync::Arc::new(
         hyperme_providers::mcp::AccountAuth::new(oauth, store, &account).with_token(token),
@@ -635,11 +637,11 @@ pub async fn connectors_disconnect(app: AppHandle, account: String) -> Result<()
     let store = KeychainStore::with_service(KEYCHAIN_SERVICE);
     let data = account_data(&app)?;
     let revoked = match setup::oauth_client(&preset, &store) {
-        Ok(oauth) => setup::disconnect(&oauth, &store, &data, &account).await,
+        Ok(oauth) => setup::disconnect(&oauth, &store, &*data, &account).await,
         Err(_) => {
             // No client any more: nothing to revoke with, so forget the token and the data.
             let _ = store.delete(&account);
-            hyperme_core::connectors::AccountData::delete_account(&data, &account)
+            hyperme_core::connectors::AccountData::delete_account(&*data, &account)
                 .map_err(SetupError::Data)
         }
     };
