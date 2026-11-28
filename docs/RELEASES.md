@@ -22,7 +22,7 @@ In conversation, "version 3" means 0.3.
 
 | Version | Phase | Features | Gate (from ROADMAP.md) | Target |
 | --- | --- | --- | --- | --- |
-| **0.1** | 1 and 2 | Dictation as good as Wispr Flow: hold or hands-free, cleanup levels, personal dictionary with Wispr Flow import, provider settings with any key or a local server, Home and History, local traces and **Report a problem**, in-app updates; tone per app (#219), microphone handling (#221). First public release | Edits per 100 characters at or below Wispr Flow's 11.6, internal names right, a week of daily use | mid-December 2026, under review after #219 and #221 are sized |
+| **0.1** | 1 and 2 | Dictation as good as Wispr Flow: hold or hands-free, cleanup levels, personal dictionary with Wispr Flow import, provider settings with any key or a local server, Home and History, local traces and **Report a problem**, in-app updates; tone per app (#219), microphone handling (#221); samples: correct a dictation in History and keep it, with its audio, as ground truth for the quality harness (#267, proposed 28 November 2026). First public release | Edits per 100 characters at or below Wispr Flow's 11.6, internal names right, a week of daily use | mid-December 2026, under review after #219 and #221 are sized |
 | **0.2** | 3 and 4 (tasks) | Voice commands and the to-do list: one key for dictation, questions and commands; "Hyper, remind me to …"; the task list with dependencies, the morning card and nudges, with calendar events; voice edits of selected text; answers in a card; GitHub tickets; Home sidebar: Commands, the commands run and what the agent did (#231); Insights, usage stats modeled on Wispr Flow's plus commands run and tasks done (#235, needs a spec first) | Commands and the to-do list every day for two weeks | late January 2027 |
 | **0.3** | 4 (email) | Email: Google mail triage, draft-only replies, approvals from connector servers; research on cleaning text while the user speaks (#220); Home sidebar: Calendar with list and board views (#232) | A week of daily mail drafts | late February 2027 |
 | **0.4** | 5 | Meetings: on-device live transcript, "Transcribe?" on a call, notes to proposed tickets, the Meetings page | Tickets from a real meeting accepted with few edits | April 2027 |
@@ -43,6 +43,7 @@ gantt
   Wispr-level quality, dictionary, providers :a1, 2026-11-20, 2026-12-08
   Traces, Report a problem, first public build :a2, 2026-11-27, 2026-12-15
   Tone per app, mic handling :a3, 2026-12-01, 2026-12-15
+  Samples, corrections as ground truth :a4, 2026-11-28, 2026-12-12
   0.1.0 release :milestone, 2026-12-15, 0d
   section 0.2 Commands and to-do list
   One key routes, commands, GitHub tickets :b1, 2026-12-15, 2027-01-20
