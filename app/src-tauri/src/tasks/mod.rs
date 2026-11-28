@@ -182,6 +182,13 @@ pub fn jobs_changed(app: &tauri::AppHandle) {
 
 // --- Commands from Home ----------------------------------------------------------------------
 
+/// The app's one connection to `hyperme.sqlite3`, opened at start-up; `None` when it could not
+/// open. The connectors keep their request counts and cached data in the same file.
+pub fn shared_store<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Option<Arc<SqliteTaskStore>> {
+    use tauri::Manager;
+    app.try_state::<Tasks>().map(|tasks| tasks.store.clone())
+}
+
 fn state(app: &tauri::AppHandle) -> Result<(Arc<SqliteTaskStore>, DayRules), String> {
     use tauri::Manager;
     let tasks = app

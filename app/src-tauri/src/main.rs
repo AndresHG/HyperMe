@@ -30,8 +30,8 @@ mod pill;
 mod report;
 #[cfg(target_os = "macos")]
 mod runtime;
-// Pure and tested everywhere; the commands are macOS only.
-#[cfg(any(target_os = "macos", test))]
+// Its pure part uses the core and platform crates, which the app links on macOS only.
+#[cfg(target_os = "macos")]
 mod samples;
 #[cfg(target_os = "macos")]
 mod settings;
@@ -135,6 +135,7 @@ fn main() {
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
             #[cfg(target_os = "macos")]
             home::init(app.handle());
+            #[cfg(target_os = "macos")]
             samples::init(app.handle());
             // The dictionary store, with the old text file imported once (spec 93, D2).
             #[cfg(target_os = "macos")]

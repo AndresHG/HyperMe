@@ -760,3 +760,20 @@ fn the_nudge_job_shows_its_card() {
     assert_eq!(*s.ui.refreshes.lock().unwrap(), 0);
     assert!(s.ui.cards.lock().unwrap().is_empty());
 }
+
+/// The connectors share the scheduler's store instead of opening the same file again on every
+/// call (refactor B3).
+#[test]
+fn the_connectors_share_the_schedulers_store() {
+    use tauri::Manager;
+    let app = tauri::test::mock_app();
+    let store = store("shared");
+    let (commands, _rx) = tokio::sync::mpsc::unbounded_channel();
+    app.manage(Tasks {
+        commands,
+        store: store.clone(),
+        rules: DayRules::default(),
+    });
+    let shared = shared_store(app.handle()).expect("the managed store");
+    assert!(Arc::ptr_eq(&shared, &store));
+}
