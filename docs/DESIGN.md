@@ -20,7 +20,9 @@ transparent window with a painted card and shadow). This page exists so that doe
   region with `data-tauri-drag-region`, which needs the `core:window:allow-start-dragging`
   permission and covers only the element that carries it, not its children.
 - **Only the pill may be transparent.** It is an `NSPanel` with no decorations; its shape is the
-  capsule drawn by the page.
+  capsule drawn by the page. Its shadow is macOS's own (`has_shadow` and `invalidateShadow` after each
+  resize), so it follows the capsule and the card; the 14-point bead has none, because macOS draws
+  its outline in steps (docs/results/2026-11-28-pill-shadow.md).
 - **A page never draws window corners or a window shadow.** A sheet, popover or dialog is drawn
   inside a native window's content, never as its own transparent window. A transparent window gets
   no correct system shadow (the shadow follows the window's shape only when `invalidateShadow` is
