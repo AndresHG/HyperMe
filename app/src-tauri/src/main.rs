@@ -135,6 +135,7 @@ fn main() {
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
             #[cfg(target_os = "macos")]
             home::init(app.handle());
+            #[cfg(target_os = "macos")]
             samples::init(app.handle());
             // The dictionary store, with the old text file imported once (spec 93, D2).
             #[cfg(target_os = "macos")]
