@@ -3,8 +3,9 @@
 Required reading before any UI work. HyperMe must look and behave like a native Mac app, not a web
 page in a window. The rules below come from Apple's Human Interface Guidelines (HIG), the values
 AppKit itself reports on macOS 26, and the write-ups listed under "Sources"; where a value is our
-own convention rather than Apple's, it says so. The values live in one file, `app/ui/tokens.css`; every
-other file in `app/ui` uses them through `var(--…)`, and a test enforces it (see "Checks").
+own convention rather than Apple's, it says so. The values live in one file, `app/web/src/lib/ui/tokens.css`;
+every other style in `app/web/src` uses them through `var(--…)`, and a test enforces it (see
+"Checks").
 
 Owner decision, 27 November 2026: stay on Rust and Tauri, and adopt a strict macOS design system.
 The "awkward on Mac" look and the square corners came from faking window chrome in CSS (a
@@ -117,16 +118,15 @@ Weights are `--weight-regular`, `--weight-medium`, `--weight-semibold` and `--we
 
 Built only from tokens, in one shared CSS file, the same on every page: button (default, primary,
 borderless), field, toggle, segmented control, list row, card, menu. A page adds layout, never its
-own look for a control. The file is `app/ui/components.css`; every page links `tokens.css`, then
-`components.css`. Its classes carry a `ui-` prefix (`ui-button primary`, `ui-field`,
+own look for a control. The file is `app/web/src/lib/ui/components.css`; every page's `main.ts`
+imports `tokens.css`, then `components.css`. Its classes carry a `ui-` prefix (`ui-button primary`, `ui-field`,
 `ui-switch`, `ui-segmented`, `ui-row`, `ui-card`, `ui-menu`), and it holds the behaviour every page
 shares (arrow cursor, non-selectable interface text, focus ring, no page bounce).
 
 Pages written in Svelte (spec 257) use the same controls as components in `app/web/src/lib/ui/`:
 `Button`, `Field`, `Select`, `Switch`, `Segmented`, `Row`, `Card` with `CardRow`, `Menu` and
 `Sheet`, each with its own styles from the tokens. `app/web/gallery.html` shows every one in its
-states; the screenshot checks build it (`HYPERME_GALLERY=1`), the app never does. When the last
-page leaves `app/ui`, `components.css` keeps only the shared behaviour.
+states; the screenshot checks build it (`HYPERME_GALLERY=1`), the app never does.
 
 ## Other platforms (later)
 
@@ -171,11 +171,10 @@ Read on 27 November 2026.
 
 ## Checks
 
-- `cargo test -p hyperme-app --test design_tokens`: every Svelte component in `app/web/src` and
-  every file in the migrated list uses tokens
-  for `border-radius`, `padding`, `margin`, `gap`, `font-size`, `font-family`, `font`, colours and
-  shadows; only `0`, `auto` and CSS-wide keywords pass raw. A page joins the list when it moves to
-  the tokens, so the check only ever grows.
+- `cargo test -p hyperme-app --test design_tokens`: every Svelte component and stylesheet in
+  `app/web/src` (all but `tokens.css` itself) uses tokens for `border-radius`, `padding`,
+  `margin`, `gap`, `font-size`, `font-family`, `font`, colours and shadows; only `0`, `auto` and
+  CSS-wide keywords pass raw.
 - `cd app/ui-tests && npm install && npm test` (about 10 s): builds the pages (`app/web`), then
   shows every page in WebKit (the engine of
   macOS's web view) at a fixed size, light and dark, with fixture data from `mock-tauri.js` in place

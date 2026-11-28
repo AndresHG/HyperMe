@@ -37,7 +37,7 @@ patterns are borrowed from the best Mac apps, not from any single app.
 ## Visual language
 
 The values and rules for building any of this are in [DESIGN.md](DESIGN.md) and
-`app/ui/tokens.css`; the table below is the product view of them.
+`app/web/src/lib/ui/tokens.css`; the table below is the product view of them.
 
 | Token | Value | Use |
 | --- | --- | --- |

@@ -40,8 +40,10 @@ cargo test
 ```
 
 The pages are Svelte 5 components in TypeScript under `app/web`, built by Vite
-([spec 257](specs/257-ui-framework/spec.md)); pages not yet moved still live in `app/ui` and are
-copied as they are. Building the app needs Node 22 or later and npm: `cargo build` builds the
+([spec 257](specs/257-ui-framework/spec.md)). They call Rust only through
+`app/web/src/lib/bindings.ts`, generated from the Rust commands by tauri-specta; after changing a
+command or a type it sends, run `HYPERME_UPDATE_BINDINGS=1 cargo test -p hyperme-app bindings` on
+a Mac and commit the new file (a test fails until you do). Building the app needs Node 22 or later and npm: `cargo build` builds the
 pages first, through the app's build script. A change to the pages also runs their checks, and the
 screenshot checks on a Mac:
 
