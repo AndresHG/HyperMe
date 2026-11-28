@@ -1,9 +1,9 @@
 # Samples: correct a dictation and keep it as ground truth
 
-**Status:** draft, 28 November 2026. Decisions GT-1 and GT-2 wait for the owner.
+**Status:** approved, 28 November 2026 (owner: "spec 267 approved, V0.1 with the first-save sheet").
 **Issue:** [#267](https://github.com/AndresHG/hyperme/issues/267). **Size:** L (changes what is
 kept on disk, a core trait, a new platform store, the harness and the History page).
-**Version:** 0.1 (proposed, GT-1): it turns daily use into the gate's measure.
+**Version:** 0.1 (GT-1): it turns daily use into the gate's measure.
 **Traces to:** the owner's ask of 28 November 2026; [RELEASES](../../docs/RELEASES.md) 0.1 gate
 (edits per 100 characters at or below Wispr Flow's 11.6); spec [98](../98-home-window/spec.md)
 R-13, R-16, R-17 (History's actions); spec [182](../182-trace-store/spec.md) (traces, provider
@@ -162,7 +162,7 @@ It is three months later and this failed. Why?
 
 | ID | Question | Recommendation | Answer |
 | --- | --- | --- | --- |
-| GT-1 | Which version? | 0.1. It does not move the date: slices 1 to 3 are core, platform and harness; slice 4 is one page action after spec 257. And it is what makes the gate's number come from daily use instead of hand-edited JSON | waits for the owner |
-| GT-2 | How does the user agree to keep audio past the history's retention? | The first Save as sample shows one sheet (R-6): each sample is a deliberate act, so a Settings switch that is off by default would only add a step. Rejected: keeping samples inside the history with a "pinned" flag, which ties a benchmark set to a store the user clears, and makes "delete my history" not mean what it says | waits for the owner |
-| GT-3 | Does a correction change the row's shown text? | Yes, the row shows what the user said was right, with a sample mark; the first text is kept for the benchmark (R-1) | decided in this draft; the owner may overrule |
+| GT-1 | Which version? | 0.1. It does not move the date: slices 1 to 3 are core, platform and harness; slice 4 is one page action after spec 257. And it is what makes the gate's number come from daily use instead of hand-edited JSON | Decided 28 November 2026, as recommended: 0.1 |
+| GT-2 | How does the user agree to keep audio past the history's retention? | The first Save as sample shows one sheet (R-6): each sample is a deliberate act, so a Settings switch that is off by default would only add a step. Rejected: keeping samples inside the history with a "pinned" flag, which ties a benchmark set to a store the user clears, and makes "delete my history" not mean what it says | Decided 28 November 2026, as recommended: the one-time sheet at the first save |
+| GT-3 | Does a correction change the row's shown text? | Yes, the row shows what the user said was right, with a sample mark; the first text is kept for the benchmark (R-1) | decided in the draft; the owner did not object, 28 November 2026 |
 | GT-4 | One folder in the harness's set layout, or a table in SQLite? | The folder: the harness is the only reader, it already reads that layout, and the user can see and delete it in Finder. Samples are few and written one at a time; SQLite stays the history's store | decided in this draft |
