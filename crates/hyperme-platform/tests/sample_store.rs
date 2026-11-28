@@ -66,11 +66,13 @@ fn a_sample_is_written_and_replaced() {
 }
 
 /// AC-5 (store side, R-12): Delete sample and Delete all samples remove the files, and only the
-/// folder's own files.
+/// folder's own files; the agreement to keep samples stays (R-6).
 #[test]
 fn samples_are_deleted_one_or_all() {
     let dir = temp_dir("delete");
     let mut store = SampleStore::open(&dir).unwrap();
+    assert!(!store.agreed());
+    store.agree().unwrap();
     store.save(&facts(1, "es"), b"one", "Uno.").unwrap();
     store.save(&facts(2, "en"), b"two", "Two.").unwrap();
     std::fs::write(dir.join("notes.txt"), "mine").unwrap();
@@ -89,6 +91,7 @@ fn samples_are_deleted_one_or_all() {
         dir.join("notes.txt").exists(),
         "a file the user put there stays"
     );
+    assert!(store.agreed(), "the agreement survives Delete all (R-6)");
     assert!(!SampleStore::open(&dir).unwrap().has(2));
 }
 

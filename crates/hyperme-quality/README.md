@@ -23,6 +23,20 @@ outside the repository or in a git-ignored folder: the tool refuses any other pl
 
 `spikes/flowbench/samples/` already has this layout: the 50 Phase 0 samples with their gold texts.
 
+## Samples: dictations you corrected in the app
+
+In History, **Correct** saves a dictation you fixed as a sample (spec 267): its audio, the speech
+transcript, the first pasted text and your correction, in the app's own sample folder, laid out
+as a set. Replay it with
+
+```bash
+cargo run --release -p hyperme-quality -- run --set samples --config other-speech.toml
+```
+
+`--set samples` names that folder (`~/Library/Application Support/HyperMe/samples/`); use
+`./samples` for a local folder of that name. `raw.json` in it holds the speech transcripts, for
+`--reuse-raw`. The harness only reads it; `import` refuses it.
+
 ## Add dictations from the app's history
 
 ```bash
@@ -82,6 +96,9 @@ were reused and from which file. Confirm a winner with one live run.
 
 - **Zero-edit:** pasted text equal to the corrected text apart from spacing.
 - **Edits per 100 chars:** character edits to reach the corrected text, per 100 characters of it.
+- **Speech edits per 100:** the same for the speech transcript, before the dictionary and cleanup:
+  the speech model alone. Case and punctuation count, so compare it between speech models, not
+  with the pasted column.
 - **Names right:** names in the corrected texts that the pasted text has too. **Wrong names:**
   names in the pasted text where the corrected text has none.
 - **Fillers left:** um, uh, eh, o sea, you know and similar in the pasted text (in the raw text).

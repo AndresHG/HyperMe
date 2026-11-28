@@ -33,6 +33,9 @@ pub trait Samples: Send {
     fn has(&self, history_id: DictationId) -> bool;
     /// How many samples there are and the bytes they take (R-12).
     fn summary(&self) -> Result<(usize, u64), Error>;
+    /// The user agreed to keep samples (R-6). Asked before the first sample is written.
+    fn agreed(&self) -> bool;
+    fn agree(&mut self) -> Result<(), Error>;
 }
 
 /// A sample's name in a harness set (R-9): `es-h12`, `en-h12`, or `xx-h12` when the language is

@@ -25,6 +25,9 @@ pub const RAW: &str = "raw.json";
 pub const APPS: &str = "apps.json";
 pub const FACTS: &str = "samples.json";
 const JSON_FILES: [&str; 4] = [GOLD, RAW, APPS, FACTS];
+/// Marks that the user agreed to keep samples (R-6). It survives Delete all samples; deleting
+/// the folder in Finder asks again.
+const AGREED: &str = ".agreed";
 
 fn error(what: impl std::fmt::Display) -> Error {
     Error {
@@ -208,5 +211,15 @@ impl Samples for SampleStore {
             .map(|m| m.len())
             .sum();
         Ok((self.names.len(), bytes))
+    }
+
+    fn agreed(&self) -> bool {
+        self.dir.join(AGREED).is_file()
+    }
+
+    fn agree(&mut self) -> Result<(), Error> {
+        std::fs::create_dir_all(&self.dir)
+            .and_then(|()| std::fs::write(self.dir.join(AGREED), ""))
+            .map_err(|e| error(format!("creating {}: {e}", self.dir.display())))
     }
 }

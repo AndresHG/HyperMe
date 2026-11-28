@@ -504,6 +504,12 @@ impl SqliteHistory {
         )
     }
 
+    /// A dictation's audio file as it is on disk, for a sample (spec 267, R-9).
+    pub fn audio_wav(&self, id: DictationId) -> Result<Vec<u8>, Error> {
+        std::fs::read(self.audio_path(id))
+            .map_err(|e| error(format!("no audio for dictation {id}: {e}")))
+    }
+
     /// Deletes a dictation's text and audio (#98 R-18, AC-12).
     pub fn delete_item(&mut self, id: DictationId) -> Result<(), Error> {
         self.delete(id)

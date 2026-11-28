@@ -26,6 +26,9 @@ mod pill;
 mod report;
 #[cfg(target_os = "macos")]
 mod runtime;
+// Pure and tested everywhere; the commands are macOS only.
+#[cfg(any(target_os = "macos", test))]
+mod samples;
 #[cfg(target_os = "macos")]
 mod settings;
 #[cfg(target_os = "macos")]
@@ -125,6 +128,12 @@ fn main() {
             home::home_retry,
             home::home_delete,
             home::home_fix_word,
+            samples::home_correct,
+            samples::home_delete_sample,
+            samples::home_samples_of,
+            samples::samples_view,
+            samples::samples_delete_all,
+            samples::samples_reveal,
             runtime::pill_view,
             diagnostics::diagnostics_view,
             diagnostics::history_trace,
@@ -200,6 +209,7 @@ fn main() {
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
             #[cfg(target_os = "macos")]
             home::init(app.handle());
+            samples::init(app.handle());
             // The dictionary store, with the old text file imported once (spec 93, D2).
             #[cfg(target_os = "macos")]
             dictionary::init(app.handle());

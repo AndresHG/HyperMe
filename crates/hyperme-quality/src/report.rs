@@ -24,6 +24,9 @@ pub struct Row {
     pub fillers_left: usize,
     /// Outputs compared with a gold text, zero-edit among them, mean edits per 100 characters.
     pub gold: Option<(usize, usize, f64)>,
+    /// Mean edits per 100 characters of the speech transcript against the gold text: the speech
+    /// model alone, before the dictionary and cleanup (spec 267, R-15).
+    pub speech_gold: Option<f64>,
     /// Over the outputs that have a gold text.
     pub names: NameScore,
     /// Median and 90th percentile, milliseconds from key release.
@@ -74,6 +77,13 @@ fn row(
             Some(score::against_gold(&p.text, g))
         })
         .collect();
+    let speech: Vec<f64> = group
+        .iter()
+        .filter_map(|r| {
+            let g = gold.get(&r.sample)?;
+            Some(score::against_gold(r.raw.as_deref()?, g).edits_per_100)
+        })
+        .collect();
     let quantiles = |values: Vec<u64>| (median(&values), percentile(&values, 90));
     Row {
         label,
@@ -92,6 +102,7 @@ fn row(
                 compared.iter().map(|c| c.edits_per_100).sum::<f64>() / compared.len() as f64;
             (compared.len(), zero, mean)
         }),
+        speech_gold: (!speech.is_empty()).then(|| speech.iter().sum::<f64>() / speech.len() as f64),
         names: name_score,
         stt: quantiles(ok.iter().map(|(_, p)| p.stt_ms).collect()),
         total: quantiles(ok.iter().map(|(_, p)| p.total_ms).collect()),
@@ -106,9 +117,9 @@ fn pair((p50, p90): (Option<u64>, Option<u64>)) -> String {
     format!("{} / {}", opt(p50), opt(p90))
 }
 
-const COLUMNS: &str = "| Language | Samples | Zero-edit | Edits per 100 chars | Names right | \
+const COLUMNS: &str = "| Language | Samples | Zero-edit | Edits per 100 chars | Speech edits per 100 | Names right | \
 Wrong names | Fillers left (in raw) | Unchanged | Fallbacks | Failed | `stt_ms` | `total_ms` |\n\
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n";
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n";
 
 /// The table, for the terminal and the results file alike.
 pub fn table(rows: &[Row]) -> String {
@@ -118,6 +129,7 @@ pub fn table(rows: &[Row]) -> String {
             Some((n, zero, mean)) => (format!("{zero}/{n}"), format!("{mean:.1}")),
             None => ("-".to_owned(), "-".to_owned()),
         };
+        let speech = r.speech_gold.map_or("-".to_owned(), |m| format!("{m:.1}"));
         let (right, wrong) = if r.names.expected > 0 || r.names.wrong > 0 {
             (
                 format!("{}/{}", r.names.right, r.names.expected),
@@ -128,7 +140,7 @@ pub fn table(rows: &[Row]) -> String {
         };
         let _ = writeln!(
             out,
-            "| {} | {} | {zero} | {edits} | {right} | {wrong} | {} ({}) | {} | {} | {} | {} | {} |",
+            "| {} | {} | {zero} | {edits} | {speech} | {right} | {wrong} | {} ({}) | {} | {} | {} | {} | {} |",
             r.label,
             r.n,
             r.fillers_left,
@@ -174,6 +186,8 @@ pub fn markdown(
          - **Zero-edit:** outputs equal to the owner's corrected text apart from spacing. \
          **Edits per 100 chars:** character edits needed to reach it, per 100 characters of the \
          corrected text. Both over the samples that have one.\n\
+         - **Speech edits per 100:** the same for the speech transcript, before the dictionary \
+         and cleanup: how well the speech model alone did.\n\
          - **Names right:** internal names in the corrected texts that the output has too. \
          **Wrong names:** names in the output where the corrected text has none.\n\
          - **Fillers left:** um, uh, eh, em, hmm, o sea, you know and similar in the pasted \
