@@ -1,16 +1,15 @@
 //! The design-token lint (docs/DESIGN.md, "Checks"): pages take sizes, fonts and colours from
-//! `tokens.css` through `var(--…)`, never as raw values. Every Svelte component in `app/web/src`
-//! is held to it (spec 257, AC-3); a page still in `app/ui` joins `MIGRATED` when it moves to the
+//! `tokens.css` through `var(--…)`, never as raw values. Every Svelte component and stylesheet in
+//! `app/web/src` is held to it (spec 257, AC-3); a page still in `app/ui` joins `MIGRATED` when it moves to the
 //! tokens, so the check only ever grows.
 
 use std::path::{Path, PathBuf};
 
-/// Files in `app/ui` held to the tokens, besides every `.svelte` file in `app/web/src`.
+/// Files in `app/ui` held to the tokens, besides every `.svelte` and `.css` file in `app/web/src`.
 const MIGRATED: &[&str] = &[
     "components.css",
     "dictionary.css",
     "home.html",
-    "onboarding.html",
     "settings.html",
 ];
 
@@ -89,13 +88,13 @@ fn ui_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../ui")
 }
 
-/// Every Svelte component under `dir`, as paths.
-fn svelte_files(dir: &Path, found: &mut Vec<PathBuf>) {
+/// Every Svelte component and stylesheet under `dir`, as paths.
+fn web_files(dir: &Path, found: &mut Vec<PathBuf>) {
     for entry in std::fs::read_dir(dir).unwrap_or_else(|e| panic!("{}: {e}", dir.display())) {
         let path = entry.unwrap().path();
         if path.is_dir() {
-            svelte_files(&path, found);
-        } else if path.extension().is_some_and(|e| e == "svelte") {
+            web_files(&path, found);
+        } else if path.extension().is_some_and(|e| e == "svelte" || e == "css") {
             found.push(path);
         }
     }
@@ -217,7 +216,7 @@ fn migrated_pages_use_the_tokens() {
     let mut files: Vec<PathBuf> = MIGRATED.iter().map(|name| ui_dir().join(name)).collect();
     let web = Path::new(env!("CARGO_MANIFEST_DIR")).join("../web/src");
     let before = files.len();
-    svelte_files(&web, &mut files);
+    web_files(&web, &mut files);
     assert!(
         files.len() > before,
         "no Svelte component found in app/web/src"

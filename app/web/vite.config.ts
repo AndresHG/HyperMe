@@ -19,6 +19,6 @@ export default defineConfig({
     // WebKit on macOS 13 and later (Safari 16.4 features), no older engine to support.
     target: 'safari16.4',
     sourcemap: false,
-    rollupOptions: { input: { pill: page('pill') } },
+    rollupOptions: { input: { pill: page('pill'), onboarding: page('onboarding') } },
   },
 });
