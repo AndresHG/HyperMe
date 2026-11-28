@@ -3,7 +3,7 @@
   // missing (specs/96, R-24a), and the connector accounts that need you.
   import { commands } from '../lib/ipc';
   import ConnectorRows from './connectors/ConnectorRows.svelte';
-  import State from './State.svelte';
+  import StateMark from './StateMark.svelte';
   import { mark, useSettings } from './state.svelte';
 
   let { on }: { on: boolean } = $props();
@@ -20,11 +20,11 @@
   </p>
   <div class="row" data-words="accessibility paste permission">
     <div class="what">Accessibility<small>Needed to paste at the cursor.</small></div>
-    <span><State mark={v && mark(v.setup.accessibility, 'Allowed', 'Not allowed')} /> <button onclick={() => commands.settingsOpen('request-accessibility')}>Allow</button> <button onclick={() => commands.settingsOpen('accessibility')}>Open</button></span>
+    <span><StateMark mark={v && mark(v.setup.accessibility, 'Allowed', 'Not allowed')} /> <button onclick={() => commands.settingsOpen('request-accessibility')}>Allow</button> <button onclick={() => commands.settingsOpen('accessibility')}>Open</button></span>
   </div>
   <div class="row" data-words="input monitoring hotkey keyboard permission">
     <div class="what">Input Monitoring<small>Needed to see the hotkey.</small></div>
-    <span><State mark={v && mark(v.setup.input_monitoring, 'Allowed', 'Not allowed')} /> <button onclick={() => commands.settingsOpen('request-input-monitoring')}>Allow</button> <button onclick={() => commands.settingsOpen('input-monitoring')}>Open</button></span>
+    <span><StateMark mark={v && mark(v.setup.input_monitoring, 'Allowed', 'Not allowed')} /> <button onclick={() => commands.settingsOpen('request-input-monitoring')}>Allow</button> <button onclick={() => commands.settingsOpen('input-monitoring')}>Open</button></span>
   </div>
   <div class="row" data-words="microphone permission">
     <div class="what">Microphone<small>macOS asks the first time you dictate.</small></div>
@@ -32,18 +32,18 @@
   </div>
   <div class="row" data-words="speech key speechmatics">
     <div class="what">Speech key<small>{v?.config?.speech_provider ?? ''}</small></div>
-    <State mark={v && mark(v.keys.speech, 'Key saved', 'No key')} />
+    <StateMark mark={v && mark(v.keys.speech, 'Key saved', 'No key')} />
   </div>
   <div class="row" data-words="cleanup key groq">
     <div class="what">Cleanup key<small>{v?.config?.cleanup_provider ?? ''}</small></div>
-    <State mark={v && mark(v.keys.cleanup, 'Key saved', 'No key')} />
+    <StateMark mark={v && mark(v.keys.cleanup, 'Key saved', 'No key')} />
   </div>
   <div>
     {#each v?.roles ?? [] as r (r.role)}
       {#if r.fallback}
         <div class="row">
           <div class="what">{r.label} fallback<small>{r.fallback.name} · {r.fallback.model}</small></div>
-          <State mark={mark(r.fallback.ready, 'Key saved', 'No key: skipped until you add it')} />
+          <StateMark mark={mark(r.fallback.ready, 'Key saved', 'No key: skipped until you add it')} />
         </div>
       {/if}
     {/each}

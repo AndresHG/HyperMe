@@ -2,7 +2,7 @@
   // A role's fallback (specs/96, R-24 to R-24a): one per role, saved only once its Test passes. A
   // fallback provider with no key yet takes it here (one key per provider, D-2).
   import { commands, type RoleView } from '../../lib/ipc';
-  import State from '../State.svelte';
+  import StateMark from '../StateMark.svelte';
   import { mark, testing, useSettings, type Mark } from '../state.svelte';
 
   let { r }: { r: RoleView } = $props();
@@ -83,7 +83,7 @@
   <td><input type="text" placeholder="Model" aria-label="{r.label} fallback model" bind:value={model} /></td>
   <td>
     <div class="key">
-      <State mark={status} id="fallback-state-{r.role}" /><input
+      <StateMark mark={status} id="fallback-state-{r.role}" /><input
         type="password"
         placeholder="Paste the key"
         autocomplete="off"

@@ -296,3 +296,42 @@ fn the_tokens_hold_the_scale() {
         assert_eq!(px % 4, 0, "{line}");
     }
 }
+
+/// PR 265 regression: `State.svelte` beside `state.svelte.ts` built on Linux, but on macOS, whose
+/// file names ignore case, `import … from './state.svelte'` found the component and the build
+/// failed. No two files in a folder of `app/web/src` may share a name, or the name an import uses
+/// (without `.ts` or `.js`), when case is ignored.
+#[test]
+fn no_two_web_files_differ_only_in_case() {
+    fn walk(dir: &Path, clashes: &mut Vec<String>) {
+        let mut seen = std::collections::HashMap::<String, String>::new();
+        for entry in std::fs::read_dir(dir).unwrap_or_else(|e| panic!("{}: {e}", dir.display())) {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                walk(&path, clashes);
+                continue;
+            }
+            let name = path.file_name().unwrap().to_string_lossy().into_owned();
+            let lower = name.to_lowercase();
+            let import = lower
+                .strip_suffix(".ts")
+                .or_else(|| lower.strip_suffix(".js"))
+                .map(str::to_owned);
+            for key in std::iter::once(lower.clone()).chain(import) {
+                if let Some(other) = seen.insert(key, name.clone()) {
+                    clashes.push(format!("{}: {other} and {name}", dir.display()));
+                }
+            }
+        }
+    }
+    let mut clashes = Vec::new();
+    walk(
+        &Path::new(env!("CARGO_MANIFEST_DIR")).join("../web/src"),
+        &mut clashes,
+    );
+    assert!(
+        clashes.is_empty(),
+        "names that clash on macOS:\n{}",
+        clashes.join("\n")
+    );
+}

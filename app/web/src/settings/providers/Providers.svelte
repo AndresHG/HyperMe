@@ -3,7 +3,7 @@
   // table of roles (R-6 to R-14), each with its provider, model, key and fallback.
   import { sheet } from '../../home/settings.svelte';
   import { commands, type Role } from '../../lib/ipc';
-  import State from '../State.svelte';
+  import StateMark from '../StateMark.svelte';
   import { mark, testing, useSettings, type Mark } from '../state.svelte';
   import RoleRows from './RoleRows.svelte';
 
@@ -59,7 +59,7 @@
 {#snippet simple(role: Role, title: string, use: string)}
   <div class="row" data-words="{role} provider {role === 'speech' ? 'speechmatics' : 'groq'} key test">
     <div class="what">
-      {title}<small>{v?.config ? `${role === 'speech' ? v.config.speech_provider : v.config.cleanup_provider} · used by ${use}` : `Used by ${use}`}</small><State
+      {title}<small>{v?.config ? `${role === 'speech' ? v.config.speech_provider : v.config.cleanup_provider} · used by ${use}` : `Used by ${use}`}</small><StateMark
         small
         mark={tested[role] ?? (v && mark(v.keys[role], 'Key saved', 'No key yet'))}
       />

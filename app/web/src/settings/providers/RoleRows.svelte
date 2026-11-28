@@ -3,7 +3,7 @@
   // (R-6 to R-14), the hint line under it (R-18), a local server or custom endpoint being added
   // (R-21, R-22), and its fallback (R-24, R-24a).
   import { commands, type ProviderHint, type ProviderView, type RoleView } from '../../lib/ipc';
-  import State from '../State.svelte';
+  import StateMark from '../StateMark.svelte';
   import { mark, testing, useSettings, type Mark } from '../state.svelte';
   import FallbackRow from './FallbackRow.svelte';
   import LocalServer from './LocalServer.svelte';
@@ -202,7 +202,7 @@
   </td>
   <td>
     <div class="key">
-      <State mark={keyMark} id="role-state-{r.role}" />
+      <StateMark mark={keyMark} id="role-state-{r.role}" />
       {#if needsKey}
         <input type="password" placeholder="Paste the key" autocomplete="off" bind:value={key} />
         <button class="main" onclick={saveAndTest}>Save and test</button>
