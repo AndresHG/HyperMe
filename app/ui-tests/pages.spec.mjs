@@ -95,6 +95,17 @@ test('settings', async ({ page }) => {
   expect(layout).toEqual({ scrollTop: 0, mics: 2, inside: true });
 });
 
+// The AI models pages (spec 257, R-16 to R-20), after docs/ux/settings-models/.
+for (const name of ['speech', 'language']) {
+  test(`settings-${name}`, async ({ page }) => {
+    await open(page, 'home.html#home');
+    await page.evaluate((place) => window.openSettings(place), name);
+    await expect(page.locator(`#${name} .model`).first()).toBeVisible();
+    await expect(page).toHaveScreenshot(`settings-${name}.png`);
+    expect(await layoutProblems(page, '.settings')).toEqual([]);
+  });
+}
+
 test('onboarding', async ({ page }) => {
   await open(page, 'onboarding.html#keys', { width: 640, height: 620 });
   await expect(page.locator('#choices button').first()).toBeVisible();
