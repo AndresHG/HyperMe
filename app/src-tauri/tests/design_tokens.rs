@@ -243,8 +243,7 @@ fn the_lint_catches_raw_values() {
                border: 1px solid white; box-shadow: 0 1px 2px black; --local: #fff; \
                font: 700 15px -apple-system; }";
     assert_eq!(violations(bad).len(), 11, "{:?}", violations(bad));
-    let good =
-        "/* padding: 3px */ a:hover { padding: var(--space-1) var(--space-2); margin: 0 auto; \
+    let good = "/* padding: 3px */ a:hover { padding: var(--space-1) var(--space-2); margin: 0 auto; \
                 border-radius: var(--radius-control); font: inherit; color: var(--color-label); \
                 margin: calc(-1 * var(--space-2)) 0 0; \
                 border: var(--border-width) solid var(--color-separator); gap: var(--space-2); \
